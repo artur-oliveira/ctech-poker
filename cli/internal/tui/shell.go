@@ -12,7 +12,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.aoctech.app/poker/cli/internal/auth"
 	"gopkg.aoctech.app/poker/cli/internal/config"
+	"gopkg.aoctech.app/poker/cli/internal/game"
+	"gopkg.aoctech.app/poker/cli/internal/proto"
 	"gopkg.aoctech.app/poker/cli/internal/rest"
+	"gopkg.aoctech.app/poker/cli/internal/wsclient"
 )
 
 type shellState int
@@ -40,6 +43,10 @@ type Shell struct {
 	spin        spinner.Model
 	lines       []string
 	busy        bool
+
+	play  playState
+	table *TableModel
+	ws    *wsclient.Client
 }
 
 // NewShell wires a Session and REST client from cfg and returns the initial
@@ -122,10 +129,161 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.spin, cmd = s.spin.Update(msg)
 		return s, cmd
 
+	case stakesLoadedMsg:
+		s.busy = false
+		if msg.err != nil {
+			s.appendLine(explainErr(msg.err))
+			s.state = stateHome
+			return s, nil
+		}
+		s.play.stakes = msg.stakes
+		s.play.stakeIdx = 0
+		s.state = statePlayStake
+		return s, nil
+
+	case roomLoadedMsg:
+		s.busy = false
+		if msg.err != nil {
+			s.appendLine(explainErr(msg.err))
+			s.state = stateHome
+			return s, nil
+		}
+		s.play.smallBlind = msg.room.SmallBlind
+		s.play.bigBlind = msg.room.BigBlind
+		s.play.shareCode = msg.room.ShareCode
+		s.input.Reset()
+		s.input.Placeholder = buyInHint(s.play.bigBlind)
+		s.state = statePlayBuyin
+		return s, nil
+
+	case joinedMsg:
+		if msg.err != nil {
+			s.busy = false
+			s.appendLine(explainErr(msg.err))
+			s.state = stateHome
+			return s, nil
+		}
+		s.play.roomID = msg.roomID
+		s.play.shareCode = msg.shareCode
+		s.play.smallBlind, s.play.bigBlind = msg.blinds[0], msg.blinds[1]
+		s.appendLine("conectando à mesa…")
+		return s, connectTable(s.cfg.APIBaseURL, s.session.Token, msg.roomID, msg.shareCode)
+
+	case wsConnectedMsg:
+		s.busy = false
+		if msg.err != nil {
+			s.appendLine("erro ao conectar: " + msg.err.Error())
+			s.state = stateHome
+			return s, nil
+		}
+		s.ws = msg.client
+		s.startTable()
+		return s, tea.Batch(pumpTable(s.ws), s.table.Init(), sendReadyCmd(s.ws))
+
+	case wsStreamMsg:
+		var cmd tea.Cmd
+		if s.table != nil {
+			var tm tea.Model
+			tm, cmd = s.table.Update(SnapshotMsg{M: msg.m})
+			s.table = tm.(*TableModel)
+		}
+		return s, tea.Batch(cmd, pumpTable(s.ws))
+
+	case ReconnectingMsg, ReconnectedMsg:
+		if s.table != nil {
+			tm, _ := s.table.Update(msg)
+			s.table = tm.(*TableModel)
+		}
+		return s, pumpTable(s.ws)
+
+	case wsClosedMsg:
+		s.leaveTable()
+		if msg.err != nil {
+			s.appendLine("conexão encerrada: " + msg.err.Error())
+		}
+		return s, nil
+
+	case TableTickMsg:
+		if s.table == nil {
+			return s, nil
+		}
+		tm, cmd := s.table.Update(msg)
+		s.table = tm.(*TableModel)
+		return s, cmd
+
+	case TableExitedMsg:
+		s.leaveTable()
+		return s, nil
+
 	case tea.KeyMsg:
 		return s.handleKey(msg)
 	}
 	return s, nil
+}
+
+func sendReadyCmd(cl *wsclient.Client) tea.Cmd {
+	return func() tea.Msg {
+		_ = cl.Send(context.Background(), &proto.ClientMessage{Type: "ready", Ready: true})
+		return nil
+	}
+}
+
+func (s *Shell) startTable() {
+	s.state = stateInTable
+	s.table = NewTableModel(tableConfig(s))
+}
+
+func tableConfig(s *Shell) TableConfig {
+	return TableConfig{
+		RoomID: s.play.roomID, RoomName: s.play.roomID, ShareCode: s.play.shareCode,
+		Blinds:   [2]int64{s.play.smallBlind, s.play.bigBlind},
+		MaxSeats: maxOr(s.play.seats, 9), CardMode: cardMode(s.cfg),
+		YouID: s.youID(),
+		Send:  func(m *proto.ClientMessage) error { return s.ws.Send(context.Background(), m) },
+		CurrentSession: func(ctx context.Context) (string, error) {
+			sess, err := s.rc.CurrentSession(ctx)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("sessão: buy-in %d · saldo atual %d · resultado %d",
+				sess.BuyinAmount, sess.CashoutAmount, sess.NetPnL), nil
+		},
+	}
+}
+
+func (s *Shell) leaveTable() {
+	if s.ws != nil {
+		_ = s.ws.Close()
+		s.ws = nil
+	}
+	s.table = nil
+	s.state = stateHome
+	s.input.Reset()
+	s.input.Placeholder = "/help"
+	s.appendLine("· de volta ao lobby")
+}
+
+func maxOr(v, fallback int) int {
+	if v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+func cardMode(cfg config.Settings) game.CardMode {
+	if cfg.CardMode == "ascii" {
+		return game.CardASCII
+	}
+	return game.CardColor
+}
+
+// youID returns the player id from the stored access token's `sub` claim.
+func (s *Shell) youID() string {
+	tok, err := s.session.Token(context.Background())
+	if err != nil {
+		return ""
+	}
+	return subFromJWT(tok)
 }
 
 func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -180,6 +338,66 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
 		return s, cmd
+
+	case statePlaySize:
+		switch msg.String() {
+		case "up":
+			s.play.sizeIdx = (s.play.sizeIdx - 1 + len(tableSizes)) % len(tableSizes)
+		case "down":
+			s.play.sizeIdx = (s.play.sizeIdx + 1) % len(tableSizes)
+		case "enter":
+			s.play.seats = tableSizes[s.play.sizeIdx].seats
+			s.busy = true
+			return s, loadStakes(s.rc)
+		case "esc":
+			s.state = stateHome
+		}
+		return s, nil
+
+	case statePlayStake:
+		switch msg.String() {
+		case "up":
+			s.play.stakeIdx = (s.play.stakeIdx - 1 + len(s.play.stakes)) % len(s.play.stakes)
+		case "down":
+			s.play.stakeIdx = (s.play.stakeIdx + 1) % len(s.play.stakes)
+		case "enter":
+			st := s.play.stakes[s.play.stakeIdx]
+			s.play.smallBlind, s.play.bigBlind = st.SmallBlind, st.BigBlind
+			s.input.Reset()
+			s.input.Placeholder = buyInHint(s.play.bigBlind)
+			s.state = statePlayBuyin
+		case "esc":
+			s.state = stateHome
+		}
+		return s, nil
+
+	case statePlayBuyin:
+		if msg.String() == "enter" {
+			amount, err := parseBuyIn(s.input.Value(), s.play.bigBlind)
+			if err != nil {
+				s.appendLine("· " + err.Error())
+				return s, nil
+			}
+			s.input.Reset()
+			s.busy = true
+			s.state = stateJoining
+			if s.play.fromEnter {
+				return s, joinRoom(s.rc, s.play, amount)
+			}
+			return s, joinOrCreate(s.rc, s.play, amount)
+		}
+		var cmd tea.Cmd
+		s.input, cmd = s.input.Update(msg)
+		return s, cmd
+
+	case stateInTable:
+		if s.table == nil {
+			return s, nil
+		}
+		tm, cmd := s.table.Update(msg)
+		s.table = tm.(*TableModel)
+		return s, cmd
+
 	default:
 		return s, nil
 	}
@@ -216,15 +434,23 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 		s.busy = true
 		return s, s.runAchievements()
 	case "/play":
-		s.appendLine("/play ainda não está disponível nesta build (chega numa próxima task).")
+		s.play = playState{}
+		s.play.sizeIdx = 0
+		s.state = statePlaySize
 		return s, nil
 	case "/enter":
 		if len(args) != 1 {
-			s.appendLine("uso: /enter <room-id>")
+			s.appendLine("uso: /enter <room-id> [--code <código>]")
 			return s, nil
 		}
-		s.appendLine("/enter ainda não está disponível nesta build (chega numa próxima task).")
-		return s, nil
+		s.play = playState{fromEnter: true, roomID: args[0]}
+		for i := 1; i+1 < len(args); i++ {
+			if args[i] == "--code" {
+				s.play.shareCode = args[i+1]
+			}
+		}
+		s.busy = true
+		return s, loadRoom(s.rc, args[0])
 	default:
 		s.appendLine(fmt.Sprintf("comando desconhecido: %s (tente /help)", cmd))
 		return s, nil
@@ -284,6 +510,37 @@ func (s *Shell) View() string {
 		return "CTech Poker CLI\n\n" + s.input.View()
 	case stateLoggingIn:
 		return s.spin.View() + " entrando..."
+	case statePlaySize:
+		var b strings.Builder
+		b.WriteString("Tamanho da mesa:\n")
+		for i, sz := range tableSizes {
+			cur := "  "
+			if i == s.play.sizeIdx {
+				cur = "› "
+			}
+			b.WriteString(cur + sz.label + "\n")
+		}
+		return b.String()
+	case statePlayStake:
+		var b strings.Builder
+		b.WriteString("Stake (small/big blind):\n")
+		for i, st := range s.play.stakes {
+			cur := "  "
+			if i == s.play.stakeIdx {
+				cur = "› "
+			}
+			b.WriteString(fmt.Sprintf("%s%d / %d\n", cur, st.SmallBlind, st.BigBlind))
+		}
+		return b.String()
+	case statePlayBuyin:
+		return fmt.Sprintf("%s\n%s", buyInHint(s.play.bigBlind), s.input.View())
+	case stateJoining:
+		return s.spin.View() + " entrando na mesa..."
+	case stateInTable:
+		if s.table != nil {
+			return s.table.View()
+		}
+		return ""
 	default: // stateHome, stateCheckingLogin
 		body := strings.Join(s.lines, "\n")
 		if s.state == stateCheckingLogin {

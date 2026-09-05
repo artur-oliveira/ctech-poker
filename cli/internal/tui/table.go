@@ -28,10 +28,14 @@ type TableConfig struct {
 	Send func(*proto.ClientMessage) error
 	// Session backs /summary (nil disables it).
 	CurrentSession func(context.Context) (summary string, err error)
-	// OnExit is called when the player leaves the table; the shell uses it
-	// to return to the home REPL.
-	OnExit func()
 }
+
+// TableExitedMsg is emitted when the player leaves the table (via /exit, a
+// forced exit, or a "removed" frame). The parent model returns to its own
+// prior screen; the table itself never calls tea.Quit.
+type TableExitedMsg struct{}
+
+func exitCmd() tea.Cmd { return func() tea.Msg { return TableExitedMsg{} } }
 
 // Table messages.
 type (
@@ -167,10 +171,7 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 	case "removed":
 		m.appendLog(strings.Join(m.narr.OnMessage(sm), "\n"))
 		m.quit = true
-		if m.cfg.OnExit != nil {
-			m.cfg.OnExit()
-		}
-		return tea.Quit
+		return exitCmd()
 
 	case "chat", "reaction", "achievement_unlocked":
 		if lines := m.narr.OnMessage(sm); len(lines) > 0 {
@@ -184,7 +185,7 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyCtrlC {
 		m.quit = true
-		return m, tea.Quit
+		return m, exitCmd()
 	}
 	if msg.String() != "enter" {
 		var cmd tea.Cmd
@@ -203,6 +204,10 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if err != nil {
 		m.appendLog("· " + err.Error())
 		return m, nil
+	}
+	if local == ActExit && cm != nil {
+		// tell the server we're leaving, then exit locally
+		return m, tea.Batch(m.send(cm), exitCmd())
 	}
 	if cmd := m.runLocal(local); cmd != nil || local != ActNone {
 		return m, cmd
@@ -247,17 +252,11 @@ func (m *TableModel) runLocal(local LocalAction) tea.Cmd {
 		}
 	case ActExit:
 		m.appendLog("· saindo da mesa…")
-		if m.cfg.OnExit != nil {
-			m.cfg.OnExit()
-		}
 		m.quit = true
-		return tea.Quit
+		return exitCmd()
 	case ActForceExit:
 		m.quit = true
-		if m.cfg.OnExit != nil {
-			m.cfg.OnExit()
-		}
-		return tea.Quit
+		return exitCmd()
 	}
 	return nil
 }

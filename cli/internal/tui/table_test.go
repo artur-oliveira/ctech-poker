@@ -130,16 +130,15 @@ func TestTableUnavailableErrorResyncsAndResendsSameActionID(t *testing.T) {
 	}
 }
 
-func TestTableRemovedQuitsAndCallsOnExit(t *testing.T) {
-	exited := false
-	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, OnExit: func() { exited = true }})
+func TestTableRemovedEmitsExitAndLogsSettledStack(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6})
 	nm, cmd := m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "removed", Message: "idle", Amount: 1500}})
 	m = nm.(*TableModel)
-	if !exited {
-		t.Error("OnExit not called")
-	}
 	if cmd == nil {
-		t.Error("removed should return tea.Quit")
+		t.Fatal("removed should emit a command")
+	}
+	if _, ok := cmd().(TableExitedMsg); !ok {
+		t.Errorf("removed should emit TableExitedMsg, got %T", cmd())
 	}
 	if !strings.Contains(strings.Join(m.log, "\n"), "1500") {
 		t.Errorf("settled stack not logged: %v", m.log)
