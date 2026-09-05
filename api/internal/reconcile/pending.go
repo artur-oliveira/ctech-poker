@@ -246,7 +246,7 @@ func (s *PendingStore) ListForPlayer(ctx context.Context, playerID string, limit
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":pid": &types.AttributeValueMemberS{Value: playerID},
 		},
-		ScanIndexForward: aws.Bool(false), Limit: aws.Int32(int32(limit)), ExclusiveStartKey: startKey,
+		ScanIndexForward: aws.Bool(false), Limit: aws.Int32(int32(limit)), ExclusiveStartKey: startKey, // lgtm[go/incorrect-integer-conversion] -- limit clamped to [1,100] above
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("reconcile: list for player: %w", err)

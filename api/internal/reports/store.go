@@ -174,7 +174,7 @@ func (s *DynamoStore) ListByReporter(ctx context.Context, reporterID, cursor str
 	out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
 		IndexName: aws.String(gsiReporter), KeyConditionExpression: aws.String("gsi_reporter_pk = :reporter"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{":reporter": &types.AttributeValueMemberS{Value: reporterID}},
-		ScanIndexForward:          aws.Bool(false), Limit: aws.Int32(int32(limit)), ExclusiveStartKey: decodeCursor(cursor),
+		ScanIndexForward:          aws.Bool(false), Limit: aws.Int32(int32(limit)), ExclusiveStartKey: decodeCursor(cursor), // lgtm[go/incorrect-integer-conversion] -- limit clamped to [1,100] above
 	})
 	if err != nil {
 		return Page{}, fmt.Errorf("reports: list by reporter: %w", err)
