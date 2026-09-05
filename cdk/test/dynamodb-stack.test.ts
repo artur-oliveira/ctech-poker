@@ -272,6 +272,17 @@ test('creates social graph, recent players, inbox and reports storage', () => {
 
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_social_edges',
+    // Exactly one index: DynamoDB creates at most one GSI per stack update.
+    GlobalSecondaryIndexes: [
+      Match.objectLike({
+        IndexName: 'gsi_relationship',
+        KeySchema: [
+          {AttributeName: 'pk', KeyType: 'HASH'},
+          {AttributeName: 'relationship', KeyType: 'RANGE'},
+        ],
+        Projection: {ProjectionType: 'KEYS_ONLY'},
+      }),
+    ],
   });
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_recent_players',

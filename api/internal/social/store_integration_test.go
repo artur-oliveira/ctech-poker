@@ -13,27 +13,13 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestDynamoConcurrentCrossedRequestsNeverLeaveUnilateralFriendship(t *testing.T) {
 	db := socialTestClient(t)
 	env := fmt.Sprintf("social_test_%d", time.Now().UnixNano())
 	name := env + "_" + tableSocialEdges
-	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{
-		TableName: aws.String(name), BillingMode: types.BillingModePayPerRequest,
-		AttributeDefinitions: []types.AttributeDefinition{
-			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
-			{AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS},
-		},
-		KeySchema: []types.KeySchemaElement{
-			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
-			{AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	createSocialEdgeTestTable(t, db, name)
 	store := NewStore(db, env)
 	service := NewService(store, true)
 	start := make(chan struct{})

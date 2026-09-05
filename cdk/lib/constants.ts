@@ -129,6 +129,7 @@ export const DYNAMO_INDEX = {
   friendCode: 'gsi_friend_code',
   socialInbox: 'gsi_inbox',
   socialUnread: 'gsi_unread',
+  socialRelationship: 'gsi_relationship',
   reportStatus: 'gsi_status',
   handShareOwner: 'gsi_owner',
 } as const;

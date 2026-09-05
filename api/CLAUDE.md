@@ -696,11 +696,17 @@ catalog.
   `markReadConcurrency` (10) at a time instead of up to 100 serial round trips; it stays per-item rather than one
   `TransactWriteItems` precisely so a single already-deleted event cannot abort the whole batch.
   **Deliberately not materialized counters:** nothing drifts, nothing needs reconciling, and no path that flips an
-  event's unread flag pays an extra write. **Known ceiling:** `Count`'s `relationship` is still a `FilterExpression`,
-  not a key, so a partition padded with tens of thousands of non-matching rows can exhaust `maxCountPages` and
-  under-report — which errs toward letting a legitimate action through rather than wrongly blocking one. The exact fix
-  is a sparse `owner#relationship` GSI on `poker_social_edges` (which has none today), a schema change and its own
-  deploy. `countbudget_integration_test.go` asserts the call counts, not just the results.
+  event's unread flag pays an extra write. `countbudget_integration_test.go` asserts the call counts, not just the
+  results.
+- **Issue #278 fixed: `social.Store.Count` resolves `relationship` by key, not by filter.** `poker_social_edges` now
+  carries exactly one GSI, `gsi_relationship` (`pk` / `relationship`, `KEYS_ONLY`), and `Count` queries it with
+  `pk = :pk AND #relationship = :relationship` and no `FilterExpression`. That closes #208's known ceiling: with the
+  filter, a partition padded with tens of thousands of rows of *another* relationship could exhaust `maxCountPages`
+  before reaching the matching ones and under-report the cap check. The index is **sparse for free** — `relationship`
+  is written `omitempty`, so a mute- or block-only edge has no sort key and never enters it — and needs **no
+  backfill**: both key attributes are base-table attributes present on every row ever written, so existing rows are
+  indexed by DynamoDB's own backfill when the index is created. It ships in its own stack update; DynamoDB refuses
+  more than one GSI creation per table update (that is what broke the prod deploy of #224, see #253).
 - **Issue #224 fixed: open sessions are indexed, not filtered.** `sessionlog`'s `FindOpenSession`,
   `FindLatestOpenSession` and `HasSessionAtTable` — on the buy-in, reconnect/presence, invite and table-scoped
   authorization paths — used to page the player's *entire* `poker_player_sessions` partition with a non-key

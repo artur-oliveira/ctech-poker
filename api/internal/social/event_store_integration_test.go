@@ -80,6 +80,36 @@ func createSimpleCompositeTable(t *testing.T, db *dynamodb.Client, name string) 
 	}
 }
 
+// createSocialEdgeTestTable mirrors cdk/lib/dynamodb-stack.ts: the edges table
+// plus its single sparse gsi_relationship index, whose keys are attributes the
+// rows already carry.
+func createSocialEdgeTestTable(t *testing.T, db *dynamodb.Client, name string) {
+	t.Helper()
+	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{
+		TableName: aws.String(name), BillingMode: types.BillingModePayPerRequest,
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("relationship"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+			{AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange},
+		},
+		GlobalSecondaryIndexes: []types.GlobalSecondaryIndex{{
+			IndexName:  aws.String(gsiSocialRelationship),
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: aws.String("relationship"), KeyType: types.KeyTypeRange},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func createSocialEventTestTable(t *testing.T, db *dynamodb.Client, name string) {
 	t.Helper()
 	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{
