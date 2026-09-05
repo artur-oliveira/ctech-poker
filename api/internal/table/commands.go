@@ -93,6 +93,19 @@ type ReconnectCmd struct {
 
 func (c ReconnectCmd) reply() chan error { return c.Reply }
 
+// RequestHandoffCmd is dispatched when a player explicitly confirms "continue
+// here, disconnect the other device." NewConnID is the connection asking to
+// take over — every OTHER connID this player currently holds anywhere in the
+// fleet (per tableconn, via Actor.fleetConnIDs) gets a deliberate server close,
+// never left to expire by TTL. See internal/tablehandoff.
+type RequestHandoffCmd struct {
+	PlayerID  string
+	NewConnID string
+	Reply     chan error
+}
+
+func (c RequestHandoffCmd) reply() chan error { return c.Reply }
+
 // ExternalChangeCmd is dispatched by tablemanager when a ChangeNotifier
 // signal reports that a sibling process just committed for this table. It
 // carries no player scope: unlike ReconnectCmd (which only broadcasts when

@@ -83,6 +83,40 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 	return nil
 }
 
+// handleRequestHandoff assumes every other live connection of PlayerID
+// (fleet-wide, from tableconn via fleetConnIDs — activeConns alone only ever
+// sees THIS instance's own sockets) and asks handoffCloser to close them.
+// A no-op if there is nothing else to close (no HandoffCloser wired, or the
+// player has no other live connID anywhere) — not an error, since "nobody
+// else was connected" is a completely normal outcome of the client's own
+// confirmation prompt firing on a stale dot.
+//
+// No ordering logic is needed here: Run processes one command at a time, so
+// any command from the old connection already queued ahead of this one
+// commits first, and nothing new from it can arrive after its socket closes
+// (the read loop that would dispatch it dies with the socket). See
+// docs/specs/2026-09-05-session-handoff-tableconn.md §5.
+func (a *Actor) handleRequestHandoff(c RequestHandoffCmd) error {
+	if a.handoffCloser == nil {
+		return nil
+	}
+	conns := a.fleetConnIDs[c.PlayerID]
+	if len(conns) == 0 {
+		return nil
+	}
+	var toClose []string
+	for connID := range conns {
+		if connID != c.NewConnID {
+			toClose = append(toClose, connID)
+		}
+	}
+	if len(toClose) == 0 {
+		return nil
+	}
+	a.handoffCloser.RequestClose(context.Background(), a.id, toClose)
+	return nil
+}
+
 // handleExternalChange reacts to a ChangeNotifier signal (see
 // SetChangeNotifierForActor): a sibling process just committed for this
 // table, so this instance forces a fresh reload — reloading also re-arms

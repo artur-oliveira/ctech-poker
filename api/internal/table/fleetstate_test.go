@@ -555,3 +555,78 @@ func TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed(t *testing.T) {
 		t.Fatalf("armed deadline = %d, want the exact persisted value %d", got, first)
 	}
 }
+
+// fakeHandoffCloser stands in for internal/tablehandoff.
+type fakeHandoffCloser struct {
+	tableID string
+	connIDs []string
+	calls   int
+}
+
+func (f *fakeHandoffCloser) RequestClose(_ context.Context, tableID string, connIDs []string) {
+	f.calls++
+	f.tableID = tableID
+	f.connIDs = connIDs
+}
+
+// A handoff closes every OTHER live connID for the player, never the new one,
+// and is a no-op when the player has no other connection anywhere in the
+// fleet (nothing to assume from).
+func TestRequestHandoffClosesEveryOtherConnID(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	closer := &fakeHandoffCloser{}
+	actor.SetHandoffCloserForActor(closer)
+	actor.fleetConnIDs = map[string]map[string]bool{
+		"p1": {"old-conn-1": true, "old-conn-2": true, "new-conn": true},
+	}
+
+	reply := make(chan error, 1)
+	if err := actor.handle(context.Background(), RequestHandoffCmd{
+		PlayerID: "p1", NewConnID: "new-conn", Reply: reply,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if closer.calls != 1 {
+		t.Fatalf("RequestClose calls = %d, want 1", closer.calls)
+	}
+	if closer.tableID != actor.id {
+		t.Fatalf("tableID = %q, want %q", closer.tableID, actor.id)
+	}
+	got := map[string]bool{}
+	for _, id := range closer.connIDs {
+		got[id] = true
+	}
+	if !got["old-conn-1"] || !got["old-conn-2"] || got["new-conn"] {
+		t.Fatalf("connIDs = %v, want exactly old-conn-1 and old-conn-2", closer.connIDs)
+	}
+}
+
+func TestRequestHandoffNoOpWhenNoOtherConnection(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	closer := &fakeHandoffCloser{}
+	actor.SetHandoffCloserForActor(closer)
+	actor.fleetConnIDs = map[string]map[string]bool{"p1": {"new-conn": true}}
+
+	reply := make(chan error, 1)
+	if err := actor.handle(context.Background(), RequestHandoffCmd{
+		PlayerID: "p1", NewConnID: "new-conn", Reply: reply,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if closer.calls != 0 {
+		t.Fatalf("RequestClose calls = %d, want 0 — nothing else to close", closer.calls)
+	}
+}
+
+// Without a HandoffCloser wired (dev/tests without a cache) this is a no-op,
+// not a panic — same convention as ConnStore/ChangeNotifier.
+func TestRequestHandoffWithoutACloserDoesNotPanic(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.fleetConnIDs = map[string]map[string]bool{"p1": {"old": true, "new-conn": true}}
+	reply := make(chan error, 1)
+	if err := actor.handle(context.Background(), RequestHandoffCmd{
+		PlayerID: "p1", NewConnID: "new-conn", Reply: reply,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+}

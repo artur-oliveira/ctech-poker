@@ -277,6 +277,19 @@ type ChangeNotifier interface {
 // after construction, by tablemanager.
 func (a *Actor) SetChangeNotifierForActor(n ChangeNotifier) { a.changeNotifier = n }
 
+// HandoffCloser asks whichever instance owns connIDs to close each one
+// deliberately (1001, never a bare drop) — see internal/tablehandoff.
+// Fire-and-forget, same reasoning as ChangeNotifier: nothing here decides
+// table state, so a dropped signal only means the old device stays connected
+// a bit longer, never a correctness issue.
+type HandoffCloser interface {
+	RequestClose(ctx context.Context, tableID string, connIDs []string)
+}
+
+// SetHandoffCloserForActor wires the shared handoff-close signal. Set once,
+// right after construction, by tablemanager.
+func (a *Actor) SetHandoffCloserForActor(c HandoffCloser) { a.handoffCloser = c }
+
 // syncFleetConns republishes this instance's connected players and refreshes
 // the fleet-wide set. force is set by the connect/disconnect handlers, whose
 // whole point is to make the change visible immediately; the paced caller is

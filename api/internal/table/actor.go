@@ -79,6 +79,10 @@ type Actor struct {
 	// only noticing on their own next unrelated reload trigger. nil in
 	// dev/tests without a cache; see docs/specs/2026-09-04-cross-process-change-notify.md.
 	changeNotifier ChangeNotifier
+	// handoffCloser tells whichever instance owns an old connID to close it
+	// deliberately when a player confirms a device handoff (internal/tablehandoff).
+	// nil in dev/tests without a cache, where RequestHandoffCmd is a no-op.
+	handoffCloser HandoffCloser
 	// fleetConnIDs is the last answer connStore gave — playerID -> connID ->
 	// alive anywhere in the fleet right now. nil means "never synced", which
 	// applyPresence reads as "trust the local view". Display only, never a
@@ -384,6 +388,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleDisconnect(c)
 	case ReconnectCmd:
 		return a.handleReconnect(ctx, c)
+	case RequestHandoffCmd:
+		return a.handleRequestHandoff(c)
 	case ExternalChangeCmd:
 		return a.handleExternalChange(ctx, c)
 	case SitOutCmd:
