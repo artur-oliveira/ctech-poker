@@ -44,41 +44,91 @@
     font-size: var(--font-size-compact);
     color: var(--text-secondary)
 }
+/* Quick presets sit directly under the server ⅓/½/⅔ row and read as one
+   preset cluster with it. Favouriting is a corner badge on each pill, not a
+   second segmented button per pill (#341 shipped that; it doubled the item
+   count and left the row a wall of outlined stars). The badge stays faint
+   until hover/focus or once pinned, so an unpinned row is just clean pills. */
 .bet-quick-presets {
     grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px
+    gap: 7px
 }
 .bet-quick-presets-hint {
-    margin: 0;
+    flex-basis: 100%;
+    margin: 0 0 1px;
     font-size: var(--font-size-tiny);
-    color: var(--text-secondary)
+    color: var(--muted)
 }
 .bet-quick-preset {
-    display: inline-flex;
-    align-items: stretch;
-    border-radius: var(--rounded-sm);
-    overflow: hidden
+    position: relative;
+    display: inline-flex
 }
-.bet-quick-preset button:first-child {
+.bet-quick-preset .bet-quick-preset-pick {
     min-height: 40px;
-    padding: 2px 10px;
-    font: 600 var(--font-size-compact) var(--font-mono)
+    /* right padding reserves the badge's corner so the longest label
+       ("All-in") never sits under the star */
+    padding: 2px 30px 2px 14px;
+    white-space: nowrap;
+    font: 600 var(--font-size-compact) var(--font-mono);
+    border-radius: var(--rounded-pill)
 }
-.bet-quick-preset-favorite {
+.bet-quick-preset[data-pinned] .bet-quick-preset-pick {
+    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+    color: var(--gold)
+}
+/* 24x24 hit target (WCAG 2.5.8); the star glyph itself stays small via svg size */
+.action-bar .bet-quick-preset-favorite {
+    position: absolute;
+    top: 2px;
+    right: 2px;
     display: grid;
     place-items: center;
-    width: 32px;
-    min-height: 40px
+    width: 24px;
+    min-width: 0;
+    height: 24px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--rounded-pill);
+    background: transparent;
+    color: var(--muted);
+    opacity: .4;
+    transition: opacity 140ms var(--ease-out-quart), color 140ms var(--ease-out-quart), transform 140ms var(--ease-out-quart)
 }
-.bet-quick-preset-favorite svg {
-    width: 15px;
-    height: 15px
+.action-bar .bet-quick-preset-favorite svg {
+    width: 12px;
+    height: 12px
 }
-.bet-quick-preset-favorite[aria-pressed='true'] svg {
+.bet-quick-preset:hover .bet-quick-preset-favorite,
+.bet-quick-preset:focus-within .bet-quick-preset-favorite,
+.bet-quick-preset[data-pinned] .bet-quick-preset-favorite {
+    opacity: 1
+}
+.bet-quick-preset[data-pinned] .bet-quick-preset-favorite {
     color: var(--gold)
+}
+.action-bar .bet-quick-preset-favorite:hover {
+    transform: scale(1.15)
+}
+@media (hover: none), (pointer: coarse) {
+    .action-bar .bet-quick-preset-favorite {
+        opacity: .5
+    }
+    .action-bar .bet-quick-preset-favorite svg {
+        width: 13px;
+        height: 13px
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .action-bar .bet-quick-preset-favorite {
+        transition: color 140ms var(--ease-out-quart)
+    }
+    .action-bar .bet-quick-preset-favorite:hover {
+        transform: none
+    }
 }
 .reality-check-title {
     display: inline-flex;

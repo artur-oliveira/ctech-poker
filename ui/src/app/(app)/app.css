@@ -1511,9 +1511,13 @@
     position: relative;
     z-index: 10;
     display: grid;
-    grid-template-columns:auto minmax(190px, 320px) auto;
-    gap: 8px;
-    align-items: center;
+    grid-template-columns:auto minmax(268px, 380px) auto;
+    gap: 8px 12px;
+    /* end, not center: the sizing column is several rows tall, so centring the
+       Fold/Check/Pagar cluster and Aumentar against its midpoint left them
+       floating with air above and below and the slider stranded at the bottom.
+       Bottom-aligning ties all three clusters to the same baseline. */
+    align-items: end;
     justify-content: center;
     padding: 9px max(15px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(15px, env(safe-area-inset-left));
     background: linear-gradient(transparent, var(--table-room))
@@ -1639,6 +1643,10 @@
     grid-template-columns:minmax(112px, 1fr) 68px;
     align-items: center;
     gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--surface-control) 70%, transparent);
     color: var(--gold);
     font: 600 12px var(--font-mono)
 }
@@ -1719,10 +1727,10 @@
 }
 .action-bar .bet-presets button {
     flex: 1;
-    min-height: 44px;
+    min-height: 40px;
     padding: 2px 8px;
     font: 600 var(--font-size-compact) var(--font-mono);
-    border-radius: var(--rounded-sm)
+    border-radius: var(--rounded-pill)
 }
 .action-bar kbd {
     margin-left: 6px;
@@ -3645,12 +3653,14 @@
     }
 .bet-control {
         grid-template-columns: 1fr;
-        gap: 6px
+        gap: 6px;
+        padding: 6px
     }
 .bet-stepper {
         display: grid;
-        grid-template-columns: 52px minmax(0, 1fr) 52px;
-        gap: 6px
+        grid-template-columns: 52px minmax(96px, 148px) 52px;
+        justify-content: center;
+        gap: 8px
     }
 .action-bar .bet-step-button {
         display: grid;

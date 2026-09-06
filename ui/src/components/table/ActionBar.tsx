@@ -282,17 +282,20 @@ function QuickPresetRow({pot, minRaise, maxRaise, raiseStep, disabled, favorites
   if (maxRaise < minRaise) return null;
   return <div className="bet-quick-presets" role="group" aria-label="Presets rápidos de aposta">
     {!favorites.length && <p className="bet-quick-presets-hint">Toque na estrela para fixar seus favoritos.</p>}
-    {visible.map(preset => <span key={preset.id} className="bet-quick-preset">
-      <button type="button" disabled={disabled}
-              aria-label={`Preset ${preset.label}: aumentar para ${preset.value.toLocaleString('pt-BR')}`}
-              onClick={() => onPick(preset.value)}>{preset.label}</button>
-      <button type="button" className="bet-quick-preset-favorite" disabled={favoritesSaving}
-              aria-pressed={favorites.includes(preset.id)}
-              aria-label={`${favorites.includes(preset.id) ? 'Remover' : 'Marcar'} ${preset.label} dos favoritos`}
-              onClick={() => onToggleFavorite(preset.id)}>
-        <Star aria-hidden="true" fill={favorites.includes(preset.id) ? 'currentColor' : 'none'}/>
-      </button>
-    </span>)}
+    {visible.map(preset => {
+      const pinned = favorites.includes(preset.id);
+      return <span key={preset.id} className="bet-quick-preset" data-pinned={pinned || undefined}>
+        <button type="button" className="bet-quick-preset-pick" disabled={disabled}
+                aria-label={`Preset ${preset.label}: aumentar para ${preset.value.toLocaleString('pt-BR')}`}
+                onClick={() => onPick(preset.value)}>{preset.label}</button>
+        <button type="button" className="bet-quick-preset-favorite" disabled={favoritesSaving}
+                aria-pressed={pinned}
+                aria-label={`${pinned ? 'Remover' : 'Marcar'} ${preset.label} dos favoritos`}
+                onClick={() => onToggleFavorite(preset.id)}>
+          <Star aria-hidden="true" fill={pinned ? 'currentColor' : 'none'}/>
+        </button>
+      </span>;
+    })}
   </div>;
 }
 
