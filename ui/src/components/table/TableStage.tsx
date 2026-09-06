@@ -29,36 +29,16 @@ export function tableCapacity(maxSeats?: number): TableCapacity {
 
 /** Evenly divide the occupied perimeter with the viewer at index zero on the
  * bottom. The same angular rule produces face-to-face, reversed-triangle and
- * diamond layouts for 2/3/4 players without capacity-specific magic slots. */
-export function balancedSeatPosition(index: number, playerCount: number, portrait = false): SeatLayoutPosition {
+ * diamond layouts for 2/3/4 players without capacity-specific magic slots.
+ *
+ * Every seat lands on the orbit ellipse — the rail band's centreline
+ * (`--table-orbit-*`) — so opponents sit on the walnut with their bet chips on
+ * the felt inside it. Portrait and the desktop oval share this rule; portrait
+ * differs only in the capsule shape and per-occupancy rail insets, both in CSS.
+ * In portrait, index 0 (the viewer) leaves the ring to become the bottom HUD,
+ * so its bottom slot is shared out evenly rather than weighting one side. */
+export function balancedSeatPosition(index: number, playerCount: number): SeatLayoutPosition {
   const safeCount = Math.max(1, playerCount);
-  if (portrait) {
-    // Nine reference points trace the centre of the capsule rail, in the
-    // normalised orbit space CSS resolves against the rail tokens (0 = the
-    // left/top orbit line, 1 = the right/bottom one — see
-    // --table-orbit-* in base.css). Sampling that path by occupancy keeps
-    // every player on the material itself; an ellipse cuts the lower pair
-    // through the felt, because a capsule's sides stay straight before they
-    // turn into its bottom arc.
-    const rail = [
-      [.5, 1], [.078, .798], [0, .488], [.078, .179], [.3, 0],
-      [.7, 0], [.922, .179], [1, .488], [.922, .798], [.5, 1],
-    ] as const;
-    const progress = index / safeCount * 9;
-    const start = Math.floor(progress);
-    const mix = progress - start;
-    const from = rail[start];
-    const to = rail[Math.min(start + 1, rail.length - 1)];
-    const s = from[0] + (to[0] - from[0]) * mix;
-    const t = from[1] + (to[1] - from[1]) * mix;
-    // Only the shallow top arc uses the inward-card/outward-label treatment.
-    // The t=.179 reference points are already on the straight upper sides.
-    const zone = t > .726 ? 'bottom' : t < .131 ? 'top' : s < .5 ? 'left' : 'right';
-    const side = s < .444 ? 'left' : s > .556 ? 'right' : 'center';
-    return {s: Number(s.toFixed(4)), t: Number(t.toFixed(4)), zone, side};
-  }
-  // The desktop oval's seats are the orbit ellipse itself, so they track the
-  // rail band the same way the capsule's polyline does.
   const angle = Math.PI / 2 + index * (Math.PI * 2 / safeCount);
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
@@ -68,16 +48,16 @@ export function balancedSeatPosition(index: number, playerCount: number, portrai
 }
 
 // `balancedSeatPosition` is pure and its inputs are a tiny bounded set
-// (index x occupancy x orientation), but it returns a fresh object — which is
-// a new prop identity for every seat on every render, and enough on its own to
-// defeat `memo(Seat)`. Caching the results is what makes the memo real (#230).
+// (index x occupancy), but it returns a fresh object — which is a new prop
+// identity for every seat on every render, and enough on its own to defeat
+// `memo(Seat)`. Caching the results is what makes the memo real (#230).
 const layoutPositionCache = new Map<string, SeatLayoutPosition>();
 
-function seatLayoutPosition(index: number, playerCount: number, portrait = false): SeatLayoutPosition {
-  const key = `${index}:${playerCount}:${portrait}`;
+function seatLayoutPosition(index: number, playerCount: number): SeatLayoutPosition {
+  const key = `${index}:${playerCount}`;
   const cached = layoutPositionCache.get(key);
   if (cached) return cached;
-  const position = balancedSeatPosition(index, playerCount, portrait);
+  const position = balancedSeatPosition(index, playerCount);
   layoutPositionCache.set(key, position);
   return position;
 }
@@ -356,32 +336,43 @@ function TableStageImpl({
   // the ring entirely and becomes the hero HUD at the stage's bottom edge.
   const viewerFirst = seats[0]?.player_id === viewer;
   const opponents = viewerFirst ? seats.slice(1) : seats;
+
+  const overlayStack = <>
+    <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
+                       onDismissedChangeAction={onOutcomeDismissedChange}
+                       nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
+    <div className="table-overlay-stack">
+      <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                   pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
+                   onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
+                   offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
+      <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+      <ExitStatus pendingExit={Boolean(viewerPendingExit)}
+                  isViewerTurn={snapshot.current_player_id === viewer}
+                  onCancelAction={() => onCancelExitAction?.()}/>
+    </div>
+  </>;
+
+  // Portrait handhelds and short landscape both use the avatar ring: the
+  // viewer leaves it and becomes a separate hero seat. Portrait (stage-v) docks
+  // that seat below the capsule; short landscape (stage-h) uses `display:
+  // contents` on this wrapper so the ring and the hero seat become siblings in
+  // the .game grid — ring in the left column, hero above the action dock on
+  // the right. Same composition, one extra class.
   return (
-    <div className={`game-table stage-v ${compactLandscape ? 'stage-h' : ''}`} data-stage={snapshot.stage} data-capacity={capacity}
-         data-player-count={seats.length} data-layout-key={seatLayoutKey}>
+    <div className={`game-table stage-v${compactLandscape ? ' stage-h' : ''}`} data-stage={snapshot.stage}
+         data-capacity={capacity} data-player-count={seats.length} data-layout-key={seatLayoutKey}>
       <div className="stage-v-ring">
         <div className="game-rail"/>
         <div className="game-felt">{feltContent}</div>
         {opponents.map((seat, index) => {
           const tableIndex = viewerFirst ? index + 1 : index;
-          return seatNode(seat, tableIndex, seatLayoutPosition(tableIndex, seats.length, vertical));
+          return seatNode(seat, tableIndex, seatLayoutPosition(tableIndex, seats.length));
         })}
-        <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
-                           onDismissedChangeAction={onOutcomeDismissedChange}
-                           nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
-        <div className="table-overlay-stack">
-          <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                       pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
-                       onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
-                       offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
-          <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                    pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
-                    onRequestRabbitHuntAction={onRequestRabbitHuntAction}
-                    onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
-          <ExitStatus pendingExit={Boolean(viewerPendingExit)}
-                      isViewerTurn={snapshot.current_player_id === viewer}
-                      onCancelAction={() => onCancelExitAction?.()}/>
-        </div>
+        {overlayStack}
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>

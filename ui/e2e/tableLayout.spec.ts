@@ -11,6 +11,9 @@ const VIEWPORTS = [
   {name: '320x568', width: 320, height: 568},
   {name: '390x844', width: 390, height: 844},
   {name: '430x932', width: 430, height: 932},
+  // Phone held sideways: the two-column stage-h layout (table left, viewer +
+  // dock right). `.game` clips, so nothing on the ring may leave the viewport.
+  {name: '812x375', width: 812, height: 375},
   {name: '768x1024', width: 768, height: 1024},
   {name: '1280x800', width: 1280, height: 800},
   {name: '1440x900', width: 1440, height: 900},
@@ -94,11 +97,24 @@ for (const viewport of VIEWPORTS) {
       test(`${scenario}: the rail band is the same thickness all the way round`, async ({page}) => {
         await openTable(page, scenario);
         const band = await page.evaluate(() => {
-          const rail = document.querySelector('.game-rail')!.getBoundingClientRect();
-          const felt = document.querySelector('.game-felt')!.getBoundingClientRect();
+          const felt = document.querySelector('.game-felt')!;
+          const rail = document.querySelector('.game-rail');
+          // stage-h: the walnut is the felt's own border (a constant-width
+          // stroke), the separate .game-rail ellipse is display:none.
+          if (!rail || getComputedStyle(rail).display === 'none') {
+            const cs = getComputedStyle(felt);
+            return {
+              top: Math.round(parseFloat(cs.borderTopWidth)),
+              right: Math.round(parseFloat(cs.borderRightWidth)),
+              bottom: Math.round(parseFloat(cs.borderBottomWidth)),
+              left: Math.round(parseFloat(cs.borderLeftWidth)),
+            };
+          }
+          const r = rail.getBoundingClientRect();
+          const f = felt.getBoundingClientRect();
           return {
-            top: Math.round(felt.top - rail.top), right: Math.round(rail.right - felt.right),
-            bottom: Math.round(rail.bottom - felt.bottom), left: Math.round(felt.left - rail.left),
+            top: Math.round(f.top - r.top), right: Math.round(r.right - f.right),
+            bottom: Math.round(r.bottom - f.bottom), left: Math.round(f.left - r.left),
           };
         });
         const sides = Object.values(band);
@@ -115,12 +131,23 @@ for (const viewport of VIEWPORTS) {
     test('every balanced seat sits on the band centreline', async ({page}) => {
       await openTable(page, 'nine_max');
       const worst = await page.evaluate(() => {
-        const rail = document.querySelector('.game-rail')!.getBoundingClientRect();
-        const felt = document.querySelector('.game-felt')!.getBoundingClientRect();
-        const mid = {
-          left: (rail.left + felt.left) / 2, right: (rail.right + felt.right) / 2,
-          top: (rail.top + felt.top) / 2, bottom: (rail.bottom + felt.bottom) / 2,
-        };
+        const feltEl = document.querySelector('.game-felt')!;
+        const felt = feltEl.getBoundingClientRect();
+        const railEl = document.querySelector('.game-rail');
+        let mid;
+        if (!railEl || getComputedStyle(railEl).display === 'none') {
+          // stage-h: centreline is the felt's border centre.
+          const cs = getComputedStyle(feltEl);
+          const bt = parseFloat(cs.borderTopWidth) / 2, br = parseFloat(cs.borderRightWidth) / 2;
+          const bb = parseFloat(cs.borderBottomWidth) / 2, bl = parseFloat(cs.borderLeftWidth) / 2;
+          mid = {left: felt.left + bl, right: felt.right - br, top: felt.top + bt, bottom: felt.bottom - bb};
+        } else {
+          const rail = railEl.getBoundingClientRect();
+          mid = {
+            left: (rail.left + felt.left) / 2, right: (rail.right + felt.right) / 2,
+            top: (rail.top + felt.top) / 2, bottom: (rail.bottom + felt.bottom) / 2,
+          };
+        }
         return [...document.querySelectorAll('.game-seat[data-balanced-seat]')].reduce((max, seat) => {
           const box = seat.getBoundingClientRect();
           const style = getComputedStyle(seat);

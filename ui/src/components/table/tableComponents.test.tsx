@@ -208,12 +208,23 @@ describe('table presentation', () => {
     ]);
   });
 
-  test('samples portrait seats from the capsule rail instead of an inset ellipse', () => {
-    expect(balancedSeatPosition(1, 2, true)).toEqual({s: 0.5, t: 0, zone: 'top', side: 'center'});
-    expect(balancedSeatPosition(1, 3, true)).toEqual({s: 0.078, t: 0.179, zone: 'left', side: 'left'});
-    expect(balancedSeatPosition(2, 3, true)).toEqual({s: 0.922, t: 0.179, zone: 'right', side: 'right'});
-    expect(balancedSeatPosition(1, 9, true)).toEqual({s: 0.078, t: 0.798, zone: 'bottom', side: 'left'});
-    expect(balancedSeatPosition(8, 9, true)).toEqual({s: 0.922, t: 0.798, zone: 'bottom', side: 'right'});
+  test('keeps every seat on the orbit ellipse so opponents ride the rail band', () => {
+    // s,t stay within [0,1] — the orbit line itself — at every occupancy, so
+    // no opponent is pushed onto the felt or past the rail's outer edge.
+    for (const count of [2, 3, 4, 5, 6, 7, 8, 9]) {
+      for (let index = 0; index < count; index += 1) {
+        const {s, t} = balancedSeatPosition(index, count);
+        expect(s).toBeGreaterThanOrEqual(0);
+        expect(s).toBeLessThanOrEqual(1);
+        expect(t).toBeGreaterThanOrEqual(0);
+        expect(t).toBeLessThanOrEqual(1);
+      }
+    }
+    // Portrait drops index 0 (the bottom HUD); the rest spread evenly, so a
+    // 6-max ring is symmetric left-to-right rather than top-heavy.
+    const ring = [1, 2, 3, 4, 5].map(index => balancedSeatPosition(index, 6).s);
+    expect(ring[0]).toBeCloseTo(1 - ring[4], 5);
+    expect(ring[1]).toBeCloseTo(1 - ring[3], 5);
   });
 
   test.each([
@@ -245,6 +256,24 @@ describe('table presentation', () => {
       maxSeats={6} seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
       holdOutcomeOpen={false}/>);
     expect(portrait.container.querySelector('.stage-v-ring .game-felt .felt-wordmark')).toHaveTextContent('CTECH');
+  });
+
+  test('short landscape keeps the avatar ring and splits the viewer into its own column', () => {
+    // matchMedia mock matches every query; the component prefers the portrait
+    // capsule when both fire, so force portrait off for this one.
+    vi.mocked(window.matchMedia).mockImplementation(query => ({
+      ...NON_MATCHING_MEDIA(query),
+      matches: query.includes('landscape'),
+    } as unknown as MediaQueryList));
+    const snapshot = snapshotForScenario('layout_5');
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={9}
+      seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(container.querySelector('.game-table')).toHaveClass('stage-h');
+    // The 4 opponents stay in the avatar ring; the viewer leaves it and is the
+    // separate hero seat that CSS lifts into the right column.
+    expect(container.querySelectorAll('.stage-v-ring .game-seat')).toHaveLength(4);
+    expect(container.querySelector('.stage-h > .game-seat.viewer')).toBeInTheDocument();
+    expect(container.querySelector('.stage-v-ring .game-felt .board')).toBeInTheDocument();
   });
 
   test('shows one public playstyle badge and leaves unbadged seats unchanged', () => {

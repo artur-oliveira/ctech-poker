@@ -452,7 +452,7 @@
    keeps every hidden string in the accessibility tree; tapping the trophy
    (TodayHighlight.tsx's `expanded` state) floats the full pill open again
    via the rules below instead of losing the number outright. */
-@media (max-width: 520px), (orientation: portrait) and (max-width: 1023px) {
+@media (max-width: 520px), (orientation: portrait) and (max-width: 1023px), (max-height: 620px) and (orientation: landscape) {
 /* app.css's base `.today-highlight-wrap` rule (every route it renders on)
        sets flex-shrink:0/max-width:100% for desktop, where the pill needs to
        keep its natural width. At these phone widths that pinned the wrap at

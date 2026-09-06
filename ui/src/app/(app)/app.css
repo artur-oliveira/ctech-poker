@@ -1530,7 +1530,19 @@
     align-items: end;
     justify-content: center;
     padding: 9px max(15px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(15px, env(safe-area-inset-left));
-    background: linear-gradient(transparent, var(--table-room))
+    background: linear-gradient(transparent, var(--table-room));
+    scrollbar-width: thin;
+    scrollbar-color: var(--white-22) transparent
+}
+.action-bar::-webkit-scrollbar {
+    width: 6px
+}
+.action-bar::-webkit-scrollbar-track {
+    background: transparent
+}
+.action-bar::-webkit-scrollbar-thumb {
+    border-radius: var(--rounded-pill);
+    background: var(--white-22)
 }
 @media (orientation: portrait) and (max-height: 760px),
        (orientation: landscape) and (max-height: 620px) {
@@ -3338,7 +3350,9 @@
 .stage-v {
     --table-rail-band: 26px;
     --table-rail-inset-top: 28px;
-    --table-rail-inset-inline: 4px;
+    /* Wide enough that a left/right seat (s = 0 or 1, i.e. centred on the
+       band) keeps its whole 38px avatar chip on the walnut and on screen. */
+    --table-rail-inset-inline: 16px;
     --table-rail-inset-bottom: 12px
 }
 .stage-v .board-runout-row,
@@ -3444,73 +3458,94 @@
     }
 }
 @media (max-height: 620px) and (orientation: landscape) {
-.game-chrome {
-        grid-column: 1 / -1
-    }
 .game-chrome > header {
-        min-height: 48px;
+        min-height: 46px;
         padding-top: max(2px, env(safe-area-inset-top));
         padding-bottom: 2px
     }
-.game-table {
-        grid-column: 1;
-        grid-row: 2;
-        width: 100%;
-        min-height: 320px
-    }
-.game-table:not(.stage-v) .felt-wordmark {
+/* The pot pill has no room beside the collapsed tool row on a short header,
+       and it broke the landscape header layout. Drop it entirely here (its
+       data is still on /hands and the toast); it comes back in portrait. */
+    .today-highlight-wrap {
         display: none
     }
-.stage-h .stage-v-ring {
-        align-self: stretch;
-        width: 100%;
-        min-height: 0;
-        aspect-ratio: auto
-    }
-.stage-h {
-        --table-rail-band: 26px;
-        --table-rail-inset-top: 10%;
-        --table-rail-inset-inline: 1%;
-        --table-rail-inset-bottom: 8%
-    }
-.stage-h .game-rail,
-    .stage-h .game-felt {
-        border-radius: 50%
-    }
-.stage-h .felt-wordmark,
-    .stage-h .table-callout {
-        display: none
-    }
-.stage-h .stage-v-ring .game-seat {
-        --seat-size: 34px
-    }
-.stage-h > .game-seat {
-        min-height: 54px;
-        padding-block: 4px
-    }
-.game-table {
-        --table-rail-band: 26px;
-        --table-rail-inset-top: 10%;
-        --table-rail-inset-inline: 1%;
-        --table-rail-inset-bottom: 8%
-    }
-.action-bar {
+/* .game-table is display:contents in landscape (renderer.css) — its grid
+       placement lives on .stage-v-ring and the hero .game-seat.viewer. */
+    .action-bar {
         grid-column: 2;
-        grid-row: 2;
-        align-content: center;
+        grid-row: 3;
+        min-height: 0;
+        align-content: start;
         grid-template-columns:1fr;
-        padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) 12px;
+        gap: 6px;
+        padding: 6px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) 10px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         background: var(--room-grad-4)
     }
-.action-choices {
+.action-context-row {
+        flex-wrap: wrap;
+        gap: 4px 8px
+    }
+/* Landscape mobile is a touch device with no keyboard — drop every
+       shortcut hint (the `(pointer: coarse)` rule already does this on real
+       hardware, but not in a resized desktop viewport, and the narrow column
+       has no width to spare for a `kbd` that does nothing here). */
+    .action-bar kbd,
+    .action-preselectors kbd {
+        display: none
+    }
+/* The prepared-action row is a horizontal strip on desktop; in the narrow
+       right column it has to wrap to a grid or it blows the column width out
+       and breaks the landscape layout. */
+    .action-preselectors {
         grid-column: auto;
-        grid-template-columns:1fr
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px
+    }
+.action-preselectors > span:first-child {
+        grid-column: 1 / -1
+    }
+.action-preselectors button {
+        min-width: 0
+    }
+/* The raise sizing UI stays collapsed until the player taps Aumentar once
+       (RaiseControl's COMPACT_QUERY matches here). renderer.css's
+       `.bet-control-collapsed{display:none}` loses to this sheet's later base
+       `.bet-control{display:grid}` at equal specificity, so re-assert it with
+       the descendant selector the portrait tier already uses. */
+    .action-bar .bet-control-collapsed {
+        display: none
+    }
+.bet-range,
+    .bet-control .bet-output-desktop,
+    .bet-preset-mobile-hidden {
+        display: none
+    }
+/* Keep the decisions in a 3-up block at the top of the dock so they never
+       scroll out of reach; only the bet range and presets below can. */
+    .action-choices {
+        grid-column: auto;
+        grid-template-columns:repeat(3, 1fr);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding-bottom: 6px;
+        background: var(--room-grad-4)
     }
 .bet-control {
-        grid-template-columns:minmax(76px, 1fr) 58px
+        grid-template-columns: 1fr;
+        gap: 6px;
+        padding: 6px
+    }
+.bet-stepper {
+        display: grid;
+        grid-template-columns: 48px minmax(80px, 1fr) 48px;
+        gap: 6px
     }
 .game-chat {
-        right: calc(clamp(220px, 28vw, 264px) + 12px);
+        right: calc(clamp(224px, 34vw, 320px) + 12px);
         bottom: max(12px, env(safe-area-inset-bottom))
     }
 }
@@ -3576,7 +3611,35 @@
        viewer hero seat below it drifted up off the bottom instead of
        staying pinned there. Reverted. */
 .stage-v[data-capacity='2'] .stage-v-ring {
-        max-width: min(82%, 640px)
+        max-width: min(94%, 640px)
+    }
+/* A small field only sits on the top two-thirds of the capsule, so a
+       full-height pill leaves the lower half a dead green slab (the
+       "not full width / geometrically wrong" report). Deepen the rail's
+       top+bottom inset by occupancy so the walnut wraps the seats that are
+       actually there; the band and felt still derive from it (One Band
+       Rule), and the ring keeps flex:1 so the viewer HUD stays pinned. */
+.stage-v[data-player-count='2'],
+    .stage-v[data-player-count='3'] {
+        --table-rail-inset-top: 19%;
+        --table-rail-inset-bottom: 20%
+    }
+.stage-v[data-player-count='4'],
+    .stage-v[data-player-count='5'] {
+        --table-rail-inset-top: 10%;
+        --table-rail-inset-bottom: 11%
+    }
+@media (max-height: 760px) {
+        .stage-v[data-player-count='2'],
+        .stage-v[data-player-count='3'] {
+            --table-rail-inset-top: 15%;
+            --table-rail-inset-bottom: 16%
+        }
+        .stage-v[data-player-count='4'],
+        .stage-v[data-player-count='5'] {
+            --table-rail-inset-top: 8%;
+            --table-rail-inset-bottom: 9%
+        }
     }
 /* Short portrait phones (SE/8 class): the capsule steps down as a whole, so
        the band steps down with it instead of each side drifting on its own
@@ -5991,7 +6054,8 @@ button.deck-grid-slot:hover {
     justify-content: flex-start;
     gap: 10px
 }
-@media (orientation: portrait) and (max-width: 1023px) {
+@media (orientation: portrait) and (max-width: 1023px),
+       (max-height: 620px) and (orientation: landscape) {
 .table-utility-menu-slot {
         display: inline-flex
     }

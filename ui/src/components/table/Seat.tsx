@@ -292,6 +292,9 @@ function SeatImpl({
               data-player-id={seat.player_id}
               data-seat-zone={layoutPosition?.zone}
               data-seat-side={layoutPosition?.side}
+              data-seat-vert={layoutPosition
+                ? layoutPosition.t < 0.4 ? 'high' : layoutPosition.t > 0.62 ? 'low' : 'mid'
+                : undefined}
               data-balanced-seat={layoutPosition ? '' : undefined}
               style={seatStyle}
               aria-current={isTurn ? 'true' : undefined}

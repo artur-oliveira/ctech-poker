@@ -285,7 +285,7 @@ The table permits an evidence-backed micro-scale below the token floor only insi
 
 Public and authenticated content share a centered shell capped at 1160px, with 20px desktop gutters and 16px mobile gutters. Public landing layouts use generous vertical sections, asymmetric two-column storytelling, and a responsive table preview. Operational pages use a sticky 72px application bar, compact page headings, and scannable grids or lists; only true editorial arrivals opt into centered feature headings.
 
-The live table is a distinct blocking layout. It occupies the available 100dvh, subtracts the global API-unavailable strip when present, and divides the viewport into table chrome, a flexible stage, and the action dock. Desktop and landscape use an oval rail up to 920px wide. Portrait handhelds use a dedicated vertical seat ring; the viewer leaves the ring and becomes a bottom hero HUD so identity and actions stay readable.
+The live table is a distinct blocking layout. It occupies the available 100dvh, subtracts the global API-unavailable strip when present, and divides the viewport into table chrome, a flexible stage, and the action dock. Desktop uses an oval rail up to 920px wide. Portrait handhelds use a dedicated vertical seat ring on a capsule (opponents ride the walnut, the viewer leaves the ring and becomes a bottom hero HUD); with only two or three players the capsule's rail inset deepens so the walnut wraps the seats instead of leaving dead felt. Short landscape (`max-height: 620px`) splits into two columns: the oval + avatar ring on the left (the viewer removed from it) and, on the right, the viewer's own cards stacked above the action dock. `.game-table` is `display: contents` so both become `.game` grid items. The rail there is `.game-felt`'s own 26px `border` (a constant-width stroke) rather than an inset ellipse — two `border-radius:50%` ellipses can't give a uniform band at that size. Chat/reactions/last-winners consolidate into the header icons like portrait.
 
 Responsive adaptation is structural. At 600px, the seven authenticated routes leave the top bar for a fixed four-slot bottom navigation; every page using it reserves bottom safe-area clearance. Table actions collapse into an opaque bottom sheet at 800px or in short landscape. Content indexes and guide topics become native disclosures near 720px. Compact 520px and 380px tiers resolve dense components without horizontal page scrolling. Touch targets remain at least 44×44px even when their visible badge or icon is smaller.
 
@@ -293,7 +293,7 @@ Spacing follows a 4px base rhythm with recurring 8, 12, 16, 24, 32, 48, 64, and 
 
 ### Named Rules
 
-**The Blocking Table Rule.** Portrait play owns exactly one viewport: header, flexible table, viewer HUD, and safe-area action dock. Do not add document scroll to solve table crowding.
+**The Blocking Table Rule.** Portrait play owns exactly one viewport: header, flexible table, viewer HUD, and safe-area action dock. Do not add document scroll to solve table crowding. Short landscape is the same budget in two columns — the table on the left, the viewer's cards over the action dock on the right — and the only thing allowed to scroll is the (collapsed-by-default) raise sizing UI.
 
 **The Structure-Before-Shrink Rule.** Reflow, disclose, or relocate before reducing type or touch targets. Critical actions never fall below 44px.
 

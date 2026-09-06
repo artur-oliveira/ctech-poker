@@ -1420,8 +1420,12 @@
        against the card's own white/striped back. translateZ forces its own
        compositing layer instead, which keeps iOS Safari from rasterizing
        the SVG at a blurry, non-retina resolution under the filter (a
-       documented WebKit quirk, distinct from the DPR-sizing fix above). */
-    filter: drop-shadow(0 8px 8px var(--overlay-night-3));
+       documented WebKit quirk, distinct from the DPR-sizing fix above).
+       The card-face SVGs carry no internal <filter> (that was the other
+       half of the iOS blur, and its baked drop-shadow was the heavy smear
+       under every card); this contact shadow is short and soft so the card
+       sits on the felt instead of floating over a dark blob. */
+    filter: drop-shadow(0 2px 4px var(--overlay-night-2));
     transform: translateZ(0)
 }
 .card-reveal {
@@ -1666,7 +1670,7 @@
 .seat-cards > img.playing-card {
     /* filter, not box-shadow — see the board-card comment above; every
        opponent's face-down card hit the same iPhone blur. */
-    filter: drop-shadow(0 4px 4px var(--black));
+    filter: drop-shadow(0 2px 3px var(--overlay-night-2));
     transform: translateZ(0);
     animation: hole-deal 320ms var(--ease-out-expo) both;
     animation-delay: calc(var(--deal-index, 0) * 65ms)
@@ -5054,12 +5058,14 @@
     height: 42px;
     margin-right: -12px
 }
-.stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards,
+/* Cards below / caption above is the top-arc treatment, keyed on the geometric
+   zone only. It used to also name .seat-4/.seat-5 (the fixed top pair of the
+   capacity era), but the balanced ring puts player index 4 or 5 anywhere — a
+   right-column seat-4 was getting its hole cards flung down past the felt. */
 .stage-v-ring .seat-zone-top .seat-cards {
     bottom: auto;
     top: calc(100% + 5px)
 }
-.stage-v-ring .seat-4 .seat-info, .stage-v-ring .seat-5 .seat-info,
 .stage-v-ring .seat-zone-top .seat-info {
     top: auto;
     bottom: 100%;
@@ -5319,6 +5325,21 @@
     width: 60px;
     max-width: 60px;
     transform: none
+}
+/* A left/right seat riding high on the ring (few-handed tables put the two
+   opponents up near 10 and 2 o'clock) has no room for cards above it — the
+   upper rail is a thin sliver there. Drop the cards toward the felt and lift
+   the caption onto the rail, the same split the top arc uses. Bet chips keep
+   their sideways lane. */
+.stage-v-ring :is(.seat-zone-left, .seat-zone-right)[data-seat-vert='high'] .seat-cards {
+    bottom: auto;
+    top: calc(100% + 5px)
+}
+.stage-v-ring :is(.seat-zone-left, .seat-zone-right)[data-seat-vert='high'] .seat-info {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 3px
 }
 /* The hero IS obviously you: the neutral border moves to gold's "your turn"
    signal here, matching .game-seat.is-turn:after above so red stays reserved
@@ -5942,139 +5963,250 @@
     }
 }
 @media (max-height: 620px) and (orientation: landscape) {
-.game {
-        grid-template-columns:minmax(320px, 1fr) clamp(220px, 28vw, 264px);
-        grid-template-rows:auto minmax(320px, 1fr)
+/* Short landscape (phone rotated): a hard, non-scrolling budget in TWO
+       columns — the table (oval + avatar ring, exactly the portrait/desktop
+       ring) on the left, and everything the local player touches on the right:
+       their own hole cards, the prepared-action row, and the action dock.
+       The viewer never sits in the ring. Rows: header, then the viewer's card
+       strip, then the table (spanning down) beside the action dock. */
+    .game {
+        height: calc(100dvh - var(--api-bar-h));
+        min-height: 0;
+        overflow: hidden;
+        grid-template-columns: minmax(0, 1fr) minmax(224px, 34%);
+        grid-template-rows: auto auto minmax(0, 1fr)
     }
-/* The action dock owns the second grid column, so balanced centers clamp
-       inside the first column by half a compact seat. Vertical clamping keeps
-       floated cards below the header and above the street rail. */
-    .game-table:not(.stage-v) > .game-seat[data-balanced-seat] {
-        left: clamp(64px, calc(var(--table-orbit-inline) + var(--seat-s) * (100% - 2 * var(--table-orbit-inline))), calc(100% - 64px));
-        top: clamp(90px, calc(var(--table-orbit-top) + var(--seat-t) * (100% - var(--table-orbit-top) - var(--table-orbit-bottom))), calc(100% - 90px))
+.game-chrome {
+        grid-column: 1 / -1;
+        grid-row: 1
     }
-/* Short landscape uses the same compact-seat DOM as portrait, but on a
-       shallow oval. The viewer HUD consumes a small strip below the ring and
-       the action dock remains in its dedicated right column. */
+/* display:contents so the ring and the hero seat (both direct children of
+       .game-table in TableStage) become grid items of .game directly. */
     .game-table.stage-h {
-        gap: 4px;
-        padding: 0 8px 4px
+        display: contents
     }
-.stage-h .stage-v-ring .seat-cards > .playing-card {
-        width: 26px;
-        height: 36px;
-        margin-right: -11px
+/* The ring is a fixed-ratio oval centred in its grid cell, not a box
+       stretched to fill it: a box inset of `--table-rail-*` only reads as a
+       uniform walnut band when the box's own proportions are close to the
+       oval's. A pancake-wide cell gave a thin sliver of rail at the top and a
+       fat one at the sides. `aspect-ratio` + `min()` sizes it to whichever of
+       the cell's width/height binds first; the rest of the cell is table-room
+       black, exactly like the desktop oval's side gutters. */
+    .stage-h .stage-v-ring {
+        grid-column: 1;
+        grid-row: 2 / 4;
+        align-self: center;
+        justify-self: center;
+        /* Desktop's oval ratio, so the ellipse-pair walnut reads uniform the
+           same way it does on desktop. Whichever of the cell's width/height
+           binds first sizes it; the rest of the cell is table-room black. */
+        aspect-ratio: 1.5 / 1;
+        height: 100%;
+        width: auto;
+        max-width: 100%;
+        max-height: 100%;
+        min-width: 0;
+        min-height: 0;
+        margin: 0;
+        padding: 0
     }
-.stage-h .stage-v-ring .seat-info,
-    .stage-h .stage-v-ring .seat-zone-top .seat-info {
-        width: 48px;
-        max-width: 48px
+.stage-h > .game-seat.viewer {
+        grid-column: 2;
+        grid-row: 2;
+        position: relative;
+        inset: auto;
+        left: auto;
+        top: auto;
+        transform: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin: 0;
+        padding: 5px 10px max(5px, env(safe-area-inset-bottom)) 10px
     }
-.stage-h > .game-seat .seat-avatar {
+.stage-h .action-bar {
+        grid-column: 2;
+        grid-row: 3
+    }
+/* --- the oval: desktop's ELLIPSE shape, with a genuinely uniform rail ---
+       Two inset ellipses (rail behind felt) can't give a constant-width band —
+       the gap pinches at the diagonals, invisible on desktop's big mild oval
+       but obvious at this size with 9 seats on it. A CSS `border`, by contrast,
+       is a constant-width stroke whatever the `border-radius`. So here the
+       walnut is `.game-felt`'s own 26px border (uniform), the brown edge is a
+       box-shadow ring outside it, and the separate `.game-rail` ellipse is
+       dropped. `border-radius: 50%` keeps the desktop ellipse silhouette. */
+    .stage-h .game-rail {
         display: none
     }
-.stage-h > .game-seat .seat-cards > .playing-card {
-        width: 38px;
-        height: 53px
+.stage-h .game-felt {
+        inset: 10% 8%;
+        border-radius: 50%;
+        border: 26px solid var(--table-rail);
+        box-shadow:
+            0 0 0 7px var(--table-rail-edge),
+            0 16px 36px #000b,
+            var(--shadow-felt);
+        background: radial-gradient(circle, var(--table-felt-light), var(--table-felt-dark) 72%)
     }
-.table-reactions {
-        right: calc(clamp(220px, 28vw, 264px) + 64px);
-        bottom: max(12px, env(safe-area-inset-bottom))
+.game-table.stage-h,
+    .stage-h .stage-v-ring {
+        /* Seats on the border centreline: felt inset (%) + half the 26px
+           border. A 24px avatar centred there stays inside the walnut. */
+        --table-orbit-inline: calc(8% + 13px);
+        --table-orbit-top: calc(10% + 13px);
+        --table-orbit-bottom: calc(10% + 13px)
     }
-/* A 390px-tall ring is wide, not tall: spread the bottom/top rows into
-       the corners, pin the side seats to the true vertical middle, and keep
-       bets tight to their seats so nothing reaches the board. */
-    .seat-0 {
-        left: 33%;
-        bottom: 2%
+.stage-h .stage-v-ring .game-seat {
+        --seat-size: 24px
     }
-.seat-8 {
-        left: 56%;
-        bottom: 2%
+.stage-h .felt-wordmark,
+    .stage-h .table-callout {
+        display: none
     }
-.seat-1 {
-        left: 12%;
-        bottom: 7%
-    }
-.seat-7 {
-        right: 12%;
-        bottom: 7%
-    }
-.seat-2 {
-        left: 1%;
-        top: 40%
-    }
-.seat-6 {
-        right: 1%;
-        top: 40%
-    }
-/* Side seats sit level with the board on short landscape tables. Keep
-       long localized bet values in the open rail pocket below each seat
-       instead of letting the amount extend into the first/fifth card. */
-    .game-table .seat-2 .seat-bet,
-    .game-table .seat-6 .seat-bet {
-        top: calc(100% + 4px);
-        right: auto;
-        bottom: auto;
-        left: 50%;
-        transform: translateX(-50%);
-        transform-origin: 50% 0
-    }
-.seat-3 {
-        left: 13%;
-        top: 5%
-    }
-.seat-5 {
-        right: 13%;
-        top: 5%
-    }
-.seat-4 {
-        left: 46%;
-        top: 4%
-    }
-/* Top-center seat: cards float over the header if they stay above the
-       pill, so flip them below, toward the felt. */
-    .seat-4 .seat-cards {
-        bottom: auto;
-        top: calc(100% - 3px)
-    }
-.seat-4 .seat-bet {
-        top: calc(100% + 48px)
-    }
-.seat-bet {
-        top: calc(100% + 4px)
-    }
-.seat-0 .seat-bet, .seat-8 .seat-bet {
-        bottom: calc(100% + 40px)
-    }
-/* Lower-corner bets slide sideways toward the pot; floating them up
-       lands them on the mid-side seats at this height. */
-    .seat-1 .seat-bet {
-        top: 50%;
-        left: calc(100% + 6px);
-        bottom: auto;
-        transform: translateY(-50%);
-        transform-origin: 0 50%;
-        flex-direction: column
-    }
-.seat-7 .seat-bet {
-        top: 50%;
-        left: auto;
-        right: calc(100% + 6px);
-        bottom: auto;
-        transform: translateY(-50%);
-        transform-origin: 100% 50%;
-        flex-direction: column
-    }
-.board-card, .board > div > span,
-    .board-runout-row > div > span:not(.playing-card) {
-        width: 42px;
-        height: 59px
+.stage-h .board > div {
+        gap: 3px
     }
 .stage-h .board-card, .stage-h .board > div > span,
     .stage-h .board-runout-row > div > span:not(.playing-card) {
-        width: 34px;
-        height: 48px
+        width: 30px;
+        height: 42px
+    }
+.stage-h .stage-v-ring .seat-cards > .playing-card {
+        width: 22px;
+        height: 31px;
+        margin-right: -10px
+    }
+.stage-h .stage-v-ring .seat-info {
+        width: 58px;
+        max-width: 58px
+    }
+/* Every ring caption sits OUTSIDE the oval — never over the felt. Top seats
+       push up into the header gap (the 12% top inset leaves room), bottom seats
+       push down, side seats stay in their outward lane. The stack figure is
+       the only line shown; name lives in the avatar initials. */
+    .stage-h .stage-v-ring .seat-zone-top .seat-info {
+        top: auto;
+        bottom: calc(100% + 2px);
+        margin: 0;
+        transform: translateX(-50%)
+    }
+.stage-h .stage-v-ring .seat-zone-bottom .seat-info {
+        top: calc(100% + 2px);
+        bottom: auto;
+        margin: 0;
+        transform: translateX(-50%)
+    }
+.stage-h .stage-v-ring .seat-zone-top .seat-cards {
+        bottom: auto;
+        top: calc(100% + 2px)
+    }
+/* --- the viewer's own card strip (right column, above the dock) --- */
+    .stage-h > .game-seat.viewer .seat-avatar {
+        display: none
+    }
+.stage-h > .game-seat.viewer .seat-cards {
+        position: relative;
+        inset: auto;
+        left: auto;
+        top: auto;
+        bottom: auto;
+        transform: none;
+        display: flex;
+        flex: 0 0 auto
+    }
+.stage-h > .game-seat.viewer .seat-cards > .playing-card {
+        width: 40px;
+        height: 56px
+    }
+.stage-h > .game-seat.viewer .seat-info {
+        position: relative;
+        inset: auto;
+        left: auto;
+        top: auto;
+        width: auto;
+        max-width: none;
+        min-width: 0;
+        margin: 0;
+        transform: none;
+        text-align: left
+    }
+.stage-h > .game-seat.viewer .seat-info b {
+        position: static;
+        width: auto;
+        height: auto;
+        clip-path: none
+    }
+.stage-h > .game-seat.viewer .seat-info .seat-equity {
+        display: block
+    }
+.stage-h > .game-seat.viewer .seat-bet,
+    .stage-h > .game-seat.viewer .seat-win,
+    .stage-h > .game-seat.viewer .seat-refund {
+        position: static;
+        inset: auto;
+        transform: none;
+        margin-left: auto;
+        flex-direction: row;
+        gap: 4px
+    }
+.stage-h > .game-seat.viewer .seat-playstyle {
+        display: none
+    }
+/* Short landscape consolidates the asides into the header exactly like
+       portrait (see the matching rules in the portrait block): the floating
+       toggles are hidden, the quick-action icons and the utility menu open
+       them instead, and the panels dock in the top-right clear of the felt.
+       Selectors carry a .header-right / .game prefix so they beat the base
+       display rules that sit later in this sheet. */
+    .header-right .table-mobile-quick-action {
+        display: inline-flex
+    }
+.header-right .table-rankings-standalone,
+    .header-right .table-preferences-standalone,
+    .header-right .table-invite-standalone {
+        display: none
+    }
+.header-right .table-exit-slot {
+        display: inline-flex;
+        margin-left: 2px;
+        padding-left: 2px;
+        border-left: 1px solid var(--white-18)
+    }
+.header-right .table-exit-slot button {
+        color: var(--danger-soft)
+    }
+.game .game-chat .chat-toggle,
+    .game .table-reactions .reaction-toggle,
+    .game .last-winners .last-winners-toggle,
+    .game .equity-trainer .equity-trainer-toggle {
+        display: none
+    }
+.game .game-chat.game-chat,
+    .game .table-reactions,
+    .game .last-winners,
+    .game .equity-trainer {
+        top: calc(env(safe-area-inset-top) + 52px);
+        bottom: auto;
+        right: max(8px, env(safe-area-inset-right));
+        left: auto;
+        flex-direction: column;
+        align-items: flex-end
+    }
+.game .game-chat:not(.open),
+    .game .table-reactions:not(.open),
+    .game .last-winners:not(.open),
+    .game .equity-trainer:not(.open) {
+        pointer-events: none
+    }
+.game .chat-body,
+    .game .reaction-panel,
+    .game .last-winners-panel,
+    .game .equity-trainer-panel {
+        width: min(300px, calc(100vw - clamp(212px, 30vw, 260px) - 24px));
+        max-height: calc(100dvh - env(safe-area-inset-top) - 60px);
+        margin: 4px 0 0
     }
 }
 /* Short portrait phones (SE/8 class): the ring loses its height to header +

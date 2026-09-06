@@ -41,6 +41,18 @@ export default function TableGuide() {
           clicar de novo fecha.</p></>
     },
     {
+      id: 'layout',
+      title: 'A mesa em cada tela',
+      summary: 'A disposição muda com o formato da tela, não só o tamanho das coisas.',
+      body: <><p>Em tela larga a mesa é um oval com os assentos na madeira ao redor do feltro e você embaixo.</p>
+        <p>No <b>celular em pé</b> os adversários viram fichas de avatar na borda de uma cápsula e você sai do anel:
+          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Com poucos jogadores a
+          cápsula encolhe para não deixar feltro vazio.</p>
+        <p>No <b>celular deitado</b> a tela vira duas colunas: à esquerda o mesmo oval com os adversários na madeira,
+          à direita tudo que é seu — suas cartas, a ação preparada e a barra de ações. Você não fica no anel. Chat,
+          reações e últimos vencedores passam para os ícones do cabeçalho, como no celular em pé.</p></>
+    },
+    {
       id: 'acoes',
       title: 'Ações na sua vez',
       summary: 'A barra habilita apenas o que é legal no estado atual.',
