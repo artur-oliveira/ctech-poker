@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/google/uuid"
 	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/proto"
 )
@@ -88,6 +89,16 @@ type TableModel struct {
 	exitRequested   bool // /exit sent request_exit; waiting for the server's "removed"
 	exitActionID    string
 	quit            bool
+
+	// Per-hand local peek state (§1.1). Both cards render face-down until the
+	// viewer peeks them; strength/equity stay hidden until both are peeked.
+	// Reset when hand_id changes; forced revealed once the hand completes.
+	peek               [2]bool
+	peekHandID         string
+	peekBreadcrumbSent bool
+
+	// Ctrl+C at the table needs a confirmation press (§1.2).
+	ctrlCAt time.Time
 }
 
 // NewTableModel builds the table view for cfg.
@@ -97,11 +108,49 @@ func NewTableModel(cfg TableConfig) *TableModel {
 	ti.PromptStyle = promptStyle
 	ti.Placeholder = "/ para ver comandos"
 	ti.Focus()
-	return &TableModel{
+	m := &TableModel{
 		cfg: cfg, narr: game.NewNarrator(cfg.YouID).WithCardMode(cfg.CardMode),
 		input: ti, menu: newCommandMenu(tableCommandSpecs),
 		now: time.Now(), followBottom: true,
 	}
+	m.menu.argFn = m.reactCompletions
+	return m
+}
+
+// reactCompletions drives argument-level autocomplete for `/react`: first the
+// reaction code, then — for a targeted reaction — the opponent to throw it at.
+// prefix is the input text to keep verbatim ahead of the completed token.
+func (m *TableModel) reactCompletions(value string) (choices []commandSpec, prefix string) {
+	fields := strings.SplitN(value, " ", 3)
+	if fields[0] != "/react" || len(fields) < 2 {
+		return nil, ""
+	}
+	if len(fields) == 2 { // completing the reaction code
+		partial := strings.ToLower(fields[1])
+		for _, r := range game.TableReactions {
+			if !strings.HasPrefix(r.ID, partial) {
+				continue
+			}
+			args, desc := "", r.Label
+			if r.Targeted {
+				args, desc = "<jogador>", r.Label+" (mira alguém)"
+			}
+			choices = append(choices, commandSpec{Name: r.ID, Args: args, Desc: desc})
+		}
+		return choices, "/react "
+	}
+	r, ok := game.LookupReaction(fields[1]) // completing the target player
+	if !ok || !r.Targeted {
+		return nil, ""
+	}
+	partial := strings.ToLower(fields[2])
+	for _, p := range m.view.Players {
+		if p.IsYou || !strings.HasPrefix(strings.ToLower(p.Name), partial) {
+			continue
+		}
+		choices = append(choices, commandSpec{Name: p.Name, Desc: p.Position})
+	}
+	return choices, "/react " + fields[1] + " "
 }
 
 func (m *TableModel) Init() tea.Cmd { return tableTick() }
@@ -205,6 +254,7 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 		}
 		m.view = game.NewTableView(sm.Snapshot, m.cfg.YouID, m.cfg.RoomName, m.cfg.RealMoney, m.cfg.Blinds, m.cfg.MaxSeats, m.cfg.CardMode)
 		m.haveView = true
+		m.reconcilePeek()
 		m.refreshCommandMenu()
 		m.refreshInputHint()
 		return nil
@@ -278,8 +328,7 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 
 func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyCtrlC {
-		m.quit = true
-		return m, exitCmd(m.exitDetails("local", "atalho Ctrl+C", 0, false))
+		return m.handleCtrlC()
 	}
 
 	switch msg.Type {
@@ -408,6 +457,108 @@ func (m *TableModel) submitLine() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleCtrlC guards the table exit: outside a live seat it quits at once;
+// seated, the first press warns and arms a 3s window, the second within it
+// folds (if it's your turn) or sits you out, asks the server to remove you,
+// then quits.
+func (m *TableModel) handleCtrlC() (tea.Model, tea.Cmd) {
+	if m.view.You.ID == "" || m.fatal || m.exitRequested {
+		m.quit = true
+		return m, exitCmd(m.exitDetails("local", "atalho Ctrl+C", 0, false))
+	}
+	if !m.ctrlCAt.IsZero() && time.Since(m.ctrlCAt) < 3*time.Second {
+		send := func(cm *proto.ClientMessage) {
+			if m.cfg.Send != nil {
+				_ = m.cfg.Send(cm)
+			}
+		}
+		if m.view.IsYourTurn && hasAction(m.view, "fold") {
+			send(act("fold", 0, m.view))
+			m.appendLog("· fold enviado ao sair")
+		} else {
+			send(&proto.ClientMessage{Type: "ready", Ready: false})
+			m.appendLog("· sit-out enviado ao sair")
+		}
+		send(&proto.ClientMessage{Type: "request_exit", ActionId: uuid.NewString()})
+		m.quit = true
+		return m, exitCmd(m.exitDetails("local", "saída via Ctrl+C", 0, false))
+	}
+	m.ctrlCAt = time.Now()
+	m.appendLog(mutedStyle.Render("· aperte Ctrl+C de novo em 3s para sair — você vai dar fold / sit-out"))
+	return m, nil
+}
+
+// reconcilePeek resets per-hand peek state on a new hand and force-reveals
+// both cards once the hand completes.
+func (m *TableModel) reconcilePeek() {
+	if m.view.HandID != m.peekHandID {
+		m.peekHandID = m.view.HandID
+		m.peek = [2]bool{}
+		m.peekBreadcrumbSent = false
+	}
+	if strings.EqualFold(m.view.Stage, "complete") {
+		m.peek = [2]bool{true, true}
+	}
+}
+
+// applyPeek toggles local reveal state. idx < 0 toggles both cards
+// independently. On the first reveal of a hand it fires the one-shot
+// peek_cards achievement breadcrumb (best-effort).
+func (m *TableModel) applyPeek(idx int) tea.Cmd {
+	revealed := false
+	if idx < 0 {
+		for i := range m.peek {
+			m.peek[i] = !m.peek[i]
+			revealed = revealed || m.peek[i]
+		}
+	} else {
+		m.peek[idx] = !m.peek[idx]
+		revealed = m.peek[idx]
+	}
+	if !revealed || m.peekBreadcrumbSent || m.view.HandID == "" || len(m.view.YourHole) != 2 {
+		return nil
+	}
+	if m.reconnecting || m.fatal || m.cfg.Send == nil {
+		return nil
+	}
+	m.peekBreadcrumbSent = true
+	cm := &proto.ClientMessage{Type: "peek_cards"}
+	if idx >= 0 {
+		i := int32(idx)
+		cm.CardIndex = &i
+	}
+	return m.send(cm)
+}
+
+// handSummary renders the viewer's hole cards, face-down (██) until peeked;
+// strength and equity appear only once both cards are peeked (§1.1).
+func (m *TableModel) handSummary() string {
+	v := m.view
+	if len(v.YourHole) != 2 {
+		if len(v.YourHole) > 0 {
+			return "Sua mão: " + game.FormatCards(v.YourHole, m.cfg.CardMode)
+		}
+		return "Sua mão: —"
+	}
+	if !(m.peek[0] && m.peek[1]) {
+		card := func(i int) string {
+			if m.peek[i] {
+				return game.FormatCard(v.YourHole[i], m.cfg.CardMode)
+			}
+			return "██"
+		}
+		return "Sua mão: " + card(0) + " " + card(1) + " " + mutedStyle.Render("(/peek para ver)")
+	}
+	s := "Sua mão: " + game.FormatCards(v.YourHole, m.cfg.CardMode)
+	if v.YourStrength != "" {
+		s += " · " + v.YourStrength
+	}
+	if v.YourEquity >= 0 {
+		s += fmt.Sprintf(" · ~%.0f%%", v.YourEquity*100)
+	}
+	return s
+}
+
 func (m *TableModel) clearPendingAction() {
 	m.pendingActionID = ""
 	m.pendingMsg = nil
@@ -461,6 +612,12 @@ func (m *TableModel) runLocal(local LocalAction) tea.Cmd {
 	case ActClear:
 		m.log = nil
 		m.syncViewport()
+	case ActPeekBoth:
+		return m.applyPeek(-1)
+	case ActPeekCard1:
+		return m.applyPeek(0)
+	case ActPeekCard2:
+		return m.applyPeek(1)
 	}
 	return nil
 }
@@ -635,16 +792,10 @@ func (m *TableModel) header(maxWidth int) string {
 	if board == "" {
 		board = "pré-flop"
 	}
-	hand := "Sua mão: —"
-	if len(v.YourHole) > 0 {
-		hand = "Sua mão: " + game.FormatCards(v.YourHole, m.cfg.CardMode)
-		if v.YourStrength != "" {
-			hand += " · " + v.YourStrength
-		}
-		if v.YourEquity >= 0 {
-			hand += fmt.Sprintf(" · ~%.0f%%", v.YourEquity*100)
-		}
-	}
+	// Board and hole cards each get their own line so they are easy to pick
+	// out (§5); the pot rides along on the board line.
+	boardLine := fmt.Sprintf("Board  %s · Pote %s", board, money(v.Pot))
+	hand := m.handSummary()
 
 	var lines []string
 	switch {
@@ -652,20 +803,27 @@ func (m *TableModel) header(maxWidth int) string {
 		lines = append(lines,
 			fmt.Sprintf("Mesa %s · No-Limit Hold'em · %s · blinds %s/%s · %d/%d",
 				titleStyle.Render(name), stage, money(v.SmallBlind), money(v.BigBlind), v.Seated, v.MaxSeats),
-			fmt.Sprintf("Pote: %s · Mesa: %s · %s", money(v.Pot), board, hand),
+			boardLine,
+			hand,
 		)
-		lines = append(lines, packHeaderSegments("Jogadores: ", m.playerSegments(money, false), width, 2)...)
+		// The per-seat table costs one line per seat; on a short terminal fall
+		// back to the packed two-line list so the log doesn't vanish.
+		if m.windowHeight > 0 && m.windowHeight < 20 {
+			lines = append(lines, packHeaderSegments("Jogadores: ", m.playerSegments(money, false), width, 2)...)
+		} else {
+			lines = append(lines, m.playerRows(money)...)
+		}
 	case width >= 48:
 		lines = append(lines,
 			fmt.Sprintf("Mesa %s · %s · blinds %s/%s", titleStyle.Render(name), stage, money(v.SmallBlind), money(v.BigBlind)),
-			fmt.Sprintf("Pote: %s · Mesa: %s", money(v.Pot), board),
+			boardLine,
 			hand,
 		)
 		lines = append(lines, packHeaderSegments("Em foco: ", m.playerSegments(money, true), width, 1)...)
 	default:
 		lines = append(lines,
 			fmt.Sprintf("%s · %s", titleStyle.Render(name), stage),
-			fmt.Sprintf("Pote %s · Mesa %s", money(v.Pot), board),
+			boardLine,
 			hand,
 		)
 	}
@@ -698,6 +856,70 @@ func stageLabel(stage string) string {
 		}
 		return stage
 	}
+}
+
+// playerRows renders the seat list as an aligned table (§5): one row per
+// seat, position / name / stack in fixed columns, an "aposta N" or status
+// note trailing. Actor row is marked "▶" and coloured; the viewer's row is
+// bold; folded / sitting-out rows are dimmed.
+func (m *TableModel) playerRows(money func(int64) string) []string {
+	if len(m.view.Players) == 0 {
+		return []string{mutedStyle.Render("Jogadores: aguardando")}
+	}
+	type row struct {
+		marker, pos, name, stack, note string
+		you, actor, dim                bool
+	}
+	rows := make([]row, 0, len(m.view.Players))
+	var posW, nameW, stackW int
+	for _, p := range m.view.Players {
+		r := row{
+			pos: p.Position, name: p.Name, stack: money(p.Stack),
+			you:   p.IsYou,
+			actor: p.ID == m.view.CurrentPlayer.ID && m.view.CurrentPlayer.ID != "",
+			dim:   p.Folded || p.SittingOut,
+		}
+		if r.pos == "" {
+			r.pos = "—"
+		}
+		if p.IsYou {
+			r.name = "VOCÊ"
+		}
+		switch {
+		case p.Folded:
+			r.note = "desistiu"
+		case p.SittingOut:
+			r.note = "fora"
+		case p.Committed > 0:
+			r.note = "aposta " + money(p.Committed)
+		}
+		r.marker = " "
+		if r.actor {
+			r.marker = "▶"
+		}
+		rows = append(rows, r)
+		posW = max(posW, len(r.pos))
+		nameW = max(nameW, ansi.StringWidth(r.name))
+		stackW = max(stackW, len(r.stack))
+	}
+	out := make([]string, 0, len(rows)+1)
+	out = append(out, mutedStyle.Render("Jogadores"))
+	for _, r := range rows {
+		line := fmt.Sprintf("  %s %-*s  %-*s  %*s", r.marker, posW, r.pos, nameW, r.name, stackW, r.stack)
+		if r.note != "" {
+			line += "  " + r.note
+		}
+		switch {
+		case r.you:
+			line = accentStyle.Bold(true).Render(line)
+		case r.actor:
+			line = successStyle.Render(line)
+		case r.dim:
+			line = dimStyle.Render(line)
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 func (m *TableModel) playerSegments(money func(int64) string, focused bool) []string {

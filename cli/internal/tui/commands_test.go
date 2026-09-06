@@ -97,21 +97,109 @@ func TestParseTalkRejectsOverLong(t *testing.T) {
 	}
 }
 
+func reactView() game.TableView {
+	v := turnView()
+	v.Players = []game.PlayerView{
+		{ID: "p-caio", Name: "Caio", Position: "CO"},
+		{ID: "p-you", Name: "VOCÊ", Position: "BB", IsYou: true},
+	}
+	return v
+}
+
 func TestParseReactWithTarget(t *testing.T) {
-	m, _, err := ParseTableCommand("/react gg caio", turnView())
-	if err != nil || m.Type != "reaction" || m.ReactionId != "gg" || m.TargetPlayerId != "caio" {
+	m, _, err := ParseTableCommand("/react chip Caio", reactView())
+	if err != nil || m.Type != "reaction" || m.ReactionId != "chip" || m.TargetPlayerId != "p-caio" {
 		t.Fatalf("m=%v err=%v", m, err)
+	}
+	// position tag and raw id also resolve
+	if m, _, _ := ParseTableCommand("/react chip co", reactView()); m.TargetPlayerId != "p-caio" {
+		t.Fatalf("position target: %+v", m)
+	}
+	if m, _, _ := ParseTableCommand("/react chip p-caio", reactView()); m.TargetPlayerId != "p-caio" {
+		t.Fatalf("id target: %+v", m)
+	}
+}
+
+func TestParseReactValidation(t *testing.T) {
+	if _, _, err := ParseTableCommand("/react gg", reactView()); err == nil {
+		t.Fatal("unknown reaction code should error")
+	}
+	if _, _, err := ParseTableCommand("/react chip", reactView()); err == nil {
+		t.Fatal("targeted reaction without a player should error")
+	}
+	if _, _, err := ParseTableCommand("/react clap Caio", reactView()); err == nil {
+		t.Fatal("broadcast reaction with a target should error")
+	}
+	if _, _, err := ParseTableCommand("/react chip ninguem", reactView()); err == nil {
+		t.Fatal("unknown target should error")
+	}
+	m, _, err := ParseTableCommand("/react clap", reactView())
+	if err != nil || m.ReactionId != "clap" || m.TargetPlayerId != "" {
+		t.Fatalf("broadcast reaction: %+v err=%v", m, err)
 	}
 }
 
 func TestParsePeekVariants(t *testing.T) {
-	m, _, _ := ParseTableCommand("/peek", turnView())
-	if m.Type != "peek_cards" || m.CardIndex != nil {
-		t.Fatalf("peek all: %+v", m)
+	// /peek is a client-only reveal toggle; it sends no frame here.
+	if m, local, _ := ParseTableCommand("/peek", turnView()); m != nil || local != ActPeekBoth {
+		t.Fatalf("peek all: m=%+v local=%d", m, local)
 	}
-	m, _, _ = ParseTableCommand("/peek 2", turnView())
-	if m.CardIndex == nil || *m.CardIndex != 1 {
-		t.Fatalf("peek 2: %+v", m)
+	if _, local, _ := ParseTableCommand("/peek 1", turnView()); local != ActPeekCard1 {
+		t.Fatalf("peek 1: local=%d", local)
+	}
+	if _, local, _ := ParseTableCommand("/peek 2", turnView()); local != ActPeekCard2 {
+		t.Fatalf("peek 2: local=%d", local)
+	}
+	if _, _, err := ParseTableCommand("/peek 3", turnView()); err == nil {
+		t.Fatalf("peek 3 should error")
+	}
+	// `k` works even when it is not your turn.
+	if _, local, err := ParseTableCommand("k", game.TableView{}); err != nil || local != ActPeekBoth {
+		t.Fatalf("k off-turn: local=%d err=%v", local, err)
+	}
+}
+
+func TestParseAuxiliaryTableCommands(t *testing.T) {
+	cases := map[string]string{
+		"/rabbit":   "request_rabbit_hunt",
+		"/reqcards": "request_winner_cards",
+		"/accept":   "accept_winner_cards",
+		"/decline":  "decline_winner_cards",
+		"/keep":     "keep_seat",
+		"/postbb":   "post_big_blind",
+	}
+	for line, want := range cases {
+		m, _, err := ParseTableCommand(line, turnView())
+		if err != nil || m == nil || m.Type != want || m.ActionId == "" {
+			t.Fatalf("%s: m=%+v err=%v", line, m, err)
+		}
+	}
+
+	if m, _, err := ParseTableCommand("/rit on", turnView()); err != nil || m.Type != "set_run_it_twice" || m.RunItTwice == nil || !*m.RunItTwice {
+		t.Fatalf("rit on: %+v err=%v", m, err)
+	}
+	if _, _, err := ParseTableCommand("/rit maybe", turnView()); err == nil {
+		t.Fatalf("rit maybe should error")
+	}
+
+	m, _, err := ParseTableCommand("/showcards 2", turnView())
+	if err != nil || m.Type != "show_cards" || m.CardIndex == nil || *m.CardIndex != 1 {
+		t.Fatalf("showcards 2: %+v err=%v", m, err)
+	}
+	if m, _, _ := ParseTableCommand("/showcards", turnView()); m.CardIndex != nil {
+		t.Fatalf("showcards all should carry no card_index: %+v", m)
+	}
+
+	m, _, err = ParseTableCommand("/preselect call_any", turnView())
+	if err != nil || m.Type != "preselect_action" || m.Action != "call_any" ||
+		m.ExpectedSnapshotVersion != 42 || m.ExpectedHandId != "h-1" {
+		t.Fatalf("preselect: %+v err=%v", m, err)
+	}
+	if m, _, _ := ParseTableCommand("/preselect off", turnView()); m.Action != "" {
+		t.Fatalf("preselect off should clear the action: %+v", m)
+	}
+	if _, _, err := ParseTableCommand("/preselect bogus", turnView()); err == nil {
+		t.Fatalf("preselect bogus should error")
 	}
 }
 

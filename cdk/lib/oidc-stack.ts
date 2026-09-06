@@ -12,6 +12,10 @@ import {
 
 interface OidcStackProps extends cdk.StackProps {
   githubRepo: string;
+  /** Immutable numeric owner ID (GitHub `repository_owner_id` claim). */
+  githubRepoOwnerId: string;
+  /** Immutable numeric repo ID (GitHub `repository_id` claim). */
+  githubRepoId: string;
   deploymentsBucket: string;
 }
 
@@ -20,19 +24,25 @@ interface OidcStackProps extends cdk.StackProps {
  * Creates the GitHub Actions deployment roles. Auth is pure OIDC — there are no
  * long-lived access keys and no `secrets.*` anywhere in the workflows.
  *
- * ── Trust scoping (issue #41) ─────────────────────────────────────────────
- * The `sub` claim is pinned with `StringEquals` (exact match, never `:*`):
- *   - deploy/api/scopes roles: only the deploy branches
- *     (`repo:<repo>:ref:refs/heads/{main,staging,dev}`), because
+ * ── Trust scoping (issue #41, revised 2026-09-06) ─────────────────────────
+ * Identity is pinned with `StringEquals` on the immutable numeric claims
+ * `repository_owner_id` + `repository_id` (survive a repo rename/transfer and
+ * are independent of the "include repository and owner ID in the OIDC subject
+ * claim" GitHub setting). The `sub` claim is then matched with `StringLike`
+ * (`repo:*:ref:refs/heads/{main,staging,dev}` / `repo:*:pull_request`) purely
+ * to restrict *which ref* may assume the role — never `:*` alone:
+ *   - deploy/api/scopes roles: only the deploy branches, because
  *     `.github/workflows/deploy.yml` only runs those jobs on `push` to those
  *     branches (`if: github.event_name != 'pull_request'`).
- *   - infra role: the deploy branches **plus** `repo:<repo>:pull_request`,
- *     because `infra.yml`'s `diff` job assumes it on `pull_request` to render a
+ *   - infra role: the deploy branches **plus** `repo:*:pull_request`, because
+ *     `infra.yml`'s `diff` job assumes it on `pull_request` to render a
  *     read-only `cdk diff` comment. `cdk diff` needs only describe/read access,
  *     which PowerUserAccess already implies; the PR context cannot deploy
  *     because the workflow gates the deploy job on the event name.
- * The old malformed second `sub` pattern (an "owner@.../repo@..." shape that
- * can never match a real GitHub `sub`) is removed.
+ * Why not `StringEquals` on `sub`: GitHub started emitting
+ * `repo:<owner>@<ownerId>/<repo>@<repoId>:ref:...` in `sub`, which no longer
+ * equals `repo:<owner>/<repo>:ref:...` — that mismatch is what broke OIDC
+ * assumption (CloudTrail `AccessDenied` on `sts:AssumeRoleWithWebIdentity`).
  *
  * ── infraRole permissions (issue #41) ────────────────────────────────────
  * `AdministratorAccess` is replaced with `PowerUserAccess` + a narrowly scoped
@@ -49,7 +59,7 @@ export class OidcStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: OidcStackProps) {
     super(scope, id, props);
 
-    const {githubRepo, deploymentsBucket} = props;
+    const {githubRepoOwnerId, githubRepoId, deploymentsBucket} = props;
 
     // GitHub OIDC provider is owned by ctech-cdk (Ctech-Global stack).
     // Import by well-known ARN — do not create it here.
@@ -58,15 +68,24 @@ export class OidcStack extends cdk.Stack {
       this, 'GitHubOidc', providerArn,
     );
 
+    // `sub` now carries immutable IDs (`repo:<owner>@<id>/<repo>@<id>:ref:...`)
+    // whenever the GitHub subject-claim customization is on, so match the ref
+    // portion with `StringLike` (`*` spans the owner/repo segment) and pin the
+    // real identity on the numeric owner/repo ID claims below.
     const branchSubs = GHA_DEPLOY_BRANCHES.map(
-      (b) => `repo:${githubRepo}:ref:refs/heads/${b}`,
+      (b) => `repo:*:ref:refs/heads/${b}`,
     );
-    const prSub = `repo:${githubRepo}:pull_request`;
+    const prSub = 'repo:*:pull_request';
 
     const principalFor = (subs: string[]) =>
       new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+          'token.actions.githubusercontent.com:repository_owner_id':
+            githubRepoOwnerId,
+          'token.actions.githubusercontent.com:repository_id': githubRepoId,
+        },
+        StringLike: {
           'token.actions.githubusercontent.com:sub': subs,
         },
       });

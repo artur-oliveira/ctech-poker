@@ -4,6 +4,7 @@ bin/
 !cdk/bin/
 node_modules/
 cdk.out/
+cli/poker
 *.log
 .DS_Store
 api/archiver
@@ -25,3 +26,4 @@ cdk/*/*.js
 .claude/
 .codex/
 .impeccable/config.local.json
+cli/.impeccable/critique/*.md

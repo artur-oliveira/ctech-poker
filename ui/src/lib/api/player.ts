@@ -25,9 +25,11 @@ const DEFAULT_SHOWCASE_LAYOUT: ShowcaseLayout = {order: DEFAULT_SHOWCASE_ORDER, 
 export function normalizeShowcaseLayout(layout?: ShowcaseLayout): ShowcaseLayout {
   if (!layout) return DEFAULT_SHOWCASE_LAYOUT;
   const known = new Set(DEFAULT_SHOWCASE_ORDER);
-  const order = layout.order.filter(id => known.has(id));
+  // order/hidden can arrive null or absent from an older profile row, not just
+  // the whole object — coerce each to an array before filtering.
+  const order = (Array.isArray(layout.order) ? layout.order : []).filter(id => known.has(id));
   for (const id of DEFAULT_SHOWCASE_ORDER) if (!order.includes(id)) order.push(id);
-  const hidden = layout.hidden.filter(id => id !== 'achievements' && known.has(id));
+  const hidden = (Array.isArray(layout.hidden) ? layout.hidden : []).filter(id => id !== 'achievements' && known.has(id));
   return {order, hidden};
 }
 

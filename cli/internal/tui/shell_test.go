@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -373,6 +374,35 @@ func TestViewportReservesRoomForOpenMenu(t *testing.T) {
 	if vpH+menuRows+chrome > s.windowHeight {
 		t.Fatalf("viewport (%d) + menu (%d) + chrome (%d) exceeds the available window (%d) — menu would be pushed off-screen",
 			vpH, menuRows, chrome, s.windowHeight)
+	}
+}
+
+func TestHomeArrowKeysScrollLongOutput(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	m, _ := s.Update(tea.WindowSizeMsg{Width: 100, Height: 12})
+	s = m.(*Shell)
+	for i := 0; i < 60; i++ {
+		s.appendLine(fmt.Sprintf("conquista %d", i))
+	}
+	// Following the bottom: no scroll hint, view fits the window.
+	if strings.Contains(s.View(), "rolam") {
+		t.Fatal("scroll hint shown while already at the bottom")
+	}
+	// ArrowUp (menu closed) scrolls the scrollback back.
+	for i := 0; i < 5; i++ {
+		m, _ = s.Update(tea.KeyMsg{Type: tea.KeyUp})
+		s = m.(*Shell)
+	}
+	if s.followBottom {
+		t.Fatal("ArrowUp did not move the viewport off the bottom")
+	}
+	view := s.View()
+	if !strings.Contains(view, "rolam") {
+		t.Fatalf("scroll hint missing after scrolling up:\n%s", view)
+	}
+	if got := len(strings.Split(view, "\n")); got > 12 {
+		t.Fatalf("View() = %d lines, want <= 12", got)
 	}
 }
 

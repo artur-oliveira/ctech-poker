@@ -54,6 +54,131 @@ func drainCmd(cmd tea.Cmd) []tea.Msg {
 	return []tea.Msg{msg}
 }
 
+func TestTablePeekGateHidesHoleCardsUntilPeeked(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+
+	if out := m.View(); !strings.Contains(out, "██ ██") || strings.Contains(out, "62%") {
+		t.Fatalf("cards/equity should be hidden pre-peek: %q", out)
+	}
+
+	drainCmd(m.runLocal(ActPeekBoth))
+	out := m.View()
+	if !strings.Contains(out, "As") || !strings.Contains(out, "Qh") || !strings.Contains(out, "62%") {
+		t.Fatalf("cards + equity should show after peeking both: %q", out)
+	}
+	if len(sent) != 1 || sent[0].Type != "peek_cards" {
+		t.Fatalf("exactly one peek_cards breadcrumb expected: %+v", sent)
+	}
+
+	// Toggling again (hide, then peek one) must not send another breadcrumb this hand.
+	drainCmd(m.runLocal(ActPeekBoth))
+	drainCmd(m.runLocal(ActPeekCard1))
+	if len(sent) != 1 {
+		t.Fatalf("breadcrumb is once per hand: %+v", sent)
+	}
+
+	// New hand resets the gate.
+	snap := tableFixtureSnapshot()
+	snap.Snapshot.HandId = "h-10"
+	nm, _ = m.Update(SnapshotMsg{M: snap})
+	m = nm.(*TableModel)
+	if out := m.View(); !strings.Contains(out, "██ ██") {
+		t.Fatalf("new hand should hide cards again: %q", out)
+	}
+}
+
+func TestTableCtrlCAtTableNeedsConfirmation(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		RoomID: "r-1", YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = nm.(*TableModel)
+	if cmd != nil {
+		t.Fatalf("first Ctrl+C must not exit")
+	}
+	if !strings.Contains(m.View(), "Ctrl+C de novo") {
+		t.Fatalf("first Ctrl+C should warn: %q", m.View())
+	}
+
+	nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = nm.(*TableModel)
+	msgs := drainCmd(cmd)
+	var exited bool
+	for _, msg := range msgs {
+		if _, ok := msg.(TableExitedMsg); ok {
+			exited = true
+		}
+	}
+	if !exited {
+		t.Fatalf("second Ctrl+C should emit TableExitedMsg, got %#v", msgs)
+	}
+	// It's your turn in the fixture → fold, then request_exit.
+	if len(sent) < 2 || sent[0].Action != "fold" || sent[len(sent)-1].Type != "request_exit" {
+		t.Fatalf("expected fold + request_exit on confirmed exit: %+v", sent)
+	}
+}
+
+func TestTableSeatTableRendersAlignedRows(t *testing.T) {
+	msg := tableFixtureSnapshot()
+	msg.Snapshot.Seats[1].State = "folded" // Duda
+	msg.Snapshot.Seats[3].Contributed = 20 // you
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: msg})
+	m = nm.(*TableModel)
+	nm, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(*TableModel)
+
+	out := ansi.Strip(m.View())
+	if !strings.Contains(out, "\nJogadores\n") {
+		t.Fatalf("expected a Jogadores heading line:\n%s", out)
+	}
+	var seatLines []string
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, "VOCÊ") || strings.Contains(l, "Caio") || strings.Contains(l, "Duda") || strings.Contains(l, "Edu") {
+			seatLines = append(seatLines, l)
+		}
+	}
+	if len(seatLines) != 4 {
+		t.Fatalf("want 4 seat rows, got %d:\n%s", len(seatLines), strings.Join(seatLines, "\n"))
+	}
+	// Name column starts at the same visual column on every row (the actor
+	// marker "▶" is one cell but three bytes, so measure display width).
+	nameOffset := func(l string) int {
+		for _, n := range []string{"Caio", "Duda", "Edu", "VOCÊ"} {
+			if i := strings.Index(l, n); i >= 0 {
+				return ansi.StringWidth(l[:i])
+			}
+		}
+		return -1
+	}
+	want := nameOffset(seatLines[0])
+	for _, l := range seatLines {
+		if got := nameOffset(l); got != want {
+			t.Errorf("name column misaligned: offset %d vs %d in %q", got, want, l)
+		}
+	}
+	youLine := seatLines[3]
+	if !strings.Contains(youLine, "▶") || !strings.Contains(youLine, "aposta 20") {
+		t.Errorf("your row should be the actor and show the bet: %q", youLine)
+	}
+	for _, l := range seatLines {
+		if strings.Contains(l, "Duda") && !strings.Contains(l, "desistiu") {
+			t.Errorf("folded row missing note: %q", l)
+		}
+	}
+}
+
 func TestTableViewRendersLayoutBHeader(t *testing.T) {
 	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
 	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
@@ -66,8 +191,11 @@ func TestTableViewRendersLayoutBHeader(t *testing.T) {
 	if !strings.Contains(out, "SUA VEZ") {
 		t.Errorf("missing turn indicator: %q", out)
 	}
-	if !strings.Contains(out, "Pote: 24") {
+	if !strings.Contains(out, "Pote 24") {
 		t.Errorf("sandbox pot should have no currency symbol: %q", out)
+	}
+	if !strings.Contains(out, "Board  ") {
+		t.Errorf("board should have its own labelled line: %q", out)
 	}
 	if strings.Contains(out, "R$") {
 		t.Errorf("sandbox table must not render R$: %q", out)
@@ -83,7 +211,7 @@ func TestTableHeaderShowsActorAndDecisionState(t *testing.T) {
 	nm, _ := m.Update(SnapshotMsg{M: msg})
 	m = nm.(*TableModel)
 	out := m.View()
-	for _, want := range []string{"Vez de Caio", "stack 297", "(+16)", "Duda 100"} {
+	for _, want := range []string{"Vez de Caio", "stack 297", "aposta 16", "Duda"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("header missing %q:\n%s", want, out)
 		}

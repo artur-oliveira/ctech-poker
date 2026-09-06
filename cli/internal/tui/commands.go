@@ -23,6 +23,9 @@ const (
 	ActClear
 	ActExit
 	ActForceExit
+	ActPeekBoth
+	ActPeekCard1
+	ActPeekCard2
 )
 
 // ParseTableCommand turns one input line (a `/command` or a bare hotkey) into
@@ -36,8 +39,11 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		return nil, ActNone, nil
 	}
 
-	// Bare single-key hotkeys, only while it's the viewer's turn.
+	// Bare single-key hotkeys.
 	if !strings.HasPrefix(input, "/") {
+		if input == "k" { // show/hide my hand — allowed any time
+			return nil, ActPeekBoth, nil
+		}
 		if !v.IsYourTurn {
 			return nil, ActNone, fmt.Errorf("não é sua vez")
 		}
@@ -50,8 +56,6 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 			return raiseTo(v.Legal, v.Legal.GetMinRaiseTo(), v)
 		case "p":
 			return pot(v)
-		case "k":
-			return &proto.ClientMessage{Type: "peek_cards"}, ActNone, nil
 		default:
 			return nil, ActNone, fmt.Errorf("tecla desconhecida: %q", input)
 		}
@@ -99,9 +103,22 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		if len(args) < 1 {
 			return nil, ActNone, fmt.Errorf("uso: /react <código> [jogador]")
 		}
-		m := &proto.ClientMessage{Type: "reaction", ReactionId: args[0]}
-		if len(args) >= 2 {
-			m.TargetPlayerId = args[1]
+		r, ok := game.LookupReaction(args[0])
+		if !ok {
+			return nil, ActNone, fmt.Errorf("reação desconhecida: %s (Tab lista as disponíveis)", args[0])
+		}
+		m := &proto.ClientMessage{Type: "reaction", ReactionId: r.ID}
+		switch {
+		case r.Targeted && len(args) < 2:
+			return nil, ActNone, fmt.Errorf("a reação %q precisa de um jogador alvo", r.ID)
+		case r.Targeted:
+			id, terr := resolveTarget(v, strings.Join(args[1:], " "))
+			if terr != nil {
+				return nil, ActNone, terr
+			}
+			m.TargetPlayerId = id
+		case len(args) > 1:
+			return nil, ActNone, fmt.Errorf("a reação %q não tem alvo", r.ID)
 		}
 		return m, ActNone, nil
 	case "/peek":
@@ -109,7 +126,73 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		if len(args) == 1 {
 			which = args[0]
 		}
-		return peek(which)
+		switch which {
+		case "all":
+			return nil, ActPeekBoth, nil
+		case "1":
+			return nil, ActPeekCard1, nil
+		case "2":
+			return nil, ActPeekCard2, nil
+		default:
+			return nil, ActNone, fmt.Errorf("uso: /peek [all|1|2]")
+		}
+	case "/showcards":
+		which := "all"
+		if len(args) == 1 {
+			which = args[0]
+		}
+		m := &proto.ClientMessage{Type: "show_cards", ActionId: uuid.NewString()}
+		switch which {
+		case "all":
+		case "1":
+			i := int32(0)
+			m.CardIndex = &i
+		case "2":
+			i := int32(1)
+			m.CardIndex = &i
+		default:
+			return nil, ActNone, fmt.Errorf("uso: /showcards [all|1|2]")
+		}
+		return m, ActNone, nil
+	case "/rit":
+		if len(args) != 1 || (args[0] != "on" && args[0] != "off") {
+			return nil, ActNone, fmt.Errorf("uso: /rit <on|off>")
+		}
+		enabled := args[0] == "on"
+		return &proto.ClientMessage{Type: "set_run_it_twice", RunItTwice: &enabled}, ActNone, nil
+	case "/rabbit":
+		return &proto.ClientMessage{Type: "request_rabbit_hunt", ActionId: uuid.NewString()}, ActNone, nil
+	case "/reqcards":
+		return &proto.ClientMessage{Type: "request_winner_cards", ActionId: uuid.NewString()}, ActNone, nil
+	case "/accept":
+		return &proto.ClientMessage{Type: "accept_winner_cards", ActionId: uuid.NewString()}, ActNone, nil
+	case "/decline":
+		return &proto.ClientMessage{Type: "decline_winner_cards", ActionId: uuid.NewString()}, ActNone, nil
+	case "/keep":
+		return &proto.ClientMessage{Type: "keep_seat", ActionId: uuid.NewString()}, ActNone, nil
+	case "/postbb":
+		return &proto.ClientMessage{Type: "post_big_blind", ActionId: uuid.NewString()}, ActNone, nil
+	case "/preselect":
+		if len(args) != 1 {
+			return nil, ActNone, fmt.Errorf("uso: /preselect <check_fold|fold|call|call_any|all_in|off>")
+		}
+		action := args[0]
+		switch action {
+		case "off", "none", "empty":
+			action = ""
+		case "check_fold", "fold", "call", "call_any", "all_in":
+		default:
+			return nil, ActNone, fmt.Errorf("modo inválido: %s", args[0])
+		}
+		m := &proto.ClientMessage{
+			Type: "preselect_action", Action: action, ActionId: uuid.NewString(),
+			ExpectedSnapshotVersion: v.SnapshotVersion,
+			ExpectedHandId:          v.HandID,
+			ExpectedStage:           v.Stage,
+		}
+		// ponytail: fixed-call amount left to the server; the CLI has no
+		// viewer-scoped frozen call amount in the snapshot to echo.
+		return m, ActNone, nil
 	case "/sitout":
 		return &proto.ClientMessage{Type: "ready", Ready: false}, ActNone, nil
 	case "/ready":
@@ -131,6 +214,31 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 	default:
 		return nil, ActNone, fmt.Errorf("comando desconhecido: %s (tente /help)", cmd)
 	}
+}
+
+// resolveTarget maps a /react target token to a seat's player id. Accepts a
+// raw player id, a case-insensitive name, or a position tag (UTG, CO, …), so
+// the autocomplete can offer the readable name while the wire still carries
+// the id. The viewer's own seat is never a valid target.
+func resolveTarget(v game.TableView, q string) (string, error) {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return "", fmt.Errorf("faltou o jogador alvo")
+	}
+	for _, p := range v.Players {
+		if p.ID == q && !p.IsYou {
+			return p.ID, nil
+		}
+	}
+	for _, p := range v.Players {
+		if p.IsYou {
+			continue
+		}
+		if strings.EqualFold(p.Name, q) || strings.EqualFold(p.Position, q) {
+			return p.ID, nil
+		}
+	}
+	return "", fmt.Errorf("jogador não encontrado na mesa: %s", q)
 }
 
 func fold(v game.TableView) (*proto.ClientMessage, LocalAction, error) {
@@ -177,23 +285,6 @@ func callOrCheck(v game.TableView) (*proto.ClientMessage, LocalAction, error) {
 		return nil, ActNone, fmt.Errorf("nada para pagar agora")
 	}
 	return act("call", v.Legal.CallAmount, v), ActNone, nil
-}
-
-func peek(which string) (*proto.ClientMessage, LocalAction, error) {
-	m := &proto.ClientMessage{Type: "peek_cards"}
-	switch which {
-	case "all", "":
-		// both cards — no card_index
-	case "1":
-		i := int32(0)
-		m.CardIndex = &i
-	case "2":
-		i := int32(1)
-		m.CardIndex = &i
-	default:
-		return nil, ActNone, fmt.Errorf("uso: /peek [all|1|2]")
-	}
-	return m, ActNone, nil
 }
 
 // act builds an `act` ClientMessage with a fresh action id and the

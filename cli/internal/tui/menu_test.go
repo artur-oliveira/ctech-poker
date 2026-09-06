@@ -29,6 +29,35 @@ func TestMenuHiddenOnceArgumentsStart(t *testing.T) {
 	}
 }
 
+func TestMenuArgCompletion(t *testing.T) {
+	m := newCommandMenu(testSpecs())
+	m.argFn = func(value string) ([]commandSpec, string) {
+		if value == "/react c" {
+			return []commandSpec{
+				{Name: "clap", Desc: "Aplausos"},
+				{Name: "chip", Args: "<jogador>", Desc: "Jogar ficha"},
+			}, "/react "
+		}
+		return nil, ""
+	}
+	m.UpdateInput("/react c")
+	if !m.visible || len(m.items) != 2 {
+		t.Fatalf("arg menu not shown: visible=%v items=%d", m.visible, len(m.items))
+	}
+	if got, submit := m.accept(); got != "/react clap" || !submit {
+		t.Fatalf("accept broadcast: %q submit=%v", got, submit)
+	}
+	m.UpdateInput("/react c")
+	m.moveNext()
+	if got, submit := m.accept(); got != "/react chip " || submit {
+		t.Fatalf("accept targeted: %q submit=%v", got, submit)
+	}
+	m.UpdateInput("/talk hi") // no provider match
+	if m.visible {
+		t.Fatal("menu should hide when the provider returns nothing")
+	}
+}
+
 func TestMenuNarrowsOnPrefix(t *testing.T) {
 	m := newCommandMenu(testSpecs())
 	m.UpdateInput("/p")

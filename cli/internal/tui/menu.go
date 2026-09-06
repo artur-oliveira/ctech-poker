@@ -20,8 +20,14 @@ type commandSpec struct {
 // commandMenu is a Claude-Code-style `/command` suggestion list: it narrows
 // as the user types, Up/Down move the selection, Tab/Enter accept it.
 type commandMenu struct {
-	specs    []commandSpec
+	specs []commandSpec
+	// argFn, when set, supplies argument-level suggestions once the user has
+	// typed past the command token (a space). It returns the choices plus the
+	// input prefix to keep verbatim ahead of the token being completed; a nil
+	// or empty result hides the menu.
+	argFn    func(value string) (choices []commandSpec, prefix string)
 	items    []commandSpec
+	prefix   string // text before the completed token (arg mode); "" in command mode
 	selected int
 	visible  bool
 }
@@ -31,15 +37,35 @@ func newCommandMenu(specs []commandSpec) *commandMenu {
 }
 
 // UpdateInput recomputes the visible suggestion list from the current input
-// value. The menu shows only while the user is still typing the command
-// token itself — a space (moving on to arguments) or an exact single match
-// hides it.
+// value. While the user is still typing the command token it narrows the
+// command list; once they type a space it hands off to argFn (if set) for
+// argument-level suggestions, and otherwise hides.
 func (m *commandMenu) UpdateInput(value string) {
 	previous := ""
 	if m.selected >= 0 && m.selected < len(m.items) {
 		previous = m.items[m.selected].Name
 	}
+	m.prefix = ""
 	if !strings.HasPrefix(value, "/") || strings.Contains(value, " ") {
+		if m.argFn != nil {
+			if choices, prefix := m.argFn(value); len(choices) > 0 {
+				// Collapse once the token is fully typed and nothing follows.
+				if len(choices) == 1 && choices[0].Args == "" &&
+					value == prefix+choices[0].Name {
+					m.visible, m.items = false, nil
+					return
+				}
+				m.items, m.prefix, m.visible = choices, prefix, true
+				m.selected = 0
+				for i, item := range m.items {
+					if item.Name == previous {
+						m.selected = i
+						break
+					}
+				}
+				return
+			}
+		}
 		m.visible, m.items = false, nil
 		return
 	}
@@ -89,9 +115,9 @@ func (m *commandMenu) accept() (value string, submit bool) {
 	item := m.items[m.selected]
 	m.visible = false
 	if item.Args == "" {
-		return item.Name, true
+		return m.prefix + item.Name, true
 	}
-	return item.Name + " ", false
+	return m.prefix + item.Name + " ", false
 }
 
 // fill resolves the highlighted suggestion for Tab: pure autocomplete, never
@@ -103,9 +129,9 @@ func (m *commandMenu) fill() string {
 	}
 	item := m.items[m.selected]
 	if item.Args == "" {
-		return item.Name
+		return m.prefix + item.Name
 	}
-	return item.Name + " "
+	return m.prefix + item.Name + " "
 }
 
 func (m *commandMenu) hide() { m.visible = false }
@@ -324,8 +350,17 @@ var tableCommandSpecs = []commandSpec{
 	{Name: "/allin", Desc: "Aposta todas as fichas"},
 	{Name: "/fold", Desc: "Desiste da mão", Hotkey: "f"},
 	{Name: "/talk", Args: "<mensagem>", Desc: "Envia uma mensagem no chat"},
-	{Name: "/react", Args: "<código> [jogador]", Desc: "Envia uma reação"},
-	{Name: "/peek", Args: "[all|1|2]", Desc: "Espia suas cartas", Hotkey: "k"},
+	{Name: "/react", Args: "<código> [jogador]", Desc: "Envia uma reação (Tab lista códigos e alvos)"},
+	{Name: "/peek", Args: "[all|1|2]", Desc: "Mostra/esconde suas cartas", Hotkey: "k"},
+	{Name: "/showcards", Args: "[all|1|2]", Desc: "Mostra suas cartas no showdown"},
+	{Name: "/rit", Args: "<on|off>", Desc: "Liga/desliga run it twice"},
+	{Name: "/rabbit", Desc: "Pede rabbit hunt após todos correrem"},
+	{Name: "/reqcards", Desc: "Paga pra ver a mão vencedora muckada"},
+	{Name: "/accept", Desc: "Aceita mostrar sua mão vencedora"},
+	{Name: "/decline", Desc: "Recusa mostrar sua mão vencedora"},
+	{Name: "/keep", Desc: "Mantém o assento após aviso de remoção"},
+	{Name: "/postbb", Desc: "Paga o big blind pra voltar fora de vez"},
+	{Name: "/preselect", Args: "<modo|off>", Desc: "Pré-seleciona sua ação antes da vez"},
 	{Name: "/sitout", Desc: "Senta fora nas próximas mãos"},
 	{Name: "/ready", Desc: "Volta a jogar"},
 	{Name: "/summary", Desc: "Resumo da sessão atual"},

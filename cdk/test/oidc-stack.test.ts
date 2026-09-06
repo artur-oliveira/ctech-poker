@@ -8,36 +8,58 @@ import {
 } from '../lib/constants';
 
 const REPO = 'artur-oliveira/ctech-poker';
+const OWNER_ID = '48974094';
+const REPO_ID = '1311462196';
 
 function synth() {
   const app = new App();
   const stack = new OidcStack(app, 'TestOidc', {
     env: {account: '123456789012', region: 'us-east-1'},
     githubRepo: REPO,
+    githubRepoOwnerId: OWNER_ID,
+    githubRepoId: REPO_ID,
     deploymentsBucket: 'dev-ctech-deployments',
   });
   return Template.fromStack(stack);
 }
 
 const branchSubs = GHA_DEPLOY_BRANCHES.map(
-  (b) => `repo:${REPO}:ref:refs/heads/${b}`,
+  (b) => `repo:*:ref:refs/heads/${b}`,
 );
 
-function trustSubs(t: Template, roleName: string): string[] {
+function trustCond(t: Template, roleName: string): any {
   const roles = t.findResources('AWS::IAM::Role', {
     Properties: {RoleName: roleName},
   });
   const role = Object.values(roles)[0] as any;
-  const cond = role.Properties.AssumeRolePolicyDocument.Statement[0].Condition;
-  const sub = cond.StringEquals['token.actions.githubusercontent.com:sub'];
+  return role.Properties.AssumeRolePolicyDocument.Statement[0].Condition;
+}
+
+function trustSubs(t: Template, roleName: string): string[] {
+  const sub =
+    trustCond(t, roleName).StringLike['token.actions.githubusercontent.com:sub'];
   return Array.isArray(sub) ? sub : [sub];
 }
 
-test('trust conditions are pinned to exact refs — no bare wildcard', () => {
+test('trust conditions never use a bare sub wildcard', () => {
   const t = synth();
   const doc = JSON.stringify(t.toJSON());
-  expect(doc).not.toContain(`repo:${REPO}:*`);
-  expect(doc).not.toContain('@*/');
+  expect(doc).not.toContain('"repo:*"');
+  expect(doc).not.toContain('repo:*:*');
+});
+
+test('identity is pinned on the immutable owner/repo ID claims', () => {
+  const t = synth();
+  for (const roleName of [GHA_API_ROLE, GHA_INFRA_ROLE]) {
+    const eq = trustCond(t, roleName).StringEquals;
+    expect(eq['token.actions.githubusercontent.com:repository_owner_id']).toBe(
+      OWNER_ID,
+    );
+    expect(eq['token.actions.githubusercontent.com:repository_id']).toBe(
+      REPO_ID,
+    );
+    expect(eq['token.actions.githubusercontent.com:sub']).toBeUndefined();
+  }
 });
 
 test('api/scopes roles trust only the deploy branches', () => {
@@ -48,7 +70,7 @@ test('api/scopes roles trust only the deploy branches', () => {
 test('infra role additionally trusts pull_request for cdk diff', () => {
   const t = synth();
   expect(trustSubs(t, GHA_INFRA_ROLE).sort()).toEqual(
-    [...branchSubs, `repo:${REPO}:pull_request`].sort(),
+    [...branchSubs, 'repo:*:pull_request'].sort(),
   );
 });
 

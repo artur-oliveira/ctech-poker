@@ -119,10 +119,18 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 - As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a `messages-visible`
   (DLQ-depth) alarm and an `errors` alarm on the `ctech-prod-alerts` SNS topic (`cdk/lib/alarms.ts`).
   The EventBridge Scheduler → Lambda delivery hop itself still has no separate scheduler-target DLQ.
-- **`oidc-stack.ts` (issue #41, 2026-09-02)**: OIDC trust is now pinned with `StringEquals` to
-  exact `sub`s — `repo:<repo>:ref:refs/heads/{main,staging,dev}` for the api/scopes roles, plus
-  `repo:<repo>:pull_request` for the infra role (its `cdk diff` PR job). No bare `:*`; the old
-  malformed second pattern is gone. `infraRole` dropped `AdministratorAccess` for
+- **`oidc-stack.ts` (issue #41, 2026-09-02; trust revised 2026-09-06)**: OIDC trust pins identity
+  with `StringEquals` on the immutable numeric claims `repository_owner_id` (`48974094`) +
+  `repository_id` (`1311462196`) — `GITHUB_REPO_OWNER_ID_DEFAULT`/`GITHUB_REPO_ID_DEFAULT` in
+  `constants.ts`, overridable via `GITHUB_REPO_OWNER_ID`/`GITHUB_REPO_ID` env — and matches the
+  `sub` claim only with `StringLike`: `repo:*:ref:refs/heads/{main,staging,dev}` for the
+  api/scopes roles, plus `repo:*:pull_request` for the infra role (its `cdk diff` PR job). No bare
+  `repo:*`. **Why the change:** GitHub began emitting
+  `repo:<owner>@<ownerId>/<repo>@<repoId>:ref:...` in `sub` (the "include repository and owner ID
+  in the OIDC subject claim" setting), so the old `StringEquals` on `repo:<repo>:ref:...` stopped
+  matching and every `sts:AssumeRoleWithWebIdentity` from CI got `AccessDenied` (confirmed in
+  CloudTrail). The ID claims are independent of that setting and survive a repo rename/transfer.
+  `infraRole` dropped `AdministratorAccess` for
   `PowerUserAccess` + a scoped IAM block (service + `cdk-*`/`CtechPoker-*` roles/profiles/policies
   only) + an explicit `Deny` on IAM user/access-key/login-profile/MFA/SAML/OIDC-provider creation
   and `organizations:*`/`account:*`. **Interim** — follow-up is a permissions boundary on the

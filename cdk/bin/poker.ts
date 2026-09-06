@@ -17,6 +17,8 @@ import {
   DYNAMO_TABLE,
   domainForEnv,
   GITHUB_REPO_DEFAULT,
+  GITHUB_REPO_ID_DEFAULT,
+  GITHUB_REPO_OWNER_ID_DEFAULT,
   instanceProfileName,
   SSM_POKER,
 } from '../lib/constants';
@@ -26,6 +28,8 @@ const app = new cdk.App();
 
 const ENVIRONMENT = (process.env.ENVIRONMENT || 'dev') as Environment;
 const GITHUB_REPO = (process.env.GITHUB_REPO || GITHUB_REPO_DEFAULT);
+const GITHUB_REPO_OWNER_ID = process.env.GITHUB_REPO_OWNER_ID || GITHUB_REPO_OWNER_ID_DEFAULT;
+const GITHUB_REPO_ID = process.env.GITHUB_REPO_ID || GITHUB_REPO_ID_DEFAULT;
 // VPC is managed by ctech-cdk (shared across every CTech service in this
 // account — same default used by ctech-wallet/ctech-dfe/ctech-account). The ID
 // must be a concrete string (not a token) because ec2.Vpc.fromLookup resolves
@@ -64,6 +68,8 @@ const id = (name: string) =>
 new OidcStack(app, 'CtechPoker-Global-OIDC', {
   env,
   githubRepo: GITHUB_REPO,
+  githubRepoOwnerId: GITHUB_REPO_OWNER_ID,
+  githubRepoId: GITHUB_REPO_ID,
   deploymentsBucket: CTECH_DEPLOYMENTS_BUCKET,
   description: 'CTech Poker GitHub Actions deployment roles (global)',
 });

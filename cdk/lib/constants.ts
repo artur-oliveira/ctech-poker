@@ -23,6 +23,14 @@ export const CERT_ARN =
 export const ALERTS_TOPIC_ARN = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
 
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
+// Immutable numeric GitHub IDs for artur-oliveira/ctech-poker. GitHub now embeds
+// these in the OIDC `sub` claim (`repo:<owner>@<ownerId>/<repo>@<repoId>:...`)
+// when "Include repository and owner ID in the OIDC subject claim" is enabled,
+// which breaks a `StringEquals` match on the old `repo:<owner>/<repo>:...` shape.
+// The trust policy pins identity on these two claims (survive rename/transfer)
+// and matches `sub` with `StringLike` for the ref/PR restriction only.
+export const GITHUB_REPO_OWNER_ID_DEFAULT = '48974094';
+export const GITHUB_REPO_ID_DEFAULT = '1311462196';
 
 // ── Naming ──────────────────────────────────────────────────────────────────
 export const SERVICE = 'ctech-poker';

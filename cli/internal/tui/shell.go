@@ -163,6 +163,9 @@ func (s *Shell) layoutHeights() (viewportH, menuRows int) {
 	viewportH = len(s.lines)
 	if viewportH > vpBudget {
 		viewportH = vpBudget
+		if !s.followBottom && viewportH > 1 {
+			viewportH-- // leave a row for the "scroll for more" hint
+		}
 	}
 	if viewportH < 0 {
 		viewportH = 0
@@ -575,6 +578,13 @@ func (s *Shell) youID() string {
 
 func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyCtrlC {
+		// At the table the model owns Ctrl+C: it needs a confirmation press and
+		// a clean fold / sit-out / request_exit before leaving (§1.2).
+		if s.state == stateInTable && s.table != nil {
+			tm, cmd := s.table.Update(msg)
+			s.table = tm.(*TableModel)
+			return s, cmd
+		}
 		s.state = stateQuitting
 		return s, tea.Quit
 	}
@@ -664,6 +674,16 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.viewport, cmd = s.viewport.Update(msg)
 			s.followBottom = s.viewport.AtBottom()
 			return s, cmd
+		case tea.KeyUp, tea.KeyDown:
+			// Arrow keys scroll the scrollback when the command menu isn't
+			// steering them — the natural reach for reading long output
+			// (e.g. /achievements) without hunting for PgUp.
+			if !s.menu.visible {
+				var cmd tea.Cmd
+				s.viewport, cmd = s.viewport.Update(msg)
+				s.followBottom = s.viewport.AtBottom()
+				return s, cmd
+			}
 		case tea.KeyCtrlL:
 			s.lines = nil
 			s.followBottom = true
@@ -1006,6 +1026,9 @@ func (s *Shell) View() string {
 			}
 			if vpH > 0 {
 				lines = append(lines, s.viewport.View())
+				if !s.viewport.AtBottom() {
+					lines = append(lines, dimStyle.Render("↓ ↑↓/PgUp/PgDn rolam · End volta ao fim"))
+				}
 			}
 			if s.busy {
 				lines = append(lines, accentStyle.Render(s.spin.View()))
