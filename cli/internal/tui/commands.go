@@ -43,16 +43,13 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		}
 		switch input {
 		case "f":
-			return act("fold", 0, v), ActNone, nil
+			return fold(v)
 		case "c":
 			return callOrCheck(v)
 		case "r":
-			if v.Legal == nil {
-				return nil, ActNone, fmt.Errorf("nada para apostar agora")
-			}
-			return act("raise", v.Legal.MinRaiseTo, v), ActNone, nil
+			return raiseTo(v.Legal, v.Legal.GetMinRaiseTo(), v)
 		case "p":
-			return peek("all")
+			return pot(v)
 		case "k":
 			return &proto.ClientMessage{Type: "peek_cards"}, ActNone, nil
 		default:
@@ -72,7 +69,7 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 	case "/call":
 		return callOrCheck(v)
 	case "/fold":
-		return act("fold", 0, v), ActNone, nil
+		return fold(v)
 	case "/raise":
 		if len(args) != 1 {
 			return nil, ActNone, fmt.Errorf("uso: /raise <valor>")
@@ -81,17 +78,11 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		if perr != nil {
 			return nil, ActNone, fmt.Errorf("valor inválido: %s", args[0])
 		}
-		if v.Legal != nil && (to < v.Legal.MinRaiseTo || to > v.Legal.MaxRaiseTo) {
-			return nil, ActNone, fmt.Errorf("raise deve ficar entre %d e %d", v.Legal.MinRaiseTo, v.Legal.MaxRaiseTo)
-		}
-		return act("raise", to, v), ActNone, nil
+		return raiseTo(v.Legal, to, v)
 	case "/pot":
-		if v.Legal == nil || v.Legal.PotRaiseTo == 0 {
-			return nil, ActNone, fmt.Errorf("sem raise de pote disponível")
-		}
-		return act("raise", v.Legal.PotRaiseTo, v), ActNone, nil
+		return pot(v)
 	case "/allin":
-		if v.Legal == nil {
+		if !hasAction(v, "raise") || v.Legal.MaxRaiseTo <= 0 {
 			return nil, ActNone, fmt.Errorf("nada para apostar agora")
 		}
 		return act("raise", v.Legal.MaxRaiseTo, v), ActNone, nil
@@ -134,12 +125,36 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 	case "/help":
 		return nil, ActHelp, nil
 	case "/exit":
-		return &proto.ClientMessage{Type: "request_exit"}, ActExit, nil
+		return &proto.ClientMessage{Type: "request_exit", ActionId: uuid.NewString()}, ActExit, nil
 	case "/exit!":
 		return nil, ActForceExit, nil
 	default:
 		return nil, ActNone, fmt.Errorf("comando desconhecido: %s (tente /help)", cmd)
 	}
+}
+
+func fold(v game.TableView) (*proto.ClientMessage, LocalAction, error) {
+	if !hasAction(v, "fold") {
+		return nil, ActNone, fmt.Errorf("não dá para desistir agora")
+	}
+	return act("fold", 0, v), ActNone, nil
+}
+
+func raiseTo(legal *proto.LegalActions, to int64, v game.TableView) (*proto.ClientMessage, LocalAction, error) {
+	if !hasAction(v, "raise") || legal == nil || legal.MinRaiseTo <= 0 || legal.MaxRaiseTo <= 0 {
+		return nil, ActNone, fmt.Errorf("nada para aumentar agora")
+	}
+	if to < legal.MinRaiseTo || to > legal.MaxRaiseTo {
+		return nil, ActNone, fmt.Errorf("aumento deve ficar entre %d e %d", legal.MinRaiseTo, legal.MaxRaiseTo)
+	}
+	return act("raise", to, v), ActNone, nil
+}
+
+func pot(v game.TableView) (*proto.ClientMessage, LocalAction, error) {
+	if !hasAction(v, "raise") || v.Legal.PotRaiseTo <= 0 {
+		return nil, ActNone, fmt.Errorf("aumento de pote indisponível agora")
+	}
+	return act("raise", v.Legal.PotRaiseTo, v), ActNone, nil
 }
 
 func hasAction(v game.TableView, name string) bool {

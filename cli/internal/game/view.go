@@ -29,11 +29,12 @@ type TableView struct {
 	Board []string
 	Stage string
 
-	Players      []PlayerView
-	You          PlayerView
-	YourHole     []string
-	YourStrength string
-	YourEquity   float64 // -1 when the snapshot carries no equity for the viewer
+	Players       []PlayerView
+	You           PlayerView
+	CurrentPlayer PlayerView
+	YourHole      []string
+	YourStrength  string
+	YourEquity    float64 // -1 when the snapshot carries no equity for the viewer
 
 	IsYourTurn bool
 	Legal      *proto.LegalActions // nil when it isn't a betting decision point
@@ -98,6 +99,9 @@ func NewTableView(s *proto.TableSnapshot, youID, roomName string, realMoney bool
 			if seat.Equity != nil {
 				v.YourEquity = *seat.Equity
 			}
+		}
+		if pv.ID == s.CurrentPlayerId {
+			v.CurrentPlayer = pv
 		}
 	}
 	return v

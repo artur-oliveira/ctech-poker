@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T21:33:25-03:00",
+  "title": "Design System: CTech Poker CLI",
+  "extensions": {
+    "colorMeta": {
+      "dealer-gold": {
+        "role": "primary",
+        "displayName": "Dealer Gold",
+        "canonical": "#e6b85c",
+        "tonalRamp": ["oklch(15% 0.045 78)", "oklch(27% 0.065 78)", "oklch(39% 0.085 78)", "oklch(51% 0.105 78)", "oklch(63% 0.125 78)", "oklch(75% 0.11 78)", "oklch(86% 0.075 78)", "oklch(95% 0.035 78)"]
+      },
+      "table-felt": {
+        "role": "secondary",
+        "displayName": "Table Felt",
+        "canonical": "#18765b",
+        "tonalRamp": ["oklch(15% 0.045 165)", "oklch(27% 0.065 165)", "oklch(39% 0.085 165)", "oklch(51% 0.095 165)", "oklch(63% 0.09 165)", "oklch(75% 0.075 165)", "oklch(86% 0.05 165)", "oklch(95% 0.025 165)"]
+      },
+      "action-red": {
+        "role": "tertiary",
+        "displayName": "Action Red",
+        "canonical": "#d9464d",
+        "tonalRamp": ["oklch(15% 0.055 25)", "oklch(27% 0.085 25)", "oklch(39% 0.115 25)", "oklch(51% 0.145 25)", "oklch(63% 0.17 25)", "oklch(75% 0.13 25)", "oklch(86% 0.085 25)", "oklch(95% 0.04 25)"]
+      },
+      "terminal-silver": {
+        "role": "neutral",
+        "displayName": "Terminal Silver",
+        "canonical": "#8a8a8a",
+        "tonalRamp": ["#262626", "#3d3d3d", "#555555", "#6d6d6d", "#858585", "#a3a3a3", "#c8c8c8", "#f0f0f0"]
+      },
+      "terminal-charcoal": {
+        "role": "neutral",
+        "displayName": "Terminal Charcoal",
+        "canonical": "#585858",
+        "tonalRamp": ["#1f1f1f", "#303030", "#454545", "#585858", "#737373", "#969696", "#c2c2c2", "#eeeeee"]
+      }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Terminal Title", "purpose": "Product identity, room names, and choice-step headings." },
+      "body": { "displayName": "Terminal Body", "purpose": "Game state, narration, commands, and explanations." },
+      "label": { "displayName": "Terminal Label", "purpose": "Selections, prompt, badges, and urgent turn state." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "state-tick", "value": "terminal frame update", "purpose": "Spinner, countdown, network state, and input feedback only; never decorative choreography." }
+    ],
+    "breakpoints": [
+      { "name": "narrow-terminal", "value": "38 columns" },
+      { "name": "home-header-cap", "value": "72 columns" },
+      { "name": "table-rule-cap", "value": "76 columns" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Home Identity",
+      "kind": "custom",
+      "refersTo": "title",
+      "description": "Compact three-row product identity that collapses to one line below 38 columns.",
+      "html": "<pre class=\"ds-home-identity\"><span class=\"ds-dim\">╭─ </span><strong>♠ CTech Poker</strong><span class=\"ds-dim\"> ───────── </span><b class=\"ds-success\">SANDBOX</b><span class=\"ds-dim\"> ─╮</span>\n<span class=\"ds-dim\">│</span> Jogue poker no terminal · apenas fichas virtuais <span class=\"ds-dim\">│</span>\n<span class=\"ds-dim\">╰────────────────────────────────────────────────────╯</span></pre>",
+      "css": ".ds-home-identity { margin: 0; color: #8a8a8a; background: transparent; font: 14px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; } .ds-home-identity strong { color: #e6b85c; } .ds-home-identity .ds-success { color: #18765b; } .ds-home-identity .ds-dim { color: #585858; }"
+    },
+    {
+      "name": "Command Prompt",
+      "kind": "input",
+      "refersTo": "prompt",
+      "description": "Keyboard-first slash-command field with a gold prompt and terminal-native focus.",
+      "html": "<label class=\"ds-prompt\"><b>›</b><input aria-label=\"Comando\" placeholder=\"/ para ver comandos\"></label>",
+      "css": ".ds-prompt { display: flex; gap: 1ch; align-items: center; color: inherit; font: 14px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace; } .ds-prompt b { color: #e6b85c; } .ds-prompt input { min-width: 24ch; padding: 0; border: 0; outline: 0; color: inherit; background: transparent; font: inherit; } .ds-prompt input::placeholder { color: #8a8a8a; opacity: 1; } .ds-prompt:focus-within b { text-decoration: underline; text-underline-offset: 3px; }"
+    },
+    {
+      "name": "Command Menu",
+      "kind": "nav",
+      "refersTo": "menu-selected",
+      "description": "Aligned slash-command suggestions with one explicit active row.",
+      "html": "<div class=\"ds-command-menu\" role=\"listbox\"><div class=\"ds-selected\" role=\"option\" aria-selected=\"true\">› /play&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jogar em uma mesa</div><div role=\"option\">&nbsp;&nbsp;/profile&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mostrar seu perfil</div><div class=\"ds-hint\">&nbsp;&nbsp;↑↓ navegar · Tab completar · Esc fechar</div></div>",
+      "css": ".ds-command-menu { color: #8a8a8a; background: transparent; font: 14px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; } .ds-command-menu .ds-selected { color: #e6b85c; font-weight: 700; } .ds-command-menu [role=option]:hover { color: #e6b85c; } .ds-command-menu [role=option]:focus-visible { color: #e6b85c; outline: 1px solid currentColor; outline-offset: 2px; } .ds-command-menu .ds-hint { color: #585858; margin-top: .35em; }"
+    },
+    {
+      "name": "Turn Indicator",
+      "kind": "chip",
+      "refersTo": "status-success",
+      "description": "Written and symbolic active-turn state with a live countdown.",
+      "html": "<strong class=\"ds-turn\">● SUA VEZ&nbsp; 18s</strong>",
+      "css": ".ds-turn { color: #18765b; background: transparent; font: 700 14px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace; } .ds-turn:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; }"
+    },
+    {
+      "name": "Error Narration",
+      "kind": "custom",
+      "refersTo": "status-error",
+      "description": "Inline failure feedback that states the problem without relying on color.",
+      "html": "<div class=\"ds-error\" role=\"alert\">erro: não foi possível entrar na mesa</div>",
+      "css": ".ds-error { color: #d9464d; background: transparent; font: 14px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; } .ds-error:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; }"
+    },
+    {
+      "name": "Table Summary",
+      "kind": "custom",
+      "refersTo": "title",
+      "description": "Dense table state where identity, stakes, cards, turn, and legal actions remain written out.",
+      "html": "<pre class=\"ds-table\">─── <strong>Mesa 42</strong> ── No-Limit Hold'em ── Blinds 10 / 20 ── 6/6 jogadores ───\n  Pote 180   Board A♠ 10♥ 7♣   Sua mão K♠ Q♠ · Ás alto · ~34%\n  Posições [D] Ana · <b>[CO] VOCÊ</b> · [BB] Rui   <em>● SUA VEZ&nbsp; 18s</em>\n  → fold · call 40 · raise 80–520</pre>",
+      "css": ".ds-table { margin: 0; color: inherit; background: transparent; font: 14px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; } .ds-table strong, .ds-table b { color: #e6b85c; } .ds-table em { color: #18765b; font-style: normal; font-weight: 700; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Cardroom",
+    "overview": "The interface should feel like sitting at a composed card table inside the user's own terminal: the game is present, social, and alive, but never louder than the decision in front of the player. It borrows the direct command fluency of Claude Code and Codex CLI, then uses poker language, card symbols, and concise narration to establish its own identity.\n\nThe system is flat, compact, and terminal-native. Hierarchy comes from ordering, whitespace, rules, weight, and a small semantic palette—not simulated GUI surfaces. The table state, legal actions, and recovery state must remain legible before personality is added. It explicitly rejects the noisy casino interface named in PRODUCT.md.",
+    "keyCharacteristics": [
+      "Restrained gold, felt green, and red semantic accents on the user's terminal background.",
+      "Monospace alignment and terminal-cell rhythm instead of pixel-based layout.",
+      "Keyboard-first menus and slash commands with state always expressed in words or symbols as well as color.",
+      "Poker character delivered through narration and card notation, not decorative spectacle.",
+      "Width- and height-safe composition that protects the active command surface."
+    ],
+    "rules": [
+      { "name": "The Three Signals Rule", "body": "Gold means attention, felt green means healthy or active, and Action Red means error or danger. Never trade these roles for decoration.", "section": "colors" },
+      { "name": "The Terminal Owns the Canvas Rule", "body": "Never paint a global background. Inherit the user's terminal theme and apply color only to semantic fragments.", "section": "colors" },
+      { "name": "The Suit Isolation Rule", "body": "Suit colors belong to card glyphs only. Never reuse bright ANSI suit colors for navigation, status, or branding.", "section": "colors" },
+      { "name": "The One-Cell Rule", "body": "Never simulate typographic scale with ASCII art, double-width headings, or ornamental banners. Use weight and position; preserve terminal density.", "section": "typography" },
+      { "name": "The Portuguese Interface Rule", "body": "Player-facing interface copy remains concise Brazilian Portuguese. Protocol vocabulary and conventional poker terms may remain English where they are already understood.", "section": "typography" },
+      { "name": "The Flat Table Rule", "body": "Never imitate cards, modals, glass panels, or floating GUI controls with box-drawing decoration. A border is permitted only when it describes a real region, such as the compact home identity block.", "section": "elevation" },
+      { "name": "The Active Surface Rule", "body": "When vertical space is contested, protect the input and command menu first, then reduce scrollback. Interaction outranks history.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Dealer Gold only for identity, focus, selection, progress, and the player's own position.",
+      "Do express every state with wording or a symbol in addition to color.",
+      "Do keep keyboard instructions close to the interaction they control.",
+      "Do prioritize the current table state, legal actions, and input when terminal space is scarce.",
+      "Do narrate social events and outcomes concisely so poker personality emerges from play.",
+      "Do preserve NO_COLOR, ASCII card mode, and usable layouts in narrow and short terminals."
+    ],
+    "donts": [
+      "Don't resemble a noisy casino interface; prohibit ornamental spectacle, blinking chrome, decorative animation, and competing accent colors.",
+      "Don't use Action Red for ordinary emphasis, navigation, or cardroom atmosphere.",
+      "Don't rely on color alone to identify errors, turns, selections, suits, or connection state.",
+      "Don't simulate GUI cards, buttons, shadows, glass surfaces, or modal overlays with box-drawing characters.",
+      "Don't let a menu item, header, or narration line silently force terminal wrapping and desynchronize rendering.",
+      "Don't replace direct poker terminology with cute copy when the player needs to decide quickly."
+    ]
+  }
+}

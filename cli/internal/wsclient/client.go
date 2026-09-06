@@ -53,6 +53,7 @@ type Client struct {
 
 	shareCode   string
 	currentDone chan struct{}
+	closed      chan struct{}
 	closeOnce   sync.Once
 }
 
@@ -66,6 +67,7 @@ func New(wsURL string, token func(context.Context) (string, error), origin strin
 		origin:   origin,
 		messages: make(chan *proto.ServerMessage, 32),
 		sendCh:   make(chan sendReq),
+		closed:   make(chan struct{}),
 	}
 }
 
@@ -109,22 +111,39 @@ func (c *Client) dialAndHandshake(ctx context.Context, shareCode string) (chan s
 		return nil, err
 	}
 
-	first, err := readFrameOn(ctx, conn)
-	if err != nil {
-		_ = conn.CloseNow()
-		return nil, err
+	// The server adds this connection to its table fan-out set moments before
+	// it writes the "connected" frame, so a concurrent broadcast (a presence
+	// "state" push triggered by our own ConnectCmd, say) can beat the
+	// handshake onto the wire. Accept anything that arrives before
+	// "connected": stash it and replay it once the read loop is running.
+	var pending []*proto.ServerMessage
+	for {
+		f, err := readFrameOn(ctx, conn)
+		if err != nil {
+			_ = conn.CloseNow()
+			return nil, err
+		}
+		if f.Type == "error" {
+			_ = conn.CloseNow()
+			if f.Code != "" {
+				return nil, fmt.Errorf("wsclient: server rejected connection: %s", f.Code)
+			}
+			return nil, errors.New("wsclient: server rejected connection")
+		}
+		if f.Type == "connected" {
+			c.mu.Lock()
+			c.conn = conn
+			c.connID = f.ConnId
+			c.mu.Unlock()
+			break
+		}
+		pending = append(pending, f)
 	}
-	if first.Type != "connected" {
-		_ = conn.CloseNow()
-		return nil, fmt.Errorf("wsclient: expected a connected frame, got %q", first.Type)
-	}
-
-	c.mu.Lock()
-	c.conn = conn
-	c.connID = first.ConnId
-	c.mu.Unlock()
 
 	done := make(chan struct{})
+	for _, m := range pending {
+		c.messages <- m
+	}
 	go c.readLoop(conn, done)
 	go c.writeLoop(conn, done)
 	go c.pingLoop(conn, done)
@@ -165,7 +184,11 @@ func (c *Client) readLoop(conn *websocket.Conn, done chan struct{}) {
 			c.mu.Unlock()
 			return
 		}
-		c.messages <- m
+		select {
+		case c.messages <- m:
+		case <-c.closed:
+			return
+		}
 	}
 }
 
@@ -247,7 +270,16 @@ func (c *Client) Close() error {
 		return errors.New("wsclient: not connected")
 	}
 	err := conn.Close(websocket.StatusNormalClosure, "")
-	c.closeOnce.Do(func() { close(c.messages) })
+	c.closeOnce.Do(func() {
+		close(c.closed)
+		// Let the current read loop observe the closed conn (or c.closed) and
+		// return before we close its output channel, so it can never send on a
+		// closed channel.
+		if done := c.currentDone; done != nil {
+			<-done
+		}
+		close(c.messages)
+	})
 	return err
 }
 

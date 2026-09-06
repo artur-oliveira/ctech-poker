@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"gopkg.aoctech.app/poker/cli/internal/auth"
 	"gopkg.aoctech.app/poker/cli/internal/config"
 	"gopkg.aoctech.app/poker/cli/internal/rest"
+	"gopkg.aoctech.app/poker/cli/internal/wsclient"
 )
 
 func newTestShell(t *testing.T, apiSrv *httptest.Server, credDir string) *Shell {
@@ -48,6 +50,62 @@ func TestCheckLoginMsgWithCredentialsShowsHome(t *testing.T) {
 	s = m.(*Shell)
 	if s.state != stateHome {
 		t.Fatalf("state = %v, want stateHome", s.state)
+	}
+}
+
+func TestTableExitCarriesAuthoritativeOutcomeIntoLobby(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateInTable
+	s.table = NewTableModel(TableConfig{RoomID: "r-1", RoomName: "Aurora"})
+
+	m, _ := s.Update(TableExitedMsg{
+		RoomID: "r-1", RoomName: "Aurora", Reason: "exit_requested",
+		SettledAmount: 1500, SettlementKnown: true,
+	})
+	s = m.(*Shell)
+	if s.state != stateHome || s.table != nil {
+		t.Fatalf("table exit did not return home: state=%v table=%v", s.state, s.table)
+	}
+	out := strings.Join(s.lines, "\n")
+	for _, want := range []string{"mesa Aurora", "banca final 1500 fichas", "saída concluída"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lobby handoff missing %q: %q", want, out)
+		}
+	}
+	m, _ = s.Update(tableExitRecapMsg{
+		exited:  TableExitedMsg{RoomID: "r-1"},
+		session: rest.Session{TableID: "r-1", NetPnL: 500, EndedAt: 1},
+	})
+	s = m.(*Shell)
+	if !strings.Contains(strings.Join(s.lines, "\n"), "resultado +500 fichas") {
+		t.Fatalf("authoritative session result missing: %q", strings.Join(s.lines, "\n"))
+	}
+}
+
+func TestForcedTableExitDoesNotClaimSettlement(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateInTable
+	s.table = NewTableModel(TableConfig{RoomID: "r-1", RoomName: "Aurora"})
+
+	m, _ := s.Update(TableExitedMsg{RoomName: "Aurora", Reason: "forced"})
+	s = m.(*Shell)
+	out := strings.Join(s.lines, "\n")
+	if !strings.Contains(out, "liquidação não confirmada") || strings.Contains(out, "banca final") {
+		t.Fatalf("forced exit claimed an authoritative settlement: %q", out)
+	}
+}
+
+func TestStaleSocketCloseDoesNotOverwriteExitHandoff(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	s.appendLine("Você saiu da mesa Aurora · banca final 1500 fichas")
+	stale := wsclient.New("ws://stale.invalid", nil, "")
+
+	m, _ := s.Update(wsClosedMsg{client: stale, err: errors.New("closed")})
+	s = m.(*Shell)
+	out := strings.Join(s.lines, "\n")
+	if strings.Contains(out, "de volta ao lobby") || strings.Contains(out, "conexão encerrada") {
+		t.Fatalf("stale socket close overwrote the structured exit handoff: %q", out)
 	}
 }
 
@@ -482,7 +540,7 @@ func TestResultAfterFirstCommandShowsAllLinesNotJustTheLast(t *testing.T) {
 	s = m.(*Shell)
 
 	view := s.View()
-	for _, want := range []string{"Ana", "PKR-X", "sandbox", "5000", "game balance: 0"} {
+	for _, want := range []string{"Ana", "PKR-X", "sandbox", "Fichas: 5.000"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q from view — result was clipped:\n%s", want, view)
 		}

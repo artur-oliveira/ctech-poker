@@ -10,7 +10,7 @@ import (
 func TestFormatProfileIncludesNameAndBalances(t *testing.T) {
 	p := rest.Profile{Name: "Ana", FriendCode: "PKR-AAAA-BBBB-CCCC", WalletMode: "sandbox", SandboxBalance: 5000}
 	out := FormatProfile(p)
-	if !strings.Contains(out, "Ana") || !strings.Contains(out, "PKR-AAAA-BBBB-CCCC") || !strings.Contains(out, "5000") {
+	if !strings.Contains(out, "Ana") || !strings.Contains(out, "PKR-AAAA-BBBB-CCCC") || !strings.Contains(out, "Fichas: 5.000") {
 		t.Fatalf("missing expected fields: %q", out)
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/rest"
 )
@@ -17,8 +19,24 @@ func FormatProfile(p rest.Profile) string {
 	if name == "" {
 		name = "(sem nome)"
 	}
-	return fmt.Sprintf("%s\nfriend code: %s\nwallet mode: %s\nsandbox balance: %d\ngame balance: %d",
-		name, p.FriendCode, p.WalletMode, p.SandboxBalance, p.GameBalance)
+	if p.WalletMode == "sandbox" {
+		pGer := message.NewPrinter(language.BrazilianPortuguese)
+		return fmt.Sprintf(
+			"%s\nCódigo de convite: %s\nModo de jogo: %s\nFichas: %s",
+			name,
+			p.FriendCode,
+			p.WalletMode,
+			pGer.Sprintf("%d", p.SandboxBalance),
+		)
+	}
+	return fmt.Sprintf(
+		"%s\nCódigo de convite: %s\nModo de jogo: %s\nFichas: %d\nDinheiro: R$ %d",
+		name,
+		p.FriendCode,
+		p.WalletMode,
+		p.SandboxBalance,
+		p.GameBalance,
+	)
 }
 
 // FormatAchievements renders the achievement summary for /achievements.

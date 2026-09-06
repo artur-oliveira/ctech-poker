@@ -3,15 +3,18 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // commandSpec is one entry in a slash-command menu: its name (with the
 // leading "/"), an optional argument placeholder shown after the name, and a
 // short description.
 type commandSpec struct {
-	Name string
-	Args string
-	Desc string
+	Name   string
+	Args   string
+	Desc   string
+	Hotkey string
 }
 
 // commandMenu is a Claude-Code-style `/command` suggestion list: it narrows
@@ -146,9 +149,8 @@ func terminalLineWidth(maxWidth int) int {
 	return maxWidth
 }
 
-// truncateVisible clamps s to at most max visible characters (runes, not
-// bytes — this text is Portuguese with accented characters that are
-// multi-byte in UTF-8 but one column wide), appending "…" if it had to cut.
+// truncateVisible clamps s to at most max terminal cells, preserving ANSI
+// styling and grapheme clusters, and appends "…" if it had to cut.
 // This is the actual fix for a real, reproduced bug: a menu line longer than
 // the terminal's column count wraps onto a second physical row, but
 // bubbletea's renderer counts rows by '\n' alone — it has no idea the
@@ -164,14 +166,10 @@ func truncateVisible(s string, max int) string {
 	if max <= 0 {
 		return ""
 	}
-	r := []rune(s)
-	if len(r) <= max {
+	if ansi.StringWidth(s) <= max {
 		return s
 	}
-	if max == 1 {
-		return string(r[:1])
-	}
-	return string(r[:max-1]) + "…"
+	return ansi.Truncate(s, max, "…")
 }
 
 // View renders the suggestion list within maxRows total lines (0 or a
@@ -265,6 +263,48 @@ func formatCommandList(specs []commandSpec, maxWidth int) string {
 	return b.String()
 }
 
+// prioritizeCommandSpecs keeps every command discoverable while moving the
+// commands relevant to the current table state to the top of the `/` menu.
+func prioritizeCommandSpecs(specs []commandSpec, names ...string) []commandSpec {
+	byName := make(map[string]commandSpec, len(specs))
+	for _, spec := range specs {
+		byName[spec.Name] = spec
+	}
+	out := make([]commandSpec, 0, len(specs))
+	seen := make(map[string]bool, len(specs))
+	for _, name := range names {
+		if spec, ok := byName[name]; ok && !seen[name] {
+			out = append(out, spec)
+			seen[name] = true
+		}
+	}
+	for _, spec := range specs {
+		if !seen[spec.Name] {
+			out = append(out, spec)
+		}
+	}
+	return out
+}
+
+// formatHotkeyHelp derives the table shortcut reference from the same command
+// metadata the suggestion menu uses, so help cannot drift independently.
+func formatHotkeyHelp(specs []commandSpec) string {
+	groups := make([]string, 0, 5)
+	seen := map[string]int{}
+	for _, spec := range specs {
+		if spec.Hotkey == "" {
+			continue
+		}
+		if i, ok := seen[spec.Hotkey]; ok {
+			groups[i] += " ou " + spec.Name
+			continue
+		}
+		seen[spec.Hotkey] = len(groups)
+		groups = append(groups, spec.Hotkey+" "+spec.Name)
+	}
+	return "atalhos: " + strings.Join(groups, " · ")
+}
+
 var homeCommandSpecs = []commandSpec{
 	{Name: "/achievements", Desc: "Veja progresso, estrelas e conquistas"},
 	{Name: "/profile", Desc: "Veja seu perfil, código e saldos"},
@@ -277,22 +317,22 @@ var homeCommandSpecs = []commandSpec{
 }
 
 var tableCommandSpecs = []commandSpec{
-	{Name: "/check", Desc: "Passa a vez sem apostar"},
-	{Name: "/call", Desc: "Paga a aposta atual"},
-	{Name: "/raise", Args: "<valor>", Desc: "Aumenta para o valor"},
-	{Name: "/pot", Desc: "Aumenta o valor do pote"},
+	{Name: "/check", Desc: "Passa a vez sem apostar", Hotkey: "c"},
+	{Name: "/call", Desc: "Paga a aposta atual", Hotkey: "c"},
+	{Name: "/raise", Args: "<valor>", Desc: "Aumenta para o valor", Hotkey: "r"},
+	{Name: "/pot", Desc: "Aumenta para o tamanho do pote", Hotkey: "p"},
 	{Name: "/allin", Desc: "Aposta todas as fichas"},
-	{Name: "/fold", Desc: "Desiste da mão"},
+	{Name: "/fold", Desc: "Desiste da mão", Hotkey: "f"},
 	{Name: "/talk", Args: "<mensagem>", Desc: "Envia uma mensagem no chat"},
 	{Name: "/react", Args: "<código> [jogador]", Desc: "Envia uma reação"},
-	{Name: "/peek", Args: "[all|1|2]", Desc: "Espia suas cartas"},
+	{Name: "/peek", Args: "[all|1|2]", Desc: "Espia suas cartas", Hotkey: "k"},
 	{Name: "/sitout", Desc: "Senta fora nas próximas mãos"},
 	{Name: "/ready", Desc: "Volta a jogar"},
 	{Name: "/summary", Desc: "Resumo da sessão atual"},
 	{Name: "/last-winners", Desc: "Últimos vencedores"},
 	{Name: "/share", Desc: "Copia o link de convite da mesa"},
 	{Name: "/clear", Desc: "Limpa o log da mesa"},
-	{Name: "/exit", Desc: "Sai da mesa"},
-	{Name: "/exit!", Desc: "Sai da mesa sem avisar o servidor"},
+	{Name: "/exit", Desc: "Pede pra sair; você sai ao fim da mão"},
+	{Name: "/exit!", Desc: "Sai da mesa agora, sem avisar o servidor"},
 	{Name: "/help", Desc: "Lista os comandos"},
 }

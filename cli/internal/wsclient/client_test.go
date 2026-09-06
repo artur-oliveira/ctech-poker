@@ -70,6 +70,61 @@ func TestConnectSendsAuthFrameFirstAndReceivesConnected(t *testing.T) {
 	cl.Close()
 }
 
+func TestConnectToleratesFramesBeforeConnected(t *testing.T) {
+	// The server can race a broadcast onto the wire ahead of "connected".
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, _ := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		defer c.CloseNow()
+		if _, _, err := c.Read(r.Context()); err != nil {
+			return
+		}
+		st, _ := googleproto.Marshal(&proto.ServerMessage{Type: "state", Snapshot: &proto.TableSnapshot{Stage: "flop"}})
+		c.Write(r.Context(), websocket.MessageBinary, st)
+		ok, _ := googleproto.Marshal(&proto.ServerMessage{Type: "connected", ConnId: "c2"})
+		c.Write(r.Context(), websocket.MessageBinary, ok)
+		time.Sleep(100 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	cl := New(wsURL, staticToken("t"), "https://poker.aoctech.app")
+	if err := cl.Connect(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	if cl.ConnID() != "c2" {
+		t.Errorf("conn id = %q", cl.ConnID())
+	}
+	select {
+	case msg := <-cl.Messages():
+		if msg.Type != "state" || msg.Snapshot.Stage != "flop" {
+			t.Fatalf("pre-connected frame not replayed: %+v", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the replayed state frame")
+	}
+}
+
+func TestConnectRejectsErrorFrame(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, _ := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		defer c.CloseNow()
+		if _, _, err := c.Read(r.Context()); err != nil {
+			return
+		}
+		e, _ := googleproto.Marshal(&proto.ServerMessage{Type: "error", Code: "forbidden"})
+		c.Write(r.Context(), websocket.MessageBinary, e)
+		time.Sleep(50 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	cl := New(wsURL, staticToken("t"), "https://poker.aoctech.app")
+	if err := cl.Connect(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("expected a forbidden rejection, got %v", err)
+	}
+}
+
 func TestSendSerializesFramesThroughOneWriter(t *testing.T) {
 	received := make(chan *proto.ClientMessage, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

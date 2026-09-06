@@ -69,7 +69,10 @@ type wsConnectedMsg struct {
 	err    error
 }
 type wsStreamMsg struct{ m *proto.ServerMessage }
-type wsClosedMsg struct{ err error }
+type wsClosedMsg struct {
+	client *wsclient.Client
+	err    error
+}
 
 func loadStakes(rc *rest.Client) tea.Cmd {
 	return func() tea.Msg {
@@ -128,7 +131,7 @@ func pumpTable(cl *wsclient.Client) tea.Cmd {
 	return func() tea.Msg {
 		m, ok := <-cl.Messages()
 		if !ok {
-			return wsClosedMsg{err: cl.Err()}
+			return wsClosedMsg{client: cl, err: cl.Err()}
 		}
 		switch m.Type {
 		case wsclient.TypeReconnecting:

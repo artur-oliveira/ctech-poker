@@ -62,10 +62,27 @@ func TestParsePotResolvesToPotRaiseTo(t *testing.T) {
 	}
 }
 
+func TestPotHotkeyMatchesDocumentedContract(t *testing.T) {
+	m, _, err := ParseTableCommand("p", turnView())
+	if err != nil || m == nil || m.Type != "act" || m.Action != "raise" || m.Amount != 32 {
+		t.Fatalf("p hotkey: m=%v err=%v", m, err)
+	}
+}
+
 func TestParseAllinResolvesToMaxRaiseTo(t *testing.T) {
 	m, _, err := ParseTableCommand("/allin", turnView())
 	if err != nil || m.Amount != 246 {
 		t.Fatalf("m=%v err=%v", m, err)
+	}
+}
+
+func TestBettingCommandsRejectUnavailableActions(t *testing.T) {
+	v := turnView()
+	v.Legal.Actions = []string{"check"}
+	for _, command := range []string{"/fold", "/raise 40", "/pot", "/allin"} {
+		if _, _, err := ParseTableCommand(command, v); err == nil {
+			t.Errorf("%s should be rejected when unavailable", command)
+		}
 	}
 }
 
@@ -122,6 +139,9 @@ func TestParseLocalActions(t *testing.T) {
 	m, local, _ := ParseTableCommand("/exit", turnView())
 	if local != ActExit || m == nil || m.Type != "request_exit" {
 		t.Fatalf("/exit: m=%v local=%v", m, local)
+	}
+	if m.ActionId == "" {
+		t.Fatal("/exit request must carry an action id for acknowledgement correlation")
 	}
 }
 

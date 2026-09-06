@@ -59,9 +59,17 @@ type Shell struct {
 	loginSeq   int
 	copied     bool
 
-	play  playState
-	table *TableModel
-	ws    *wsclient.Client
+	play     playState
+	table    *TableModel
+	ws       *wsclient.Client
+	wsCancel context.CancelFunc
+}
+
+type tableExitRecapMsg struct {
+	exited  TableExitedMsg
+	session rest.Session
+	err     error
+	attempt int
 }
 
 // NewShell wires a Session and REST client from cfg and returns the initial
@@ -337,8 +345,12 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 		s.ws = msg.client
+		wsCtx, cancel := context.WithCancel(context.Background())
+		s.wsCancel = cancel
 		s.startTable()
-		return s, tea.Batch(pumpTable(s.ws), s.table.Init(), sendReadyCmd(s.ws))
+		// Run owns reconnect-with-resync, exactly like the web client — a
+		// dropped socket recovers the table instead of dumping to the lobby.
+		return s, tea.Batch(pumpTable(s.ws), s.table.Init(), sendReadyCmd(s.ws), runWS(s.ws, wsCtx))
 
 	case wsStreamMsg:
 		var cmd tea.Cmd
@@ -350,15 +362,24 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, tea.Batch(cmd, pumpTable(s.ws))
 
 	case ReconnectingMsg, ReconnectedMsg:
+		var cmd tea.Cmd
 		if s.table != nil {
-			tm, _ := s.table.Update(msg)
+			tm, tableCmd := s.table.Update(msg)
 			s.table = tm.(*TableModel)
+			cmd = tableCmd
 		}
-		return s, pumpTable(s.ws)
+		return s, tea.Batch(cmd, pumpTable(s.ws))
 
 	case wsClosedMsg:
-		s.leaveTable()
-		if msg.err != nil {
+		// A pump from the table we just left can close after a new table has
+		// already connected. Never let that stale event tear down the new socket
+		// or add a second generic lobby message after a structured exit recap.
+		if msg.client != nil && msg.client != s.ws {
+			return s, nil
+		}
+		unexpected := s.table != nil // a deliberate /exit clears s.table first
+		s.leaveTable(nil)
+		if msg.err != nil && unexpected {
 			s.appendLine("conexão encerrada: " + msg.err.Error())
 		}
 		return s, nil
@@ -372,13 +393,37 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, cmd
 
 	case TableExitedMsg:
-		s.leaveTable()
+		s.leaveTable(&msg)
+		if msg.SettlementKnown && msg.RoomID != "" && s.rc != nil {
+			return s, fetchTableExitRecap(s.rc, msg, 0)
+		}
+		return s, nil
+
+	case tableExitRecapMsg:
+		if msg.err == nil && msg.session.TableID == msg.exited.RoomID && msg.session.EndedAt > 0 {
+			s.appendLine(successStyle.Render("✓ sessão encerrada") + " · resultado " +
+				formatSignedExitAmount(msg.session.NetPnL, msg.exited.RealMoney))
+			return s, nil
+		}
+		if msg.attempt < 2 {
+			return s, fetchTableExitRecap(s.rc, msg.exited, msg.attempt+1)
+		}
+		s.appendLine(mutedStyle.Render("· resultado líquido ainda indisponível; a banca final acima foi confirmada pela mesa"))
 		return s, nil
 
 	case tea.KeyMsg:
 		return s.handleKey(msg)
 	}
 	return s, nil
+}
+
+// runWS drives the client's reconnect-with-resync loop for the life of the
+// table session; it returns (nil msg) only when ctx is cancelled in leaveTable.
+func runWS(cl *wsclient.Client, ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		cl.Run(ctx)
+		return nil
+	}
 }
 
 func sendReadyCmd(cl *wsclient.Client) tea.Cmd {
@@ -411,7 +456,11 @@ func tableConfig(s *Shell) TableConfig {
 	}
 }
 
-func (s *Shell) leaveTable() {
+func (s *Shell) leaveTable(exited *TableExitedMsg) {
+	if s.wsCancel != nil {
+		s.wsCancel()
+		s.wsCancel = nil
+	}
 	if s.ws != nil {
 		_ = s.ws.Close()
 		s.ws = nil
@@ -420,7 +469,73 @@ func (s *Shell) leaveTable() {
 	s.state = stateHome
 	s.input.Reset()
 	s.input.Placeholder = "/ para ver comandos"
-	s.appendLine("· de volta ao lobby")
+	if exited == nil {
+		s.appendLine("· de volta ao lobby")
+		return
+	}
+	name := exited.RoomName
+	if name == "" {
+		name = exited.RoomID
+	}
+	if name == "" {
+		name = "atual"
+	}
+	line := "Você saiu da mesa " + name
+	if exited.SettlementKnown {
+		line += " · banca final " + formatExitAmount(exited.SettledAmount, exited.RealMoney)
+	} else {
+		line += " · saída local; liquidação não confirmada"
+	}
+	if reason := removalReason(exited.Reason); reason != "" {
+		line += " · " + reason
+	}
+	s.appendLine(line)
+}
+
+func fetchTableExitRecap(rc *rest.Client, exited TableExitedMsg, attempt int) tea.Cmd {
+	return func() tea.Msg {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 250 * time.Millisecond)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		session, err := rc.CurrentSession(ctx)
+		return tableExitRecapMsg{exited: exited, session: session, err: err, attempt: attempt}
+	}
+}
+
+func formatExitAmount(amount int64, realMoney bool) string {
+	if realMoney {
+		return fmt.Sprintf("R$ %d", amount)
+	}
+	return fmt.Sprintf("%d fichas", amount)
+}
+
+func formatSignedExitAmount(amount int64, realMoney bool) string {
+	sign := ""
+	if amount > 0 {
+		sign = "+"
+	}
+	return sign + formatExitAmount(amount, realMoney)
+}
+
+func removalReason(code string) string {
+	switch strings.TrimSpace(code) {
+	case "exit_requested":
+		return "saída concluída"
+	case "idle", "idle_timeout":
+		return "removido por inatividade"
+	case "disconnected":
+		return "removido após desconexão"
+	case "forced":
+		return "saída imediata"
+	case "local":
+		return ""
+	case "":
+		return "removido da mesa"
+	default:
+		return "removido da mesa"
+	}
 }
 
 // enterBuyInStep moves into the buy-in prompt with the input pre-filled with

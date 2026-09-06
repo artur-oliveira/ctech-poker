@@ -3,11 +3,11 @@
 # asset for this OS/arch and drops the `poker` binary into $PREFIX/bin
 # (default ~/.local/bin).
 #
-#   curl -fsSL https://raw.githubusercontent.com/aoctech/ctech-poker/main/cli/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/artur-oliveira/ctech-poker/main/cli/install.sh | sh
 #
 set -eu
 
-REPO="aoctech/ctech-poker"
+REPO="artur-oliveira/ctech-poker"
 PREFIX="${PREFIX:-$HOME/.local}"
 API="https://api.github.com/repos/$REPO/releases"
 

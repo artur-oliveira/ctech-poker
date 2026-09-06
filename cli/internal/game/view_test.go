@@ -79,6 +79,9 @@ func TestNewTableViewMapsHeaderFields(t *testing.T) {
 	if !v.IsYourTurn {
 		t.Error("IsYourTurn should be true for current_player_id == you")
 	}
+	if v.CurrentPlayer.ID != "you" || !v.CurrentPlayer.IsYou {
+		t.Errorf("current player not mapped: %+v", v.CurrentPlayer)
+	}
 	if len(v.YourHole) != 2 || v.YourStrength != "par de ases" {
 		t.Errorf("your hand: %v %q", v.YourHole, v.YourStrength)
 	}

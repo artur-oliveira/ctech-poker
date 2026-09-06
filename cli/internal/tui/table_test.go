@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/proto"
 )
@@ -64,11 +66,45 @@ func TestTableViewRendersLayoutBHeader(t *testing.T) {
 	if !strings.Contains(out, "SUA VEZ") {
 		t.Errorf("missing turn indicator: %q", out)
 	}
-	if !strings.Contains(out, "Pote 24") {
+	if !strings.Contains(out, "Pote: 24") {
 		t.Errorf("sandbox pot should have no currency symbol: %q", out)
 	}
 	if strings.Contains(out, "R$") {
 		t.Errorf("sandbox table must not render R$: %q", out)
+	}
+}
+
+func TestTableHeaderShowsActorAndDecisionState(t *testing.T) {
+	msg := tableFixtureSnapshot()
+	msg.Snapshot.CurrentPlayerId = "caio"
+	msg.Snapshot.LegalActions = nil
+	msg.Snapshot.Seats[0].Contributed = 16
+	m := NewTableModel(TableConfig{YouID: "you", RoomName: "quiet-42", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: msg})
+	m = nm.(*TableModel)
+	out := m.View()
+	for _, want := range []string{"Vez de Caio", "stack 297", "(+16)", "Duda 100"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("header missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestTableHeaderPrioritizesExecutableLegalActions(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	out := m.View()
+	for _, want := range []string{"Ações:", "f desistir", "c pagar 8", "r aumentar 16–246"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("decision surface missing %q:\n%s", want, out)
+		}
+	}
+	wantOrder := []string{"/fold", "/call", "/raise", "/pot"}
+	for i, want := range wantOrder {
+		if m.menu.specs[i].Name != want {
+			t.Fatalf("menu priority[%d] = %q, want %q", i, m.menu.specs[i].Name, want)
+		}
 	}
 }
 
@@ -96,6 +132,113 @@ func TestTableActionSendsActWithPreconditions(t *testing.T) {
 	}
 	if sent[0].ExpectedSnapshotVersion != 7 || sent[0].ExpectedHandId != "h-9" {
 		t.Fatalf("missing optimistic preconditions: %+v", sent[0])
+	}
+}
+
+func TestTablePendingActionShowsStatusBlocksConflictAndConfirmsOnlyMatchingAck(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	typeLine(t, m, "/raise 40")
+	actionID := sent[0].ActionId
+	if !strings.Contains(m.View(), "enviando aumento para 40") {
+		t.Fatalf("pending status missing:\n%s", m.View())
+	}
+	typeLine(t, m, "/fold")
+	if len(sent) != 1 {
+		t.Fatalf("conflicting action was sent: %+v", sent)
+	}
+	if !strings.Contains(strings.Join(m.log, "\n"), "ainda está sendo enviada") {
+		t.Fatalf("missing conflict explanation: %v", m.log)
+	}
+	newer := tableFixtureSnapshot()
+	newer.Snapshot.SnapshotVersion = 8
+	nm, _ = m.Update(SnapshotMsg{M: newer})
+	m = nm.(*TableModel)
+	if m.pendingMsg == nil || !strings.Contains(strings.Join(m.log, "\n"), "verificando") {
+		t.Fatalf("unrelated snapshot must keep action pending: pending=%+v log=%v", m.pendingMsg, m.log)
+	}
+	nm, _ = m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "action_ack", ActionId: "another-action"}})
+	m = nm.(*TableModel)
+	if m.pendingMsg == nil {
+		t.Fatal("unrelated acknowledgement cleared the pending action")
+	}
+	nm, _ = m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "action_ack", ActionId: actionID}})
+	m = nm.(*TableModel)
+	if m.pendingMsg != nil || !strings.Contains(strings.Join(m.log, "\n"), "confirmada") {
+		t.Fatalf("matching acknowledgement did not confirm action: pending=%+v log=%v", m.pendingMsg, m.log)
+	}
+}
+
+func TestTableReconnectPausesNetworkActionsAndResendsPending(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	typeLine(t, m, "/raise 40")
+	firstID := sent[0].ActionId
+	nm, _ = m.Update(ReconnectingMsg{})
+	m = nm.(*TableModel)
+	typeLine(t, m, "/talk teste")
+	if len(sent) != 1 {
+		t.Fatalf("network action sent while reconnecting: %+v", sent)
+	}
+	nm, cmd := m.Update(ReconnectedMsg{})
+	m = nm.(*TableModel)
+	for _, msg := range drainCmd(cmd) {
+		if msg != nil {
+			m.Update(msg)
+		}
+	}
+	if len(sent) != 2 || sent[1].ActionId != firstID {
+		t.Fatalf("pending action not resent idempotently: %+v", sent)
+	}
+}
+
+func TestTableFatalStateOffersExitAndBlocksNetworkActions(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	nm, _ = m.Update(TableFatalMsg{Err: errors.New("socket fechou")})
+	m = nm.(*TableModel)
+	if !strings.Contains(m.View(), "/exit volta ao lobby") {
+		t.Fatalf("fatal recovery missing:\n%s", m.View())
+	}
+	typeLine(t, m, "/call")
+	if len(sent) != 0 {
+		t.Fatalf("action sent after fatal failure: %+v", sent)
+	}
+}
+
+func TestTableFatalStateIgnoresLateReconnect(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	nm, _ = m.Update(TableFatalMsg{Err: errors.New("socket fechou")})
+	m = nm.(*TableModel)
+	nm, cmd := m.Update(ReconnectedMsg{})
+	m = nm.(*TableModel)
+	if cmd != nil || !m.fatal {
+		t.Fatalf("late reconnect reopened fatal table: fatal=%v cmd=%v", m.fatal, cmd)
+	}
+	typeLine(t, m, "/call")
+	if len(sent) != 0 {
+		t.Fatalf("network action sent after fatal -> reconnect ordering: %+v", sent)
 	}
 }
 
@@ -131,17 +274,111 @@ func TestTableUnavailableErrorResyncsAndResendsSameActionID(t *testing.T) {
 }
 
 func TestTableRemovedEmitsExitAndLogsSettledStack(t *testing.T) {
-	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6})
-	nm, cmd := m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "removed", Message: "idle", Amount: 1500}})
+	m := NewTableModel(TableConfig{RoomID: "r-1", RoomName: "Aurora", YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6})
+	nm, cmd := m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "removed", Code: "exit_requested", Amount: 1500}})
 	m = nm.(*TableModel)
 	if cmd == nil {
 		t.Fatal("removed should emit a command")
 	}
-	if _, ok := cmd().(TableExitedMsg); !ok {
-		t.Errorf("removed should emit TableExitedMsg, got %T", cmd())
+	exited, ok := cmd().(TableExitedMsg)
+	if !ok {
+		t.Fatalf("removed should emit TableExitedMsg, got %T", cmd())
+	}
+	if exited.RoomName != "Aurora" || exited.Reason != "exit_requested" || !exited.SettlementKnown || exited.SettledAmount != 1500 {
+		t.Errorf("incomplete exit handoff: %+v", exited)
 	}
 	if !strings.Contains(strings.Join(m.log, "\n"), "1500") {
 		t.Errorf("settled stack not logged: %v", m.log)
+	}
+}
+
+func TestTableExitRequestsExitAndStaysConnected(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+
+	for _, r := range "/exit" {
+		nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = nm.(*TableModel)
+	}
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*TableModel)
+
+	for _, msg := range drainCmd(cmd) {
+		if _, ok := msg.(TableExitedMsg); ok {
+			t.Fatal("/exit must not leave the table before the server removes the player")
+		}
+	}
+	if len(sent) != 1 || sent[0].Type != "request_exit" {
+		t.Fatalf("expected one request_exit frame, got %+v", sent)
+	}
+	if !m.exitRequested {
+		t.Error("exitRequested not set")
+	}
+	if m.exitActionID == "" || m.exitActionID != sent[0].ActionId {
+		t.Fatalf("exit acknowledgement correlation not tracked: model=%q sent=%q", m.exitActionID, sent[0].ActionId)
+	}
+	nm, _ = m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "action_ack", ActionId: m.exitActionID}})
+	m = nm.(*TableModel)
+	if m.exitActionID != "" || !strings.Contains(strings.Join(m.log, "\n"), "saída confirmada") {
+		t.Fatalf("exit acknowledgement not surfaced: actionID=%q log=%v", m.exitActionID, m.log)
+	}
+
+	// The server eventually removes us -> that is what returns to the lobby.
+	nm, cmd = m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "removed", Message: "left", Amount: 246}})
+	if _, ok := cmd().(TableExitedMsg); !ok {
+		t.Errorf("removed should emit TableExitedMsg, got %T", cmd())
+	}
+}
+
+func TestTableExitRejectionUnlocksRetry(t *testing.T) {
+	var sent []*proto.ClientMessage
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6,
+		Send: func(cm *proto.ClientMessage) error { sent = append(sent, cm); return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	typeLine(t, m, "/exit")
+	actionID := sent[0].ActionId
+	nm, _ = m.Update(SnapshotMsg{M: &proto.ServerMessage{
+		Type: "error", ActionId: actionID, Code: "unavailable", Message: "mesa ocupada",
+	}})
+	m = nm.(*TableModel)
+	if m.exitRequested || m.exitActionID != "" {
+		t.Fatalf("rejected exit stayed locked: requested=%v actionID=%q", m.exitRequested, m.exitActionID)
+	}
+	if !strings.Contains(strings.Join(m.log, "\n"), "não foi possível solicitar a saída") {
+		t.Fatalf("exit rejection lacks recovery copy: %v", m.log)
+	}
+}
+
+func TestTableForceExitLeavesImmediately(t *testing.T) {
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Send: func(cm *proto.ClientMessage) error { return nil },
+	})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+
+	for _, r := range "/exit!" {
+		nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = nm.(*TableModel)
+	}
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	var exited bool
+	for _, msg := range drainCmd(cmd) {
+		if _, ok := msg.(TableExitedMsg); ok {
+			exited = true
+		}
+	}
+	if !exited {
+		t.Fatal("/exit! should emit TableExitedMsg immediately")
 	}
 }
 
@@ -188,6 +425,11 @@ func TestTableHelpListsCommandsWithDescriptions(t *testing.T) {
 	if !strings.Contains(out, "/raise") || !strings.Contains(out, "Aumenta para o valor") {
 		t.Fatalf("help output missing command+description: %q", out)
 	}
+	for _, want := range []string{"p /pot", "k /peek", "c /check ou /call"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help output missing derived shortcut %q: %q", want, out)
+		}
+	}
 }
 
 func typeLine(t *testing.T, m *TableModel, line string) {
@@ -231,6 +473,26 @@ func TestTableViewNeverOverflowsWindow(t *testing.T) {
 			if len(got) > height {
 				t.Fatalf("height=%d seq=%q: View() produced %d lines, want <= %d\n%s",
 					height, seq, len(got), height, m.View())
+			}
+		}
+	}
+}
+
+func TestTableViewNeverOverflowsTerminalWidth(t *testing.T) {
+	for _, width := range []int{20, 40, 60, 80} {
+		msg := tableFixtureSnapshot()
+		msg.Snapshot.Seats[0].Name = "Jogador界🙂com-um-nome-muito-longo"
+		m := NewTableModel(TableConfig{
+			YouID: "you", RoomName: "mesa界🙂com-um-identificador-muito-longo",
+			Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		})
+		nm, _ := m.Update(SnapshotMsg{M: msg})
+		m = nm.(*TableModel)
+		nm, _ = m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
+		m = nm.(*TableModel)
+		for _, line := range strings.Split(m.View(), "\n") {
+			if got := ansi.StringWidth(line); got > width-1 {
+				t.Fatalf("width=%d line=%q occupies %d cells, want <= %d", width, line, got, width-1)
 			}
 		}
 	}
