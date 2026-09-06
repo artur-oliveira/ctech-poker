@@ -55,6 +55,12 @@ the running program, `/command`-style (like Claude Code's own shell):
    ```
    /profile        show your poker profile
    /achievements   show your achievement progress
+   /hands          browse paginated hand history and open hand details
+   /friends        browse friends and presence (`next` / `prev` paginate)
+   /requests       browse received or sent friend requests
+   /recent         browse opponents from the last 90 days
+   /blocked        browse blocked players
+   /inbox          browse social activity and table invites
    /play           join a table (pick size, stake, buy-in, auto-rebuy)
    /enter <id>     join a table by room id
    /clear          clear the screen (Ctrl+L works too)
@@ -66,6 +72,18 @@ the running program, `/command`-style (like Claude Code's own shell):
    Typing `/` opens a Claude-Code-style suggestion menu: `↑`/`↓` to move,
    `Tab`/`Enter` to accept, `Esc` to dismiss. Long output (like the
    achievements list) scrolls — `PgUp`/`PgDn`/`Home`/`End`.
+
+   `/hands` opens a dedicated history archive instead of printing into the
+   home scrollback. It summarizes the current page's result, groups hands by
+   day, and keeps the active row visible. Use `↑`/`↓` (or `j`/`k`) to choose a
+   hand, `Enter` to open its cards, board, opponents, action timeline, and
+   available shuffle proof, `N`/`P` to move between cursor pages, and `Esc` to
+   go back. Inside a detail, `↑`/`↓` and `PgUp`/`PgDn` scroll; `Esc` returns to
+   the list and `Q` returns home.
+
+   Social lists are cursor-paginated too: append `next` or `prev` to
+   `/friends`, `/recent`, `/blocked`, or `/inbox`; requests use
+   `/requests [sent] [next|prev]`.
 
 3. **At a table** the same conventions apply — a `/` prompt with menu +
    Tab-complete, `PgUp`/`PgDn` scrollback, `Ctrl+L`/`/clear`:
@@ -83,3 +101,6 @@ Override the config file, API/account URLs, or card rendering with
 `--config`, `--api-url`, `--account-url`, `--cards ascii|color`, or the
 `CTECH_POKER_API_URL` / `CTECH_POKER_ACCOUNT_URL` / `CTECH_POKER_CLIENT_ID` /
 `NO_COLOR` environment variables.
+
+See [`WEB_PARITY.md`](WEB_PARITY.md) for the audited differences between the
+web application and this terminal client.

@@ -29,6 +29,7 @@ const (
 	stateAPIKeyInput
 	stateLoggingIn
 	stateHome
+	stateHands
 	stateQuitting
 )
 
@@ -53,6 +54,7 @@ type Shell struct {
 	windowWidth  int
 	windowHeight int
 	followBottom bool // true unless the user scrolled away from the latest output
+	socialPages  map[string]socialPageState
 
 	pkceFlow   *auth.PKCEFlow
 	pkceCancel context.CancelFunc
@@ -60,6 +62,7 @@ type Shell struct {
 	copied     bool
 
 	play     playState
+	hands    *HandsModel
 	table    *TableModel
 	ws       *wsclient.Client
 	wsCancel context.CancelFunc
@@ -70,6 +73,29 @@ type tableExitRecapMsg struct {
 	session rest.Session
 	err     error
 	attempt int
+}
+
+type socialPageState struct {
+	cursors    []string
+	index      int
+	hasNext    bool
+	nextCursor string
+}
+
+type socialPlayersMsg struct {
+	key, kind, title, command string
+	cursor                    string
+	index                     int
+	page                      rest.Page[rest.SocialPlayer]
+	err                       error
+}
+
+type socialInboxMsg struct {
+	key, command string
+	cursor       string
+	index        int
+	page         rest.Page[rest.SocialInboxEvent]
+	err          error
 }
 
 // NewShell wires a Session and REST client from cfg and returns the initial
@@ -92,7 +118,7 @@ func newShell(cfg config.Settings, session *auth.Session, rc *rest.Client) *Shel
 	sp.Style = accentStyle
 	return &Shell{
 		cfg: cfg, session: session, rc: rc, state: stateCheckingLogin, input: ti, spin: sp,
-		menu: newCommandMenu(homeCommandSpecs), followBottom: true,
+		menu: newCommandMenu(homeCommandSpecs), followBottom: true, socialPages: map[string]socialPageState{},
 	}
 }
 
@@ -243,6 +269,9 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.table = tm.(*TableModel)
 			return s, cmd
 		}
+		if s.hands != nil {
+			return s, s.hands.Update(msg)
+		}
 		return s, nil
 
 	case checkLoginMsg:
@@ -295,6 +324,39 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.busy = false
 		s.lines = append(s.lines, msg.lines...)
 		s.syncViewport()
+		return s, nil
+
+	case handsPageMsg, handDetailMsg:
+		if s.hands != nil {
+			return s, s.hands.Update(msg)
+		}
+		return s, nil
+
+	case handsExitMsg:
+		s.hands = nil
+		s.state = stateHome
+		s.input.Reset()
+		s.input.Placeholder = "/ para ver comandos"
+		return s, nil
+
+	case socialPlayersMsg:
+		s.busy = false
+		if msg.err != nil {
+			s.appendLine(explainErr(msg.err))
+			return s, nil
+		}
+		s.rememberSocialPage(msg.key, msg.cursor, msg.index, msg.page.HasNext, msg.page.NextCursor)
+		s.appendLine(FormatSocialPlayersPage(msg.kind, msg.title, msg.page, msg.index+1, s.windowWidth, msg.command))
+		return s, nil
+
+	case socialInboxMsg:
+		s.busy = false
+		if msg.err != nil {
+			s.appendLine(explainErr(msg.err))
+			return s, nil
+		}
+		s.rememberSocialPage(msg.key, msg.cursor, msg.index, msg.page.HasNext, msg.page.NextCursor)
+		s.appendLine(FormatInboxPage(msg.page, msg.index+1, s.windowWidth, msg.command))
 		return s, nil
 
 	case spinner.TickMsg:
@@ -858,6 +920,13 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
+	case stateHands:
+		if s.hands != nil {
+			return s, s.hands.Update(msg)
+		}
+		s.state = stateHome
+		return s, nil
+
 	case stateInTable:
 		if s.table == nil {
 			return s, nil
@@ -918,28 +987,93 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 	case "/achievements":
 		s.busy = true
 		return s, s.runAchievements()
+	case "/hands":
+		if len(args) > 0 {
+			s.appendLine("uso: /hands")
+			return s, nil
+		}
+		var load tea.Cmd
+		s.hands, load = NewHandsModel(s.rc, cardMode(s.cfg), s.windowWidth, s.windowHeight)
+		s.state = stateHands
+		return s, load
 	case "/friends":
-		s.busy = true
-		return s, s.runFriends()
-	case "/requests":
-		direction := "incoming"
-		if len(args) == 1 && args[0] == "sent" {
-			direction = "outgoing"
-		} else if len(args) > 0 {
-			s.appendLine("uso: /requests [sent]")
+		nav, ok := parsePageNavigation(args)
+		if !ok {
+			s.appendLine("uso: /friends [next|prev]")
+			return s, nil
+		}
+		cursor, index, err := s.socialPageRequest("friends", nav)
+		if err != nil {
+			s.appendLine(mutedStyle.Render(err.Error()))
 			return s, nil
 		}
 		s.busy = true
-		return s, s.runFriendRequests(direction)
+		return s, s.runSocialPlayers("friends", "friends", "Amigos", "/friends", cursor, index, s.rc.FriendsPage)
+	case "/requests":
+		direction := "incoming"
+		if len(args) > 0 && args[0] == "sent" {
+			direction = "outgoing"
+			args = args[1:]
+		}
+		nav, ok := parsePageNavigation(args)
+		if !ok {
+			s.appendLine("uso: /requests [sent] [next|prev]")
+			return s, nil
+		}
+		key := "requests:" + direction
+		cursor, index, err := s.socialPageRequest(key, nav)
+		if err != nil {
+			s.appendLine(mutedStyle.Render(err.Error()))
+			return s, nil
+		}
+		title, base := "Solicitações recebidas", "/requests"
+		if direction == "outgoing" {
+			title, base = "Solicitações enviadas", "/requests sent"
+		}
+		s.busy = true
+		fetch := func(ctx context.Context, cursor string) (rest.Page[rest.SocialPlayer], error) {
+			return s.rc.FriendRequestsPage(ctx, direction, cursor)
+		}
+		return s, s.runSocialPlayers(key, direction, title, base, cursor, index, fetch)
 	case "/blocked":
+		nav, ok := parsePageNavigation(args)
+		if !ok {
+			s.appendLine("uso: /blocked [next|prev]")
+			return s, nil
+		}
+		cursor, index, err := s.socialPageRequest("blocked", nav)
+		if err != nil {
+			s.appendLine(mutedStyle.Render(err.Error()))
+			return s, nil
+		}
 		s.busy = true
-		return s, s.runBlocked()
+		return s, s.runSocialPlayers("blocked", "blocked", "Bloqueados", "/blocked", cursor, index, s.rc.BlockedPage)
 	case "/recent":
+		nav, ok := parsePageNavigation(args)
+		if !ok {
+			s.appendLine("uso: /recent [next|prev]")
+			return s, nil
+		}
+		cursor, index, err := s.socialPageRequest("recent", nav)
+		if err != nil {
+			s.appendLine(mutedStyle.Render(err.Error()))
+			return s, nil
+		}
 		s.busy = true
-		return s, s.runRecentPlayers()
+		return s, s.runSocialPlayers("recent", "recent", "Jogadores recentes", "/recent", cursor, index, s.rc.RecentPlayersPage)
 	case "/inbox":
+		nav, ok := parsePageNavigation(args)
+		if !ok {
+			s.appendLine("uso: /inbox [next|prev]")
+			return s, nil
+		}
+		cursor, index, err := s.socialPageRequest("inbox", nav)
+		if err != nil {
+			s.appendLine(mutedStyle.Render(err.Error()))
+			return s, nil
+		}
 		s.busy = true
-		return s, s.runInbox()
+		return s, s.runSocialInbox("inbox", "/inbox", cursor, index)
 	case "/play":
 		s.play = playState{}
 		s.play.sizeIdx = 0
@@ -965,76 +1099,94 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 }
 
 func (s *Shell) runProfile() tea.Cmd {
+	width := s.windowWidth
 	return func() tea.Msg {
 		p, err := s.rc.Me(context.Background())
 		if err != nil {
 			return commandResultMsg{lines: []string{explainErr(err)}}
 		}
-		return commandResultMsg{lines: strings.Split(FormatProfile(p), "\n")}
+		return commandResultMsg{lines: strings.Split(FormatProfileWidth(p, width), "\n")}
 	}
 }
 
 func (s *Shell) runAchievements() tea.Cmd {
+	width := s.windowWidth
 	return func() tea.Msg {
 		a, err := s.rc.Achievements(context.Background())
 		if err != nil {
 			return commandResultMsg{lines: []string{explainErr(err)}}
 		}
-		return commandResultMsg{lines: strings.Split(FormatAchievements(a), "\n")}
+		return commandResultMsg{lines: strings.Split(FormatAchievementsWidth(a, width), "\n")}
 	}
 }
 
-func (s *Shell) runFriends() tea.Cmd {
-	return func() tea.Msg {
-		players, err := s.rc.Friends(context.Background())
-		if err != nil {
-			return commandResultMsg{lines: []string{explainErr(err)}}
+func parsePageNavigation(args []string) (string, bool) {
+	if len(args) == 0 {
+		return "", true
+	}
+	if len(args) == 1 && (args[0] == "next" || args[0] == "prev") {
+		return args[0], true
+	}
+	return "", false
+}
+
+func (s *Shell) socialPageRequest(key, navigation string) (string, int, error) {
+	if navigation == "" {
+		return "", 0, nil
+	}
+	state, ok := s.socialPages[key]
+	if !ok {
+		return "", 0, fmt.Errorf("abra a primeira página antes de navegar")
+	}
+	if navigation == "next" {
+		if !state.hasNext || state.nextCursor == "" {
+			return "", 0, fmt.Errorf("você já está na última página")
 		}
-		return commandResultMsg{lines: strings.Split(FormatSocialPlayers("Amigos", players), "\n")}
+		return state.nextCursor, state.index + 1, nil
+	}
+	if state.index == 0 {
+		return "", 0, fmt.Errorf("você já está na primeira página")
+	}
+	return state.cursors[state.index-1], state.index - 1, nil
+}
+
+func (s *Shell) rememberSocialPage(key, cursor string, index int, hasNext bool, nextCursor string) {
+	state := s.socialPages[key]
+	if len(state.cursors) == 0 {
+		state.cursors = []string{""}
+	}
+	if index >= len(state.cursors) {
+		state.cursors = append(state.cursors, cursor)
+	} else {
+		state.cursors[index] = cursor
+		state.cursors = state.cursors[:index+1]
+	}
+	state.index, state.hasNext, state.nextCursor = index, hasNext, nextCursor
+	s.socialPages[key] = state
+}
+
+func (s *Shell) runSocialPlayers(
+	key, kind, title, command, cursor string,
+	index int,
+	fetch func(context.Context, string) (rest.Page[rest.SocialPlayer], error),
+) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+		page, err := fetch(ctx, cursor)
+		return socialPlayersMsg{
+			key: key, kind: kind, title: title, command: command,
+			cursor: cursor, index: index, page: page, err: err,
+		}
 	}
 }
 
-func (s *Shell) runFriendRequests(direction string) tea.Cmd {
-	title := "Pedidos de amizade recebidos"
-	if direction == "outgoing" {
-		title = "Pedidos de amizade enviados"
-	}
+func (s *Shell) runSocialInbox(key, command, cursor string, index int) tea.Cmd {
 	return func() tea.Msg {
-		players, err := s.rc.FriendRequests(context.Background(), direction)
-		if err != nil {
-			return commandResultMsg{lines: []string{explainErr(err)}}
-		}
-		return commandResultMsg{lines: strings.Split(FormatSocialPlayers(title, players), "\n")}
-	}
-}
-
-func (s *Shell) runBlocked() tea.Cmd {
-	return func() tea.Msg {
-		players, err := s.rc.Blocked(context.Background())
-		if err != nil {
-			return commandResultMsg{lines: []string{explainErr(err)}}
-		}
-		return commandResultMsg{lines: strings.Split(FormatSocialPlayers("Bloqueados", players), "\n")}
-	}
-}
-
-func (s *Shell) runRecentPlayers() tea.Cmd {
-	return func() tea.Msg {
-		players, err := s.rc.RecentPlayers(context.Background())
-		if err != nil {
-			return commandResultMsg{lines: []string{explainErr(err)}}
-		}
-		return commandResultMsg{lines: strings.Split(FormatSocialPlayers("Jogadores recentes", players), "\n")}
-	}
-}
-
-func (s *Shell) runInbox() tea.Cmd {
-	return func() tea.Msg {
-		events, err := s.rc.Inbox(context.Background())
-		if err != nil {
-			return commandResultMsg{lines: []string{explainErr(err)}}
-		}
-		return commandResultMsg{lines: strings.Split(FormatInbox(events), "\n")}
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+		page, err := s.rc.InboxPage(ctx, cursor)
+		return socialInboxMsg{key: key, command: command, cursor: cursor, index: index, page: page, err: err}
 	}
 }
 
@@ -1131,6 +1283,11 @@ func (s *Shell) View() string {
 			dimStyle.Render("↑↓ ou espaço alterna · Enter confirma · Esc volta")
 	case stateJoining:
 		return accentStyle.Render(s.spin.View()) + " entrando na mesa..."
+	case stateHands:
+		if s.hands != nil {
+			return s.hands.View()
+		}
+		return ""
 	case stateInTable:
 		if s.table != nil {
 			return s.table.View()

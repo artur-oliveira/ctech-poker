@@ -333,12 +333,13 @@ func formatHotkeyHelp(specs []commandSpec) string {
 
 var homeCommandSpecs = []commandSpec{
 	{Name: "/achievements", Desc: "Veja progresso, estrelas e conquistas"},
+	{Name: "/hands", Desc: "Explore seu histórico de mãos"},
 	{Name: "/profile", Desc: "Veja seu perfil, código e saldos"},
-	{Name: "/friends", Desc: "Lista de amigos e presença"},
-	{Name: "/requests", Args: "[sent]", Desc: "Pedidos de amizade recebidos (ou enviados)"},
-	{Name: "/blocked", Desc: "Jogadores bloqueados"},
-	{Name: "/recent", Desc: "Jogadores com quem você jogou recentemente"},
-	{Name: "/inbox", Desc: "Caixa de entrada social (pedidos, convites)"},
+	{Name: "/friends", Args: "[next|prev]", Desc: "Amigos, presença e páginas"},
+	{Name: "/requests", Args: "[sent] [next|prev]", Desc: "Solicitações recebidas ou enviadas"},
+	{Name: "/blocked", Args: "[next|prev]", Desc: "Jogadores bloqueados"},
+	{Name: "/recent", Args: "[next|prev]", Desc: "Adversários dos últimos 90 dias"},
+	{Name: "/inbox", Args: "[next|prev]", Desc: "Atividade social e convites"},
 	{Name: "/play", Desc: "Escolha mesa, blinds e buy-in"},
 	{Name: "/enter", Args: "<room-id>", Desc: "Entre em uma mesa pelo ID"},
 	{Name: "/help", Desc: "Veja todos os comandos e atalhos"},

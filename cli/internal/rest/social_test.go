@@ -103,3 +103,21 @@ func TestInboxDecodesEvents(t *testing.T) {
 		t.Fatalf("got %+v", events)
 	}
 }
+
+func TestSocialPagesSendCursorAndPreserveEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1.0/social/friends" || r.URL.Query().Get("cursor") != "page/2" {
+			t.Errorf("unexpected request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data":     []map[string]any{{"player_id": "bia", "name": "Bia"}},
+			"has_next": true, "next_cursor": "page-3", "has_previous": true,
+		})
+	}))
+	defer srv.Close()
+
+	page, err := New(srv.URL, tokenFunc("t"), srv.Client()).FriendsPage(context.Background(), "page/2")
+	if err != nil || len(page.Data) != 1 || !page.HasNext || page.NextCursor != "page-3" || !page.HasPrevious {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+}

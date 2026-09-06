@@ -683,3 +683,90 @@ func TestHelpShowsEveryLineNotJustTheLastFew(t *testing.T) {
 		}
 	}
 }
+
+func TestHandsCommandOpensArchiveAndReturnsHome(t *testing.T) {
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1.0/players/me/hands" {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+			"pk": "you", "hand_id": "hand-1", "table_id": "table-1", "outcome": "won", "net_change": 120,
+		}}})
+	}))
+	defer apiSrv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Settings{ConfigDir: dir}
+	if err := auth.SaveCredentials(config.CredentialsPath(cfg), auth.Credentials{AccessToken: "at", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestShell(t, apiSrv, dir)
+	s.state = stateHome
+	_, _ = s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	model, cmd := s.dispatch("/hands")
+	s = model.(*Shell)
+	if s.state != stateHands || s.hands == nil || cmd == nil {
+		t.Fatalf("archive did not open: state=%v hands=%v cmd=%v", s.state, s.hands, cmd)
+	}
+	model, _ = s.Update(cmd())
+	s = model.(*Shell)
+	if !strings.Contains(s.View(), "Histórico de mãos") || !strings.Contains(s.View(), "+120 fichas") {
+		t.Fatalf("archive result missing:\n%s", s.View())
+	}
+	model, cmd = s.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	s = model.(*Shell)
+	if cmd == nil {
+		t.Fatal("archive Esc did not schedule exit")
+	}
+	model, _ = s.Update(cmd())
+	s = model.(*Shell)
+	if s.state != stateHome || s.hands != nil {
+		t.Fatalf("archive did not return home: state=%v hands=%v", s.state, s.hands)
+	}
+}
+
+func TestFriendsCursorPaginationRemembersPreviousPage(t *testing.T) {
+	var cursors []string
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cursor := r.URL.Query().Get("cursor")
+		cursors = append(cursors, cursor)
+		if cursor == "" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data":     []map[string]any{{"player_id": "ana", "name": "Ana", "presence": "online"}},
+				"has_next": true, "next_cursor": "cursor-2",
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"player_id": "bia", "name": "Bia"}}})
+	}))
+	defer apiSrv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Settings{ConfigDir: dir}
+	if err := auth.SaveCredentials(config.CredentialsPath(cfg), auth.Credentials{AccessToken: "at", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestShell(t, apiSrv, dir)
+	s.state = stateHome
+	s.windowWidth = 100
+
+	model, cmd := s.dispatch("/friends")
+	s = model.(*Shell)
+	model, _ = s.Update(cmd())
+	s = model.(*Shell)
+	model, cmd = s.dispatch("/friends next")
+	s = model.(*Shell)
+	model, _ = s.Update(cmd())
+	s = model.(*Shell)
+	if !strings.Contains(strings.Join(s.lines, "\n"), "Bia") || len(cursors) != 2 || cursors[1] != "cursor-2" {
+		t.Fatalf("next page missing: cursors=%v lines=%q", cursors, s.lines)
+	}
+	model, cmd = s.dispatch("/friends prev")
+	s = model.(*Shell)
+	model, _ = s.Update(cmd())
+	s = model.(*Shell)
+	if len(cursors) != 3 || cursors[2] != "" {
+		t.Fatalf("previous cursor not restored: %v", cursors)
+	}
+}

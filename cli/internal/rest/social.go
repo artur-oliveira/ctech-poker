@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"net/http"
+	"net/url"
 )
 
 // SocialPlayer is one row in a friends/friend-requests/blocked/recent list
@@ -24,41 +25,57 @@ type SocialPlayer struct {
 // Friends lists the caller's friends, first page, presence included
 // (GET /v1.0/social/friends).
 func (c *Client) Friends(ctx context.Context) ([]SocialPlayer, error) {
+	page, err := c.FriendsPage(ctx, "")
+	return page.Data, err
+}
+
+func (c *Client) FriendsPage(ctx context.Context, cursor string) (Page[SocialPlayer], error) {
 	var page Page[SocialPlayer]
-	if err := c.Do(ctx, http.MethodGet, "/v1.0/social/friends", nil, &page); err != nil {
-		return nil, err
-	}
-	return page.Data, nil
+	err := c.Do(ctx, http.MethodGet, withCursor("/v1.0/social/friends", cursor), nil, &page)
+	return page, err
 }
 
 // FriendRequests lists pending friend requests in one direction ("incoming"
 // or "outgoing"), first page (GET /v1.0/social/friend-requests).
 func (c *Client) FriendRequests(ctx context.Context, direction string) ([]SocialPlayer, error) {
+	page, err := c.FriendRequestsPage(ctx, direction, "")
+	return page.Data, err
+}
+
+func (c *Client) FriendRequestsPage(ctx context.Context, direction, cursor string) (Page[SocialPlayer], error) {
 	var page Page[SocialPlayer]
-	if err := c.Do(ctx, http.MethodGet, "/v1.0/social/friend-requests?direction="+direction, nil, &page); err != nil {
-		return nil, err
+	path := "/v1.0/social/friend-requests?direction=" + url.QueryEscape(direction)
+	if cursor != "" {
+		path += "&cursor=" + url.QueryEscape(cursor)
 	}
-	return page.Data, nil
+	err := c.Do(ctx, http.MethodGet, path, nil, &page)
+	return page, err
 }
 
 // Blocked lists players the caller has blocked, first page
 // (GET /v1.0/social/blocked).
 func (c *Client) Blocked(ctx context.Context) ([]SocialPlayer, error) {
+	page, err := c.BlockedPage(ctx, "")
+	return page.Data, err
+}
+
+func (c *Client) BlockedPage(ctx context.Context, cursor string) (Page[SocialPlayer], error) {
 	var page Page[SocialPlayer]
-	if err := c.Do(ctx, http.MethodGet, "/v1.0/social/blocked", nil, &page); err != nil {
-		return nil, err
-	}
-	return page.Data, nil
+	err := c.Do(ctx, http.MethodGet, withCursor("/v1.0/social/blocked", cursor), nil, &page)
+	return page, err
 }
 
 // RecentPlayers lists opponents the caller has recently shared a table with,
 // first page, newest first (GET /v1.0/social/recent).
 func (c *Client) RecentPlayers(ctx context.Context) ([]SocialPlayer, error) {
+	page, err := c.RecentPlayersPage(ctx, "")
+	return page.Data, err
+}
+
+func (c *Client) RecentPlayersPage(ctx context.Context, cursor string) (Page[SocialPlayer], error) {
 	var page Page[SocialPlayer]
-	if err := c.Do(ctx, http.MethodGet, "/v1.0/social/recent", nil, &page); err != nil {
-		return nil, err
-	}
-	return page.Data, nil
+	err := c.Do(ctx, http.MethodGet, withCursor("/v1.0/social/recent", cursor), nil, &page)
+	return page, err
 }
 
 // SocialInboxEvent is one row in the social inbox — a friend request,
@@ -78,9 +95,19 @@ type SocialInboxEvent struct {
 // Inbox lists the caller's social inbox, first page, newest first
 // (GET /v1.0/social/inbox).
 func (c *Client) Inbox(ctx context.Context) ([]SocialInboxEvent, error) {
+	page, err := c.InboxPage(ctx, "")
+	return page.Data, err
+}
+
+func (c *Client) InboxPage(ctx context.Context, cursor string) (Page[SocialInboxEvent], error) {
 	var page Page[SocialInboxEvent]
-	if err := c.Do(ctx, http.MethodGet, "/v1.0/social/inbox", nil, &page); err != nil {
-		return nil, err
+	err := c.Do(ctx, http.MethodGet, withCursor("/v1.0/social/inbox", cursor), nil, &page)
+	return page, err
+}
+
+func withCursor(path, cursor string) string {
+	if cursor == "" {
+		return path
 	}
-	return page.Data, nil
+	return path + "?cursor=" + url.QueryEscape(cursor)
 }
