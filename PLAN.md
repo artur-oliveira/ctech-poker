@@ -87,10 +87,11 @@ against the code, 2026-07-28):** Phases 0–5 are **implemented and live** in `a
 - Task 6: EMF structured metrics (`metrics` package emitting JSON lines for CW) — **REVERTED 2026-08-19** (billed per extracted metric; structured logs remain)
 - Task 7: CloudWatch alarms (ALARM log lines, lease failover spike in CDK) — **REVERTED 2026-08-19** (unmonitored, no SNS subscriber, billed past the free tier)
 - Task 8: Graceful ASG scale-in drain (`DrainAndRelease` in `tablemanager` + Fx hook) — **DONE**
-- Task 9: WAF on CloudFront distribution (AWSManagedRulesCommonRuleSet + IP rate limit) — **NOT DONE** (this line
-  previously claimed DONE and was wrong): there is no `aws-wafv2` import and no `webAclId` anywhere in `cdk/` (
-  `cdk/lib/frontend-stack.ts:103-121`). Application-level rate limits do exist (`internal/api/v1/ratelimit.go`), and
-  Turnstile guards bot traffic at the table, but the edge is unprotected
+- Task 9: WAF on CloudFront distribution (AWSManagedRulesCommonRuleSet + IP rate limit) — **NOT DONE, and now moot**:
+  the frontend migrated off CloudFront/S3 to Cloudflare Workers Static Assets (`cdk/lib/frontend-stack.ts` no
+  longer exists — see `cdk/CLAUDE.md`), so there is no CloudFront distribution left to attach a WAF to; Cloudflare's
+  edge is the closest equivalent now. Application-level rate limits do exist (`internal/api/v1/ratelimit.go`), and
+  Turnstile guards bot traffic at the table
 - Task 10: Hand-history audit endpoint (`GET /v1.0/tables/:tableId/hands/:handId/history`) — **DONE**
 - Task 11: Load + multi-table chaos test harness (`tests/load` with build tag `load`) — **DONE**
 - Task 12: Player-scoped session P&L + hand index (`GET /v1.0/players/me/sessions`, `GET /v1.0/players/me/hands`) — *

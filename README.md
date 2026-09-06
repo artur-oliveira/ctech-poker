@@ -17,18 +17,18 @@ de verdade é `https://accounts.aoctech.app/products/poker`.
 
 ## Read-only OAuth scopes
 
-Poker publishes 11 public `poker:*:read` scopes from
+Poker publishes 12 public `poker:*:read` scopes from
 `api/internal/oauthresource/scope-manifest.json`: rooms, player profile,
 sessions, hands, achievements, statistics, leaderboard, daily-reward status,
-private player notes, and existing sandbox/reaction purchases. There are no
-scopes for creating or joining a table, playing, mutating data, claiming a
-reward, buying, refunding, or operating either WebSocket.
+private player notes, and existing sandbox/reaction/cosmetic purchases. There
+are no scopes for creating or joining a table, playing, mutating data,
+claiming a reward, buying, refunding, or operating either WebSocket.
 
 The daily-reward read permission maps to the existing cooldown endpoint
 `GET /v1.0/sandbox-credits/`; its historical route name does not change the
 OAuth scope name `poker:daily-reward:read`.
 
-The Poker UI requests all 11 read scopes together with `openid profile`. On
+The Poker UI requests all 12 read scopes together with `openid profile`. On
 `GET`, a scoped token must carry the exact route-family permission. Mutations
 and both WebSockets deliberately have no public scope: they require a user
 session (`sub` + `sid`) issued to the first-party `poker` OAuth client

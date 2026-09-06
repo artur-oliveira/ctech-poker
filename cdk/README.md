@@ -11,19 +11,26 @@ AWS CDK (TypeScript) for the poker service. **All stacks are implemented and liv
 Deploys in the order **CDK → OAuth scopes → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
 anchored to `cdk/lib/` and re-verified on **2026-08-16**.
 
-## Stacks (7)
+## Stacks
 
-Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker.ts`.
+Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker.ts`. See
+`cdk/CLAUDE.md` for the up-to-date architecture facts this file previously duplicated and let go
+stale — that file is the one being kept current commit-by-commit.
 
 | Stack | File | What it provisions |
 |---|---|---|
 | `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra / scope publisher) |
-| `…-DynamoDB` | `dynamodb-stack.ts` | **22** DynamoDB tables + GSIs |
+| `…-DynamoDB` | `dynamodb-stack.ts` | **30** DynamoDB tables + GSIs |
+| `…-Storage` | `storage-stack.ts` | Avatars S3 bucket (moved out of the retired FrontendStack) |
 | `…-Archiver` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Stream → S3) + SQS DLQ |
 | `…-API` | `api-stack.ts` | EC2 ASG game server, HAProxy route, IAM, userdata |
-| `…-Frontend` | `frontend-stack.ts` | S3 + CloudFront, route KeyValueStore, URL-rewrite Function, CSP |
 | `…-Reconcile` | `reconcile-stack.ts` | Cash-out reconcile Lambda, EventBridge Scheduler `rate(5 minutes)` |
 | `…-TableCleanup` | `tablecleanup-stack.ts` | Stale-table cleanup Lambda, Scheduler `rate(30 minutes)` |
+
+There is no `FrontendStack`/`frontend-stack.ts` anymore — the frontend was migrated off
+CloudFront/S3 to Cloudflare Workers Static Assets, deployed by the reusable workflow
+`ctech-cdk/.github/workflows/frontend-cloudflare.yml` (called from
+`.github/workflows/frontend.yml` in this repo), not by anything in `cdk/`.
 
 Shared constants (no magic strings): `lib/constants.ts`. Account `868899309401`, region `us-east-1`.
 Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build`, Docker fallback).
@@ -142,44 +149,37 @@ All `TableV2`, partition key `pk` (S), on-demand billing with
 There is deliberately **no `achievement_points` GSI** — the API rejects that metric rather than
 silently ranking by another index. Adding a ranking metric means adding its GSI here first.
 
-## Frontend (`frontend-stack.ts`)
+## Frontend — retired from this repo's CDK (migrated to Cloudflare)
 
-- `createNextjsStaticFrontend` from `@aoctech/cdk` creates the private/versioned S3
-  bucket, OAC, route KVS, base rewrite, security headers and distribution. The
-  poker stack adds avatar storage/rewrites and its application-specific CSP.
-- CloudFront distribution: `CACHING_OPTIMIZED` default behavior, HTTP2+3, `PRICE_CLASS_100`, TLS
-  1.2_2021, wildcard cert imported by ARN, domain `poker[-env].aoctech.app`.
-- A **KeyValueStore** (`<env>-ctech-poker-routes`) plus a CloudFront **Function** (viewer-request)
-  rewrite SPA paths to `.html` / `/404.html`. Extensionless keys go through the rewrite; keys with an
-  extension pass unmodified.
-- `/v1.0/*` and `/.well-known/*` are API-origin behaviors: HTTPS_ONLY, `CACHING_DISABLED`,
-  `ALL_VIEWER_EXCEPT_HOST_HEADER`, all methods allowed.
-- `ResponseHeadersPolicy`: CSP `default-src 'self'` (with `img-src 'self' data:` and `connect-src`
-  allowing ctech-account + `challenges.cloudflare.com` for Turnstile), HSTS 2y preload,
-  `X-Frame-Options: DENY`, nosniff, and `Permissions-Policy: on-device-speech-recognition=self`.
-- ⚠️ **No WAF.** There is no `aws-wafv2` import and no `webAclId`. `PLAN.md` Task 9 previously
-  claimed otherwise; it was wrong.
-- ⚠️ The deploy step is `aws s3 sync out/ s3://$S3_BUCKET/ --delete`, so **anything else stored in
-  that bucket under a synced prefix is deleted on every frontend deploy** — relevant if user-uploaded
-  assets are ever hosted there. Only the GHA frontend role can write to it; the EC2 instance role
-  cannot.
+`frontend-stack.ts` (CloudFront + private S3 + the description this section used to carry —
+`createNextjsStaticFrontend`, a KeyValueStore/CloudFront Function SPA rewrite, a
+`ResponseHeadersPolicy` CSP/HSTS/`X-Frame-Options`, and the no-WAF gap `PLAN.md` Task 9 once
+claimed was fixed) was torn down as part of the Cloudflare migration
+(`ctech-cdk/docs/plans/2026-08-20-frontend-cloudflare-migration.md`, Phase 4). The frontend now
+deploys to Cloudflare Workers Static Assets via the reusable workflow
+`ctech-cdk/.github/workflows/frontend-cloudflare.yml` (see that repo for the current CSP/security
+headers and WAF-equivalent posture — Cloudflare's edge, not an `aws-wafv2` WebACL). The only
+surviving piece of the old stack is the avatars bucket, which moved to `storage-stack.ts` (see
+`cdk/CLAUDE.md`).
 
 ## IAM
 
 Instance role `<env>-ctech-poker-api-role` (`api-stack.ts`), managed policies
 `AmazonSSMManagedInstanceCore` + `CloudWatchAgentServerPolicy`, plus inline:
 
-- DynamoDB — 9 actions (incl. `BatchGetItem`, `DeleteItem` and `ConditionCheckItem`) over the **22** table ARNs the
+- DynamoDB — 9 actions (incl. `BatchGetItem`, `DeleteItem` and `ConditionCheckItem`) over the **30** table ARNs the
   server touches and their `/index/*`.
 - SSM `GetParameter` covers the existing game configuration plus account internal
   transport/JWKS, the public account issuer, poker audience and the wallet internal
   transport URL.
 - S3 `GetObject` on `<deployments>/ctech-poker/*`, `PutObject` on `<logs>/ctech-poker/*`.
 
-OIDC roles (`oidc-stack.ts`): `ctech-poker-gha-frontend` (S3 frontend RW, CloudFront invalidation +
-KeyValueStore writes), `ctech-poker-gha-api` (deployments prefix, `ssm:GetParameter` on `/ctech/*`,
-`ssm:SendCommand`, ASG describe + `StartInstanceRefresh`), `ctech-poker-gha-infra`
-(**AdministratorAccess**).
+OIDC roles (`oidc-stack.ts`): the scope-publisher role, `ctech-poker-gha-api` (deployments prefix,
+`ssm:GetParameter` on `/ctech/*`, `ssm:SendCommand`, ASG describe + `StartInstanceRefresh`), and
+`ctech-poker-gha-infra` (see `cdk/CLAUDE.md`'s OIDC entry for its current, since-scoped-down
+permissions — no longer AdministratorAccess). There is no frontend deploy role anymore: the
+Cloudflare frontend job authenticates to Cloudflare, not AWS, and no longer needs an OIDC role
+here at all.
 
 ## Secrets & config
 
@@ -225,7 +225,7 @@ their established ARN/name/SSM contracts.
 
 - Game server: EC2 ASG (1–3 instances), dual-stack, **no NAT gateway**; shared HAProxy replaces the ALB cost.
 - DynamoDB: on-demand with a 1000-RU cap — scales to zero, cheap at sandbox traffic.
-- Frontend: static S3 + CloudFront, no always-on server.
+- Frontend: static assets on Cloudflare Workers Static Assets (no AWS spend, no always-on server).
 - Lambdas: stream-driven (archiver) plus two low-frequency schedules.
 - Logs: CloudWatch Logs (1 month prod / 1 week otherwise), rotated to S3.
 

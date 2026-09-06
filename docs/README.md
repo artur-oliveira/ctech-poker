@@ -1,7 +1,9 @@
 # ctech-poker — Docs index
 
 Implementation-anchored documentation for the `ctech-poker` service. **The code is the source of truth.** This index was
-re-verified against the tree on **2026-07-28**; the top-level `OVERVIEW.md` / `ARCHITECTURE.md` / `PLAN.md` are design and
+last re-verified against the tree on **2026-07-28**, with a handful of stale claims (DynamoDB table
+count, frontend infra, ASG lifecycle hook) corrected on **2026-09-06** against `cdk/CLAUDE.md` and
+the current `cdk/lib/`; the top-level `OVERVIEW.md` / `ARCHITECTURE.md` / `PLAN.md` are design and
 history documents and lag the code by design. O índice de planos foi atualizado em **2026-08-16**.
 
 ## Per-directory docs
@@ -9,9 +11,11 @@ history documents and lag the code by design. O índice de planos foi atualizado
 - [`api/README.md`](../api/README.md) — Go game server: protobuf WebSocket transport, per-table actor model,
   endpoints/events, authz, sandbox and real-money ledgers.
 - [`ui/README.md`](../ui/README.md) — Next.js SPA: routes, lobby, table client, realtime hook, auth flow, gamification.
-- [`cdk/README.md`](../cdk/README.md) — AWS CDK: 7 stacks, EC2 ASG compute, 15 DynamoDB tables, CloudFront frontend,
-  archiver/reconcile/tablecleanup Lambdas.
-- Per-directory `CLAUDE.md` / `AGENTS.md` live in `api/`, `ui/`, `cdk/`. There is no repo-root `CLAUDE.md`.
+- [`cdk/README.md`](../cdk/README.md) — AWS CDK: EC2 ASG compute, 30 DynamoDB tables,
+  archiver/reconcile/tablecleanup Lambdas. The frontend is no longer CloudFront/S3 — it deploys to
+  Cloudflare Workers Static Assets; see `cdk/CLAUDE.md` for the current, actively-maintained facts.
+- Per-directory `CLAUDE.md` / `AGENTS.md` live in `api/`, `ui/`, `cdk/`, plus a repo-root `CLAUDE.md`
+  covering cross-repo (CTech family) awareness.
 
 ## Feature status
 
@@ -28,16 +32,21 @@ history documents and lag the code by design. O índice de planos foi atualizado
 | Voice: dealer speech synthesis + voice-driven actions                     | **LIVE**                | `ui/src/lib/hooks/useDealerVoice.ts`, `ui/src/lib/voiceActions.ts`                            |
 | Bot prevention (Cloudflare Turnstile challenge over WS)                   | **LIVE**                | `api/internal/botcheck`, `ui/src/components/table/BotChallenge.tsx`                           |
 | Real-money mode (fixed-fee model, wallet hold/cash-out, reconcile sweep)  | **LIVE, gated off**     | `walletclient`, `buyin`, `reconcile`, `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`              |
-| Infra: EC2 ASG, DynamoDB, S3+CloudFront frontend, 3 Lambdas               | **LIVE**                | `cdk/lib/*`                                                                                   |
-| WAF on the CloudFront distribution                                        | **NOT BUILT**           | no `aws-wafv2` / `webAclId` anywhere in `cdk/`                                                |
-| ASG lifecycle hook for graceful scale-in drain                            | **NOT BUILT**           | `DrainAndRelease` exists in `tablemanager`; no `lifecycleHook` in `cdk/lib`                   |
-| Multi-AZ / HA beyond a single ASG                                         | **NOT BUILT**           | see `plans/2026-07-28-audit-implementation-plan.md`                                           |
+| Infra: EC2 ASG, DynamoDB, Cloudflare-hosted frontend, 3 Lambdas           | **LIVE**                | `cdk/lib/*`; frontend moved off CloudFront/S3 to Cloudflare (see `cdk/CLAUDE.md`)             |
+| WAF-equivalent edge protection                                            | Cloudflare edge, no AWS WAF | frontend has no `aws-wafv2`/`webAclId` (there is no CloudFront distribution left to attach one to); the API's own edge is `ctech-lbalancer`, not evaluated here |
+| ASG lifecycle hook for graceful scale-in drain                            | **LIVE, with a known gap** | `api-stack.ts`'s `asg.addLifecycleHook('TerminationDrainHook', …)` invokes a drain Lambda; `cdk/CLAUDE.md`'s "Known issues" documents a real gap (not every termination reliably invokes it) and the app-side mitigation (spot-termination-notice polling) shipped for it |
+| Multi-AZ / HA beyond a single ASG                                         | Partial — spread across 3 AZs (2026-09-02, #35) | see `cdk/CLAUDE.md`'s "ASG resilience" entry; capacity is still 1 base instance, not HA in the redundancy sense |
 
 ## Known open issues
 
-- **No WAF.** `cdk/lib/frontend-stack.ts:103-121` builds the Distribution with no `webAclId`. PLAN.md previously
-  claimed this shipped; it did not.
-- **No ASG lifecycle hook.** Scale-in can terminate an instance before `DrainAndRelease` finishes.
+- **No WAF equivalent to `aws-wafv2` on the frontend** — the frontend has no CloudFront distribution
+  to attach one to anymore (migrated to Cloudflare, whose edge network is the WAF-equivalent
+  posture now). `PLAN.md`'s old claim that a CloudFront WAF shipped was already wrong before the
+  migration; it is doubly moot now. See `cdk/README.md`/`cdk/CLAUDE.md` for the current frontend
+  setup.
+- **ASG lifecycle hook for graceful drain is built**, not missing — older drafts of this doc were
+  wrong. `cdk/CLAUDE.md`'s "Known issues" section has the current, narrower gap (a termination
+  that the Lambda invocation itself misses under spot-rebalance churn) and what mitigates it.
 All three Lambdas (`reconcile`, `tablecleanup`, `archiver`) have an SQS DLQ **and**, as of #30, a
 DLQ-depth alarm plus a Lambda-`Errors` alarm on the shared `ctech-prod-alerts` SNS topic
 (`cdk/lib/alarms.ts`), covering both EventBridge Scheduler targets (`reconcile-stack.ts`,
