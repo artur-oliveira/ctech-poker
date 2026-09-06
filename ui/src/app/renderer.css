@@ -5031,7 +5031,11 @@
 .stage-v-ring .game-seat .seat-cards {
     position: absolute;
     left: 50%;
-    bottom: calc(100% - 3px);
+    /* Clear the seat's own corner badges (role / streak / actions trigger)
+       that hug this same edge — a 3px dip left the D/SB pill half-covered by
+       a hole card at showdown. The extra gap stays on the rail band and never
+       reaches the board. */
+    bottom: calc(100% + 5px);
     top: auto;
     transform: translateX(-50%);
     z-index: 0
@@ -5044,7 +5048,7 @@
 .stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards,
 .stage-v-ring .seat-zone-top .seat-cards {
     bottom: auto;
-    top: calc(100% - 3px)
+    top: calc(100% + 5px)
 }
 .stage-v-ring .seat-4 .seat-info, .stage-v-ring .seat-5 .seat-info,
 .stage-v-ring .seat-zone-top .seat-info {
@@ -5520,6 +5524,35 @@
        here, not the felt's clear top-right. */
     .hand-outcome-ring-standalone {
         justify-self: start
+    }
+
+    /* Portrait play owns exactly one viewport (The Blocking Table Rule). A
+       dialog-sized outcome card centred in the ring buried the board, the
+       pot and half the seats behind it and read as a glitch where the seats
+       bled past its edges. Dock the full card as an opaque sheet at the foot
+       of the ring instead: board, pot and the top seats stay legible above
+       it, the dismiss sits in thumb reach, and it reads as a deliberate
+       layer. The collapsed badge/standalone-ring keep their top-left dodge. */
+    .stage-v .hand-outcome:has(.hand-outcome-card) {
+        place-items: end stretch;
+        padding: 0;
+        /* The docked sheet sits over the bottom seats now, so it has to clear
+           them and the winner seat's raised stack — the centred card never
+           overlapped a seat box, so --z-table was enough there. */
+        z-index: var(--z-notice)
+    }
+    .stage-v .hand-outcome:has(.hand-outcome-card)::before {
+        display: none
+    }
+    .stage-v .hand-outcome-card,
+    .stage-v .hand-outcome-card.lose,
+    .stage-v .hand-outcome-card.fold:has(.hand-outcome-comparison) {
+        width: 100%;
+        max-width: none;
+        max-height: 62%;
+        padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+        border-radius: var(--rounded-panel) var(--rounded-panel) 0 0;
+        box-shadow: 0 -12px 40px var(--black-08)
     }
 }
 @media (max-width: 720px) {

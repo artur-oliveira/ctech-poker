@@ -173,7 +173,9 @@ export default function TableGuide() {
             decide se mostra e fica com metade do valor. Se ele recusar ou não responder no prazo, suas fichas
             voltam.</GuideTerm>
         </GuideTerms>
-        <p>Enquanto o resultado está na tela, um contador mostra quanto falta para a próxima distribuição.</p></>
+        <p>Enquanto o resultado está na tela, um contador mostra quanto falta para a próxima distribuição. No
+          celular em pé o painel encosta na base da mesa, deixando o board e o pote à vista; toque no X para
+          recolhê-lo em um selo.</p></>
     },
     {
       id: 'social',
