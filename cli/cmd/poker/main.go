@@ -10,6 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"gopkg.aoctech.app/poker/cli/internal/applog"
+	"gopkg.aoctech.app/poker/cli/internal/config"
 	"gopkg.aoctech.app/poker/cli/internal/tui"
 )
 
@@ -25,6 +27,9 @@ func main() {
 			cfg, err := loadConfig(cmd)
 			if err != nil {
 				return err
+			}
+			if closeLog, err := applog.Init(config.LogPath(cfg)); err == nil {
+				defer closeLog()
 			}
 			_, err = tea.NewProgram(tui.NewShell(cfg), tea.WithAltScreen()).Run()
 			return err

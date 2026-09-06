@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"gopkg.aoctech.app/poker/cli/internal/applog"
 	"gopkg.aoctech.app/poker/cli/internal/config"
 )
 
@@ -47,6 +49,14 @@ type Session struct {
 	cfg   config.Settings
 	token *TokenClient
 	path  string
+
+	// refreshMu serializes Token's refresh path. The account API rotates
+	// refresh tokens single-use — without this lock, two callers racing near
+	// expiry (e.g. a REST call and the table WS both fetching a token at
+	// once) both send the same stored refresh_token, and the loser gets
+	// invalid_grant even though the session is fine. Reproduced as
+	// intermittent "authentication failed" shortly after a real login.
+	refreshMu sync.Mutex
 }
 
 func NewSession(cfg config.Settings, hc *http.Client) *Session {
@@ -174,14 +184,33 @@ func (s *Session) Token(ctx context.Context) (string, error) {
 	if !ok {
 		return "", ErrLoggedOut
 	}
-	if creds.NeedsRefresh(time.Now()) {
-		creds, err = s.token.Refresh(ctx, creds)
-		if err != nil {
-			return "", err
-		}
-		if err := SaveCredentials(s.path, creds); err != nil {
-			return "", err
-		}
+	if !creds.NeedsRefresh(time.Now()) {
+		return creds.AccessToken, nil
+	}
+
+	// Only one goroutine may spend the current refresh_token — see refreshMu's
+	// doc comment. A caller that waited out someone else's refresh re-reads
+	// from disk first: it may already be satisfied by what just landed there.
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	creds, ok, err = LoadCredentials(s.path)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", ErrLoggedOut
+	}
+	if !creds.NeedsRefresh(time.Now()) {
+		return creds.AccessToken, nil
+	}
+	via := creds.ObtainedVia
+	creds, err = s.token.Refresh(ctx, creds)
+	if err != nil {
+		applog.Errorf("auth: refresh (via=%s): %v", via, err)
+		return "", err
+	}
+	if err := SaveCredentials(s.path, creds); err != nil {
+		return "", err
 	}
 	return creds.AccessToken, nil
 }

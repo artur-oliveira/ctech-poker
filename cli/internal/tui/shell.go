@@ -28,6 +28,7 @@ const (
 	stateLoginChoice
 	stateAPIKeyInput
 	stateLoggingIn
+	stateLoginConfirm
 	stateHome
 	stateHands
 	stateQuitting
@@ -60,6 +61,14 @@ type Shell struct {
 	pkceCancel context.CancelFunc
 	loginSeq   int
 	copied     bool
+
+	// reauth is true when the login flow was entered via /login (already
+	// authenticated, switching accounts) rather than the mandatory startup
+	// gate — it changes stateLoginChoice's "sair" into a cancel-back-to-home
+	// and clears stale per-account state (scrollback, social pages) once the
+	// new login is confirmed.
+	reauth            bool
+	authenticatedName string
 
 	play     playState
 	hands    *HandsModel
@@ -199,13 +208,29 @@ func (s *Shell) layoutHeights() (viewportH, menuRows int) {
 	return viewportH, menuRows
 }
 
+// appTitle is the terminal tab/window title shown outside a table — mirrors
+// IDE terminals that name the tab after what's running instead of "Local".
+const appTitle = "CTech Poker CLI"
+
 func (s *Shell) Init() tea.Cmd {
-	return tea.Batch(checkLogin(s.session), s.spin.Tick)
+	return tea.Batch(checkLogin(s.session), s.spin.Tick, tea.SetWindowTitle(appTitle))
+}
+
+// tableTitle is the window title while seated at a table.
+func tableTitle(roomID string) string {
+	return "Mesa #" + roomID
 }
 
 type checkLoginMsg struct{ loggedIn bool }
 type loginResultMsg struct{ err error }
-type commandResultMsg struct{ lines []string }
+
+// commandResultMsg carries a fire-and-forget command's output. title, if
+// non-empty, becomes the window title alongside it (e.g. "Perfil <nome>") —
+// stays until the next command changes it, same as any other page title.
+type commandResultMsg struct {
+	lines []string
+	title string
+}
 
 // browserLoginResultMsg carries the outcome of the FinishPKCE wait. seq
 // guards against a stale result arriving after the user already cancelled
@@ -219,10 +244,50 @@ type browserLoginResultMsg struct {
 // copyResetMsg clears the "Copiado!" flash a couple seconds after it's shown.
 type copyResetMsg struct{}
 
+// authNameMsg carries the freshly-logged-in user's display name for the
+// stateLoginConfirm screen.
+type authNameMsg struct {
+	name string
+	err  error
+}
+
+// enterLoginConfirm moves into the post-login confirmation screen (Claude
+// Code-style: show who you're authenticated as, wait for Enter before
+// continuing) and kicks off the name lookup.
+func (s *Shell) enterLoginConfirm() tea.Cmd {
+	s.state = stateLoginConfirm
+	s.authenticatedName = ""
+	s.busy = true
+	return s.fetchAuthenticatedName()
+}
+
+// fetchAuthenticatedName resolves the just-logged-in user's display name: the
+// access token's own `name` claim if present, otherwise a /profile fetch.
+func (s *Shell) fetchAuthenticatedName() tea.Cmd {
+	return func() tea.Msg {
+		tok, err := s.session.Token(context.Background())
+		if err == nil {
+			if name := nameFromJWT(tok); name != "" {
+				return authNameMsg{name: name}
+			}
+		}
+		p, err := s.rc.Me(context.Background())
+		if err != nil {
+			return authNameMsg{err: err}
+		}
+		return authNameMsg{name: p.Name}
+	}
+}
+
 func checkLogin(session *auth.Session) tea.Cmd {
 	return func() tea.Msg {
 		_, err := session.Token(context.Background())
-		return checkLoginMsg{loggedIn: !errors.Is(err, auth.ErrLoggedOut)}
+		// Any failure here — not just ErrLoggedOut — means there is no usable
+		// token: a refresh failure at startup (e.g. a stale/rotated
+		// refresh_token) must also send the user back to the login screen,
+		// not into stateHome with credentials the first real command will
+		// then fail on with no way back to login short of /logout.
+		return checkLoginMsg{loggedIn: err == nil}
 	}
 }
 
@@ -290,11 +355,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.state = stateLoginChoice
 			return s, nil
 		}
-		s.state = stateHome
-		s.input.Reset()
-		s.input.Placeholder = "/ para ver comandos"
-		s.appendLine(successStyle.Render("Logado."))
-		return s, nil
+		return s, s.enterLoginConfirm()
 
 	case browserLoginResultMsg:
 		if msg.seq != s.loginSeq {
@@ -310,10 +371,13 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.state = stateLoginChoice
 			return s, nil
 		}
-		s.state = stateHome
-		s.input.Reset()
-		s.input.Placeholder = "/ para ver comandos"
-		s.appendLine(successStyle.Render("Logado."))
+		return s, s.enterLoginConfirm()
+
+	case authNameMsg:
+		s.busy = false
+		if msg.err == nil {
+			s.authenticatedName = msg.name
+		}
 		return s, nil
 
 	case copyResetMsg:
@@ -324,6 +388,9 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.busy = false
 		s.lines = append(s.lines, msg.lines...)
 		s.syncViewport()
+		if msg.title != "" {
+			return s, tea.SetWindowTitle(msg.title)
+		}
 		return s, nil
 
 	case handsPageMsg, handDetailMsg:
@@ -337,7 +404,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.state = stateHome
 		s.input.Reset()
 		s.input.Placeholder = "/ para ver comandos"
-		return s, nil
+		return s, tea.SetWindowTitle(appTitle)
 
 	case socialPlayersMsg:
 		s.busy = false
@@ -415,7 +482,8 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.startTable()
 		// Run owns reconnect-with-resync, exactly like the web client — a
 		// dropped socket recovers the table instead of dumping to the lobby.
-		return s, tea.Batch(pumpTable(s.ws), s.table.Init(), sendReadyCmd(s.ws), runWS(s.ws, wsCtx))
+		return s, tea.Batch(pumpTable(s.ws), s.table.Init(), sendReadyCmd(s.ws), runWS(s.ws, wsCtx),
+			tea.SetWindowTitle(tableTitle(s.play.roomID)))
 
 	case wsStreamMsg:
 		var cmd tea.Cmd
@@ -443,11 +511,11 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 		unexpected := s.table != nil // a deliberate /exit clears s.table first
-		s.leaveTable(nil)
+		titleCmd := s.leaveTable(nil)
 		if msg.err != nil && unexpected {
 			s.appendLine("conexão encerrada: " + msg.err.Error())
 		}
-		return s, nil
+		return s, titleCmd
 
 	case TableTickMsg:
 		if s.table == nil {
@@ -458,11 +526,11 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, cmd
 
 	case TableExitedMsg:
-		s.leaveTable(&msg)
+		titleCmd := s.leaveTable(&msg)
 		if msg.SettlementKnown && msg.RoomID != "" && s.rc != nil {
-			return s, fetchTableExitRecap(s.rc, msg, 0)
+			return s, tea.Batch(titleCmd, fetchTableExitRecap(s.rc, msg, 0))
 		}
-		return s, nil
+		return s, titleCmd
 
 	case tableExitRecapMsg:
 		if msg.err == nil && msg.session.TableID == msg.exited.RoomID && msg.session.EndedAt > 0 {
@@ -531,7 +599,9 @@ func tableConfig(s *Shell) TableConfig {
 	}
 }
 
-func (s *Shell) leaveTable(exited *TableExitedMsg) {
+// leaveTable tears down the table connection and returns to the lobby,
+// restoring the window title along the way; the caller must return the cmd.
+func (s *Shell) leaveTable(exited *TableExitedMsg) tea.Cmd {
 	if s.wsCancel != nil {
 		s.wsCancel()
 		s.wsCancel = nil
@@ -544,9 +614,10 @@ func (s *Shell) leaveTable(exited *TableExitedMsg) {
 	s.state = stateHome
 	s.input.Reset()
 	s.input.Placeholder = "/ para ver comandos"
+	titleCmd := tea.SetWindowTitle(appTitle)
 	if exited == nil {
 		s.appendLine("· de volta ao lobby")
-		return
+		return titleCmd
 	}
 	name := exited.RoomName
 	if name == "" {
@@ -565,6 +636,7 @@ func (s *Shell) leaveTable(exited *TableExitedMsg) {
 		line += " · " + reason
 	}
 	s.appendLine(line)
+	return titleCmd
 }
 
 func fetchTableExitRecap(rc *rest.Client, exited TableExitedMsg, attempt int) tea.Cmd {
@@ -724,8 +796,16 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				s.state = stateAPIKeyInput
 				s.input.Reset()
 				s.input.Placeholder = "cole sua API key"
+			} else if s.reauth {
+				s.state = stateHome
+				s.reauth = false
 			} else {
 				return s, tea.Quit
+			}
+		case "esc":
+			if s.reauth {
+				s.state = stateHome
+				s.reauth = false
 			}
 		}
 		return s, nil
@@ -772,6 +852,26 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
 		return s, cmd
+
+	case stateLoginConfirm:
+		if s.busy || msg.String() != "enter" {
+			return s, nil
+		}
+		s.state = stateHome
+		s.input.Reset()
+		s.input.Placeholder = "/ para ver comandos"
+		if s.reauth {
+			s.lines = nil
+			s.socialPages = map[string]socialPageState{}
+			s.syncViewport()
+			s.reauth = false
+		}
+		line := "Autenticado."
+		if s.authenticatedName != "" {
+			line = "Autenticado como " + s.authenticatedName + "."
+		}
+		s.appendLine(successStyle.Render(line))
+		return s, nil
 
 	case stateHome:
 		if s.busy {
@@ -969,6 +1069,13 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 		s.lines = nil
 		s.syncViewport()
 		return s, nil
+	case "/login":
+		s.reauth = true
+		s.loginChoice = 0
+		s.loginErr = nil
+		s.copied = false
+		s.state = stateLoginChoice
+		return s, nil
 	case "/logout":
 		if err := s.session.Logout(); err != nil {
 			s.appendLine(errorStyle.Render("erro: " + err.Error()))
@@ -995,7 +1102,7 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 		var load tea.Cmd
 		s.hands, load = NewHandsModel(s.rc, cardMode(s.cfg), s.windowWidth, s.windowHeight)
 		s.state = stateHands
-		return s, load
+		return s, tea.Batch(load, tea.SetWindowTitle("Histórico de Mãos"))
 	case "/friends":
 		nav, ok := parsePageNavigation(args)
 		if !ok {
@@ -1105,7 +1212,11 @@ func (s *Shell) runProfile() tea.Cmd {
 		if err != nil {
 			return commandResultMsg{lines: []string{explainErr(err)}}
 		}
-		return commandResultMsg{lines: strings.Split(FormatProfileWidth(p, width), "\n")}
+		title := "Perfil"
+		if p.Name != "" {
+			title = "Perfil " + p.Name
+		}
+		return commandResultMsg{lines: strings.Split(FormatProfileWidth(p, width), "\n"), title: title}
 	}
 }
 
@@ -1116,7 +1227,7 @@ func (s *Shell) runAchievements() tea.Cmd {
 		if err != nil {
 			return commandResultMsg{lines: []string{explainErr(err)}}
 		}
-		return commandResultMsg{lines: strings.Split(FormatAchievementsWidth(a, width), "\n")}
+		return commandResultMsg{lines: strings.Split(FormatAchievementsWidth(a, width), "\n"), title: "Conquistas"}
 	}
 }
 
@@ -1215,8 +1326,12 @@ func (s *Shell) View() string {
 		if s.loginErr != nil {
 			errLine = "\n" + errorStyle.Render("erro no login: "+s.loginErr.Error())
 		}
-		return fmt.Sprintf("%s\n\nComo você quer entrar?\n%sAbrir navegador\n%sUsar API key\n%sSair%s\n",
-			renderHomeHeader(s.windowWidth), cursor(0), cursor(1), cursor(2), errLine)
+		lastLabel := "Sair"
+		if s.reauth {
+			lastLabel = "Cancelar"
+		}
+		return fmt.Sprintf("%s\n\nComo você quer entrar?\n%sAbrir navegador\n%sUsar API key\n%s%s%s\n",
+			renderHomeHeader(s.windowWidth), cursor(0), cursor(1), cursor(2), lastLabel, errLine)
 	case stateAPIKeyInput:
 		view := renderHomeHeader(s.windowWidth) + "\n\n" + mutedStyle.Render("Cole sua API key para continuar") + "\n" + s.input.View()
 		if s.busy {
@@ -1242,6 +1357,22 @@ func (s *Shell) View() string {
 			}
 			b.WriteString("\n")
 		}
+		return b.String()
+	case stateLoginConfirm:
+		var b strings.Builder
+		b.WriteString(renderHomeHeader(s.windowWidth))
+		b.WriteString("\n\n")
+		switch {
+		case s.authenticatedName != "":
+			b.WriteString(successStyle.Render("✓ Autenticado como " + s.authenticatedName))
+		case s.busy:
+			b.WriteString(accentStyle.Render(s.spin.View()) + " verificando conta...")
+		default:
+			b.WriteString(successStyle.Render("✓ Autenticado"))
+		}
+		b.WriteString("\n\n")
+		b.WriteString(mutedStyle.Render("Pressione Enter para continuar"))
+		b.WriteString("\n")
 		return b.String()
 	case statePlaySize:
 		var b strings.Builder

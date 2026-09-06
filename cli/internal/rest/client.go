@@ -13,6 +13,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"gopkg.aoctech.app/poker/cli/internal/applog"
 )
 
 // OriginHeader is sent on every request — the poker API enforces an Origin
@@ -94,12 +96,14 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	req.Header.Set("Origin", OriginHeader)
 	tok, err := c.token(ctx)
 	if err != nil {
+		applog.Errorf("rest: %s %s: token: %v", method, path, err)
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
+		applog.Errorf("rest: %s %s: %v", method, path, err)
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -113,6 +117,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 		if pe.Title == "" {
 			pe.Title = resp.Status
 		}
+		applog.Errorf("rest: %s %s: %s", method, path, pe.Error())
 		return &pe
 	}
 	if out == nil || resp.StatusCode == http.StatusNoContent {

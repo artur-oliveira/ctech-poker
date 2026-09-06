@@ -95,3 +95,6 @@ func apply(dst *string, vals ...string) {
 
 // CredentialsPath is where the CLI stores OAuth/API-key credentials for s.
 func CredentialsPath(s Settings) string { return filepath.Join(s.ConfigDir, "credentials.json") }
+
+// LogPath is where the CLI appends its error log (internal/applog).
+func LogPath(s Settings) string { return filepath.Join(s.ConfigDir, "poker.log") }

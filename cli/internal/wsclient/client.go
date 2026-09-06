@@ -13,6 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 	googleproto "google.golang.org/protobuf/proto"
+	"gopkg.aoctech.app/poker/cli/internal/applog"
 	"gopkg.aoctech.app/poker/cli/internal/proto"
 )
 
@@ -317,6 +318,7 @@ func (c *Client) Run(ctx context.Context) {
 				c.currentDone = done
 				break
 			}
+			applog.Errorf("wsclient: reconnect attempt %d: %v", attempt, err)
 		}
 
 		_ = c.Send(ctx, &proto.ClientMessage{Type: "sync_state"})

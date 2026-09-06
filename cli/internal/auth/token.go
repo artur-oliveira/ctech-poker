@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"gopkg.aoctech.app/poker/cli/internal/applog"
 )
 
 // ErrAuthFailed wraps any error the account token endpoint reports (a
@@ -54,9 +56,12 @@ func (t *TokenClient) postForm(ctx context.Context, form url.Values) (tokenRespo
 
 	var tr tokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil && resp.StatusCode >= 400 {
+		applog.Errorf("auth: POST /v1.0/token: http %d, body undecodable: %v", resp.StatusCode, err)
 		return tokenResponse{}, fmt.Errorf("%w: http %d", ErrAuthFailed, resp.StatusCode)
 	}
 	if tr.Error != "" || resp.StatusCode >= 400 {
+		applog.Errorf("auth: POST /v1.0/token: http %d, grant=%s, error=%q description=%q",
+			resp.StatusCode, form.Get("grant_type"), tr.Error, tr.ErrorDescription)
 		return tokenResponse{}, fmt.Errorf("%w: %s: %s", ErrAuthFailed, tr.Error, tr.ErrorDescription)
 	}
 	return tr, nil

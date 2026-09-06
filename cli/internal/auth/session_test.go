@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -124,6 +126,68 @@ func TestTokenDoesNotRefreshWhenStillValid(t *testing.T) {
 	tok, err := s.Token(context.Background())
 	if err != nil || tok != "fresh" {
 		t.Fatalf("tok=%q err=%v, want the stored token with no network call", tok, err)
+	}
+}
+
+// TestTokenConcurrentCallsRefreshOnce reproduces the "authentication failed
+// shortly after a real login" bug: without refreshMu, N callers racing near
+// expiry all send the same (single-use) refresh_token, and every loser after
+// the first gets invalid_grant even though the session is fine.
+func TestTokenConcurrentCallsRefreshOnce(t *testing.T) {
+	var mu sync.Mutex
+	used := map[string]bool{}
+	var refreshCalls int32
+
+	var mux http.ServeMux
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		rt := r.Form.Get("refresh_token")
+		mu.Lock()
+		if used[rt] {
+			mu.Unlock()
+			json.NewEncoder(w).Encode(map[string]any{"error": "invalid_grant", "error_description": "refresh token already used"})
+			return
+		}
+		used[rt] = true
+		mu.Unlock()
+		atomic.AddInt32(&refreshCalls, 1)
+		json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "at-new", "refresh_token": "rt-new", "expires_in": 3600, "token_type": "Bearer",
+		})
+	})
+	stub := httptest.NewServer(&mux)
+	defer stub.Close()
+
+	cfg := config.Settings{AccountBaseURL: stub.URL, ClientID: "poker-cli", ConfigDir: t.TempDir()}
+	path := config.CredentialsPath(cfg)
+	if err := SaveCredentials(path, Credentials{
+		AccessToken: "stale", ObtainedVia: "pkce", RefreshToken: "rt-old",
+		ExpiresAt: time.Now().Add(-time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSession(cfg, stub.Client())
+
+	const n = 8
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := s.Token(context.Background())
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent Token call failed: %v", err)
+		}
+	}
+	if refreshCalls != 1 {
+		t.Fatalf("refresh endpoint called %d times, want exactly 1", refreshCalls)
 	}
 }
 

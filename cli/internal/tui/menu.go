@@ -345,6 +345,7 @@ var homeCommandSpecs = []commandSpec{
 	{Name: "/help", Desc: "Veja todos os comandos e atalhos"},
 	{Name: "/clear", Desc: "Limpe o histórico desta tela"},
 	{Name: "/exit", Desc: "Encerre o CTech Poker"},
+	{Name: "/login", Desc: "Troque de conta"},
 	{Name: "/logout", Desc: "Esqueça as credenciais salvas"},
 }
 
