@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"time"
@@ -168,23 +169,6 @@ func resolveSSMParams(ctx context.Context, walletURLParam, clientIDParam, client
 }
 
 func handler(ctx context.Context) error {
-	wURLParam := os.Getenv("WALLET_URL_PARAM")
-	if wURLParam != "" {
-		params, err := resolveSSMParams(ctx, wURLParam, os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM"))
-		if err != nil {
-			return fmt.Errorf("reconcile: resolve SSM params: %w", err)
-		}
-		if err := os.Setenv("WALLET_URL", params.walletURL); err != nil {
-			return fmt.Errorf("set WALLET_URL: %w", err)
-		}
-		if err := os.Setenv("POKER_CLIENT_ID", params.clientID); err != nil {
-			return fmt.Errorf("set POKER_CLIENT_ID: %w", err)
-		}
-		if err := os.Setenv("POKER_CLIENT_SECRET", params.clientSecret); err != nil {
-			return fmt.Errorf("set POKER_CLIENT_SECRET: %w", err)
-		}
-	}
-
 	cfg, err := config.LoadForLambda()
 	if err != nil {
 		return err
@@ -201,5 +185,30 @@ func handler(ctx context.Context) error {
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	// Resolve (and decrypt) the wallet SSM params once here, at cold start,
+	// instead of on every invocation inside handler: this Lambda runs on a
+	// rate(5 minutes) schedule (cdk/lib/reconcile-stack.ts) and the warm
+	// execution environment is reused across invocations, so re-fetching an
+	// unchanging SecureString on every one of them was ~288 unnecessary KMS
+	// Decrypt calls/day. A cold start still resolves it exactly once, and
+	// resolving here (rather than lazily on first invocation) fails the
+	// Lambda fast and loudly if the parameter is missing/misconfigured.
+	if wURLParam := os.Getenv("WALLET_URL_PARAM"); wURLParam != "" {
+		params, err := resolveSSMParams(context.Background(), wURLParam, os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM"))
+		if err != nil {
+			log.Fatalf("reconcile: resolve SSM params: %v", err)
+		}
+		if err := os.Setenv("WALLET_URL", params.walletURL); err != nil {
+			log.Fatalf("set WALLET_URL: %v", err)
+		}
+		if err := os.Setenv("POKER_CLIENT_ID", params.clientID); err != nil {
+			log.Fatalf("set POKER_CLIENT_ID: %v", err)
+		}
+		if err := os.Setenv("POKER_CLIENT_SECRET", params.clientSecret); err != nil {
+			log.Fatalf("set POKER_CLIENT_SECRET: %v", err)
+		}
+	}
+
 	lambda.Start(handler)
 }
