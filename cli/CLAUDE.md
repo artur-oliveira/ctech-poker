@@ -88,13 +88,13 @@ that changed relative to the original plan.
 
 ## Releasing
 
-Tag `cli/vX.Y.Z` (Go submodule tag convention). `.github/workflows/cli-release.yml`
-runs `go test ./... -race` then `goreleaser release` (`cli/.goreleaser.yaml`),
-publishing linux/darwin/windows × amd64/arm64 archives + `checksums.txt` to a
-GitHub Release and updating the `aoctech/homebrew-tap` formula. `deploy.yml`'s
+Tag `vX.Y.Z`. `.github/workflows/cli-release.yml` runs `go test ./... -race`
+then `goreleaser release` (`cli/.goreleaser.yaml`), publishing
+linux/darwin/windows × amd64/arm64 archives + `checksums.txt` to a GitHub
+Release and updating the `artur-oliveira/homebrew-tap` cask. `deploy.yml`'s
 `dorny/paths-filter` lists never match `cli/**`, so a CLI-only push deploys
 nothing and the API stays unreleased. `cli/install.sh` fetches the newest
-`cli/*` release asset for the host.
+stable `vX.Y.Z` release asset for the host.
 
 ## Testing
 

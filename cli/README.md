@@ -11,7 +11,7 @@ A terminal client for CTech Poker — sandbox (play-money) tables only for now.
 **Script (Linux / macOS):**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/aoctech/ctech-poker/main/cli/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/artur-oliveira/ctech-poker/main/cli/install.sh | sh
 ```
 
 Downloads the latest release binary for your OS/arch into `~/.local/bin/poker`
@@ -20,12 +20,12 @@ Downloads the latest release binary for your OS/arch into `~/.local/bin/poker`
 **Homebrew (macOS / Linux):**
 
 ```sh
-brew install aoctech/tap/poker
+brew install --cask artur-oliveira/tap/poker
 ```
 
 **Windows:** download `poker_<version>_windows_<arch>.zip` from the
-[releases page](https://github.com/aoctech/ctech-poker/releases) (tags prefixed
-`cli/`), unzip, and put `poker.exe` on your `PATH`.
+[releases page](https://github.com/artur-oliveira/ctech-poker/releases), unzip,
+and put `poker.exe` on your `PATH`.
 
 **From source:**
 
@@ -34,7 +34,7 @@ cd cli
 go build -o poker ./cmd/poker
 ```
 
-Releases are cut from `cli/vX.Y.Z` git tags and cover linux, macOS and Windows
+Releases are cut from `vX.Y.Z` git tags and cover linux, macOS and Windows
 on amd64 and arm64. The API itself has no release — only this CLI does.
 
 ## Usage

@@ -7,7 +7,7 @@ Layout: `api/` (Go game server), `ui/` (web client), `cdk/` (infra), `proto/`
 (shared wire schema), and `cli/` — a Go terminal client (`bubbletea` TUI,
 sandbox only) that speaks the same protocol as the web UI. See
 `cli/README.md` and `docs/specs/2026-09-05-poker-cli.md`. The CLI has its own
-release cadence (`cli/vX.Y.Z` tags → `.github/workflows/cli-release.yml`); the
+release cadence (`vX.Y.Z` tags → `.github/workflows/cli-release.yml`); the
 API is not released.
 
 **Documentação jurídica vigente:** os Termos do CTech Poker publicados pela

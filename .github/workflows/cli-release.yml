@@ -1,12 +1,12 @@
 name: CLI Release
 
-# Builds and publishes the CTech Poker CLI on a `cli/vX.Y.Z` tag. Independent
+# Builds and publishes the CTech Poker CLI on a `vX.Y.Z` tag. Independent
 # of the deploy pipeline — the API has no release, and deploy.yml's path
 # filters never match cli/**, so a CLI-only change deploys nothing.
 on:
   push:
     tags:
-      - 'cli/v*'
+      - 'v*'
 
 permissions:
   contents: write

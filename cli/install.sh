@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs the CTech Poker CLI. Downloads the latest `cli/vX.Y.Z` release
+# Installs the CTech Poker CLI. Downloads the latest `vX.Y.Z` release
 # asset for this OS/arch and drops the `poker` binary into $PREFIX/bin
 # (default ~/.local/bin).
 #
@@ -24,17 +24,18 @@ case "$os" in
   *) echo "unsupported OS: $os" >&2; exit 1 ;;
 esac
 
-# Newest release whose tag starts with cli/ .
-tag=$(curl -fsSL "$API?per_page=30" \
-  | grep -o '"tag_name": *"cli/[^"]*"' \
-  | head -n1 | sed 's/.*"cli\/\([^"]*\)"/\1/')
-if [ -z "$tag" ]; then
-  echo "no cli/* release found for $REPO" >&2
+# Newest stable release whose tag is a semantic CLI version.
+release_tag=$(curl -fsSL "$API?per_page=30" \
+  | grep -o '"tag_name": *"v[0-9][0-9.]*"' \
+  | head -n1 | sed 's/.*"\([^"]*\)"/\1/')
+if [ -z "$release_tag" ]; then
+  echo "no vX.Y.Z release found for $REPO" >&2
   exit 1
 fi
 
-asset="poker_${tag}_${os}_${arch}.${ext}"
-url="https://github.com/$REPO/releases/download/cli/$tag/$asset"
+version=${release_tag#v}
+asset="poker_${version}_${os}_${arch}.${ext}"
+url="https://github.com/$REPO/releases/download/$release_tag/$asset"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -49,7 +50,7 @@ esac
 
 mkdir -p "$PREFIX/bin"
 install -m 0755 "$tmp/poker" "$PREFIX/bin/poker"
-echo "installed poker $tag to $PREFIX/bin/poker"
+echo "installed poker $version to $PREFIX/bin/poker"
 
 case ":$PATH:" in
   *":$PREFIX/bin:"*) ;;

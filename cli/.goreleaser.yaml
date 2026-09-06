@@ -1,5 +1,6 @@
 # Releases the CTech Poker CLI. Triggered by .github/workflows/cli-release.yml
-# on tags matching `cli/v*`. Run from the repo root with `--config cli/.goreleaser.yaml`.
+# on semantic-version tags matching `v*`. Run from the repo root with
+# `--config cli/.goreleaser.yaml`.
 version: 2
 
 project_name: poker
@@ -52,20 +53,23 @@ release:
   github:
     owner: artur-oliveira
     name: ctech-poker
-  # cli releases carry their own tag namespace; don't touch the repo's
-  # "latest" pointer, which tracks nothing today anyway.
+  # Semantic-version tags are reserved for CLI releases in this repository.
   prerelease: auto
 
-brews:
+homebrew_casks:
   - name: poker
     ids: [ poker ]
+    binaries: [ poker ]
     repository:
       owner: artur-oliveira
-      name: ctech-poker-homebrew-tap
-    directory: Formula
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
     homepage: "https://github.com/artur-oliveira/ctech-poker"
     description: "CTech Poker — terminal client"
-    install: |
-      bin.install "poker"
-    test: |
-      system "#{bin}/poker", "--version"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/poker"]
+          end
