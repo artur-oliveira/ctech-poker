@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"time"
@@ -239,12 +240,6 @@ func resolveSSMParams(ctx context.Context, walletURLParam, clientIDParam, client
 }
 
 func handler(ctx context.Context) error {
-	if wURLParam := os.Getenv("WALLET_URL_PARAM"); wURLParam != "" {
-		if err := resolveSSMParams(ctx, wURLParam, os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM")); err != nil {
-			return fmt.Errorf("tablecleanup: resolve SSM params: %w", err)
-		}
-	}
-
 	cfg, err := config.LoadForLambda()
 	if err != nil {
 		return err
@@ -263,5 +258,20 @@ func handler(ctx context.Context) error {
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	// Resolve (and decrypt) the wallet SSM params once here, at cold start,
+	// instead of on every invocation inside handler: this Lambda runs on a
+	// rate(30 minutes) schedule and the warm execution environment is reused
+	// across invocations, so re-fetching an unchanging SecureString on every
+	// one of them was ~48 unnecessary KMS Decrypt calls/day. A cold start
+	// still resolves it exactly once, and resolving here (rather than lazily
+	// on first invocation) fails the Lambda fast and loudly if the parameter
+	// is missing/misconfigured.
+	if wURLParam := os.Getenv("WALLET_URL_PARAM"); wURLParam != "" {
+		if err := resolveSSMParams(context.Background(), wURLParam, os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM")); err != nil {
+			log.Fatalf("tablecleanup: resolve SSM params: %v", err)
+		}
+	}
+
 	lambda.Start(handler)
 }
