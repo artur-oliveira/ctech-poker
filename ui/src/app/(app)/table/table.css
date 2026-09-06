@@ -437,48 +437,78 @@
         overflow: hidden;
         clip-path: inset(50%)
     }
-.today-highlight-label,
-    .today-highlight-cards {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%)
-    }
-.today-highlight-pot {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis
-    }
 }
 @media (orientation: portrait) and (max-width: 1023px) {
-.today-highlight-label,
-    .today-highlight-cards {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%)
-    }
-.today-highlight-pot {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis
-    }
 .voice-action button {
         width: 36px;
         height: 36px;
         min-height: 36px
     }
 }
-@media (orientation: portrait) and (max-width: 380px) {
-.today-highlight-pot {
+/* Collapsed to the trophy icon by default (both phone conditions the header
+   already narrows for): the label/pot/hand text never fit beside Sentar
+   fora/Sair da mesa at these widths — the pot used to render as an
+   ellipsis-truncated "18..." instead of the real number. The sr-only clip
+   keeps every hidden string in the accessibility tree; tapping the trophy
+   (TodayHighlight.tsx's `expanded` state) floats the full pill open again
+   via the rules below instead of losing the number outright. */
+@media (max-width: 520px), (orientation: portrait) and (max-width: 1023px) {
+/* app.css's base `.today-highlight-wrap` rule (every route it renders on)
+       sets flex-shrink:0/max-width:100% for desktop, where the pill needs to
+       keep its natural width. At these phone widths that pinned the wrap at
+       its 64px flex-basis regardless of how little of header-right's 252px
+       was actually left for it — the wrap (and the icon inside it) rendered
+       on top of the back-to-lobby chevron instead of shrinking to the 28px
+       badge renderer.css's header-right rules already size the rest of the
+       row around. */
+.today-highlight-wrap {
+        flex-shrink: 1;
+        /* No 28px floor: with the pill chrome gone (padding:0 above) the
+           trophy's own 14px icon is all this needs to fit, and the 320px
+           tier has no 28px to spare — the fixed floor was the last few
+           pixels of the earlier overlap even after the shrink fix. */
+        min-width: 0;
+        max-width: 112px
+    }
+.today-highlight-label,
+    .today-highlight-pot,
+    .today-highlight-cards {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+/* Collapsed, the trophy reads as one more plain icon like reações/chat/menu
+       — no pill chrome — rather than a standalone badge. renderer.css's
+       header-right rules (same breakpoint) already own the wrap's own width
+       (shrinks to a 28px icon-only badge) and the popover positioning once
+       .expanded; forcing a fixed size here fought that shrink and was what
+       pushed the badge into the back-to-lobby chevron. */
+.today-highlight-wrap:not(.expanded) .today-highlight {
+        padding: 0;
+        justify-content: center;
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none
+    }
+.today-highlight-wrap.expanded .today-highlight-label,
+    .today-highlight-wrap.expanded .today-highlight-pot,
+    .today-highlight-wrap.expanded .today-highlight-cards {
         position: static;
         width: auto;
         height: auto;
-        overflow: hidden;
+        overflow: visible;
         clip-path: none;
-        font-size: 10px
+        grid-column: 2
+    }
+.today-highlight-wrap.expanded .today-highlight-label {
+        font-size: var(--font-size-compact);
+        font-weight: 600;
+        color: var(--muted)
+    }
+.today-highlight-wrap.expanded .today-highlight-pot {
+        font-size: var(--font-size-subtitle)
     }
 }
 .reaction-favorites-dialog {

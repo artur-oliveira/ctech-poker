@@ -482,16 +482,32 @@
     height: 14px;
     flex: 0 0 auto
 }
-.rabbit-hunt {
+/* ExitStatus, RabbitHunt and WinnerCards can all be true for the same
+   viewer at once (requested exit + hand won without showdown + not the
+   winner) — .table-overlay-stack is the one shared column all three lay
+   out in, so a co-occurrence stacks with a gap instead of the three pills
+   overlapping at the same anchored position (#adapt-mobile-overlay-stack). */
+.table-overlay-stack {
     position: absolute;
     z-index: 24;
     left: 50%;
     bottom: 14%;
     transform: translateX(-50%);
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 24px);
+    pointer-events: none
+}
+.table-overlay-stack > * {
+    pointer-events: auto;
+    max-width: 100%
+}
+.rabbit-hunt {
+    display: flex;
     align-items: center;
     gap: 10px;
-    max-width: calc(100% - 24px);
     padding: 8px 10px;
     border: 1px solid var(--white-13);
     border-radius: 999px;
@@ -537,15 +553,9 @@
     gap: 4px
 }
 .exit-status {
-    position: absolute;
-    z-index: 24;
-    left: 50%;
-    bottom: 14%;
-    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 10px;
-    max-width: calc(100% - 24px);
     padding: 8px 14px;
     border: 1px solid var(--white-13);
     border-radius: 999px;
@@ -572,11 +582,6 @@
     }
 }
 .winner-cards {
-    position: absolute;
-    z-index: 24;
-    left: 50%;
-    bottom: calc(14% + 62px);
-    transform: translateX(-50%);
     padding: 8px 12px;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-control);
@@ -639,16 +644,18 @@
     border-color: var(--gold);
     background: color-mix(in srgb, var(--gold) 18%, transparent)
 }
-.stage-v .winner-cards { bottom: calc(7% + 62px) }
-.stage-v .rabbit-hunt {
+.stage-v .table-overlay-stack {
     bottom: 7%
 }
 @media (max-width: 620px) {
-.rabbit-hunt {
+.table-overlay-stack {
         bottom: 6%;
+        gap: 6px
+    }
+.rabbit-hunt {
         padding: 7px 9px
     }
-.winner-cards { bottom: calc(6% + 58px); padding: 7px 9px }
+.winner-cards { padding: 7px 9px }
 }
 .profile-showcase {
     padding-block: clamp(36px, 8vw, 88px)
@@ -1126,7 +1133,10 @@
     }
 }
 .hole-card img {
-    filter: drop-shadow(0 4px 4px var(--black))
+    /* filter, not box-shadow — see the board-card comment in renderer.css;
+       translateZ keeps iOS Safari from rasterizing the SVG blurry under it. */
+    filter: drop-shadow(0 4px 4px var(--black));
+    transform: translateZ(0)
 }
 .hand-outcome {
     position: absolute;
@@ -3405,33 +3415,10 @@
 .game-chrome > header > a {
         flex-shrink: 0
     }
-.today-highlight-wrap.expanded .today-highlight svg {
-        grid-row: 1 / 4;
-        margin-top: 2px
-    }
-.today-highlight-wrap.expanded .today-highlight-label,
-    .today-highlight-wrap.expanded .today-highlight-cards {
-        position: static;
-        width: auto;
-        height: auto;
-        overflow: visible;
-        clip-path: none;
-        grid-column: 2
-    }
-.today-highlight-wrap.expanded .today-highlight-label {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--muted)
-    }
-.today-highlight-wrap.expanded .today-highlight-pot {
-        grid-column: 2;
-        overflow: visible;
-        text-overflow: clip;
-        font-size: 18px
-    }
-.today-highlight-wrap.expanded .today-highlight-cards {
-        font-size: 12px
-    }
+/* The mobile collapse/expand behaviour for this pill is table-only, so its
+   CSS lives in table.css (see the media queries there) rather than here —
+   this sheet still renders every other route TodayHighlight never mounts
+   on, per the "narrowest sheet wins" rule. */
 .action-bar button {
         font-size: 12px;
         padding-inline: 8px
@@ -3583,7 +3570,11 @@
 /* Heads-up narrows the ring, so rail and felt shrink together and the band
        is untouched. Squeezing the felt inside a full-width rail instead is
        what produced a 63px walnut rim at the sides against 14px at the
-       bottom — the "geometrically wrong" table in the report. */
+       bottom — the "geometrically wrong" table in the report. Capping
+       height instead of width (tried 2026-09-06) freed flex space in the
+       column that the ring's own flex:1 no longer claimed, and the docked
+       viewer hero seat below it drifted up off the bottom instead of
+       staying pinned there. Reverted. */
 .stage-v[data-capacity='2'] .stage-v-ring {
         max-width: min(82%, 640px)
     }

@@ -1416,7 +1416,13 @@
 }
 .board > img.board-card,
 .board-card img {
-    filter: drop-shadow(0 8px 8px var(--overlay-night-3))
+    /* filter, not box-shadow: box-shadow reads as a hard glass-pane edge
+       against the card's own white/striped back. translateZ forces its own
+       compositing layer instead, which keeps iOS Safari from rasterizing
+       the SVG at a blurry, non-retina resolution under the filter (a
+       documented WebKit quirk, distinct from the DPR-sizing fix above). */
+    filter: drop-shadow(0 8px 8px var(--overlay-night-3));
+    transform: translateZ(0)
 }
 .card-reveal {
     position: relative
@@ -1658,7 +1664,10 @@
     z-index: 2
 }
 .seat-cards > img.playing-card {
+    /* filter, not box-shadow — see the board-card comment above; every
+       opponent's face-down card hit the same iPhone blur. */
     filter: drop-shadow(0 4px 4px var(--black));
+    transform: translateZ(0);
     animation: hole-deal 320ms var(--ease-out-expo) both;
     animation-delay: calc(var(--deal-index, 0) * 65ms)
 }
@@ -2169,8 +2178,8 @@
    win/loss reads as the loudest thing on the table. But once a player
    actually opens chat/reactions/winners, that panel needs to win the fight
    instead, or it renders invisible underneath the card/badge. --z-notice
-   (not --z-table + 1) because .rabbit-hunt sits at z-index 24, above the old
-   value of 22: an open panel that overlaps rabbit-hunt's centered pill (both
+   (not --z-table + 1) because .table-overlay-stack sits at z-index 24, above
+   the old value of 22: an open panel that overlaps rabbit-hunt's centered pill (both
    live on the felt in the portrait hero layout) used to lose that fight, so
    the pill visibly punched through the panel's own text underneath it. */
 .game-chat.open,
@@ -8710,5 +8719,27 @@ html:has(.has-tab-bar) {
 
     .stage-v-ring .seat-7 .seat-info {
         right: calc(var(--seat-badge-overhang) * -1)
+    }
+
+    /* A side seat's bet travels inward toward the pot (see the zone-left/
+       zone-right rule above) by a fixed 8px + its own ~32px badge — more
+       than the felt has left beside the board at 320px wide, so it landed
+       on top of the community cards. Tightening the gap and the badge
+       itself buys back what a 320px ring can spare; it doesn't fully clear
+       a seat sitting level with the board (that needs the travel distance
+       itself capped against the felt's remaining margin, a bigger change
+       than this narrow-phone tier warrants on its own). */
+    .stage-v-ring .seat-zone-left .seat-bet {
+        left: calc(100% + 3px)
+    }
+
+    .stage-v-ring .seat-zone-right .seat-bet {
+        right: calc(100% + 3px)
+    }
+
+    .stage-v-ring .seat-zone-left .seat-bet b,
+    .stage-v-ring .seat-zone-right .seat-bet b {
+        padding: 2px 5px;
+        font-size: 9px
     }
 }

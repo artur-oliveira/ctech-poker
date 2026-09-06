@@ -336,17 +336,19 @@ function TableStageImpl({
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                          onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
-      <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
-                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
-                  onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
-      <ExitStatus pendingExit={Boolean(viewerPendingExit)}
-                  isViewerTurn={snapshot.current_player_id === viewer}
-                  onCancelAction={() => onCancelExitAction?.()}/>
-      <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                   pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
-                   onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
-                   offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
+      <div className="table-overlay-stack">
+        <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                     pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
+                     onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
+                     offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
+        <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                    pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                    onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                    onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+        <ExitStatus pendingExit={Boolean(viewerPendingExit)}
+                    isViewerTurn={snapshot.current_player_id === viewer}
+                    onCancelAction={() => onCancelExitAction?.()}/>
+      </div>
     </div>
   );
 
@@ -367,17 +369,19 @@ function TableStageImpl({
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                            onDismissedChangeAction={onOutcomeDismissedChange}
                            nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
-        <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
-                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
-                  onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
-        <ExitStatus pendingExit={Boolean(viewerPendingExit)}
-                    isViewerTurn={snapshot.current_player_id === viewer}
-                    onCancelAction={() => onCancelExitAction?.()}/>
-        <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                     pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
-                   onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
-                   offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
+        <div className="table-overlay-stack">
+          <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                       pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
+                       onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
+                       offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
+          <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                    pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                    onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                    onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+          <ExitStatus pendingExit={Boolean(viewerPendingExit)}
+                      isViewerTurn={snapshot.current_player_id === viewer}
+                      onCancelAction={() => onCancelExitAction?.()}/>
+        </div>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>

@@ -9,6 +9,16 @@ import {invalidateAfterSettle} from '@/lib/settleRefetch';
 
 const CARD_CODE = /^[2-9TJQKA][CDHS]$/i;
 
+// KNOWN LIMITATION: this names whoever holds the single best raw hand among
+// `revealed`, not whoever actually won the largest share of `data.pot`. On a
+// multi-way all-in with a side pot, the best hand at the table is only ever
+// eligible for the pot layer it covers (see `contestedPots`/`playerPotBreakdown`
+// in lib/tableOutcome.ts, which HandOutcome and the live standings already get
+// right) — a short-stacked flush can win a small main pot while a worse hand
+// takes a much bigger side pot between the two deeper stacks. `TableHighlight`
+// (lib/api/highlights.ts) has no per-player payout on `revealed` to attribute
+// the caption correctly here; fixing it needs that field added on the
+// api/highlights.Store side first.
 export function highlightWinnerLabel(board?: string[], revealed?: Array<{name?: string; hole_cards: string[]}>) {
   if (board?.length !== 5 || new Set(board.map(card => card.toUpperCase())).size !== 5 ||
     board.some(card => !CARD_CODE.test(card))) return undefined;
