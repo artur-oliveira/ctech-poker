@@ -3,6 +3,7 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import type {ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playSound} from '@/lib/sound';
 import {useTableRealtime} from './useTableRealtime';
+import {MIGRATION_NOTICE_FALLBACK} from '@/lib/tableResilience';
 
 const ws = vi.hoisted(() => ({
   options: null as null | {
@@ -231,6 +232,24 @@ describe('useTableRealtime', () => {
     expect(result.current.actionError).toBeNull();
   });
   
+  test('surfaces a table_migrating notice and clears it once the new instance connects', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+
+    receive({type: 'table_migrating', text: 'Migrando de servidor, aguarde.'});
+    expect(result.current.migrating).toBe('Migrando de servidor, aguarde.');
+
+    receive({type: 'connected'});
+    expect(result.current.migrating).toBe('');
+  });
+
+  test('table_migrating falls back to canned copy when the server sends no text', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    receive({type: 'table_migrating'});
+    expect(result.current.migrating).toBe(MIGRATION_NOTICE_FALLBACK);
+  });
+
   test('still auto-retries a stale_state that arrives after an unrelated broadcast raced ahead of it', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);

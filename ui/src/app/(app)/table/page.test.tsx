@@ -213,7 +213,7 @@ function realtime(overrides: Record<string, unknown> = {}) {
     preselectAction: vi.fn(() => true), pendingAction: null, actionError: null,
     clearActionError: vi.fn(), keepSeat: vi.fn(() => true), chat: [], sendChat: vi.fn(),
     reactions: [], sendReaction: vi.fn(), botChallengeRequired: false, submitBotChallenge: vi.fn(),
-    unlock: null, clearUnlock: vi.fn(), ...overrides,
+    unlock: null, clearUnlock: vi.fn(), migrating: '', ...overrides,
   };
   mocks.realtimeHook.mockImplementation(() => mocks.realtime);
 }
@@ -639,6 +639,24 @@ describe('table page integration', () => {
     render(<TablePage/>);
     expect(mocks.stageProps?.nextHandDeadlineMs).toBeUndefined();
     expect(screen.getByText(/Reconectando à mesa…\s*Tentativa 2\./)).toBeInTheDocument();
+  });
+
+  test('shows the migration notice without a retry button while the socket is still up', () => {
+    realtime({
+      snapshot: snapshot({next_hand_unix_ms: Date.now() + 5000}),
+      migrating: 'Esta mesa está migrando de servidor.', status: 'connected',
+    });
+    render(<TablePage/>);
+    expect(screen.getAllByText('Esta mesa está migrando de servidor.').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', {name: /Tentar agora/})).not.toBeInTheDocument();
+    expect(mocks.stageProps?.nextHandDeadlineMs).toBeUndefined();
+  });
+
+  test('keeps the migration copy and restores the retry button once the socket drops', () => {
+    realtime({migrating: 'Esta mesa está migrando de servidor.', status: 'reconnecting', reconnectAttempt: 1});
+    render(<TablePage/>);
+    expect(screen.getAllByText('Esta mesa está migrando de servidor.').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', {name: /Tentar agora/})).toBeInTheDocument();
   });
 
   test('offers card reveal only for a participating seat still holding a hidden card', async () => {

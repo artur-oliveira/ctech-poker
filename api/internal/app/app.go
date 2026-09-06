@@ -976,6 +976,36 @@ func registerRoutes(
 // ShutdownWithContext budget it precedes.
 const wsDrainGrace = 1500 * time.Millisecond
 
+// migrationNoticeText is the heads-up a player sees just before their socket
+// is closed on a planned drain (issue #354). The client turns it into a
+// non-intrusive banner and its existing reconnect restores the table on the
+// instance that takes over.
+const migrationNoticeText = "Esta mesa está migrando de servidor. Sua conexão será restabelecida automaticamente em instantes."
+
+// migrationNoticeGrace is how long to wait between the "table migrating"
+// message and the action that ends the socket, so the client renders the
+// banner first. Budgeted inside wsDrainGrace on the OnStop path.
+const migrationNoticeGrace = 400 * time.Millisecond
+
+// announceTableMigration best-effort tells every locally-connected player
+// their table is about to move, then waits migrationNoticeGrace so the
+// notice lands before the caller closes or drains. Never blocks longer than
+// that grace; a marshal failure or zero connections is a silent no-op.
+func announceTableMigration(ctx context.Context) {
+	data, err := goproto.Marshal(&pokerproto.ServerMessage{Type: "table_migrating", Text: migrationNoticeText})
+	if err != nil {
+		slog.Warn("marshal table migration notice failed", "err", err)
+		return
+	}
+	if n := wsdrain.NoticeAll(data); n > 0 {
+		slog.Info("sent table migration notices", "conns", n)
+		select {
+		case <-time.After(migrationNoticeGrace):
+		case <-ctx.Done():
+		}
+	}
+}
+
 // validateWalletScopes fails startup loudly when real-money mode is enabled
 // but ctech-account has not granted poker's M2M client the two scopes
 // DebitReal/IsGamblingActivated depend on (internal:wallet:debit-real,
@@ -1056,6 +1086,10 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 		},
 		OnStop: func(ctx context.Context) error {
 			cancelPoll()
+			// Heads-up first (issue #354): a "table migrating" message, then a
+			// short grace so the client shows its reconnect banner before the
+			// going-away frame rather than treating the close as an error.
+			announceTableMigration(ctx)
 			// Hand every live socket a 1001 "going away" before anything else:
 			// ShutdownWithContext below force-closes them once its window
 			// elapses, and a client that learns about it only from a dead read
@@ -1102,6 +1136,10 @@ func pollSpotTermination(ctx context.Context, manager *tablemanager.Manager, cli
 			}
 			slog.Warn("spot termination notice detected via instance metadata, draining proactively ahead of the lifecycle hook")
 			drainCtx, cancel := context.WithTimeout(context.Background(), spotDrainTimeout)
+			// Same heads-up as the OnStop path (issue #354): the sockets stay
+			// open here (OnStop closes them later) but the actors are about to
+			// stop, so warn players their table is moving before the drain.
+			announceTableMigration(drainCtx)
 			manager.DrainAndRelease(drainCtx)
 			cancel()
 			return

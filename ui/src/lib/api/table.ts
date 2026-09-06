@@ -149,6 +149,8 @@ export type ServerMessage = {
   equity?: number
   reaction_id?: string;
   target_player_id?: string
+  // system_broadcast copy, and the migration notice on a "table_migrating" frame.
+  text?: string
 }
 
 export type Action = (

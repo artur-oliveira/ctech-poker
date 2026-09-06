@@ -263,7 +263,11 @@ function TableContent() {
   const s = rt.snapshot, pot = s.pots?.reduce((n, x) => n + x.amount, 0) ??
     s.seats.reduce((n, x) => n + x.contributed, 0);
   const bigBlind = room?.big_blind || 25;
-  const connectionMessage = rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt);
+  // A planned server migration (#354) keeps its own friendlier copy in the
+  // reconnect slot across the brief socket close it causes, until the instance
+  // taking over sends 'connected' and rt.migrating clears.
+  const connectionMessage = rt.migrating ||
+    (rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt));
   const actions = actionState(s, viewer);
   const viewerSeat = s.seats.find(seat => seat.player_id === viewer);
   const actionKey = [s.stage, s.current_player_id, s.board.join(','), viewerSeat?.stack, viewerSeat?.contributed,
@@ -349,7 +353,8 @@ function TableContent() {
           </div>
         </header>
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {[rt.announcement, rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage]
+          {[rt.announcement, rt.migrating ||
+            (rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage)]
             .filter(Boolean).join(' ')}
         </div>
         {/* On phones, this notice renders in-flow right below the header (see
@@ -364,7 +369,11 @@ function TableContent() {
         {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
             <span aria-hidden="true"/>
             <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
-            <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
+            {/* During a planned migration the socket is still up (or reconnects
+                on its own); a manual retry only makes sense once we're actually
+                disconnected. */}
+            {rt.status !== 'connected' &&
+              <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
         </div>}
       </div>
       {/* `payouts`, not `stage === 'complete'`: a showdown hand shows payouts

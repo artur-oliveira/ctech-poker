@@ -23,6 +23,14 @@ func (f *fakeConn) WriteControl(messageType int, data []byte, _ time.Time) error
 	return nil
 }
 
+func (f *fakeConn) WriteMessage(messageType int, data []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.types = append(f.types, messageType)
+	f.frames = append(f.frames, append([]byte(nil), data...))
+	return nil
+}
+
 func TestCloseAllSendsGoingAwayToTrackedConnsOnly(t *testing.T) {
 	tracked, untracked := &fakeConn{}, &fakeConn{}
 	Track(tracked)
@@ -144,6 +152,57 @@ func TestCloseAllStalledPeersDoNotDelayHealthySockets(t *testing.T) {
 func TestCloseAllNoConnsIsANoop(t *testing.T) {
 	if n := CloseAll(context.Background(), time.Minute); n != 0 {
 		t.Fatalf("CloseAll on an empty registry signalled %d conns, want 0", n)
+	}
+}
+
+func TestNoticeAllReachesTrackedMessageConnsOnly(t *testing.T) {
+	dataConn := &fakeConn{}
+	controlOnly := &blockedConn{release: make(chan struct{})} // no WriteMessage
+	Track(dataConn)
+	Track(controlOnly)
+	t.Cleanup(func() { Untrack(dataConn); Untrack(controlOnly) })
+
+	payload := []byte("table_migrating")
+	if n := NoticeAll(payload); n != 1 {
+		t.Fatalf("NoticeAll reached %d conns, want 1 (the control-only conn must be skipped)", n)
+	}
+	waitFrames(t, dataConn, 1)
+
+	dataConn.mu.Lock()
+	defer dataConn.mu.Unlock()
+	if dataConn.types[0] != fws.BinaryMessage {
+		t.Fatalf("notice sent as type %d, want BinaryMessage", dataConn.types[0])
+	}
+	if string(dataConn.frames[0]) != string(payload) {
+		t.Fatalf("notice payload = %q, want %q", dataConn.frames[0], payload)
+	}
+}
+
+// TestNoticeAllPrecedesCloseAll is the acceptance criterion: the migration
+// notice is delivered before the going-away frame, not after.
+func TestNoticeAllPrecedesCloseAll(t *testing.T) {
+	c := &fakeConn{}
+	Track(c)
+	t.Cleanup(func() { Untrack(c) })
+
+	NoticeAll([]byte("notice"))
+	waitFrames(t, c, 1)
+	CloseAll(context.Background(), 50*time.Millisecond)
+	waitFrames(t, c, 2)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if string(c.frames[0]) != "notice" {
+		t.Fatalf("first frame = %q, want the migration notice", c.frames[0])
+	}
+	if c.types[1] != fws.CloseMessage {
+		t.Fatalf("second frame type = %d, want CloseMessage after the notice", c.types[1])
+	}
+}
+
+func TestNoticeAllNoConnsIsANoop(t *testing.T) {
+	if n := NoticeAll([]byte("x")); n != 0 {
+		t.Fatalf("NoticeAll on an empty registry reached %d conns, want 0", n)
 	}
 }
 

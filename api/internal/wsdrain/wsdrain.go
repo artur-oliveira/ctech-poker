@@ -50,6 +50,15 @@ type Conn interface {
 	WriteControl(messageType int, data []byte, deadline time.Time) error
 }
 
+// messageWriter is the data-frame half of a live socket — the same
+// *v1.wsConnAdapter satisfies it too. NoticeAll needs it (a close frame is a
+// control frame; a "table migrating" heads-up is an ordinary app message);
+// it stays separate from Conn so a Conn that only tracks control writes is
+// still valid, just skipped by NoticeAll.
+type messageWriter interface {
+	WriteMessage(messageType int, data []byte) error
+}
+
 var (
 	mu       sync.Mutex
 	conns    = make(map[Conn]struct{})
@@ -122,6 +131,45 @@ func CloseByConnID(connIDs []string) int {
 		}(c)
 	}
 	return len(targets)
+}
+
+// NoticeAll writes one application-level binary message — a marshalled
+// pokerproto.ServerMessage the caller supplies — to every tracked connection,
+// on the same bounded fan-out CloseAll uses, and returns how many it reached.
+//
+// It is best-effort by design (issue #354): it runs just before CloseAll on a
+// planned drain (deploy, spot-termination notice) so a player sees "this table
+// is migrating, reconnecting shortly" before the going-away frame, but a
+// crash or an un-noticed termination simply skips it and the client's existing
+// reconnect still recovers. A connection whose Conn can't write data frames,
+// or whose write fails, is skipped without affecting the rest. Writers are
+// fire-and-forget: the caller waits out its own small grace window, then
+// CloseAll's frame follows.
+func NoticeAll(payload []byte) int {
+	mu.Lock()
+	snapshot := make([]messageWriter, 0, len(conns))
+	for c := range conns {
+		if w, ok := c.(messageWriter); ok {
+			snapshot = append(snapshot, w)
+		}
+	}
+	mu.Unlock()
+	if len(snapshot) == 0 {
+		return 0
+	}
+	write := func(w messageWriter) {
+		if err := w.WriteMessage(fws.BinaryMessage, payload); err != nil {
+			slog.Debug("ws migration notice failed", "err", err)
+		}
+	}
+	for i, w := range snapshot {
+		if i >= closeMaxFanOut {
+			write(w)
+			continue
+		}
+		go write(w)
+	}
+	return len(snapshot)
 }
 
 // CloseAll sends a 1001 close frame to every tracked connection — on a

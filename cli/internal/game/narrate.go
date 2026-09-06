@@ -266,6 +266,12 @@ func (n *Narrator) OnMessage(m *proto.ServerMessage) []string {
 		return []string{fmt.Sprintf("conquista: %s (+%d★)", m.Key, m.Stars)}
 	case "removed":
 		return []string{fmt.Sprintf("você saiu da mesa (%s) — banca %d", m.Message, m.Amount)}
+	case "table_migrating":
+		note := m.Text
+		if note == "" {
+			note = "esta mesa está migrando de servidor — a conexão será restabelecida automaticamente"
+		}
+		return []string{note}
 	default:
 		return nil
 	}

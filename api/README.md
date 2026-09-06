@@ -143,8 +143,9 @@ Per-binary keys read outside `Config` (not in the struct above):
   `spotlight`, `crown`, and `bandage`.
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
-  `room_updated`, `payment_received`, `system_broadcast`, `social_event`, `social_presence_changed` and
-  `social_inbox_count`. Social frames are emitted only on the authenticated `user#<playerID>` channel.
+  `room_updated`, `payment_received`, `system_broadcast`, `table_migrating` (see below), `social_event`,
+  `social_presence_changed` and `social_inbox_count`. Social frames are emitted only on the authenticated
+  `user#<playerID>` channel.
 - Abuse control: per-**player** fixed-window limiters — 10 actions/sec and 1 reaction/2 s — sharing the same
   `RateLimiter` (`internal/api/v1/ratelimit.go`) and therefore the same Redis `INCR`/`EXPIRE` counter as the HTTP
   limiters, keyed `ws:act:<playerID>` / `ws:react:<playerID>`. Before #43 these were per-process, per-connection
@@ -154,6 +155,15 @@ Per-binary keys read outside `Config` (not in the struct above):
   `chatMessageMaxLength` (50 chars, mirrored client-side as `CHAT_MESSAGE_MAX_LENGTH`) and masked by
   `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
 - Heartbeat: 30s ping / 45s pong wait.
+- `table_migrating` (issue #354): on a **planned** drain — a deploy's `OnStop`, or `pollSpotTermination` detecting a
+  spot-termination notice — `internal/app`'s `announceTableMigration` sends every locally-connected socket a
+  `ServerMessage{type:"table_migrating", text:...}` through `wsdrain.NoticeAll`, waits `migrationNoticeGrace` (400ms,
+  budgeted inside `wsDrainGrace`), and only then lets `wsdrain.CloseAll` send the 1001 going-away frame. The client
+  shows a non-intrusive reconnect banner and its existing bounded-backoff reconnect restores the table on whichever
+  instance takes over — no game state moves, DynamoDB stays the source of truth, and `internal/tablelease` is untouched
+  and gains no responsibility. Best-effort by construction: a crash or an un-noticed termination skips the notice and
+  the client still recovers as before. `internal/tablemanager.DrainAndRelease` is deliberately not involved — it must
+  not depend on the transport-adjacent `wsdrain` package, and both drain triggers already live in `internal/app`.
 
 ## Social graph rollout
 
