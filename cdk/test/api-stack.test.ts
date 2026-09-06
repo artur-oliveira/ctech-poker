@@ -184,7 +184,7 @@ test('user data only fetches and runs the shared ctech-cdk scripts', () => {
   expect(text).toContain('setup-nginx.sh');
   expect(text).toContain('setup-realip.sh');
   // app-port-alt/alt-port turn on the rolling deploy.
-  expect(text).toContain("setup-nginx.sh 8080 8000 /v1.0/health-check 100 1m 8001");
+  expect(text).toContain("setup-nginx.sh 8080 8000 /v1.0/health 100 1m 8001");
   expect(text).toContain("ctech_run setup-app-service.sh 'CTech Poker API' app 8001");
   // Downloaded to a file and then executed: a pipe truncated mid-transfer runs a
   // partial script and reports success.

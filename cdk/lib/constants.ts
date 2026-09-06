@@ -76,11 +76,10 @@ export const APP_PORT_ALT = APP_PORT + 1;
 export const NGINX_PORT = 8080;
 
 /**
- * Detailed health check path served by the Go API (RFC draft-inadarei-api-health-check;
- * see api/internal/api/v1/health.go). The ALB target group accepts 200 and 207
- * (degraded but still serving) as healthy.
+ * Dependency-free liveness path served by the Go API. HAProxy needs only a
+ * reachable process, not to probe DynamoDB on every reconciliation.
  */
-export const HEALTH_CHECK_PATH = '/v1.0/health-check';
+export const HEALTH_CHECK_PATH = '/v1.0/health';
 
 /**
  * Spot instance-type pool for the API ASG's MixedInstancesPolicy (#35: a spot
