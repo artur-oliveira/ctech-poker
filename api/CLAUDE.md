@@ -660,6 +660,12 @@ catalog.
   frames are best-effort by construction — `ShutdownWithContext` is the backstop it always was.
   `TestCloseAllStalledPeersDoNotDelayHealthySockets` pins it: 64 permanently stalled peers plus 200 healthy ones,
   total time inside the grace budget, every healthy socket signalled.
+  **Issue #354: `wsdrain.NoticeAll` is the heads-up that precedes `CloseAll` on a planned drain.** It fan-outs one
+  app-level `ServerMessage{type:"table_migrating"}` (marshalled by the caller) to every tracked socket on the same
+  bounded pool, then returns — `internal/app`'s `announceTableMigration` waits `migrationNoticeGrace` before letting
+  `CloseAll` follow, so the client renders its reconnect banner instead of treating the close as an error. Wired only
+  in `internal/app` (the OnStop hook and `pollSpotTermination`); `tablemanager`/`tablelease` are untouched and
+  `tablelease` stays latency-only. Best-effort: skipped entirely on a crash or an un-noticed termination.
 - `internal/handreveal` (`poker_hand_reveals` + `poker_hand_reveal_payments`) extends the live paid winner-cards reveal
   (`Table.RequestWinnerCards`) to hand history — non-consensual by design, since the hand is archived and there is no
   winner still at the table to ask: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one archive row

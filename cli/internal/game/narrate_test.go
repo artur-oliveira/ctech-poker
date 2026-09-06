@@ -121,6 +121,14 @@ func TestNarratorOnMessageChatAndReaction(t *testing.T) {
 	if len(rem) != 1 || !strings.Contains(rem[0], "1500") {
 		t.Errorf("removed line: %v", rem)
 	}
+	mig := n.OnMessage(&proto.ServerMessage{Type: "table_migrating", Text: "migrando de servidor"})
+	if len(mig) != 1 || mig[0] != "migrando de servidor" {
+		t.Errorf("table_migrating line: %v", mig)
+	}
+	migFallback := n.OnMessage(&proto.ServerMessage{Type: "table_migrating"})
+	if len(migFallback) != 1 || !strings.Contains(migFallback[0], "migrando de servidor") {
+		t.Errorf("table_migrating fallback line: %v", migFallback)
+	}
 }
 
 func TestNarratorLastWinnersTracksHistory(t *testing.T) {

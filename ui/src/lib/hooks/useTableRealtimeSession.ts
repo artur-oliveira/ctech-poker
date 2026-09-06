@@ -9,7 +9,7 @@ import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/
 import {CHAT_HISTORY_LIMIT} from '@/lib/chat';
 import {
   ACTION_TIMEOUT_MS, type ActionError, actionError, MAX_ACTION_RETRIES,
-  RESYNC_ERROR_CODES, RESYNC_TIMEOUT_MS, TERMINAL_ERROR_CODES
+  MIGRATION_NOTICE_FALLBACK, RESYNC_ERROR_CODES, RESYNC_TIMEOUT_MS, TERMINAL_ERROR_CODES
 } from '@/lib/tableResilience';
 import {describeSnapshot, playSoundForTransition} from '@/lib/tableNarration';
 import {
@@ -150,6 +150,9 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  // Non-empty only between a server 'table_migrating' notice and the next
+  // 'connected' frame from whichever instance takes the table over (#354).
+  const [migrating, setMigrating] = useState('');
   const [botChallengeRequired, setBotChallengeRequired] = useState(false);
   const [removed, setRemoved] = useState<{ code?: string; amount?: number } | null>(null);
   const [terminalFailure, setTerminalFailure] = useState<{ tableID: string; code: string } | null>(null);
@@ -475,6 +478,10 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
     }
     if (message.type === 'connected') {
       awaitingReconnectSnapshotRef.current = true;
+      setMigrating('');
+    }
+    if (message.type === 'table_migrating') {
+      setMigrating(message.text || MIGRATION_NOTICE_FALLBACK);
     }
     if (message.type === 'bot_challenge') setBotChallengeRequired(true);
     if (message.type === 'bot_challenge_passed') {
@@ -823,6 +830,7 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
     actionError: lastActionError,
     reconnectAttempt,
     announcement,
+    migrating,
     botChallengeRequired,
     removed,
     terminalError,

@@ -50,6 +50,13 @@ export const ERROR_MESSAGES: Record<string, string> = {
   connection_lost: 'A conexão caiu antes da confirmação. Aguarde a atualização da mesa.'
 };
 
+/** Shown in the reconnect notice while a table is being moved between server
+ * instances (a deploy or a spot-termination drain), if the server's own
+ * `table_migrating` frame carries no text. The reconnect is transparent —
+ * this only sets expectations. See api issue #354. */
+export const MIGRATION_NOTICE_FALLBACK =
+  'Esta mesa está migrando de servidor. Sua conexão será restabelecida automaticamente em instantes.';
+
 export function actionError(code = 'unknown'): ActionError {
   return {code, message: ERROR_MESSAGES[code] || 'Não foi possível concluir a ação. Tente novamente.'};
 }

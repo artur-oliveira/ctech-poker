@@ -72,7 +72,8 @@ whenever a players store is wired) are all **fixed**; older docs that still list
   (`2026-07-28-architecture-state-audit-and-provably-fair.md`, `2026-07-28-audit-implementation-plan.md`, both pt-BR)
   carry the current architecture punch list.
 - `specs/` — `2026-07-19-api-audit-remediation.md`, `2026-07-23-poker-reveal-timing-and-runout-pacing.md`,
-  `2026-07-28-player-avatars-and-next-features.md` (proposed next features).
+  `2026-07-28-player-avatars-and-next-features.md` (proposed next features),
+  `2026-09-06-table-migration-notice.md` (visible maintenance-migration notice, #354).
 - Top-level `OVERVIEW.md` (product/game rules), `ARCHITECTURE.md` (technical design), `PLAN.md` (build history),
   `README.md` (status). Untracked `future.md` / `future_analysis.md` are brainstorm/feasibility notes — much of their
   Fase 1–2 backlog has since shipped.
