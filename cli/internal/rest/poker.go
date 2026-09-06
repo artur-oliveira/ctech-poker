@@ -3,6 +3,8 @@ package rest
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 // Stake is one entry in the /rooms/stakes catalog.
@@ -189,4 +191,45 @@ func (c *Client) ReactionCatalog(ctx context.Context) ([]Reaction, error) {
 		return nil, err
 	}
 	return page.Data, nil
+}
+
+// PlayerNote is a private per-opponent note (playernotes.Note, mirrored).
+// Only the caller ever sees it — the server keys it by (viewer, opponent).
+type PlayerNote struct {
+	OpponentID string `json:"opponent_id"`
+	Tag        string `json:"tag,omitempty"`
+	Text       string `json:"note,omitempty"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+// PlayerNoteTags are the valid PlayerNote.Tag values (playernotes color tags).
+var PlayerNoteTags = []string{"red", "orange", "yellow", "green", "blue", "purple"}
+
+// Notes fetches the caller's private notes scoped to opponentIDs (GET
+// /v1.0/players/me/notes/?opponent_ids=...; at most 25). Mirrors
+// ui/src/lib/api/playerNotes.ts's getPlayerNotes — never the unscoped list.
+// Empty input is a no-op (the endpoint rejects an empty query).
+func (c *Client) Notes(ctx context.Context, opponentIDs []string) ([]PlayerNote, error) {
+	if len(opponentIDs) == 0 {
+		return nil, nil
+	}
+	var page Page[PlayerNote]
+	path := "/v1.0/players/me/notes/?opponent_ids=" + url.QueryEscape(strings.Join(opponentIDs, ","))
+	if err := c.Do(ctx, http.MethodGet, path, nil, &page); err != nil {
+		return nil, err
+	}
+	return page.Data, nil
+}
+
+// SaveNote creates, updates, or (tag and text both empty) deletes the
+// caller's private note about opponentID (POST /v1.0/players/me/notes/<id>).
+func (c *Client) SaveNote(ctx context.Context, opponentID, tag, text string) (PlayerNote, error) {
+	var note PlayerNote
+	path := "/v1.0/players/me/notes/" + url.PathEscape(opponentID)
+	body := struct {
+		Tag  string `json:"tag"`
+		Note string `json:"note"`
+	}{Tag: tag, Note: text}
+	err := c.Do(ctx, http.MethodPost, path, body, &note)
+	return note, err
 }

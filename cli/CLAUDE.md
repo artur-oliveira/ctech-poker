@@ -36,11 +36,24 @@ ctech-account** — a config/data change, tracked here rather than in that repo:
       above must be registered verbatim. `validateRedirectURIs` allows `http://`
       only for `localhost`/`127.*`, which this is.
 - [ ] `allowed_scopes`: `poker:rooms:read poker:players:read poker:sessions:read
-      poker:hands:read poker:achievements:read poker:stats:read`.
+      poker:hands:read poker:achievements:read poker:stats:read
+      poker:player-notes:read`. The last one gates `rest.Client.Notes` (GET
+      `/v1.0/players/me/notes/`), added 2026-09-05 for `/note`; without it
+      that one call 403s (the note *save* itself is a POST and is gated by
+      client identity, not scope — see `enforceReadOnlyScope` in
+      `api/internal/api/v1/readscopes.go` — so it isn't blocked here).
 - [ ] Add the grant to every environment's deploy reconciliation (dev/staging/prod) —
       mirrors the still-open real-money M2M scope gap documented in `api/CLAUDE.md`.
 - [ ] Confirm `POST /v1.0/token` with `grant_type=api_key` issues a token carrying
       those same scopes for a key created with them.
+
+`rest.Client`'s `/v1.0/social/*` methods (`Friends`, `FriendRequests`, `Blocked`,
+`RecentPlayers`, `Inbox`, added 2026-09-05 for `/friends` `/requests` `/blocked`
+`/recent` `/inbox`) need **no scope at all** — the whole `/social` group is gated
+by `firstPartyOnly` (client identity), not `enforceReadOnlyScope`, per
+`api/internal/api/v1/social.go` and `readscopes.go`'s `socialReadPathPrefix`
+exemption. They start working the moment the `client_id=poker-cli` registration
+above lands, same as every other write-shaped call in this file.
 
 **2026-09-05: `ctech-account/api/cmd/createpublicclient` now exists** —
 `ctech-account` PR https://github.com/artur-oliveira/ctech-account/pull/25 (open).

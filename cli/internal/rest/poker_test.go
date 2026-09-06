@@ -179,3 +179,58 @@ func TestReactionCatalogDecodesOwnedEntries(t *testing.T) {
 		t.Fatalf("got %+v", rs)
 	}
 }
+
+func TestNotesSendsScopedOpponentIDsAndDecodesResult(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1.0/players/me/notes/" || r.URL.Query().Get("opponent_ids") != "caio,duda" {
+			t.Errorf("unexpected request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"opponent_id": "caio", "tag": "red", "note": "joga muito"}},
+		})
+	}))
+	defer srv.Close()
+
+	notes, err := New(srv.URL, tokenFunc("t"), srv.Client()).Notes(context.Background(), []string{"caio", "duda"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 1 || notes[0].OpponentID != "caio" || notes[0].Tag != "red" || notes[0].Text != "joga muito" {
+		t.Fatalf("got %+v", notes)
+	}
+}
+
+func TestNotesEmptyInputIsANoOp(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("no request should be sent for an empty opponent list")
+	}))
+	defer srv.Close()
+
+	notes, err := New(srv.URL, tokenFunc("t"), srv.Client()).Notes(context.Background(), nil)
+	if err != nil || notes != nil {
+		t.Fatalf("notes=%v err=%v", notes, err)
+	}
+}
+
+func TestSaveNotePostsTagAndText(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1.0/players/me/notes/caio" || r.Method != http.MethodPost {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		json.NewDecoder(r.Body).Decode(&gotBody)
+		json.NewEncoder(w).Encode(map[string]any{"opponent_id": "caio", "tag": "blue", "note": "cuidado"})
+	}))
+	defer srv.Close()
+
+	note, err := New(srv.URL, tokenFunc("t"), srv.Client()).SaveNote(context.Background(), "caio", "blue", "cuidado")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note.Tag != "blue" || note.Text != "cuidado" {
+		t.Fatalf("got %+v", note)
+	}
+	if gotBody["tag"] != "blue" || gotBody["note"] != "cuidado" {
+		t.Fatalf("request body: %+v", gotBody)
+	}
+}

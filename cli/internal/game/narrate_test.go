@@ -61,6 +61,52 @@ func TestNarratorShowdownEmitsWinnerAndPayout(t *testing.T) {
 	}
 }
 
+func TestNarratorShowdownSidePotBreakdown(t *testing.T) {
+	n := NewNarrator("you")
+	n.OnSnapshot(&proto.TableSnapshot{Stage: "river", Seats: []*proto.Seat{
+		{PlayerId: "a", Name: "Ana"}, {PlayerId: "b", Name: "Bru"}, {PlayerId: "c", Name: "Caio"},
+	}})
+	lines := n.OnSnapshot(&proto.TableSnapshot{
+		Stage:   "complete",
+		Board:   []string{"Ah", "7c", "Kd", "2s", "9h"},
+		Winners: []string{"a", "c"},
+		Seats: []*proto.Seat{
+			{PlayerId: "a", Name: "Ana"}, {PlayerId: "b", Name: "Bru"}, {PlayerId: "c", Name: "Caio"},
+		},
+		PotResults: []*proto.PotResult{
+			{PayoutAmount: 300, Payouts: map[string]int64{"a": 300}},
+			{PayoutAmount: 120, Payouts: map[string]int64{"c": 120}},
+			{PayoutAmount: 40, Refund: true, Payouts: map[string]int64{"b": 40}},
+		},
+	})
+	joined := strings.Join(lines, "\n")
+	for _, want := range []string{"pote principal 300 · Ana", "pote lateral 1 120 · Caio", "devolvido 40 · Bru"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in:\n%s", want, joined)
+		}
+	}
+	// History still totals contested winnings only (refund excluded).
+	if w := n.LastWinners(2); len(w) != 2 || !strings.Contains(strings.Join(w, ","), "Ana (+300)") {
+		t.Fatalf("history: %v", w)
+	}
+}
+
+func TestNarratorShowdownSplitPot(t *testing.T) {
+	n := NewNarrator("you")
+	n.OnSnapshot(&proto.TableSnapshot{Stage: "river"})
+	lines := strings.Join(n.OnSnapshot(&proto.TableSnapshot{
+		Stage: "complete", Winners: []string{"a", "b"},
+		Seats: []*proto.Seat{{PlayerId: "a", Name: "Ana"}, {PlayerId: "b", Name: "Bru"}},
+		PotResults: []*proto.PotResult{
+			{PayoutAmount: 200, Refund: true, Payouts: map[string]int64{"c": 200}},
+			{PayoutAmount: 101, Payouts: map[string]int64{"a": 51, "b": 50}},
+		},
+	}), "\n")
+	if !strings.Contains(lines, "Ana 51 e Bru 50") {
+		t.Fatalf("split pot not shown: %s", lines)
+	}
+}
+
 func TestNarratorOnMessageChatAndReaction(t *testing.T) {
 	n := NewNarrator("you")
 	chat := n.OnMessage(&proto.ServerMessage{Type: "chat", PlayerId: "ana", Message: "gg"})

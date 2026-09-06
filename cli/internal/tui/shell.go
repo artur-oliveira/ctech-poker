@@ -404,8 +404,13 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tableExitRecapMsg:
 		if msg.err == nil && msg.session.TableID == msg.exited.RoomID && msg.session.EndedAt > 0 {
-			s.appendLine(successStyle.Render("✓ sessão encerrada") + " · resultado " +
-				formatSignedExitAmount(msg.session.NetPnL, msg.exited.RealMoney))
+			name := msg.exited.RoomName
+			if name == "" {
+				name = msg.exited.RoomID
+			}
+			for _, line := range formatSessionRecap(name, msg.session, msg.exited.RealMoney) {
+				s.appendLine(line)
+			}
 			return s, nil
 		}
 		if msg.attempt < 2 {
@@ -456,6 +461,11 @@ func tableConfig(s *Shell) TableConfig {
 			return fmt.Sprintf("sessão: buy-in %d · saldo atual %d · resultado %d",
 				sess.BuyinAmount, sess.CashoutAmount, sess.NetPnL), nil
 		},
+		// ponytail: fixed at the web's default (60min); the CLI has no
+		// table-preferences store yet to make this configurable per player.
+		RealityCheckEvery: 60 * time.Minute,
+		Notes:             s.rc.Notes,
+		SaveNote:          s.rc.SaveNote,
 	}
 }
 
@@ -504,6 +514,43 @@ func fetchTableExitRecap(rc *rest.Client, exited TableExitedMsg, attempt int) te
 		defer cancel()
 		session, err := rc.CurrentSession(ctx)
 		return tableExitRecapMsg{exited: exited, session: session, err: err, attempt: attempt}
+	}
+}
+
+// formatSessionRecap renders the on-removal session recap (web SessionRecap):
+// time at the table, buy-in, cash-out, net result. joined_at / ended_at are
+// epoch-ms. Hands-played and biggest-pot (which the web pulls from hand
+// history) are left out — the CLI has no hand-history client yet.
+func formatSessionRecap(name string, sess rest.Session, realMoney bool) []string {
+	money := func(n int64) string { return formatExitAmount(n, realMoney) }
+	out := []string{successStyle.Render("✓ Resumo da sessão") + mutedStyle.Render(" — "+name)}
+	if sess.EndedAt > sess.JoinedAt && sess.JoinedAt > 0 {
+		out = append(out, "  Tempo na mesa   "+durationLabel(sess.EndedAt-sess.JoinedAt))
+	}
+	out = append(out,
+		"  Entrada         "+money(sess.BuyinAmount),
+		"  Retirada        "+money(sess.CashoutAmount),
+	)
+	result := formatSignedExitAmount(sess.NetPnL, realMoney)
+	switch {
+	case sess.NetPnL > 0:
+		result = successStyle.Render(result)
+	case sess.NetPnL < 0:
+		result = errorStyle.Render(result)
+	}
+	return append(out, "  Resultado       "+result)
+}
+
+// durationLabel renders an epoch-ms span as "1h 04min" / "12min" / "8s".
+func durationLabel(ms int64) string {
+	secs := ms / 1000
+	switch {
+	case secs >= 3600:
+		return fmt.Sprintf("%dh %02dmin", secs/3600, (secs%3600)/60)
+	case secs >= 60:
+		return fmt.Sprintf("%dmin", secs/60)
+	default:
+		return fmt.Sprintf("%ds", secs)
 	}
 }
 
@@ -871,6 +918,28 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 	case "/achievements":
 		s.busy = true
 		return s, s.runAchievements()
+	case "/friends":
+		s.busy = true
+		return s, s.runFriends()
+	case "/requests":
+		direction := "incoming"
+		if len(args) == 1 && args[0] == "sent" {
+			direction = "outgoing"
+		} else if len(args) > 0 {
+			s.appendLine("uso: /requests [sent]")
+			return s, nil
+		}
+		s.busy = true
+		return s, s.runFriendRequests(direction)
+	case "/blocked":
+		s.busy = true
+		return s, s.runBlocked()
+	case "/recent":
+		s.busy = true
+		return s, s.runRecentPlayers()
+	case "/inbox":
+		s.busy = true
+		return s, s.runInbox()
 	case "/play":
 		s.play = playState{}
 		s.play.sizeIdx = 0
@@ -912,6 +981,60 @@ func (s *Shell) runAchievements() tea.Cmd {
 			return commandResultMsg{lines: []string{explainErr(err)}}
 		}
 		return commandResultMsg{lines: strings.Split(FormatAchievements(a), "\n")}
+	}
+}
+
+func (s *Shell) runFriends() tea.Cmd {
+	return func() tea.Msg {
+		players, err := s.rc.Friends(context.Background())
+		if err != nil {
+			return commandResultMsg{lines: []string{explainErr(err)}}
+		}
+		return commandResultMsg{lines: strings.Split(FormatSocialPlayers("Amigos", players), "\n")}
+	}
+}
+
+func (s *Shell) runFriendRequests(direction string) tea.Cmd {
+	title := "Pedidos de amizade recebidos"
+	if direction == "outgoing" {
+		title = "Pedidos de amizade enviados"
+	}
+	return func() tea.Msg {
+		players, err := s.rc.FriendRequests(context.Background(), direction)
+		if err != nil {
+			return commandResultMsg{lines: []string{explainErr(err)}}
+		}
+		return commandResultMsg{lines: strings.Split(FormatSocialPlayers(title, players), "\n")}
+	}
+}
+
+func (s *Shell) runBlocked() tea.Cmd {
+	return func() tea.Msg {
+		players, err := s.rc.Blocked(context.Background())
+		if err != nil {
+			return commandResultMsg{lines: []string{explainErr(err)}}
+		}
+		return commandResultMsg{lines: strings.Split(FormatSocialPlayers("Bloqueados", players), "\n")}
+	}
+}
+
+func (s *Shell) runRecentPlayers() tea.Cmd {
+	return func() tea.Msg {
+		players, err := s.rc.RecentPlayers(context.Background())
+		if err != nil {
+			return commandResultMsg{lines: []string{explainErr(err)}}
+		}
+		return commandResultMsg{lines: strings.Split(FormatSocialPlayers("Jogadores recentes", players), "\n")}
+	}
+}
+
+func (s *Shell) runInbox() tea.Cmd {
+	return func() tea.Msg {
+		events, err := s.rc.Inbox(context.Background())
+		if err != nil {
+			return commandResultMsg{lines: []string{explainErr(err)}}
+		}
+		return commandResultMsg{lines: strings.Split(FormatInbox(events), "\n")}
 	}
 }
 

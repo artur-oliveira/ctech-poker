@@ -1,14 +1,17 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/proto"
+	"gopkg.aoctech.app/poker/cli/internal/rest"
 )
 
 func tableFixtureSnapshot() *proto.ServerMessage {
@@ -176,6 +179,299 @@ func TestTableSeatTableRendersAlignedRows(t *testing.T) {
 		if strings.Contains(l, "Duda") && !strings.Contains(l, "desistiu") {
 			t.Errorf("folded row missing note: %q", l)
 		}
+	}
+}
+
+func TestTableRealityCheckFiresPeriodicallyOffTurn(t *testing.T) {
+	msg := tableFixtureSnapshot()
+	msg.Snapshot.CurrentPlayerId = "caio" // not your turn
+
+	var sessionCalls int
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		RealityCheckEvery: 10 * time.Minute,
+		CurrentSession: func(context.Context) (string, error) {
+			sessionCalls++
+			return "sessão: buy-in 100", nil
+		},
+	})
+	nm, _ := m.Update(SnapshotMsg{M: msg})
+	m = nm.(*TableModel)
+	t0 := m.joinedAt
+	if t0.IsZero() {
+		t.Fatal("joinedAt should be set on the first snapshot")
+	}
+
+	// Before the first boundary: nothing. maybeRealityCheck is called
+	// directly (bypassing TableTickMsg/Update) so the test doesn't also pay
+	// for tableTick's real 1s timer.
+	m.now = t0.Add(5 * time.Minute)
+	drainCmd(m.maybeRealityCheck())
+	if strings.Contains(strings.Join(m.log, "\n"), "Pausa consciente") {
+		t.Fatal("fired before the interval elapsed")
+	}
+
+	// Past the 10min boundary: fires once, fetches the session summary.
+	m.now = t0.Add(11 * time.Minute)
+	for _, res := range drainCmd(m.maybeRealityCheck()) {
+		nm, _ = m.Update(res)
+		m = nm.(*TableModel)
+	}
+	out := strings.Join(m.log, "\n")
+	if !strings.Contains(out, "Pausa consciente") || !strings.Contains(out, "Mãos concluídas 0") {
+		t.Fatalf("reality check did not fire: %q", out)
+	}
+	if !strings.Contains(out, "sessão: buy-in 100") || sessionCalls != 1 {
+		t.Fatalf("session summary not fetched exactly once: calls=%d out=%q", sessionCalls, out)
+	}
+
+	// Same boundary again: no repeat.
+	m.now = t0.Add(11*time.Minute + 30*time.Second)
+	drainCmd(m.maybeRealityCheck())
+	if sessionCalls != 1 {
+		t.Fatalf("must not re-fire within the same boundary: calls=%d", sessionCalls)
+	}
+
+	// It's your turn now: the next boundary is held, not dropped.
+	yourTurn := tableFixtureSnapshot() // CurrentPlayerId == "you"
+	nm, _ = m.Update(SnapshotMsg{M: yourTurn})
+	m = nm.(*TableModel)
+	m.now = t0.Add(21 * time.Minute)
+	drainCmd(m.maybeRealityCheck())
+	if sessionCalls != 1 {
+		t.Fatalf("must not fire during the viewer's turn: calls=%d", sessionCalls)
+	}
+	nm, _ = m.Update(SnapshotMsg{M: msg}) // back off-turn
+	m = nm.(*TableModel)
+	m.now = t0.Add(22 * time.Minute)
+	drainCmd(m.maybeRealityCheck())
+	if sessionCalls != 2 {
+		t.Fatalf("held boundary should fire once the turn passes: calls=%d", sessionCalls)
+	}
+}
+
+func submitTableLine(m *TableModel, line string) (*TableModel, tea.Cmd) {
+	m.input.SetValue(line)
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	return nm.(*TableModel), cmd
+}
+
+func TestTablePlayerNotesFetchViewSaveAndClear(t *testing.T) {
+	var savedTag, savedText string
+	var saveCalls int
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Notes: func(_ context.Context, ids []string) ([]rest.PlayerNote, error) {
+			if len(ids) != 3 { // caio, duda, edu — every opponent, not you
+				t.Errorf("expected 3 opponent ids, got %v", ids)
+			}
+			return []rest.PlayerNote{{OpponentID: "caio", Tag: "red", Text: "joga muito"}}, nil
+		},
+		SaveNote: func(_ context.Context, id, tag, text string) (rest.PlayerNote, error) {
+			saveCalls++
+			savedTag, savedText = tag, text
+			if tag == "" && text == "" {
+				return rest.PlayerNote{OpponentID: id}, nil // deleted
+			}
+			return rest.PlayerNote{OpponentID: id, Tag: tag, Text: text}, nil
+		},
+	})
+	nm, cmd := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	for _, res := range drainCmd(cmd) {
+		nm, _ = m.Update(res)
+		m = nm.(*TableModel)
+	}
+	if m.notes["caio"].Tag != "red" {
+		t.Fatalf("note not cached after fetch: %+v", m.notes)
+	}
+
+	// A second snapshot with the same seats must not re-fetch.
+	nm, cmd = m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	if cmd != nil {
+		t.Fatal("notes for already-asked opponents must not be re-fetched")
+	}
+
+	// /note <player> with no more args shows the cached note.
+	m, cmd = submitTableLine(m, "/note Caio")
+	if cmd != nil {
+		t.Fatal("viewing a note is local, no command expected")
+	}
+	if out := strings.Join(m.log, "\n"); !strings.Contains(out, "nota sobre Caio [red]: joga muito") {
+		t.Fatalf("note view missing: %q", out)
+	}
+
+	// Free-form text saves, preserving the existing tag.
+	m, cmd = submitTableLine(m, "/note Caio fica de olho no all-in")
+	for _, res := range drainCmd(cmd) {
+		nm, _ = m.Update(res)
+		m = nm.(*TableModel)
+	}
+	if savedTag != "red" || savedText != "fica de olho no all-in" {
+		t.Fatalf("save did not preserve the tag: tag=%q text=%q", savedTag, savedText)
+	}
+	if m.notes["caio"].Text != "fica de olho no all-in" {
+		t.Fatalf("cache not updated after save: %+v", m.notes["caio"])
+	}
+	if out := strings.Join(m.log, "\n"); !strings.Contains(out, "anotação sobre Caio salva") {
+		t.Fatalf("save confirmation missing: %q", out)
+	}
+
+	// tag <cor> changes only the tag.
+	m, cmd = submitTableLine(m, "/note Caio tag blue")
+	for _, res := range drainCmd(cmd) {
+		nm, _ = m.Update(res)
+		m = nm.(*TableModel)
+	}
+	if savedTag != "blue" || savedText != "fica de olho no all-in" {
+		t.Fatalf("tag change should keep the text: tag=%q text=%q", savedTag, savedText)
+	}
+
+	// clear deletes both.
+	m, cmd = submitTableLine(m, "/note Caio clear")
+	for _, res := range drainCmd(cmd) {
+		nm, _ = m.Update(res)
+		m = nm.(*TableModel)
+	}
+	if _, ok := m.notes["caio"]; ok {
+		t.Fatalf("cleared note should drop out of the cache: %+v", m.notes)
+	}
+	if saveCalls != 3 {
+		t.Fatalf("expected 3 saves (text, tag, clear), got %d", saveCalls)
+	}
+
+	// Invalid tag is rejected before any request.
+	saveCalls = 0
+	m, cmd = submitTableLine(m, "/note Caio tag magenta")
+	if cmd != nil || saveCalls != 0 {
+		t.Fatal("invalid tag must not reach SaveNote")
+	}
+	if out := strings.Join(m.log, "\n"); !strings.Contains(out, "cor inválida") {
+		t.Fatalf("invalid tag error missing: %q", out)
+	}
+}
+
+func TestTablePlayerCommandShowsProfileAndNoteHint(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+
+	m, _ = submitTableLine(m, "/player Caio")
+	out := strings.Join(m.log, "\n")
+	for _, want := range []string{"Caio — D · stack 297", "sem anotação", "/note Caio", "/react <código> Caio"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestTableSeatRowShowsNoteTagDot(t *testing.T) {
+	m := NewTableModel(TableConfig{
+		YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII,
+		Notes: func(context.Context, []string) ([]rest.PlayerNote, error) {
+			return []rest.PlayerNote{{OpponentID: "caio", Tag: "red"}}, nil
+		},
+	})
+	nm, cmd := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	for _, res := range drainCmd(cmd) {
+		nm, _ = m.Update(res)
+		m = nm.(*TableModel)
+	}
+	nm, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(*TableModel)
+
+	out := ansi.Strip(m.View())
+	var caioLine, dudaLine string
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, "Caio") {
+			caioLine = l
+		}
+		if strings.Contains(l, "Duda") {
+			dudaLine = l
+		}
+	}
+	if !strings.Contains(caioLine, "●") {
+		t.Fatalf("noted player should show a tag dot: %q", caioLine)
+	}
+	if strings.Contains(dudaLine, "●") {
+		t.Fatalf("un-noted player should not: %q", dudaLine)
+	}
+}
+
+func TestTableChatHistoryPaneTracksUnreadAndReplays(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+
+	nm, _ = m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "chat", PlayerId: "caio", Message: "gg"}})
+	m = nm.(*TableModel)
+	nm, _ = m.Update(SnapshotMsg{M: &proto.ServerMessage{Type: "chat", PlayerId: "you", Message: "vlw"}})
+	m = nm.(*TableModel)
+
+	if m.chatUnread != 1 {
+		t.Fatalf("only messages from someone else should count as unread, got %d", m.chatUnread)
+	}
+	if out := m.View(); !strings.Contains(out, "1 mensagem(ns) nova(s)") {
+		t.Fatalf("chat badge missing: %q", out)
+	}
+
+	m, cmd := submitTableLine(m, "/chat")
+	if cmd != nil {
+		t.Fatal("/chat is local, no command expected")
+	}
+	if m.chatUnread != 0 {
+		t.Fatalf("viewing /chat should clear unread, got %d", m.chatUnread)
+	}
+	out := strings.Join(m.log, "\n")
+	if !strings.Contains(out, "Caio: gg") || !strings.Contains(out, "você: vlw") {
+		t.Fatalf("chat history missing entries: %q", out)
+	}
+	if strings.Contains(m.View(), "mensagem(ns) nova(s)") {
+		t.Fatal("badge should be gone once viewed")
+	}
+}
+
+func TestTableTimerRendersForOpponentWithBankAndIdleWarning(t *testing.T) {
+	msg := tableFixtureSnapshot()
+	msg.Snapshot.CurrentPlayerId = "caio"
+	msg.Snapshot.LegalActions = nil
+	// now = 100s; base clock ends at 115s, hard deadline at 130s (15s bank).
+	now := int64(100_000)
+	msg.Snapshot.ActionBaseDeadlineUnixMs = 115_000
+	msg.Snapshot.ActionDeadlineUnixMs = 130_000
+	msg.Snapshot.IdleRemovalUnixMs = 145_000
+
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: msg})
+	m = nm.(*TableModel)
+	m.now = time.UnixMilli(now)
+	out := ansi.Strip(m.View())
+
+	if !strings.Contains(out, "Vez de Caio · stack 297 · 15s (+15s banco)") {
+		t.Fatalf("opponent clock with bank split missing:\n%s", out)
+	}
+	if !strings.Contains(out, "Caio sai por inatividade em 45s") {
+		t.Fatalf("idle warning for opponent missing:\n%s", out)
+	}
+
+	// Push now past the base clock: the actor is now spending the reserve.
+	m.now = time.UnixMilli(120_000)
+	if out := ansi.Strip(m.View()); !strings.Contains(out, "10s de banco") {
+		t.Fatalf("time-bank phase not shown:\n%s", out)
+	}
+}
+
+func TestTableIdleWarningForViewerTellsThemToAct(t *testing.T) {
+	msg := tableFixtureSnapshot() // CurrentPlayerId == "you"
+	msg.Snapshot.IdleRemovalUnixMs = 200_000
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: msg})
+	m = nm.(*TableModel)
+	m.now = time.UnixMilli(190_000)
+	if out := ansi.Strip(m.View()); !strings.Contains(out, "você sai por inatividade em 10s — aja ou /keep") {
+		t.Fatalf("viewer idle warning missing:\n%s", out)
 	}
 }
 

@@ -74,12 +74,15 @@ func TestTableExitCarriesAuthoritativeOutcomeIntoLobby(t *testing.T) {
 		}
 	}
 	m, _ = s.Update(tableExitRecapMsg{
-		exited:  TableExitedMsg{RoomID: "r-1"},
-		session: rest.Session{TableID: "r-1", NetPnL: 500, EndedAt: 1},
+		exited:  TableExitedMsg{RoomID: "r-1", RoomName: "Aurora"},
+		session: rest.Session{TableID: "r-1", BuyinAmount: 1000, CashoutAmount: 1500, NetPnL: 500, JoinedAt: 1_000, EndedAt: 3_701_000},
 	})
 	s = m.(*Shell)
-	if !strings.Contains(strings.Join(s.lines, "\n"), "resultado +500 fichas") {
-		t.Fatalf("authoritative session result missing: %q", strings.Join(s.lines, "\n"))
+	out = strings.Join(s.lines, "\n")
+	for _, want := range []string{"Resumo da sessão", "Tempo na mesa   1h 01min", "Entrada         1000 fichas", "Retirada        1500 fichas", "+500 fichas"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("session recap missing %q: %q", want, out)
+		}
 	}
 }
 
@@ -193,6 +196,79 @@ func TestHomeProfileCommandPrintsResult(t *testing.T) {
 	}
 	if !strings.Contains(s.View(), "Ana") {
 		t.Fatalf("view missing profile result: %q", s.View())
+	}
+}
+
+func TestHomeFriendsCommandPrintsResult(t *testing.T) {
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1.0/social/friends" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"player_id": "caio", "name": "Caio", "presence": "in_table"}},
+		})
+	}))
+	defer apiSrv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Settings{ConfigDir: dir}
+	if err := auth.SaveCredentials(config.CredentialsPath(cfg), auth.Credentials{
+		AccessToken: "at", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestShell(t, apiSrv, dir)
+	s.state = stateHome
+
+	for _, r := range "/friends" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	msg := runCmd(t, s, cmd)
+	m, _ = s.Update(msg)
+	s = m.(*Shell)
+	if !strings.Contains(s.View(), "Caio") || !strings.Contains(s.View(), "na mesa") {
+		t.Fatalf("view missing friends result: %q", s.View())
+	}
+}
+
+func TestHomeRequestsCommandDefaultsToIncomingAndAcceptsSent(t *testing.T) {
+	var gotDirection string
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotDirection = r.URL.Query().Get("direction")
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{}})
+	}))
+	defer apiSrv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Settings{ConfigDir: dir}
+	if err := auth.SaveCredentials(config.CredentialsPath(cfg), auth.Credentials{
+		AccessToken: "at", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestShell(t, apiSrv, dir)
+	s.state = stateHome
+	m, cmd := s.dispatch("/requests")
+	s = m.(*Shell)
+	runCmd(t, s, cmd)
+	if gotDirection != "incoming" {
+		t.Fatalf("default direction = %q, want incoming", gotDirection)
+	}
+
+	m, cmd = s.dispatch("/requests sent")
+	s = m.(*Shell)
+	runCmd(t, s, cmd)
+	if gotDirection != "outgoing" {
+		t.Fatalf("/requests sent direction = %q, want outgoing", gotDirection)
+	}
+
+	m, cmd = s.dispatch("/requests bogus")
+	s = m.(*Shell)
+	if cmd != nil || !strings.Contains(s.View(), "uso: /requests") {
+		t.Fatalf("invalid arg should error locally, not dispatch: view=%q", s.View())
 	}
 }
 

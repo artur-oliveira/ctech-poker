@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"gopkg.aoctech.app/poker/cli/internal/proto"
@@ -110,27 +111,142 @@ func (n *Narrator) showdownLines(s *proto.TableSnapshot) []string {
 		}
 	}
 
+	// Per-player winnings, contested pots only (refunds are not "winning").
 	total := map[string]int64{}
 	for _, pr := range s.PotResults {
-		for _, w := range pr.WinnerPlayerIds {
-			total[w] += pr.PayoutAmount
+		if pr.Refund {
+			continue
 		}
-	}
-	winnersThisHand := s.Winners
-	if len(winnersThisHand) == 0 {
-		for w := range total {
-			winnersThisHand = append(winnersThisHand, w)
-		}
-	}
-	for _, w := range winnersThisHand {
-		if amt := total[w]; amt > 0 {
-			out = append(out, fmt.Sprintf("  %s vence %d", n.label(w), amt))
+		if len(pr.Payouts) > 0 {
+			for w, amt := range pr.Payouts {
+				total[w] += amt
+			}
 		} else {
-			out = append(out, fmt.Sprintf("  %s vence", n.label(w)))
+			for _, w := range pr.WinnerPlayerIds {
+				total[w] += pr.PayoutAmount
+			}
 		}
+	}
+
+	if detail := n.potBreakdownLines(s.PotResults); len(detail) > 0 {
+		out = append(out, detail...)
+	} else {
+		// Server sent no pot detail — collapsed winner lines.
+		winnersThisHand := s.Winners
+		if len(winnersThisHand) == 0 {
+			for w := range total {
+				winnersThisHand = append(winnersThisHand, w)
+			}
+			sort.Strings(winnersThisHand)
+		}
+		for _, w := range winnersThisHand {
+			if amt := total[w]; amt > 0 {
+				out = append(out, fmt.Sprintf("  %s vence %d", n.label(w), amt))
+			} else {
+				out = append(out, fmt.Sprintf("  %s vence", n.label(w)))
+			}
+		}
+	}
+
+	// History: one "Name (+total)" per winner, stable order.
+	histWinners := s.Winners
+	if len(histWinners) == 0 {
+		for w := range total {
+			histWinners = append(histWinners, w)
+		}
+		sort.Strings(histWinners)
+	}
+	for _, w := range histWinners {
 		n.winners = append(n.winners, fmt.Sprintf("%s (+%d)", n.label(w), total[w]))
 	}
 	return out
+}
+
+// potBreakdownLines renders each pot layer from the server's PotResults. A
+// single uncontested pot with no refund collapses to one "Name vence N" line;
+// anything with side pots, refunds, or a run-it-twice runout gets a labeled
+// breakdown ("pote principal", "pote lateral 1", "devolvido"). Returns nil
+// when the server sent no PotResults at all.
+func (n *Narrator) potBreakdownLines(prs []*proto.PotResult) []string {
+	if len(prs) == 0 {
+		return nil
+	}
+	contested, refunds := 0, 0
+	runouts := map[int32]bool{}
+	for _, pr := range prs {
+		if pr.Refund {
+			refunds++
+		} else {
+			contested++
+		}
+		runouts[pr.Runout] = true
+	}
+	multiRunout := len(runouts) > 1 || runouts[2]
+
+	if contested <= 1 && refunds == 0 && !multiRunout {
+		pr := prs[0]
+		return []string{fmt.Sprintf("  %s vence %d", n.payoutParts(pr), pr.PayoutAmount)}
+	}
+
+	out := make([]string, 0, len(prs))
+	layerByRunout := map[int32]int{}
+	for _, pr := range prs {
+		who := n.payoutParts(pr)
+		if pr.Refund {
+			out = append(out, fmt.Sprintf("  devolvido %d · %s", pr.PayoutAmount, who))
+			continue
+		}
+		l := layerByRunout[pr.Runout]
+		layerByRunout[pr.Runout]++
+		label := "pote principal"
+		if l > 0 {
+			label = fmt.Sprintf("pote lateral %d", l)
+		}
+		if multiRunout && pr.Runout > 0 {
+			label += fmt.Sprintf(" (corrida %d)", pr.Runout)
+		}
+		out = append(out, fmt.Sprintf("  %s %d · %s", label, pr.PayoutAmount, who))
+	}
+	return out
+}
+
+// payoutParts names who collected a pot layer and how much (the amount only
+// when it splits between players), preferring the exact Payouts map and
+// falling back to the winner/eligible id lists.
+func (n *Narrator) payoutParts(pr *proto.PotResult) string {
+	ids := make([]string, 0, len(pr.Payouts))
+	for id := range pr.Payouts {
+		ids = append(ids, id)
+	}
+	if len(ids) > 0 {
+		sort.Slice(ids, func(i, j int) bool {
+			if pr.Payouts[ids[i]] != pr.Payouts[ids[j]] {
+				return pr.Payouts[ids[i]] > pr.Payouts[ids[j]]
+			}
+			return n.label(ids[i]) < n.label(ids[j])
+		})
+		parts := make([]string, len(ids))
+		for i, id := range ids {
+			if len(ids) == 1 {
+				parts[i] = n.label(id)
+			} else {
+				parts[i] = fmt.Sprintf("%s %d", n.label(id), pr.Payouts[id])
+			}
+		}
+		return strings.Join(parts, " e ")
+	}
+	fallback := pr.WinnerPlayerIds
+	if len(fallback) == 0 {
+		fallback = pr.EligiblePlayerIds
+	}
+	if len(fallback) == 0 {
+		return "sem vencedor"
+	}
+	parts := make([]string, len(fallback))
+	for i, w := range fallback {
+		parts[i] = n.label(w)
+	}
+	return strings.Join(parts, " e ")
 }
 
 // OnMessage narrates one out-of-band server message (chat, reaction,

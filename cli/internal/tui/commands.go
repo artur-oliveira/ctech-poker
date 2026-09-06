@@ -26,6 +26,7 @@ const (
 	ActPeekBoth
 	ActPeekCard1
 	ActPeekCard2
+	ActChatHistory
 )
 
 // ParseTableCommand turns one input line (a `/command` or a bare hotkey) into
@@ -201,6 +202,8 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		return nil, ActSummary, nil
 	case "/last-winners":
 		return nil, ActLastWinners, nil
+	case "/chat":
+		return nil, ActChatHistory, nil
 	case "/share":
 		return nil, ActShare, nil
 	case "/clear":

@@ -9,10 +9,12 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/uuid"
 	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/proto"
+	"gopkg.aoctech.app/poker/cli/internal/rest"
 )
 
 // TableConfig wires a TableModel to its transport and identity.
@@ -30,6 +32,13 @@ type TableConfig struct {
 	Send func(*proto.ClientMessage) error
 	// Session backs /summary (nil disables it).
 	CurrentSession func(context.Context) (summary string, err error)
+	// RealityCheckEvery is how often the responsible-gaming reminder (web
+	// RealityCheck.tsx) fires while seated; <= 0 disables it.
+	RealityCheckEvery time.Duration
+	// Notes/SaveNote back /note and /player (nil disables both — same
+	// pattern as CurrentSession).
+	Notes    func(ctx context.Context, opponentIDs []string) ([]rest.PlayerNote, error)
+	SaveNote func(ctx context.Context, opponentID, tag, text string) (rest.PlayerNote, error)
 }
 
 // TableExitedMsg is emitted when the player leaves the table (via /exit, a
@@ -60,6 +69,16 @@ type (
 	sessionSummaryMsg struct {
 		text string
 		err  error
+	}
+	notesLoadedMsg struct {
+		notes []rest.PlayerNote
+		err   error
+	}
+	noteSavedMsg struct {
+		playerID string
+		name     string
+		note     rest.PlayerNote
+		err      error
 	}
 )
 
@@ -99,6 +118,35 @@ type TableModel struct {
 
 	// Ctrl+C at the table needs a confirmation press (§1.2).
 	ctrlCAt time.Time
+
+	// RealityCheck (web parity): joinedAt marks the first snapshot, handsSeen
+	// counts distinct completed hand ids, realityShown is the last interval
+	// boundary already announced (never re-announced, and skipped — not
+	// dropped — while it's the viewer's turn, same as the web gate).
+	joinedAt     time.Time
+	handsSeen    map[string]bool
+	realityShown int
+
+	// Private per-opponent notes (§3 PlayerNoteDialog). notes is keyed by
+	// opponent id, absent = no note; notesRequested tracks ids already asked
+	// for (success or failure) so a missing-scope 403 isn't retried every
+	// snapshot.
+	notes          map[string]rest.PlayerNote
+	notesRequested map[string]bool
+
+	// Chat history pane (§3 Chat.tsx): chat is kept separately from the
+	// narration log so /chat can review just the conversation — the log
+	// mixes it in with every hand event, easy to miss. chatUnread counts
+	// messages since the last /chat view (the web's unread badge).
+	chat       []chatEntry
+	chatUnread int
+}
+
+// chatEntry is one message in the table's chat history.
+type chatEntry struct {
+	name string
+	text string
+	at   time.Time
 }
 
 // NewTableModel builds the table view for cfg.
@@ -111,7 +159,8 @@ func NewTableModel(cfg TableConfig) *TableModel {
 	m := &TableModel{
 		cfg: cfg, narr: game.NewNarrator(cfg.YouID).WithCardMode(cfg.CardMode),
 		input: ti, menu: newCommandMenu(tableCommandSpecs),
-		now: time.Now(), followBottom: true,
+		now: time.Now(), followBottom: true, handsSeen: map[string]bool{},
+		notes: map[string]rest.PlayerNote{}, notesRequested: map[string]bool{},
 	}
 	m.menu.argFn = m.reactCompletions
 	return m
@@ -122,7 +171,14 @@ func NewTableModel(cfg TableConfig) *TableModel {
 // prefix is the input text to keep verbatim ahead of the completed token.
 func (m *TableModel) reactCompletions(value string) (choices []commandSpec, prefix string) {
 	fields := strings.SplitN(value, " ", 3)
-	if fields[0] != "/react" || len(fields) < 2 {
+	switch fields[0] {
+	case "/react":
+	case "/note", "/player":
+		return m.playerTargetCompletions(fields)
+	default:
+		return nil, ""
+	}
+	if len(fields) < 2 {
 		return nil, ""
 	}
 	if len(fields) == 2 { // completing the reaction code
@@ -153,6 +209,22 @@ func (m *TableModel) reactCompletions(value string) (choices []commandSpec, pref
 	return choices, "/react " + fields[1] + " "
 }
 
+// playerTargetCompletions completes /note and /player's first (and only,
+// besides /note's free-form note text) argument: the opponent's name.
+func (m *TableModel) playerTargetCompletions(fields []string) (choices []commandSpec, prefix string) {
+	if len(fields) != 2 {
+		return nil, "" // /note's later args are free-form note text, not completed
+	}
+	partial := strings.ToLower(fields[1])
+	for _, p := range m.view.Players {
+		if p.IsYou || !strings.HasPrefix(strings.ToLower(p.Name), partial) {
+			continue
+		}
+		choices = append(choices, commandSpec{Name: p.Name, Desc: p.Position})
+	}
+	return choices, fields[0] + " "
+}
+
 func (m *TableModel) Init() tea.Cmd { return tableTick() }
 
 func tableTick() tea.Cmd {
@@ -179,7 +251,7 @@ func (m *TableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TableTickMsg:
 		m.now = time.Time(msg)
-		return m, tableTick()
+		return m, tea.Batch(tableTick(), m.maybeRealityCheck())
 
 	case ReconnectingMsg:
 		if !m.reconnecting {
@@ -227,6 +299,29 @@ func (m *TableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case notesLoadedMsg:
+		// Silent on failure (missing scope, network hiccup) — same as the web's
+		// silentError: true, a private-note lookup must never interrupt the game.
+		for _, n := range msg.notes {
+			m.notes[n.OpponentID] = n
+		}
+		return m, nil
+
+	case noteSavedMsg:
+		if msg.err != nil {
+			m.appendLog(errorStyle.Render("· não deu para salvar a anotação: " + msg.err.Error()))
+			return m, nil
+		}
+		if msg.note.Tag == "" && msg.note.Text == "" {
+			delete(m.notes, msg.playerID)
+			m.appendLog(successStyle.Render("✓ anotação sobre " + msg.name + " removida"))
+		} else {
+			msg.note.OpponentID = msg.playerID
+			m.notes[msg.playerID] = msg.note
+			m.appendLog(successStyle.Render("✓ anotação sobre " + msg.name + " salva"))
+		}
+		return m, nil
+
 	case SnapshotMsg:
 		return m, m.handleServerMessage(msg.M)
 
@@ -252,12 +347,18 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 		for _, line := range m.narr.OnSnapshot(sm.Snapshot) {
 			m.appendLog(line)
 		}
+		if m.joinedAt.IsZero() {
+			m.joinedAt = m.now
+		}
+		if strings.EqualFold(sm.Snapshot.Stage, "complete") && sm.Snapshot.HandId != "" {
+			m.handsSeen[sm.Snapshot.HandId] = true
+		}
 		m.view = game.NewTableView(sm.Snapshot, m.cfg.YouID, m.cfg.RoomName, m.cfg.RealMoney, m.cfg.Blinds, m.cfg.MaxSeats, m.cfg.CardMode)
 		m.haveView = true
 		m.reconcilePeek()
 		m.refreshCommandMenu()
 		m.refreshInputHint()
-		return nil
+		return m.fetchMissingNotes()
 
 	case "action_ack":
 		if sm.ActionId != "" && sm.ActionId == m.pendingActionID && m.pendingMsg != nil {
@@ -317,7 +418,14 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 		exited := m.exitDetails(sm.Code, sm.Message, sm.Amount, true)
 		return exitCmd(exited)
 
-	case "chat", "reaction", "achievement_unlocked":
+	case "chat":
+		m.recordChat(sm)
+		if lines := m.narr.OnMessage(sm); len(lines) > 0 {
+			m.appendLog(strings.Join(lines, "\n"))
+		}
+		return nil
+
+	case "reaction", "achievement_unlocked":
 		if lines := m.narr.OnMessage(sm); len(lines) > 0 {
 			m.appendLog(strings.Join(lines, "\n"))
 		}
@@ -397,6 +505,18 @@ func (m *TableModel) submitLine() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.appendLog(m.input.Prompt + line)
+
+	// /note and /player are REST-backed, not table-socket ClientMessages —
+	// handled directly rather than threading a whole extra return value
+	// through ParseTableCommand for two commands.
+	if fields := strings.Fields(line); len(fields) > 0 {
+		switch fields[0] {
+		case "/note":
+			return m, m.handleNoteCommand(fields[1:])
+		case "/player":
+			return m, m.handlePlayerCommand(fields[1:])
+		}
+	}
 
 	cm, local, err := ParseTableCommand(line, m.view)
 	if err != nil {
@@ -501,6 +621,178 @@ func (m *TableModel) reconcilePeek() {
 	}
 }
 
+// maybeRealityCheck fires the periodic responsible-gaming reminder (web
+// RealityCheck.tsx): every cfg.RealityCheckEvery of table time, at most once
+// per interval boundary, never while it's the viewer's turn (checked again
+// next tick rather than dropped). Prints a neutral summary instead of the
+// web's modal — this is a terminal, nothing else demands attention over it.
+func (m *TableModel) maybeRealityCheck() tea.Cmd {
+	if m.cfg.RealityCheckEvery <= 0 || m.joinedAt.IsZero() || m.view.IsYourTurn {
+		return nil
+	}
+	elapsed := m.now.Sub(m.joinedAt)
+	due := int(elapsed / m.cfg.RealityCheckEvery)
+	if due <= m.realityShown {
+		return nil
+	}
+	m.realityShown = due
+	m.appendLog(dimStyle.Render("── Pausa consciente ──"))
+	m.appendLog(fmt.Sprintf("  Tempo na mesa   %s", durationLabel(elapsed.Milliseconds())))
+	m.appendLog(fmt.Sprintf("  Mãos concluídas %d", len(m.handsSeen)))
+	m.appendLog(mutedStyle.Render("  · não interrompe nada — continue quando quiser"))
+	if m.cfg.CurrentSession == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		text, err := m.cfg.CurrentSession(context.Background())
+		return sessionSummaryMsg{text: text, err: err}
+	}
+}
+
+// fetchMissingNotes requests notes for every seated opponent this model
+// hasn't already asked about (whether or not that ask succeeded — a scope
+// gap 403s every time, and retrying it every snapshot would just spam the
+// same request forever).
+func (m *TableModel) fetchMissingNotes() tea.Cmd {
+	if m.cfg.Notes == nil {
+		return nil
+	}
+	var missing []string
+	for _, p := range m.view.Players {
+		if p.IsYou || m.notesRequested[p.ID] {
+			continue
+		}
+		m.notesRequested[p.ID] = true
+		missing = append(missing, p.ID)
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return func() tea.Msg {
+		notes, err := m.cfg.Notes(context.Background(), missing)
+		return notesLoadedMsg{notes: notes, err: err}
+	}
+}
+
+// noteTagColors maps a PlayerNote tag to the seat-row marker color
+// (playernotes.PLAYER_NOTE_TAGS, mirrored — ui/src/lib/api/playerNotes.ts).
+var noteTagColors = map[string]lipgloss.Color{
+	"red": "#ef4444", "orange": "#f97316", "yellow": "#eab308",
+	"green": "#22c55e", "blue": "#3b82f6", "purple": "#a855f7",
+}
+
+// noteTagDot renders the seat-row marker for a note's color tag, or "" for
+// no tag / an unrecognized one.
+func noteTagDot(tag string) string {
+	color, ok := noteTagColors[tag]
+	if !ok {
+		return ""
+	}
+	return lipgloss.NewStyle().Foreground(color).Render("●")
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
+}
+
+// handleNoteCommand implements /note <jogador> [tag <cor>|clear|<texto>...]
+// (web PlayerNoteDialog): no extra args shows the cached note, otherwise
+// saves (tag/clear/free text) via cfg.SaveNote.
+func (m *TableModel) handleNoteCommand(args []string) tea.Cmd {
+	if len(args) == 0 {
+		m.appendLog(errorStyle.Render("uso: /note <jogador> [tag <cor>|clear|<texto>]"))
+		return nil
+	}
+	id, err := resolveTarget(m.view, args[0])
+	if err != nil {
+		m.appendLog(errorStyle.Render("· " + err.Error()))
+		return nil
+	}
+	name := args[0]
+	for _, p := range m.view.Players {
+		if p.ID == id {
+			name = p.Name
+		}
+	}
+	existing := m.notes[id]
+
+	if len(args) == 1 {
+		if existing.Tag == "" && existing.Text == "" {
+			m.appendLog(mutedStyle.Render("· sem anotação sobre " + name))
+		} else {
+			m.appendLog(fmt.Sprintf("· nota sobre %s [%s]: %s", name, orDash(existing.Tag), orDash(existing.Text)))
+		}
+		return nil
+	}
+
+	tag, text := existing.Tag, existing.Text
+	switch args[1] {
+	case "tag":
+		if len(args) != 3 {
+			m.appendLog(errorStyle.Render("uso: /note <jogador> tag <" + strings.Join(rest.PlayerNoteTags, "|") + ">"))
+			return nil
+		}
+		if _, ok := noteTagColors[args[2]]; !ok {
+			m.appendLog(errorStyle.Render("cor inválida: " + args[2] + " (opções: " + strings.Join(rest.PlayerNoteTags, ", ") + ")"))
+			return nil
+		}
+		tag = args[2]
+	case "clear":
+		tag, text = "", ""
+	default:
+		text = strings.Join(args[1:], " ")
+		if len(text) > 500 {
+			m.appendLog(errorStyle.Render("· nota muito longa (máx 500)"))
+			return nil
+		}
+	}
+	if m.cfg.SaveNote == nil {
+		m.appendLog(errorStyle.Render("· anotações indisponíveis nesta sessão"))
+		return nil
+	}
+	return func() tea.Msg {
+		note, err := m.cfg.SaveNote(context.Background(), id, tag, text)
+		return noteSavedMsg{playerID: id, name: name, note: note, err: err}
+	}
+}
+
+// handlePlayerCommand implements /player <jogador> — a text-mode stand-in for
+// the web's per-seat action menu (profile/note/react at a glance). Friend/
+// mute/block/report have no CLI-reachable endpoint yet (§4 social gap); this
+// surfaces what the CLI actually can do for that seat today.
+func (m *TableModel) handlePlayerCommand(args []string) tea.Cmd {
+	if len(args) == 0 {
+		m.appendLog(errorStyle.Render("uso: /player <jogador>"))
+		return nil
+	}
+	id, err := resolveTarget(m.view, strings.Join(args, " "))
+	if err != nil {
+		m.appendLog(errorStyle.Render("· " + err.Error()))
+		return nil
+	}
+	var p game.PlayerView
+	for _, pl := range m.view.Players {
+		if pl.ID == id {
+			p = pl
+		}
+	}
+	stack := fmt.Sprintf("%d", p.Stack)
+	if m.view.RealMoney {
+		stack = fmt.Sprintf("R$ %d", p.Stack)
+	}
+	m.appendLog(fmt.Sprintf("· %s — %s · stack %s", p.Name, orDash(p.Position), stack))
+	if note := m.notes[id]; note.Tag != "" || note.Text != "" {
+		m.appendLog(fmt.Sprintf("  nota [%s]: %s", orDash(note.Tag), orDash(note.Text)))
+	} else {
+		m.appendLog(mutedStyle.Render("  sem anotação — /note " + p.Name + " <texto>"))
+	}
+	m.appendLog(mutedStyle.Render("  reagir: /react <código> " + p.Name))
+	return nil
+}
+
 // applyPeek toggles local reveal state. idx < 0 toggles both cards
 // independently. On the first reveal of a hand it fires the one-shot
 // peek_cards achievement breadcrumb (best-effort).
@@ -587,6 +879,18 @@ func (m *TableModel) runLocal(local LocalAction) tea.Cmd {
 			m.appendLog("· ainda sem mãos concluídas")
 		} else {
 			m.appendLog("últimos vencedores: " + strings.Join(w, " · "))
+		}
+	case ActChatHistory:
+		const maxShown = 20
+		m.chatUnread = 0
+		if len(m.chat) == 0 {
+			m.appendLog(mutedStyle.Render("· sem mensagens no chat ainda"))
+			break
+		}
+		m.appendLog(mutedStyle.Render("── Chat ──"))
+		start := max(0, len(m.chat)-maxShown)
+		for _, c := range m.chat[start:] {
+			m.appendLog(fmt.Sprintf("  %s %s: %s", c.at.Format("15:04"), c.name, c.text))
 		}
 	case ActShare:
 		if m.cfg.ShareCode == "" {
@@ -829,6 +1133,12 @@ func (m *TableModel) header(maxWidth int) string {
 	}
 
 	lines = append(lines, m.actorLine(money))
+	if warn := m.idleWarningLine(); warn != "" {
+		lines = append(lines, warn)
+	}
+	if badge := m.chatBadgeLine(); badge != "" {
+		lines = append(lines, badge)
+	}
 	if actions := m.actionSegments(money); len(actions) > 0 {
 		lines = append(lines, packHeaderSegments("Ações: ", actions, width, 3)...)
 	}
@@ -892,6 +1202,18 @@ func (m *TableModel) playerRows(money func(int64) string) []string {
 			r.note = "fora"
 		case p.Committed > 0:
 			r.note = "aposta " + money(p.Committed)
+		}
+		// The note-tag dot is appended to the trailing note text, not the
+		// fixed-width name column: it carries its own ANSI color escapes,
+		// and only the columns built through the row's Sprintf below need
+		// display-width-safe padding — the note suffix is concatenated
+		// after that, unformatted, so raw ANSI here is safe.
+		if tag := m.notes[p.ID].Tag; !p.IsYou && tag != "" {
+			dot := noteTagDot(tag)
+			if r.note != "" {
+				dot += " "
+			}
+			r.note = dot + r.note
 		}
 		r.marker = " "
 		if r.actor {
@@ -958,26 +1280,120 @@ func (m *TableModel) playerSegments(money func(int64) string, focused bool) []st
 	return out
 }
 
+// turnClock renders the current actor's decision countdown, splitting the
+// base room clock from the time bank the way the web PerimeterTimer does.
+// Applies to whoever is on the clock — the viewer or an opponent. Returns ""
+// when the snapshot carries no deadline, and "esgotado" past it.
+func (m *TableModel) turnClock() string {
+	dl := m.view.ActionDeadlineMS
+	if dl <= 0 {
+		return ""
+	}
+	now := m.now.UnixMilli()
+	remain := dl - now
+	if remain <= 0 {
+		return "esgotado"
+	}
+	total := ceilSecs(remain)
+	base := m.view.BaseDeadlineMS
+	if base <= 0 || base >= dl {
+		return fmt.Sprintf("%ds", total)
+	}
+	bankSecs := (dl - base) / 1000
+	if now >= base {
+		return fmt.Sprintf("%ds de banco", total) // base clock spent, into the reserve
+	}
+	return fmt.Sprintf("%ds (+%ds banco)", ceilSecs(base-now), bankSecs)
+}
+
+func ceilSecs(ms int64) int64 {
+	if ms <= 0 {
+		return 0
+	}
+	return (ms + 999) / 1000
+}
+
 func (m *TableModel) actorLine(money func(int64) string) string {
 	p := m.view.CurrentPlayer
 	if p.ID == "" {
 		return mutedStyle.Render("Aguardando a próxima mão")
 	}
+	clock := m.turnClock()
 	if p.IsYou {
-		if m.view.ActionDeadlineMS > 0 {
-			secs := (m.view.ActionDeadlineMS - m.now.UnixMilli()) / 1000
-			if secs <= 0 {
-				return mutedStyle.Render("Tempo esgotado · aguardando a mesa")
-			}
-			return successStyle.Bold(true).Render(fmt.Sprintf("● SUA VEZ · %ds", secs))
+		switch clock {
+		case "":
+			return successStyle.Bold(true).Render("● SUA VEZ")
+		case "esgotado":
+			return mutedStyle.Render("Tempo esgotado · aguardando a mesa")
+		default:
+			return successStyle.Bold(true).Render("● SUA VEZ · " + clock)
 		}
-		return successStyle.Bold(true).Render("● SUA VEZ")
 	}
 	name := p.Name
 	if name == "" {
 		name = "outro jogador"
 	}
-	return fmt.Sprintf("Vez de %s · stack %s", name, money(p.Stack))
+	line := fmt.Sprintf("Vez de %s · stack %s", name, money(p.Stack))
+	if clock != "" && clock != "esgotado" {
+		line += " · " + clock
+	} else if clock == "esgotado" {
+		line += " · tempo esgotado"
+	}
+	return line
+}
+
+// idleWarningLine surfaces the server's pending idle removal (the web
+// IdleWarning). Shown for the viewer and for opponents alike.
+func (m *TableModel) idleWarningLine() string {
+	if m.view.IdleRemovalMS <= 0 {
+		return ""
+	}
+	secs := ceilSecs(m.view.IdleRemovalMS - m.now.UnixMilli())
+	p := m.view.CurrentPlayer
+	if p.IsYou {
+		return errorStyle.Render(fmt.Sprintf("⚠ você sai por inatividade em %ds — aja ou /keep", secs))
+	}
+	who := "o jogador da vez"
+	if p.Name != "" {
+		who = p.Name
+	}
+	return mutedStyle.Render(fmt.Sprintf("⚠ %s sai por inatividade em %ds", who, secs))
+}
+
+// recordChat appends one server chat message to the chat history (§3
+// Chat.tsx) and, for a message from someone else, bumps the unread count.
+func (m *TableModel) recordChat(sm *proto.ServerMessage) {
+	if sm.Message == "" {
+		return
+	}
+	m.chat = append(m.chat, chatEntry{name: m.playerName(sm.PlayerId), text: sm.Message, at: m.now})
+	if sm.PlayerId != m.cfg.YouID {
+		m.chatUnread++
+	}
+}
+
+// playerName resolves a player id to its seat name for display, falling back
+// to a generic label rather than the raw id once a seat hasn't loaded yet.
+func (m *TableModel) playerName(id string) string {
+	if id == m.cfg.YouID {
+		return "você"
+	}
+	for _, p := range m.view.Players {
+		if p.ID == id {
+			return p.Name
+		}
+	}
+	return "jogador"
+}
+
+// chatBadgeLine surfaces the chat history's unread count (the web's Chat.tsx
+// badge) — chat is diluted into the narration log alongside every hand
+// event, easy to miss, so this is shown independent of scroll position.
+func (m *TableModel) chatBadgeLine() string {
+	if m.chatUnread == 0 {
+		return ""
+	}
+	return mutedStyle.Render(fmt.Sprintf("💬 %d mensagem(ns) nova(s) — /chat para ver", m.chatUnread))
 }
 
 func (m *TableModel) actionSegments(money func(int64) string) []string {

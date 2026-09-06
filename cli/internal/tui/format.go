@@ -59,3 +59,82 @@ func FormatAchievements(s rest.AchievementSummary) string {
 	}
 	return b.String()
 }
+
+// presenceLabel renders a rest.SocialPlayer.Presence value in Portuguese;
+// empty (not resolved for this list) and unrecognized values fall back to
+// "offline" so a stale/older server field never surfaces as raw JSON.
+func presenceLabel(presence string) string {
+	switch presence {
+	case "online":
+		return "online"
+	case "in_table":
+		return "na mesa"
+	default:
+		return "offline"
+	}
+}
+
+// FormatSocialPlayers renders one friends/friend-requests/blocked/recent list
+// for its command (/friends, /requests, /blocked, /recent).
+func FormatSocialPlayers(title string, players []rest.SocialPlayer) string {
+	if len(players) == 0 {
+		return title + ": nenhum jogador"
+	}
+	var b strings.Builder
+	b.WriteString(title)
+	for _, p := range players {
+		name := p.Name
+		if name == "" {
+			name = p.PlayerID
+		}
+		_, _ = fmt.Fprintf(&b, "\n  %-20s", name)
+		if p.Presence != "" {
+			b.WriteString(" · " + presenceLabel(p.Presence))
+		}
+		if p.HandsTogether > 0 {
+			_, _ = fmt.Fprintf(&b, " · %d mão(s) juntos", p.HandsTogether)
+		}
+		if p.RoomID != "" {
+			b.WriteString(" · jogando agora (/enter " + p.RoomID + ")")
+		}
+	}
+	return b.String()
+}
+
+// inboxEventLabel renders a SocialInboxEvent.Type in Portuguese.
+func inboxEventLabel(eventType string) string {
+	switch eventType {
+	case "friend_request":
+		return "pedido de amizade"
+	case "friend_accepted":
+		return "aceitou seu pedido de amizade"
+	case "table_invite":
+		return "convite de mesa"
+	default:
+		return eventType
+	}
+}
+
+// FormatInbox renders the social inbox for /inbox.
+func FormatInbox(events []rest.SocialInboxEvent) string {
+	if len(events) == 0 {
+		return "Caixa de entrada: nenhum evento"
+	}
+	var b strings.Builder
+	b.WriteString("Caixa de entrada")
+	for _, e := range events {
+		who := e.ActorName
+		if who == "" {
+			who = e.ActorPlayerID
+		}
+		mark := " "
+		if e.Unread {
+			mark = "•"
+		}
+		_, _ = fmt.Fprintf(&b, "\n[%s] %s — %s", mark, who, inboxEventLabel(e.Type))
+		if e.RoomID != "" {
+			b.WriteString(" (/enter " + e.RoomID + ")")
+		}
+	}
+	return b.String()
+}

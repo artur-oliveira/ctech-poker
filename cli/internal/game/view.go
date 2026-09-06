@@ -12,6 +12,7 @@ type PlayerView struct {
 	Folded     bool
 	SittingOut bool
 	IsYou      bool
+	TimeBankMS int64 // durable decision reserve remaining; 0 = exhausted/none
 }
 
 // TableView is one TableSnapshot flattened into what the terminal renders.
@@ -39,8 +40,9 @@ type TableView struct {
 	IsYourTurn bool
 	Legal      *proto.LegalActions // nil when it isn't a betting decision point
 
-	ActionDeadlineMS int64
-	BaseDeadlineMS   int64
+	ActionDeadlineMS int64 // final decision deadline (base clock + time bank)
+	BaseDeadlineMS   int64 // end of the base room clock; the gap to ActionDeadlineMS is the actor's time bank
+	IdleRemovalMS    int64 // when the idle actor gets removed; 0 = no pending removal
 
 	// Optimistic-concurrency preconditions for the next `act` message.
 	SnapshotVersion uint64
@@ -70,6 +72,7 @@ func NewTableView(s *proto.TableSnapshot, youID, roomName string, realMoney bool
 		YourEquity:       -1,
 		ActionDeadlineMS: s.ActionDeadlineUnixMs,
 		BaseDeadlineMS:   s.ActionBaseDeadlineUnixMs,
+		IdleRemovalMS:    s.IdleRemovalUnixMs,
 		SnapshotVersion:  s.SnapshotVersion,
 		HandID:           s.HandId,
 	}
@@ -88,6 +91,7 @@ func NewTableView(s *proto.TableSnapshot, youID, roomName string, realMoney bool
 			Folded:     seat.State == "folded",
 			SittingOut: seat.State == "sitting_out" || (seat.Ready != nil && !*seat.Ready),
 			IsYou:      seat.PlayerId == youID,
+			TimeBankMS: seat.TimeBankMs,
 		}
 		v.Players = append(v.Players, pv)
 		if pv.IsYou {
