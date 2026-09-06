@@ -3,6 +3,13 @@
 Online Texas Hold'em poker for the CTech ecosystem, with a real-money mode backed by
 `ctech-wallet` and a sandbox (play-money) mode that never touches it.
 
+Layout: `api/` (Go game server), `ui/` (web client), `cdk/` (infra), `proto/`
+(shared wire schema), and `cli/` — a Go terminal client (`bubbletea` TUI,
+sandbox only) that speaks the same protocol as the web UI. See
+`cli/README.md` and `docs/specs/2026-09-05-poker-cli.md`. The CLI has its own
+release cadence (`cli/vX.Y.Z` tags → `.github/workflows/cli-release.yml`); the
+API is not released.
+
 **Documentação jurídica vigente:** os Termos do CTech Poker publicados pela
 Central Jurídica estão na versão **2.1**. `CurrentPokerTermsVersion` em
 `api/internal/player/model.go` reexige o aceite quando ela muda; a fonte pública

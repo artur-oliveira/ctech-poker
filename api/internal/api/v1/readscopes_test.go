@@ -97,9 +97,11 @@ func TestOnlyFirstPartyPokerSessionsAuthorizeWebSocket(t *testing.T) {
 	}{
 		{"scoped Poker UI", &jwtverify.Claims{SID: "session", AZP: firstPartyPokerClientID, Scope: ScopeRoomsRead}, true},
 		{"legacy Poker UI", &jwtverify.Claims{SID: "session", AZP: firstPartyPokerClientID, Scope: "openid profile"}, true},
+		{"poker-cli with a user session", &jwtverify.Claims{SID: "session", AZP: "poker-cli", Scope: ScopeRoomsRead}, true},
 		{"API key", &jwtverify.Claims{SID: "session", AZP: "api-key", Scope: ScopeRoomsRead}, false},
 		{"third-party client", &jwtverify.Claims{SID: "session", AZP: "third-party", Scope: ScopeRoomsRead}, false},
 		{"M2M Poker client", &jwtverify.Claims{AZP: firstPartyPokerClientID, Scope: ScopeRoomsRead}, false},
+		{"M2M poker-cli client", &jwtverify.Claims{AZP: "poker-cli", Scope: ScopeRoomsRead}, false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

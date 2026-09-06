@@ -182,6 +182,7 @@ export class PokerApiStack extends cdk.Stack {
       actions: [
         'dynamodb:GetItem',
         'dynamodb:BatchGetItem',
+        'dynamodb:BatchWriteItem',
         'dynamodb:PutItem',
         'dynamodb:UpdateItem',
         'dynamodb:DeleteItem',
