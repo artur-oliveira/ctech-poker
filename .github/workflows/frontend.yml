@@ -104,12 +104,52 @@ jobs:
   # Safari's dynamic viewport or its flex intrinsic sizing, so a green run is
   # necessary and not sufficient — table geometry still needs a pass on a real
   # handset before it ships.
+  layout-changed:
+    name: Detect layout-affecting changes
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    outputs:
+      slow: ${{ steps.filter.outputs.slow }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # dorny/paths-filter's push-event diff mode needs the base commit
+          # present locally (same reason as api.yml's turn-order gate).
+          fetch-depth: 0
+
+      # e2e/tableLayout.spec.ts is the only spec here (#see e2e/) and it only
+      # ever opens /table — so this is scoped to what that route actually
+      # renders, not every route under (app)/, or the e2e job would still run
+      # on every lobby/hands/profile-only push.
+      - name: Detect layout/geometry changes
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            slow:
+              - 'ui/e2e/**'
+              - 'ui/playwright.config.ts'
+              - 'ui/src/app/(app)/table/**'
+              - 'ui/src/app/(app)/app.css'
+              - 'ui/src/app/(app)/table-reactions.css'
+              - 'ui/src/app/base.css'
+              - 'ui/src/components/table/**'
+              - 'ui/src/components/reactions/**'
+              - 'ui/src/lib/hooks/useTable*.ts'
+              - 'ui/src/lib/table*.ts'
+              - 'ui/src/lib/seatRects.ts'
+              - 'ui/package-lock.json'
+              - '.github/workflows/frontend.yml'
+
   browsers:
     name: Cross-browser layout
     # Three engines plus their system deps is the most expensive job here, and
     # the class of defect it catches (layout/geometry) is not what #277 was
-    # about. Push only.
-    if: github.event_name != 'pull_request'
+    # about. Push only, and (same idea as api.yml's turn-order gate)
+    # further gated on paths that can actually move layout/geometry — a
+    # copy-only or lib-only push doesn't need three browser engines.
+    if: github.event_name != 'pull_request' && needs.layout-changed.outputs.slow == 'true'
+    needs: [layout-changed]
     runs-on: ubuntu-26.04
     defaults:
       run:
@@ -143,7 +183,12 @@ jobs:
 
   deploy:
     needs: [quality, browsers]
-    if: github.event_name != 'pull_request'
+    # browsers is conditionally skipped (layout-changed.outputs.slow == 'false');
+    # a skipped-but-not-failed dependency must not block deploy.
+    if: |
+      github.event_name != 'pull_request' &&
+      needs.quality.result == 'success' &&
+      (needs.browsers.result == 'success' || needs.browsers.result == 'skipped')
     uses: artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml@main
     secrets: inherit
     with:
