@@ -15,28 +15,42 @@ func RegisterDailyReward(router fiber.Router, auth fiber.Handler, svc *dailyrewa
 	g.Get("/", h.cooldown)
 }
 
+// spin claims today's slot on the streak trail. The response keeps `amount`
+// and `remaining_time_seconds` exactly where they were and adds the refreshed
+// streak calendar, so a client that only reads the cooldown is unaffected.
 func (h *dailyRewardHandlers) spin(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	seconds, err := h.svc.RemainingTime(c.Context(), userID)
+	status, err := h.svc.Status(c.Context(), userID)
 	if err != nil {
 		return problem.InternalServer("spin failed", c, err).Send(c)
 	}
-	if seconds == 0 {
-		amount, rem, err := h.svc.Spin(c.Context(), userID)
-		if err != nil {
-			return walletOrInternalProblem(err, "spin failed", c).Send(c)
+	amount := int64(0)
+	if !status.ClaimedToday {
+		won, _, spinErr := h.svc.Spin(c.Context(), userID)
+		if spinErr != nil {
+			return walletOrInternalProblem(spinErr, "spin failed", c).Send(c)
 		}
-		return c.JSON(fiber.Map{"amount": amount, "remaining_time_seconds": rem})
+		amount = won
+		if status, err = h.svc.Status(c.Context(), userID); err != nil {
+			return problem.InternalServer("spin failed", c, err).Send(c)
+		}
 	}
-	return c.JSON(fiber.Map{"amount": 0, "remaining_time_seconds": seconds})
+	return c.JSON(spinResponse{Amount: amount, Status: status})
+}
+
+// spinResponse inlines the calendar next to the claimed amount so the client
+// never needs a follow-up GET to repaint the trail after a claim.
+type spinResponse struct {
+	Amount int64 `json:"amount"`
+	dailyreward.Status
 }
 
 func (h *dailyRewardHandlers) cooldown(c fiber.Ctx) error {
-	seconds, err := h.svc.RemainingTime(c.Context(), c.Locals(localsUserID).(string))
+	status, err := h.svc.Status(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
 		return problem.InternalServer("cooldown check failed", c, err).Send(c)
 	}
-	return c.JSON(fiber.Map{"remaining_time_seconds": seconds})
+	return c.JSON(status)
 }
 
 // walletOrInternalProblem passes ctech-wallet's own problem+json straight

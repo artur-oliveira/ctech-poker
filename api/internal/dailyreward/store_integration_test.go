@@ -29,18 +29,18 @@ func TestStoreKeepsPendingPrizeAndCompletes(t *testing.T) {
 	}
 	store := NewStore(db, env)
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, brt)
-	first, err := store.Claim(context.Background(), "p1", cooldownKey(now), 500, now)
+	first, err := store.Claim(context.Background(), "p1", cooldownKey(now), 500, StreakRecord{CurrentStreak: 1, TotalClaims: 1, LastClaimDay: cooldownKey(now)}, now)
 	if err != nil || first.Amount != 500 || first.Status != StatusPending {
 		t.Fatalf("first=%+v err=%v", first, err)
 	}
-	retry, err := store.Claim(context.Background(), "p1", cooldownKey(now), 1000, now)
+	retry, err := store.Claim(context.Background(), "p1", cooldownKey(now), 1000, StreakRecord{CurrentStreak: 1, TotalClaims: 1, LastClaimDay: cooldownKey(now)}, now)
 	if err != nil || retry.Amount != 500 || retry.Status != StatusPending {
 		t.Fatalf("retry=%+v err=%v", retry, err)
 	}
 	if err := store.Complete(context.Background(), "p1", cooldownKey(now), now); err != nil {
 		t.Fatal(err)
 	}
-	completed, err := store.Claim(context.Background(), "p1", cooldownKey(now), 100, now)
+	completed, err := store.Claim(context.Background(), "p1", cooldownKey(now), 100, StreakRecord{CurrentStreak: 1, TotalClaims: 1, LastClaimDay: cooldownKey(now)}, now)
 	if err != nil || completed.Amount != 500 || completed.Status != StatusCompleted {
 		t.Fatalf("completed=%+v err=%v", completed, err)
 	}

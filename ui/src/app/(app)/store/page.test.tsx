@@ -73,6 +73,24 @@ vi.mock('@/lib/api/dailyReward', () => ({
   spin: mocks.spin,
 }));
 
+// A streak status the trail can actually render: day 4 of 30 pending, with
+// the three earlier days already claimed.
+function streakStatus(over: Partial<Record<string, unknown>> = {}) {
+  const trail = [5000, 7500, 10000, 12500, 15000, 20000, 50000];
+  const days = Array.from({length: 30}, (_, i) => ({
+    day: i + 1,
+    amount: i === 29 ? 1_000_000 : (trail[i] ?? 25000 * (i + 1)),
+    milestone: [7, 14, 21, 30].includes(i + 1),
+    claimed: i + 1 < 4,
+    today: i + 1 === 4,
+  }));
+  return {
+    remaining_time_seconds: 0, current_streak: 3, best_streak: 9, total_claims: 3,
+    cycle_day: 4, cycle_length: 30, protection_available: false,
+    claimed_today: false, streak_at_risk: true, days, ...over,
+  };
+}
+
 const skus = [
   {id: 'pack_100', price_cents: 100, base_credits: 1000, bonus_percent: 0, total_credits: 1000},
   {id: 'pack_500', price_cents: 500, base_credits: 5000, bonus_percent: 10, total_credits: 5500},
@@ -95,7 +113,7 @@ describe('store page', () => {
     mocks.queryState = {
       'wallet.skus': queryState(skus),
       'wallet.sandbox-purchases': pageState(purchases),
-      'dailyReward.cooldown': queryState({remaining_time_seconds: 0}),
+      'dailyReward.cooldown': queryState(streakStatus()),
       'player.me': queryState({sandbox_balance: 12_345}),
     };
   });
@@ -114,7 +132,7 @@ describe('store page', () => {
     expect(within(chipDepartment!).getByRole('heading', {name: 'Compras e estornos de fichas'})).toBeInTheDocument();
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Resgatar fichas grátis'})).toBeEnabled();
+    expect(screen.getByRole('button', {name: 'Abrir e resgatar'})).toBeEnabled();
     expect(screen.getByText('1.000')).toBeInTheDocument();
     expect(screen.getByText('Confirmada')).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: 'Comprar via Pix'})).not.toBeInTheDocument();
@@ -122,27 +140,35 @@ describe('store page', () => {
 
   test('collapses the reward to a countdown when it is on cooldown', () => {
     vi.useFakeTimers();
-    mocks.queryState['dailyReward.cooldown'] = queryState({remaining_time_seconds: 3661});
+    mocks.queryState['dailyReward.cooldown'] = queryState(
+      streakStatus({remaining_time_seconds: 3661, claimed_today: true, streak_at_risk: false, current_streak: 4}),
+    );
     render(<Store/>);
-    expect(screen.getByRole('heading', {name: 'Recompensa diária'})).toBeInTheDocument();
-    expect(screen.getByText('Resgatada · próxima em 1:01:01')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Ofensiva diária'})).toBeInTheDocument();
+    expect(screen.getByText('Dia 4 de 30 garantido. Próximo resgate em 1:01:01.')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Ver trilha'})).toBeEnabled();
     vi.useRealTimers();
   });
 
-  test('claims the daily reward and shows the amount won', async () => {
-    mocks.spin.mockResolvedValue({amount: 500, remaining_time_seconds: 86400});
+  // The claim now happens inside the trail dialog, which is also where the
+  // 30-day calendar and the 1,000,000-chip finale are legible (#293).
+  test('claims the daily reward from the streak trail and shows the amount won', async () => {
+    const claimed = streakStatus({remaining_time_seconds: 86400, claimed_today: true, streak_at_risk: false, current_streak: 4});
+    mocks.spin.mockResolvedValue({amount: 500, ...claimed});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Resgatar fichas grátis'}));
-    await waitFor(() => expect(screen.getByText(/^\+500 fichas recebidas · próxima em/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', {name: 'Abrir e resgatar'}));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Dia 30 · 1.000.000 fichas')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', {name: 'Resgatar 12.500 fichas'}));
+
+    await waitFor(() => expect(screen.getByText(/\+500 fichas/)).toBeInTheDocument());
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('500'), 'info');
     // Balance rides on the canonical player profile key, never a dead
     // `['wallet','balance']` key (issue #101).
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']});
     expect(mocks.invalidateQueries).not.toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
-    expect(mocks.setQueryData).toHaveBeenCalledWith(
-      ['dailyReward', 'cooldown'],
-      {remaining_time_seconds: 86400},
-    );
+    expect(mocks.setQueryData).toHaveBeenCalledWith(['dailyReward', 'cooldown'], claimed);
   });
 
   test('renders the SKU grid and purchase history without navigation', () => {
@@ -350,7 +376,7 @@ describe('store cosmetics and reactions', () => {
       'wallet.cosmetic-purchases.deck': pageState([deckReceipt]),
       'wallet.cosmetic-catalog.felt': queryState(feltCatalog),
       'wallet.cosmetic-purchases.felt': pageState([]),
-      'dailyReward.cooldown': queryState({remaining_time_seconds: 0}),
+      'dailyReward.cooldown': queryState(streakStatus()),
       'player.me': queryState({sandbox_balance: 12_345}),
     };
   });
