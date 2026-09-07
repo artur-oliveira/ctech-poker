@@ -556,6 +556,15 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   keyed on the JWT's own `sub`, so the caller-supplied session id carries no IDOR surface; an unknown id is 404, not
   an empty recap.
 
+- **Player notes: `Tag` is a colour, `Labels` are the searchable text — and search never leaves the viewer's own
+  partition (#345).** `playernotes.Note.Tag` keeps its fixed colour enum (an existing client is untouched);
+  `Labels []string` is additive, normalized the same way (trimmed, lowercased, deduped, `MaxLabels` 10 ×
+  `MaxLabelLength` 24). `GET /players/me/notes?label=&q=` filters **in memory** through `playernotes.Filter` over
+  the single `List` Query the endpoint already made — `label` is exact, `q` is a substring over the note text and
+  its labels. **Do not add a GSI for this**: search is always inside one viewer's own notes, so a secondary index
+  buys nothing over a Query the caller already pays for. A save still replaces the note wholesale (`PutItem`), so
+  omitting `labels` clears them, and an empty tag + text + label set still deletes the row.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -16,6 +17,14 @@ const (
 	tablePlayerNotes = "poker_player_notes"
 	MaxNoteLength    = 500
 
+	// MaxLabels / MaxLabelLength bound the searchable free-text labels a
+	// single note may carry (#345). They exist so one note stays a small
+	// DynamoDB item and so the in-memory search below stays linear in a
+	// bounded amount of text — not because the product needs exactly these
+	// numbers.
+	MaxLabels      = 10
+	MaxLabelLength = 24
+
 	// MaxBatchOpponentIDs bounds one GetMany call. A table seats at most 9 and
 	// a hand has at most 8 opponents, so this is already far above any real
 	// screen; it matches the social relationship batch the same screens call
@@ -27,6 +36,7 @@ const (
 var (
 	ErrInvalidOpponent = errors.New("playernotes: invalid opponent")
 	ErrInvalidTag      = errors.New("playernotes: invalid tag")
+	ErrInvalidLabel    = errors.New("playernotes: invalid label")
 	ErrNoteTooLong     = errors.New("playernotes: note too long")
 	// ErrTooManyOpponents keeps one request's fan-out bounded by the screen
 	// asking, not by whatever id list a client feels like sending.
@@ -37,8 +47,13 @@ type Note struct {
 	ViewerID   string `dynamodbav:"pk" json:"-"`
 	OpponentID string `dynamodbav:"sk" json:"opponent_id"`
 	Tag        string `dynamodbav:"tag,omitempty" json:"tag,omitempty"`
-	Text       string `dynamodbav:"note,omitempty" json:"note,omitempty"`
-	UpdatedAt  string `dynamodbav:"updated_at" json:"updated_at"`
+	// Labels are the searchable free-text tags (#345). Tag above stays what
+	// it always was — one colour from a fixed enum, used as a visual
+	// highlight — so an existing client keeps working unchanged; Labels is
+	// additive and normalized the same way (trimmed, lowercased, deduped).
+	Labels    []string `dynamodbav:"labels,omitempty" json:"labels,omitempty"`
+	Text      string   `dynamodbav:"note,omitempty" json:"note,omitempty"`
+	UpdatedAt string   `dynamodbav:"updated_at" json:"updated_at"`
 }
 
 type Store struct{ base dynamo.Base }
@@ -47,7 +62,7 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{base: dynamo.NewBase(db, env, tablePlayerNotes)}
 }
 
-func Normalize(viewerID, opponentID, tag, text string) (Note, error) {
+func Normalize(viewerID, opponentID, tag, text string, labels []string) (Note, error) {
 	viewerID = strings.TrimSpace(viewerID)
 	opponentID = strings.TrimSpace(opponentID)
 	tag = strings.ToLower(strings.TrimSpace(tag))
@@ -61,7 +76,80 @@ func Normalize(viewerID, opponentID, tag, text string) (Note, error) {
 	if utf8.RuneCountInString(text) > MaxNoteLength {
 		return Note{}, ErrNoteTooLong
 	}
-	return Note{ViewerID: viewerID, OpponentID: opponentID, Tag: tag, Text: text}, nil
+	normalizedLabels, err := normalizeLabels(labels)
+	if err != nil {
+		return Note{}, err
+	}
+	return Note{ViewerID: viewerID, OpponentID: opponentID, Tag: tag, Text: text, Labels: normalizedLabels}, nil
+}
+
+// normalizeLabels trims, lowercases and dedupes while preserving the caller's
+// order, so a label is one canonical string and Matches can compare it
+// exactly. An empty entry is dropped rather than rejected — a trailing comma
+// in a client's input is not an error worth failing a save over.
+func normalizeLabels(labels []string) ([]string, error) {
+	if len(labels) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(labels))
+	seen := make(map[string]bool, len(labels))
+	for _, label := range labels {
+		label = strings.ToLower(strings.TrimSpace(label))
+		if label == "" || seen[label] {
+			continue
+		}
+		if utf8.RuneCountInString(label) > MaxLabelLength {
+			return nil, ErrInvalidLabel
+		}
+		seen[label] = true
+		normalized = append(normalized, label)
+	}
+	if len(normalized) > MaxLabels {
+		return nil, ErrInvalidLabel
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
+}
+
+// Matches reports whether the note satisfies a label filter and/or a free-text
+// query. Both are matched in memory over the caller's own bounded note set —
+// search is always within one viewer's notes, never across players, so a GSI
+// would buy nothing that a Query the caller already makes does not (#345).
+func (n Note) Matches(label, query string) bool {
+	label = strings.ToLower(strings.TrimSpace(label))
+	query = strings.ToLower(strings.TrimSpace(query))
+	if label != "" && !slices.Contains(n.Labels, label) {
+		return false
+	}
+	if query == "" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(n.Text), query) {
+		return true
+	}
+	for _, own := range n.Labels {
+		if strings.Contains(own, query) {
+			return true
+		}
+	}
+	return false
+}
+
+// Filter keeps the notes matching label/query, in order. An empty filter
+// returns notes untouched.
+func Filter(notes []Note, label, query string) []Note {
+	if strings.TrimSpace(label) == "" && strings.TrimSpace(query) == "" {
+		return notes
+	}
+	filtered := make([]Note, 0, len(notes))
+	for _, note := range notes {
+		if note.Matches(label, query) {
+			filtered = append(filtered, note)
+		}
+	}
+	return filtered
 }
 
 func validTag(tag string) bool {
@@ -147,13 +235,14 @@ func (s *Store) GetMany(ctx context.Context, viewerID string, opponentIDs []stri
 }
 
 // Save atomically replaces the caller's private annotation for one opponent.
-// An empty note and tag means removal, keeping empty rows out of DynamoDB.
-func (s *Store) Save(ctx context.Context, viewerID, opponentID, tag, text string) (*Note, error) {
-	note, err := Normalize(viewerID, opponentID, tag, text)
+// An empty note, tag and label set means removal, keeping empty rows out of
+// DynamoDB.
+func (s *Store) Save(ctx context.Context, viewerID, opponentID, tag, text string, labels []string) (*Note, error) {
+	note, err := Normalize(viewerID, opponentID, tag, text, labels)
 	if err != nil {
 		return nil, err
 	}
-	if note.Tag == "" && note.Text == "" {
+	if note.Tag == "" && note.Text == "" && len(note.Labels) == 0 {
 		if _, err := s.base.DeleteItem(ctx, note.ViewerID, note.OpponentID); err != nil {
 			return nil, fmt.Errorf("playernotes: delete: %w", err)
 		}
