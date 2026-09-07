@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
@@ -74,6 +76,17 @@ type playerHandlers struct {
 	// settlements backs GET /players/me/settlements (#333). nil in the
 	// narrower test-only registerRoutes wiring.
 	settlements settlementReader
+	// ranks resolves a showcase visitor's current leaderboard position for the
+	// ranking profile milestones (#330). nil in tests and in the narrower
+	// wiring; the showcase then simply carries no ranking mark.
+	ranks leaderboardRanker
+}
+
+// leaderboardRanker is the one method the showcase needs from
+// leaderboard.Service: an exact rank, answered from the Valkey rank mirror
+// (#202) or the existing gsi_hands_won COUNT — no new index.
+type leaderboardRanker interface {
+	MyRank(ctx context.Context, mode, metric, playerID string) (*leaderboard.RankInfo, error)
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
@@ -83,19 +96,27 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	var reportSvc *reports.Service
 	var identity *tableIdentityPusher
 	var settlements settlementReader
+	var ranks leaderboardRanker
 	for _, extra := range extras {
 		switch value := extra.(type) {
 		case *reports.Service:
 			reportSvc = value
 		case *tableIdentityPusher:
 			identity = value
+		case *leaderboard.Service:
+			// A typed nil would still be non-nil once boxed in the interface,
+			// and MyRank would deref its store — the narrower test wiring
+			// passes exactly that.
+			if value != nil {
+				ranks = value
+			}
 		// Last: settlementReader is an interface, so it would otherwise
 		// swallow any future extra that happens to carry a matching method.
 		case settlementReader:
 			settlements = value
 		}
 	}
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity, settlements: settlements}
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity, settlements: settlements, ranks: ranks}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
@@ -561,6 +582,13 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		"featured_achievements": featured,
 		"best_hand":             bestHand,
 		"showcase_layout":       profile.ShowcaseLayout,
+		"milestones":            h.profileMilestones(c, profile, counts[achievements.KeyHandsPlayed]),
+	}
+	// CreatedAt is stored but json:"-" on the profile itself; the showcase is
+	// the one place it is public, and only because ShowcasePublic gated the
+	// whole response above (#330).
+	if profile.CreatedAt != "" {
+		response["member_since"] = profile.CreatedAt
 	}
 	if profile.PlaystylePublic && h.stats != nil {
 		stats, statsErr := h.stats.Get(c.Context(), playerID, roomstore.CurrencyModeSandbox)
@@ -572,6 +600,27 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		}
 	}
 	return c.JSON(response)
+}
+
+// profileMilestones computes the longevity/volume/ranking marks for a public
+// showcase (#330). Everything it needs is already in hand except the rank,
+// which costs one mirror read (or a COUNT) — so this adds no write anywhere
+// and no new table. A rank lookup that fails is logged and dropped rather
+// than failing the whole showcase: a missing badge is not worth a 500.
+func (h *playerHandlers) profileMilestones(c fiber.Ctx, profile *player.PlayerProfile, handsPlayed int) []player.Milestone {
+	in := player.MilestoneInput{Now: time.Now().UTC(), HandsPlayed: handsPlayed}
+	if createdAt, err := time.Parse(time.RFC3339Nano, profile.CreatedAt); err == nil {
+		in.CreatedAt = createdAt
+	}
+	if h.ranks != nil {
+		rank, err := h.ranks.MyRank(c.Context(), roomstore.CurrencyModeSandbox, "hands_won", profile.UserID)
+		if err != nil {
+			slog.Warn("player: showcase rank lookup failed", "user_id", profile.UserID, "err", err)
+		} else if rank != nil {
+			in.Rank = rank.Rank
+		}
+	}
+	return player.Milestones(in)
 }
 
 // responseWithBalance adds the wallet balance to the profile response.

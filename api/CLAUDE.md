@@ -499,6 +499,19 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   `GetItem` serving the cooldown, the streak and all 30 calendar slots, replacing the old `IsFirstReward` `Query`.
   A missed day is absorbed by a protection (one granted every 7 consecutive days); two missed days reset to day 1.
   See `docs/specs/2026-09-06-daily-streak-calendar.md`.
+- **Profile milestones are derived at read time, never written (#330).** `player.Milestones`
+  (`internal/player/milestones.go`) is a pure function over three counters that already exist — account age
+  (`PlayerProfile.CreatedAt`), the `hands_played` aggregate `achievements` has materialized since #198, and the
+  caller's current leaderboard rank — so the public showcase gained longevity/volume/ranking marks with **no new
+  table, no new GSI and nothing added to `onHandComplete`** (#204's budget is untouched). The ranking marks are
+  **current** rank, not peak: a peak needs a durable high-water mark written whenever a rank improves, and the only
+  place to put that write is the per-hand path #198/#217 spent effort taking writes out of. Current rank costs one
+  Valkey rank-mirror read (#202) falling back to the existing `gsi_hands_won` COUNT. `GET
+  /players/:playerId/showcase` gained `member_since` and `milestones`, both under the `ShowcasePublic` gate the whole
+  response already sits behind — no new gate. `leaderboard.Service` reaches `playerHandlers` through
+  `RegisterPlayers`' existing variadic `extras` switch behind a one-method `leaderboardRanker` interface; that switch
+  rejects a typed-nil `*leaderboard.Service` (what the narrower test wiring passes), because a typed nil boxed in an
+  interface is not `nil` and `MyRank` would deref its store. See `docs/specs/2026-09-06-profile-milestones.md`.
 
 ## B9 authz — what is enforced (fixed 2026-07)
 

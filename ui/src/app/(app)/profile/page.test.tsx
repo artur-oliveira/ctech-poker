@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {ProfileShowcase} from '@/lib/api/player';
 import ProfilePage from './page';
@@ -121,6 +121,41 @@ describe('public player profile page', () => {
     expect(screen.getByRole('button', {name: 'Ir para o Lobby'})).toHaveAttribute('href', '/lobby');
   });
   
+  // #330: the public showcase carries the player's tenure and the derived
+  // longevity/volume/ranking marks, and each mark shows the real figure it
+  // was earned with — not just the threshold it crossed.
+  test('renders member_since and the earned profile milestones', () => {
+    mocks.query = queryState({
+      player_id: 'player-42',
+      name: 'Ás da Mesa',
+      featured_achievements: [],
+      member_since: '2024-03-11T10:00:00Z',
+      milestones: [
+        {key: 'veteran_1y', category: 'tenure', value: 540},
+        {key: 'hands_10k', category: 'volume', value: 43_700},
+        {key: 'top100', category: 'ranking', value: 62},
+        {key: 'from_a_newer_server', category: 'volume', value: 1},
+      ],
+    });
+    render(<ProfilePage/>);
+
+    expect(screen.getByText('março de 2024')).toBeInTheDocument();
+    const marks = screen.getByRole('list', {name: 'Marcos do perfil'});
+    expect(within(marks).getByText('1 ano de casa')).toBeInTheDocument();
+    expect(within(marks).getByText('43.700 mãos jogadas')).toBeInTheDocument();
+    expect(within(marks).getByText('#62 no ranking sandbox')).toBeInTheDocument();
+    // A key this client has no copy for is skipped, never rendered as a slug.
+    expect(within(marks).queryByText(/from_a_newer_server/)).not.toBeInTheDocument();
+    expect(within(marks).getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  test('renders no milestone rail at all when the server sends none', () => {
+    mocks.query = queryState({player_id: 'player-42', featured_achievements: []});
+    render(<ProfilePage/>);
+    expect(screen.queryByRole('list', {name: 'Marcos do perfil'})).not.toBeInTheDocument();
+    expect(screen.queryByText(/Jogando desde/)).not.toBeInTheDocument();
+  });
+
   test('uses safe fallbacks when optional showcase content is absent', () => {
     mocks.query = queryState({
       player_id: 'player-42',
