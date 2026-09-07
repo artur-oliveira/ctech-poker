@@ -536,6 +536,15 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   `handPipeline.run` is what is *ordered* on purpose (the player-visible `persistHandHistory`/`persistHandReveal`/
   `highlights` writes) or gated by `ClaimHandCounters` — do not move those behind the consumer list.
 
+- **The "timer-fired handler must force a reload" rule is enforced by a test, not by review (#370).**
+  `internal/table/timerhandler_reload_test.go` parses the package's own AST: every command type dispatched from
+  inside a `time.AfterFunc`, mapped through `handle`'s type switch to its handler, must call
+  `ensureLoaded(ctx, true)` and must not call `ensureLoaded(ctx, false)` anywhere in the same handler (one forced
+  reload is worthless if another branch re-reads through `trustCache`). A **new** background handler is therefore
+  caught by CI instead of by a third production incident — this class was already found twice (seating, timers).
+  The three deliberate exceptions live in `deliberateStaleCacheTimerHandlers` with their reason; removing a name
+  from that map is a fix, adding one is a decision that needs written reasoning in a spec, not a way to go green.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see
