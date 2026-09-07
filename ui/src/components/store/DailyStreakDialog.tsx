@@ -34,8 +34,11 @@ function TrailCell({day, claimable}: {day: DailyStreakDay; claimable: boolean}) 
   const state = dayState(day, claimable);
   return <li className="streak-cell" data-state={state} data-milestone={day.milestone || undefined}>
     <span className="streak-cell-day">{day.day}</span>
+    {/* One glyph per meaning, and nothing at all for a plain future day: a
+        flame in all 22 locked cells reads as noise and steals the marker that
+        identifies the claimable day. */}
     <span className="streak-cell-mark" aria-hidden="true">
-      {state === 'claimed' ? <Check/> : day.milestone ? <Gift/> : <Flame/>}
+      {state === 'claimed' ? <Check/> : state === 'today' ? <Flame/> : day.milestone ? <Gift/> : null}
     </span>
     <span className="streak-cell-amount">{shortChips(day.amount)}</span>
     <span className="sr-only">{dayLabel(day, state)}</span>
