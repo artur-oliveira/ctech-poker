@@ -62,6 +62,27 @@ func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, mode, 
 	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
 
+// SessionRecap mirrors the real store closely enough for the handler test:
+// the fixture session with its one fixture hand summarized.
+func (m *mockHistoryReader) SessionRecap(ctx context.Context, playerID, mode, sessionID string) (*sessionlog.Recap, error) {
+	if sessionID != "s-1" {
+		return nil, nil
+	}
+	hands, _, err := m.ListHandsByTable(ctx, playerID, mode, "tbl-1", sessionlog.RecapHandScan, nil)
+	if err != nil {
+		return nil, err
+	}
+	recap := &sessionlog.Recap{SessionID: sessionID, TableID: "tbl-1", NetPnL: 100, DurationMs: 60_000}
+	for _, hand := range hands {
+		recap.HandsPlayed++
+		if hand.NetChange > 0 {
+			recap.HandsWon++
+			recap.BiggestWin = &sessionlog.PublicHandSummary{HandID: hand.HandID, NetChange: hand.NetChange}
+		}
+	}
+	return recap, nil
+}
+
 // BestPublicHand mirrors the real store: the best of the same fixture hands
 // ListHands returns, reduced to the public attributes.
 func (m *mockHistoryReader) BestPublicHand(ctx context.Context, playerID, mode string) (*sessionlog.PublicHandSummary, error) {
@@ -105,6 +126,33 @@ func TestPlayerHistoryEndpoints(t *testing.T) {
 		if err != nil || resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("expected 200, got %d, err %v", resp.StatusCode, err)
 		}
+	})
+
+	t.Run("GET /players/me/sessions/:sessionId/recap", func(t *testing.T) {
+		req := httptest.NewRequest(fiber.MethodGet, "/v1.0/players/me/sessions/s-1/recap", nil)
+		resp, err := app.Test(req)
+		if err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("expected 200, got %d, err %v", resp.StatusCode, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var recap sessionlog.Recap
+		if err := json.NewDecoder(resp.Body).Decode(&recap); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if recap.HandsPlayed != 1 || recap.HandsWon != 1 || recap.BiggestWin == nil {
+			t.Fatalf("recap=%+v", recap)
+		}
+	})
+
+	// An unknown session is 404, not an empty recap: a client must be able to
+	// tell "nothing to show" from "that sitting is not yours".
+	t.Run("GET /players/me/sessions/:sessionId/recap unknown", func(t *testing.T) {
+		req := httptest.NewRequest(fiber.MethodGet, "/v1.0/players/me/sessions/nope/recap", nil)
+		resp, err := app.Test(req)
+		if err != nil || resp.StatusCode != fiber.StatusNotFound {
+			t.Fatalf("expected 404, got %d, err %v", resp.StatusCode, err)
+		}
+		_ = resp.Body.Close()
 	})
 }
 

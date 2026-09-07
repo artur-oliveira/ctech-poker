@@ -545,6 +545,17 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   The three deliberate exceptions live in `deliberateStaleCacheTimerHandlers` with their reason; removing a name
   from that map is a fix, adding one is a decision that needs written reasoning in a spec, not a way to go green.
 
+- **The session recap is derived at read time, never written (#310).** `GET /v1.0/players/me/sessions/:sessionId/recap`
+  (`sessionlog.Store.SessionRecap`) answers "how did that sitting go" — duration, buy-in/cash-out/P&L, hands
+  played/won, biggest win and biggest loss — from rows that already exist: one `GetItem` on the `SessionItem` plus
+  one bounded, table-GSI `Query` (`RecapHandScan` = 200) over that table's `HandItem`s. **Nothing is added to
+  `CloseSession` or to the post-hand pipeline**, so #204's budget is untouched and a session closed while a process
+  died still recaps correctly on the next read. The hands are filtered to the session's own `[JoinedAt, EndedAt]`
+  window in memory because the GSI is keyed by table alone and a player can sit at one table several times —
+  `aggregateRecap` is split out from the reads precisely so that rule is unit-tested without DynamoDB. Both reads are
+  keyed on the JWT's own `sub`, so the caller-supplied session id carries no IDOR surface; an unknown id is 404, not
+  an empty recap.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see
