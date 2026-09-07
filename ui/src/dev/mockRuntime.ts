@@ -795,7 +795,13 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       name: mockProfile.name,
       playstyle: mockProfile.playstyle_public ? [{key: 'initiative'}] : undefined,
       featured_achievements: mockProfile.featured_achievements.map(key => ({key, count: counts.get(key) || 0})),
-      best_hand: mockHands[0]
+      best_hand: mockHands[0],
+      member_since: new Date(Date.now() - 400 * 24 * 3600 * 1000).toISOString(),
+      milestones: [
+        {key: 'veteran_1y', category: 'tenure', value: 400},
+        {key: 'hands_10k', category: 'volume', value: 43_700},
+        {key: 'top100', category: 'ranking', value: 62}
+      ]
     }, config);
   }
   if (method === 'GET' && /^\/v1\.0\/wallet\/sandbox-purchase\/skus\/?$/.test(path)) {

@@ -681,7 +681,10 @@
 }
 .profile-showcase > header {
     display: flex;
-    align-items: center;
+    /* Top-aligned, not centred: the identity block grew a tenure line and a
+       milestone rail (#330), and a vertically centred avatar drifts down past
+       the name it belongs to. */
+    align-items: flex-start;
     gap: 18px;
     max-width: 760px;
     margin-inline: auto;
@@ -697,6 +700,59 @@
     margin-top: 2px;
     font-size: clamp(28px, 5vw, 48px);
     letter-spacing: -.03em
+}
+.profile-milestones {
+    margin-top: 12px
+}
+.profile-member-since {
+    margin: 0;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body)
+}
+.profile-member-since b {
+    color: var(--paper);
+    font-weight: 600
+}
+/* Earned marks, so gold — told apart from each other by icon and copy, never
+   by hue (#330). */
+.profile-milestones ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none
+}
+.profile-milestones li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 12px 7px 10px;
+    border: 1px solid var(--gold-33);
+    border-radius: var(--rounded-control);
+    background: var(--white-08)
+}
+.profile-milestones li svg {
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    color: var(--gold)
+}
+.profile-milestones li span {
+    display: grid;
+    gap: 1px
+}
+.profile-milestones li b {
+    color: var(--gold-pale);
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    line-height: 1.2
+}
+.profile-milestones li small {
+    color: var(--text-muted-soft);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2
 }
 .profile-playstyle-badges {
     margin-top: 10px

@@ -16,6 +16,7 @@ import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
+import {ProfileMilestones} from '@/components/ProfileMilestones';
 import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
 import {getRelationship} from '@/lib/api/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
@@ -109,6 +110,8 @@ function ProfileContent() {
             <div>
               <small>VITRINE DO JOGADOR</small>
               <h1>{showcase.data.name || 'Jogador'}</h1>
+              <ProfileMilestones memberSince={showcase.data.member_since}
+                                 milestones={showcase.data.milestones}/>
               {showcase.data.playstyle?.length
                 ? <PlaystyleBadges badges={showcase.data.playstyle} className="profile-playstyle-badges"/>
                 : null}

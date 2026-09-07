@@ -317,7 +317,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `POST /rooms/:id/leave`                      | JWT             | leave → `{amount}` cashed out                                                              |
 | `POST /rooms/:id/ready`                      | JWT             | **501** — use the table WebSocket's `ready` message                                        |
 | `GET /avatars/:userId/:version.jpg`          | **none**        | published avatar bytes, streamed from the bucket's `av/` prefix; 600/min/IP                |
-| `GET /players/:playerId/showcase`            | **none**        | public profile showcase; 404 when `showcase_public` is false                               |
+| `GET /players/:playerId/showcase`            | **none**        | public profile showcase (+ `member_since` and derived `milestones`, #330); 404 when `showcase_public` is false |
 | `GET /players/me`                            | JWT             | profile + sandbox/real balances                                                            |
 | `POST /players/me`                           | JWT             | update name, wallet mode, deck variant, showcase settings and `showcase_layout`           |
 | `POST /players/me/terms/accept`              | JWT             | accept the poker ToS addendum                                                              |

@@ -3,15 +3,18 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/reports"
@@ -28,10 +31,14 @@ const fixtureEndedAtMs int64 = 1_700_000_000_000
 
 type mockAchievementReader struct {
 	all []achievements.PlayerAchievementProgress
+	// progress backs ListAchievements, which the public showcase reads for
+	// its featured counts and (since #330) for the hands_played aggregate the
+	// volume milestones are derived from. nil keeps the historical behaviour.
+	progress []achievements.PlayerAchievementProgress
 }
 
-func (mockAchievementReader) ListAchievements(context.Context, string, string, int, map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error) {
-	return nil, nil, nil
+func (m mockAchievementReader) ListAchievements(context.Context, string, string, int, map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error) {
+	return m.progress, nil, nil
 }
 
 func (m mockAchievementReader) AllAchievements(context.Context, string, string) ([]achievements.PlayerAchievementProgress, error) {
@@ -54,6 +61,7 @@ func (m *mockHistoryReader) ListHands(_ context.Context, playerID, mode string, 
 func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, mode, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
 	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
+
 // BestPublicHand mirrors the real store: the best of the same fixture hands
 // ListHands returns, reduced to the public attributes.
 func (m *mockHistoryReader) BestPublicHand(ctx context.Context, playerID, mode string) (*sessionlog.PublicHandSummary, error) {
@@ -699,4 +707,121 @@ func TestHandByIDDropsStaleOpponentAvatar(t *testing.T) {
 		t.Fatalf("decode hand: %v", err)
 	}
 	assertNoStaleAvatars(t, hand)
+}
+
+// fakeRanker stands in for leaderboard.Service on the showcase's ranking
+// milestone. rank 0 means "unranked", which MyRank reports as (nil, nil).
+type fakeRanker struct {
+	rank int64
+	err  error
+}
+
+func (f fakeRanker) MyRank(context.Context, string, string, string) (*leaderboard.RankInfo, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.rank == 0 {
+		return nil, nil
+	}
+	return &leaderboard.RankInfo{Rank: f.rank, Total: 5000}, nil
+}
+
+// #330: the public showcase carries member_since and the derived profile
+// milestones, and both are gated by the same ShowcasePublic flag the rest of
+// the response already was — there is no separate opt-in to add.
+func TestShowcaseExposesMemberSinceAndMilestones(t *testing.T) {
+	createdAt := time.Now().UTC().AddDate(-2, 0, 0).Format(time.RFC3339Nano)
+	newHandlers := func(public bool, ranks leaderboardRanker) *playerHandlers {
+		store := &fakePlayerStore{profile: player.PlayerProfile{ShowcasePublic: public, CreatedAt: createdAt}}
+		return &playerHandlers{
+			players: player.NewService(store), sessions: &mockHistoryReader{},
+			achievements: mockAchievementReader{progress: []achievements.PlayerAchievementProgress{
+				{Key: achievements.KeyHandsPlayed, Count: 12_345},
+			}},
+			ranks: ranks,
+		}
+	}
+	get := func(t *testing.T, h *playerHandlers) (int, map[string]json.RawMessage) {
+		t.Helper()
+		app := fiber.New()
+		app.Get("/players/:playerId/showcase", h.showcase)
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/u1/showcase", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			return resp.StatusCode, nil
+		}
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, body
+	}
+
+	t.Run("public profile reports one mark per earned category", func(t *testing.T) {
+		status, body := get(t, newHandlers(true, fakeRanker{rank: 9}))
+		if status != fiber.StatusOK {
+			t.Fatalf("status = %d", status)
+		}
+		var memberSince string
+		if err := json.Unmarshal(body["member_since"], &memberSince); err != nil || memberSince != createdAt {
+			t.Fatalf("member_since = %q (err %v), want %q", memberSince, err, createdAt)
+		}
+		var marks []player.Milestone
+		if err := json.Unmarshal(body["milestones"], &marks); err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]int64{}
+		for _, mark := range marks {
+			got[mark.Key] = mark.Value
+		}
+		if _, ok := got[player.MilestoneVeteran1y]; !ok {
+			t.Fatalf("no tenure mark: %+v", marks)
+		}
+		if got[player.MilestoneHands10k] != 12_345 {
+			t.Fatalf("no volume mark carrying the real count: %+v", marks)
+		}
+		if got[player.MilestoneTop10] != 9 {
+			t.Fatalf("no ranking mark carrying the real rank: %+v", marks)
+		}
+	})
+
+	t.Run("private profile exposes nothing at all", func(t *testing.T) {
+		if status, _ := get(t, newHandlers(false, fakeRanker{rank: 9})); status != fiber.StatusNotFound {
+			t.Fatalf("status = %d, want 404", status)
+		}
+	})
+
+	t.Run("a rank lookup failure drops the badge, never the showcase", func(t *testing.T) {
+		status, body := get(t, newHandlers(true, fakeRanker{err: errors.New("valkey down")}))
+		if status != fiber.StatusOK {
+			t.Fatalf("status = %d, want 200", status)
+		}
+		var marks []player.Milestone
+		if err := json.Unmarshal(body["milestones"], &marks); err != nil {
+			t.Fatal(err)
+		}
+		for _, mark := range marks {
+			if mark.Category == player.MilestoneCategoryRanking {
+				t.Fatalf("ranking mark survived a failed lookup: %+v", marks)
+			}
+		}
+	})
+
+	t.Run("no leaderboard wired means no ranking mark", func(t *testing.T) {
+		status, body := get(t, newHandlers(true, nil))
+		if status != fiber.StatusOK {
+			t.Fatalf("status = %d", status)
+		}
+		var marks []player.Milestone
+		if err := json.Unmarshal(body["milestones"], &marks); err != nil {
+			t.Fatal(err)
+		}
+		for _, mark := range marks {
+			if mark.Category == player.MilestoneCategoryRanking {
+				t.Fatalf("ranking mark without a ranker: %+v", marks)
+			}
+		}
+	})
 }

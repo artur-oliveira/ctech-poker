@@ -79,7 +79,7 @@ boundaries, `not-found.tsx` and `unavailable/` stay ungrouped.
 | `/achievements` | `(app)/achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
 | `/store` | `(app)/store/page.tsx` | Durable Fichas hub: sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity |
 | `/people` | `(app)/people/page.tsx` | Friends, requests (in/out), recent players, blocked list and activity feed, plus the friend-code header |
-| `/profile?id=<playerId>` | `(app)/profile/page.tsx` | **Public read-only showcase** of another player, with the shared player menu |
+| `/profile?id=<playerId>` | `(app)/profile/page.tsx` | **Public read-only showcase** of another player: identity + tenure and derived profile milestones (`ProfileMilestones.tsx`, #330), featured achievements, best hand, matchup, with the shared player menu |
 | `/share?id=<token>` | `(app)/share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |
 | `/guide` | `(marketing)/guide/page.tsx` | Illustrated how-to-play |
 | `/poker-rules` | `(marketing)/poker-rules/page.tsx` | Rules + hand rankings reference |

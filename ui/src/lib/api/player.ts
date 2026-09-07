@@ -103,6 +103,19 @@ export interface ProfileShowcase {
   // when absent, so an older server response degrades to today's behavior
   // rather than to a broken layout.
   showcase_layout?: ShowcaseLayout;
+  // #330. Absent on an older server, and absent on a private profile (the
+  // whole showcase 404s there) — never a separate opt-in.
+  member_since?: string;
+  milestones?: ProfileMilestone[];
+}
+
+/** A derived longevity/volume/ranking mark on a public showcase (#330).
+ * `value` carries the figure the mark was earned with — days for tenure,
+ * hands for volume, the rank itself for ranking. */
+export interface ProfileMilestone {
+  key: string;
+  category: 'tenure' | 'volume' | 'ranking';
+  value: number;
 }
 
 export async function getProfileShowcase(playerId: string) {
