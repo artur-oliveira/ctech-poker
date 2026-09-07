@@ -86,6 +86,9 @@ func Register(
 	// probes (it accepts 200 and 207).
 	RegisterHealth(router, cfg, db)
 
+	// Feature manifest (unauthenticated, deployment-wide — see capabilities.go).
+	RegisterCapabilities(router, cfg)
+
 	// The table WebSocket's per-player limits go through the same Redis
 	// counter as the HTTP ones — a player spread across instances, or
 	// reconnecting, used to get one fresh in-memory budget per connection

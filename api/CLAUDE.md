@@ -513,6 +513,16 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   rejects a typed-nil `*leaderboard.Service` (what the narrower test wiring passes), because a typed nil boxed in an
   interface is not `nil` and `MyRank` would deref its store. See `docs/specs/2026-09-06-profile-milestones.md`.
 
+- **`GET /v1.0/capabilities` is the feature manifest, and it stays caller-independent (#312).**
+  `internal/api/v1/capabilities.go` reports what this *deployment* has turned on — `real_money_enabled`,
+  `social_graph_enabled`, `bot_check_enabled` — read straight off `*config.Config`, so the client hides a surface
+  instead of discovering it is off by attempting the operation and parsing the error. It is unauthenticated for the
+  same reason `RegisterHealth` is (deployment configuration, nothing about the caller) and needs no rate limiter: it
+  touches no store. `schema_version` is bumped only when a field is removed or changes meaning — adding a flag is
+  backwards compatible. **Do not add player-dependent capabilities here** (cohorts, entitlements, ownership): that
+  turns a constant into a per-player fan-out on an unauthenticated route; those belong on the profile/entitlement
+  endpoints that already authenticate.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see
