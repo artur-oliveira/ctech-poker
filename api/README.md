@@ -339,10 +339,10 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /hand-shares/:token`                    | **none**        | public shared hand, opponents aliased                                                      |
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
 | `GET /achievements`                          | **none**        | static achievement catalog                                                                 |
-| `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate` (win_rate needs ≥100 hands), `?limit`, `?cursor` |
+| `GET /leaderboard`                           | **public**      | `?metric=hands_won\|hands_played\|win_rate` (win_rate needs ≥100 hands), `?limit`, `?cursor`; no token needed, 120/min/IP |
 | `GET /leaderboard/me`                        | JWT             | caller's exact rank + total for `?mode`/`?metric`; `{ranked:false}` if never played that mode |
-| `POST /sandbox-credits/`                     | JWT             | daily spin; rate-limited 60/min/IP                                                         |
-| `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
+| `POST /sandbox-credits/`                     | JWT             | claim today's streak slot; returns `amount` + the streak calendar; rate-limited 60/min/IP  |
+| `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` + streak/calendar (#293); scoped tokens require `poker:daily-reward:read` |
 | `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`; lists are paginated           |
 | `GET /wallet/reaction-purchase/...`          | JWT             | catalog/history/detail reads; `poker:reaction-purchases:read`; lists are paginated          |
 | `GET /wallet/cosmetic-purchase/:kind/...`    | JWT             | per-kind catalog/history/detail; `poker:cosmetic-purchases:read`; lists are paginated       |

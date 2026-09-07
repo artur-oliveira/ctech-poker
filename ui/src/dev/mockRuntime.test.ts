@@ -64,10 +64,13 @@ describe('mock store REST contract', () => {
   test('accepts the daily-reward trailing slash used by the store client', async () => {
     sessionStorage.removeItem('mock_next_credit_at');
     const cooldown = await request('GET', '/v1.0/sandbox-credits/');
-    expect(cooldown.data).toEqual({remaining_time_seconds: 0});
+    expect(cooldown.data).toMatchObject({remaining_time_seconds: 0, claimed_today: false, cycle_length: 30});
+    expect(cooldown.data.days).toHaveLength(30);
+    expect(cooldown.data.days[29]).toMatchObject({day: 30, amount: 1_000_000, milestone: true});
 
     const reward = await request('POST', '/v1.0/sandbox-credits/');
-    expect(reward.data).toEqual({amount: 250, remaining_time_seconds: 90});
+    expect(reward.data).toMatchObject({amount: expect.any(Number), remaining_time_seconds: 90, claimed_today: true});
+    expect(reward.data.amount).toBeGreaterThan(0);
     expect(sessionStorage.getItem('mock_next_credit_at')).not.toBeNull();
   });
 

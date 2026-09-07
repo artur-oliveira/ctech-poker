@@ -99,7 +99,7 @@ func TestLeaderboardMeUnranked(t *testing.T) {
 	app := fiber.New()
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("nobody"), svc, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("nobody"), svc, nil, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil)
 	resp, err := app.Test(req)
@@ -125,7 +125,7 @@ func TestLeaderboardMeRanked(t *testing.T) {
 		"sandbox#p2": {PlayerID: "p2", HandsPlayed: 5, HandsWon: 1},
 	}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("p2"), svc, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p2"), svc, nil, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil)
 	resp, err := app.Test(req)
@@ -152,7 +152,7 @@ func TestLeaderboardMeRequiresAuth(t *testing.T) {
 	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), deny, svc, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), deny, svc, nil, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me", nil)
 	resp, err := app.Test(req)
@@ -177,7 +177,7 @@ func TestLeaderboardResolvesRenamedPlayerName(t *testing.T) {
 	}})
 	svc := leaderboard.NewServiceWithStore(store)
 	app := fiber.New()
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), svc, players)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), svc, players, nil)
 
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox&metric=hands_won", nil))
 	if err != nil || resp.StatusCode != fiber.StatusOK {

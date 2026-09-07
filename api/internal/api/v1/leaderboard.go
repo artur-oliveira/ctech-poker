@@ -20,9 +20,21 @@ type leaderboardHandlers struct {
 	players *player.Service
 }
 
-func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service) {
+// RegisterLeaderboard mounts the public board and the caller-scoped one.
+//
+// `GET /leaderboard` is deliberately PUBLIC: the ranking page is linkable and
+// meant to be readable without an account (it was briefly put behind the auth
+// middleware under B9, which broke that). It exposes nothing a signed-in
+// player could not already read — display name, hands played/won, achievement
+// points — and never a player id the caller supplied, so there is no IDOR
+// surface. It carries an IP rate limiter instead of auth, the same shape
+// `RegisterAvatars` uses for its public reads.
+//
+// `GET /leaderboard/me` stays behind `auth`: it derives the player from the
+// JWT `sub`, so without a user token it has nobody to rank.
+func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service, readLimiter *RateLimiter) {
 	h := &leaderboardHandlers{svc: svc, players: players}
-	router.Get("/leaderboard", auth, h.top)
+	router.Get("/leaderboard", rateLimit(readLimiter, ipKey("leaderboard:top")), h.top)
 	router.Get("/leaderboard/me", auth, h.me)
 }
 

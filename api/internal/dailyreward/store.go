@@ -10,7 +10,13 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
-const tableSpins = "poker_daily_reward"
+const (
+	tableSpins = "poker_daily_reward"
+	// streakSK is the one non-day item under a player's partition. It carries
+	// no TTL on purpose — the day claims expire after 48h, the streak is the
+	// only durable history of them.
+	streakSK = "streak"
+)
 
 var brt = time.FixedZone("BRT", -3*60*60)
 
@@ -26,19 +32,34 @@ type dailyRewardItem struct {
 	TTL         int64  `dynamodbav:"ttl"`
 }
 
+type streakItem struct {
+	PK string `dynamodbav:"pk"`
+	SK string `dynamodbav:"sk"`
+	StreakRecord
+	UpdatedAt string `dynamodbav:"updated_at"`
+}
+
 type Store struct{ base dynamo.Base }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{base: dynamo.NewBase(db, env, tableSpins)}
 }
 
-func (s *Store) Claim(ctx context.Context, playerID, day string, proposed int64, now time.Time) (DailyRewardRecord, error) {
+// Claim writes the day row (create-only) and the streak row in one
+// transaction: the day row's condition guards both, so a duplicate claim
+// aborts the streak write too and can never advance a streak twice.
+func (s *Store) Claim(ctx context.Context, playerID, day string, proposed int64, streak StreakRecord, now time.Time) (DailyRewardRecord, error) {
 	item := dailyRewardItem{PK: playerID, SK: day, Amount: proposed, Status: StatusPending, CreatedAt: now.UTC().Format(time.RFC3339Nano), TTL: now.Add(48 * time.Hour).Unix()}
 	encoded, err := dynamo.Encode(item)
 	if err != nil {
 		return DailyRewardRecord{}, fmt.Errorf("dailyreward: encode: %w", err)
 	}
-	if err := s.base.TransactWrite(ctx, []types.TransactWriteItem{s.base.BuildPutTxItemIfAbsent(encoded)}); err == nil {
+	encodedStreak, err := dynamo.Encode(streakItem{PK: playerID, SK: streakSK, StreakRecord: streak, UpdatedAt: now.UTC().Format(time.RFC3339Nano)})
+	if err != nil {
+		return DailyRewardRecord{}, fmt.Errorf("dailyreward: encode streak: %w", err)
+	}
+	tx := []types.TransactWriteItem{s.base.BuildPutTxItemIfAbsent(encoded), s.base.BuildPutTxItem(encodedStreak)}
+	if err := s.base.TransactWrite(ctx, tx); err == nil {
 		return DailyRewardRecord{Amount: proposed, Status: StatusPending}, nil
 	} else if !dynamo.IsConditionFailed(err) {
 		return DailyRewardRecord{}, fmt.Errorf("dailyreward: persist claim: %w", err)
@@ -83,10 +104,19 @@ func (s *Store) Complete(ctx context.Context, playerID, day string, now time.Tim
 	return nil
 }
 
-func (s *Store) IsFirstReward(ctx context.Context, playerID string) (bool, error) {
-	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 1})
+// LoadStreak reads the single streak row. An absent row is the zero record —
+// a player who has never claimed, not an error.
+func (s *Store) LoadStreak(ctx context.Context, playerID string) (StreakRecord, error) {
+	existing, err := s.base.GetItem(ctx, playerID, streakSK)
 	if err != nil {
-		return false, err
+		return StreakRecord{}, fmt.Errorf("dailyreward: get streak: %w", err)
 	}
-	return len(result.Items) == 0, nil
+	if existing == nil {
+		return StreakRecord{}, nil
+	}
+	decoded, err := dynamo.Decode[streakItem](existing)
+	if err != nil {
+		return StreakRecord{}, fmt.Errorf("dailyreward: decode streak: %w", err)
+	}
+	return decoded.StreakRecord, nil
 }

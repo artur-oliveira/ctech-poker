@@ -106,15 +106,17 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 }
 
-// GET /leaderboard must sit behind the auth middleware (B9).
-func TestLeaderboardRequiresAuth(t *testing.T) {
+// The public ranking page must stay readable without a token: GET
+// /leaderboard is mounted WITHOUT the auth middleware. (Its sibling
+// /leaderboard/me still requires one — TestLeaderboardMeRequiresAuth.)
+func TestLeaderboardTopIsPublic(t *testing.T) {
 	app := fiber.New()
 	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
-	RegisterLeaderboard(app.Group("/v1.0"), deny, &leaderboard.Service{}, nil)
+	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
+	RegisterLeaderboard(app.Group("/v1.0"), deny, leaderboard.NewServiceWithStore(store), nil, nil)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard", nil)
-	resp, err := app.Test(req)
-	if err != nil || resp.StatusCode != fiber.StatusUnauthorized {
-		t.Fatalf("expected 401 from auth middleware, got %d, err %v", resp.StatusCode, err)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("public leaderboard: expected 200, got %d, err %v", resp.StatusCode, err)
 	}
 }
