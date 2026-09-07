@@ -12,12 +12,17 @@ import (
 )
 
 type fakeNoteStore struct {
-	listCalls  int
-	batchCalls [][]string
+	listCalls   int
+	batchCalls  [][]string
+	notes       []playernotes.Note
+	savedLabels []string
 }
 
 func (f *fakeNoteStore) List(context.Context, string) ([]playernotes.Note, error) {
 	f.listCalls++
+	if f.notes != nil {
+		return f.notes, nil
+	}
 	return []playernotes.Note{{OpponentID: "everyone"}}, nil
 }
 
@@ -26,8 +31,9 @@ func (f *fakeNoteStore) GetMany(_ context.Context, _ string, opponentIDs []strin
 	return []playernotes.Note{{OpponentID: opponentIDs[0]}}, nil
 }
 
-func (f *fakeNoteStore) Save(context.Context, string, string, string, string) (*playernotes.Note, error) {
-	return nil, nil
+func (f *fakeNoteStore) Save(_ context.Context, _, opponentID, tag, text string, labels []string) (*playernotes.Note, error) {
+	f.savedLabels = labels
+	return &playernotes.Note{OpponentID: opponentID, Tag: tag, Text: text, Labels: labels}, nil
 }
 
 func noteTestApp() (*fiber.App, *fakeNoteStore) {
@@ -91,5 +97,49 @@ func TestPlayerNotesWithoutOpponentIDsStillListsEverything(t *testing.T) {
 	}
 	if store.listCalls != 1 || len(store.batchCalls) != 0 {
 		t.Fatalf("expected the unscoped list, got list=%d batch=%v", store.listCalls, store.batchCalls)
+	}
+}
+
+// The label/free-text search is the whole point of #345, and it must run over
+// the caller's own notes without adding a second read.
+func TestPlayerNotesSearchFiltersInMemory(t *testing.T) {
+	app, store := noteTestApp()
+	store.notes = []playernotes.Note{
+		{OpponentID: "a", Text: "paga demais", Labels: []string{"calling-station"}},
+		{OpponentID: "b", Text: "3-bet leve", Labels: []string{"agressivo"}},
+	}
+
+	response, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/players/me/notes/?label=agressivo", nil))
+	if err != nil || response.StatusCode != fiber.StatusOK {
+		t.Fatalf("response=%v err=%v", response.StatusCode, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var payload struct {
+		Data []playernotes.Note `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Data) != 1 || payload.Data[0].OpponentID != "b" {
+		t.Fatalf("data=%+v", payload.Data)
+	}
+	if store.listCalls != 1 {
+		t.Fatalf("search must reuse the single list read, got %d", store.listCalls)
+	}
+}
+
+func TestPlayerNotesSaveForwardsLabels(t *testing.T) {
+	app, store := noteTestApp()
+	body := strings.NewReader(`{"note":"3-bet leve","labels":["Agressivo","3-bet"]}`)
+	request := httptest.NewRequest(fiber.MethodPost, "/v1.0/players/me/notes/opponent", body)
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := app.Test(request)
+	if err != nil || response.StatusCode != fiber.StatusOK {
+		t.Fatalf("response=%v err=%v", response.StatusCode, err)
+	}
+	_ = response.Body.Close()
+	if strings.Join(store.savedLabels, ",") != "Agressivo,3-bet" {
+		t.Fatalf("labels reaching the store=%v", store.savedLabels)
 	}
 }

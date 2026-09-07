@@ -576,8 +576,12 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 	pipeline := &handPipeline{
 		reg: reg, achievements: achv, leaderboard: leaderboardSvc, rooms: rooms,
 		sessions: sessionStore, pokerStats: pokerStatsStore, matchups: matchupStore,
-		highlights: highlightsStore, recent: recentSvc, players: players,
-		tables: store, handReveals: handRevealStore, cfg: cfg,
+		highlights: highlightsStore, players: players,
+		// Derived, order-independent post-hand writers live here, on the
+		// versioned handhook.Event contract, instead of being appended to
+		// pipeline.run's ordered steps (#315).
+		consumers: []handhook.Consumer{recentPlayersConsumer(recentSvc)},
+		tables:    store, handReveals: handRevealStore, cfg: cfg,
 	}
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		dispatchGamificationPipeline(tableID, handID, func(ctx context.Context) {

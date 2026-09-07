@@ -513,6 +513,68 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   rejects a typed-nil `*leaderboard.Service` (what the narrower test wiring passes), because a typed nil boxed in an
   interface is not `nil` and `MyRank` would deref its store. See `docs/specs/2026-09-06-profile-milestones.md`.
 
+- **`GET /v1.0/capabilities` is the feature manifest, and it stays caller-independent (#312).**
+  `internal/api/v1/capabilities.go` reports what this *deployment* has turned on — `real_money_enabled`,
+  `social_graph_enabled`, `bot_check_enabled` — read straight off `*config.Config`, so the client hides a surface
+  instead of discovering it is off by attempting the operation and parsing the error. It is unauthenticated for the
+  same reason `RegisterHealth` is (deployment configuration, nothing about the caller) and needs no rate limiter: it
+  touches no store. `schema_version` is bumped only when a field is removed or changes meaning — adding a flag is
+  backwards compatible. **Do not add player-dependent capabilities here** (cohorts, entitlements, ownership): that
+  turns a constant into a per-player fan-out on an unauthenticated route; those belong on the profile/entitlement
+  endpoints that already authenticate.
+
+- **A new derived post-hand writer is a `handhook.Consumer`, not another step in `handPipeline.run` (#315).**
+  `internal/handhook/event.go` defines the versioned contract: `handhook.Event` (`SchemaVersion`, table/hand,
+  `CurrencyMode`, participants, winners, names, completion time) — deliberately **not** `hand.HandOutcome`, so an
+  engine refactor is not a breaking change for bookkeeping that only ever needed "who played, who won, where".
+  `handhook.Dispatch` runs the registered list in order, reports each failure through `observeConsumer` (same
+  `recordStepDuration`/`stepFailed` instrumentation the hardcoded steps have, keyed by the consumer's fixed `Name`)
+  and **never aborts on one failing** — the hand is already Complete, broadcast and claimed, so stopping early
+  silently drops every later consumer's writes for a hand nobody retries. `recentPlayersConsumer` is the first one.
+  This adds no exclusivity of its own: `Service.Claim` is still the only thing deciding which instance runs a hand's
+  hooks, and dispatch stays a synchronous in-process call list, not an event bus. What stays hardcoded in
+  `handPipeline.run` is what is *ordered* on purpose (the player-visible `persistHandHistory`/`persistHandReveal`/
+  `highlights` writes) or gated by `ClaimHandCounters` — do not move those behind the consumer list.
+
+- **The "timer-fired handler must force a reload" rule is enforced by a test, not by review (#370).**
+  `internal/table/timerhandler_reload_test.go` parses the package's own AST: every command type dispatched from
+  inside a `time.AfterFunc`, mapped through `handle`'s type switch to its handler, must call
+  `ensureLoaded(ctx, true)` and must not call `ensureLoaded(ctx, false)` anywhere in the same handler (one forced
+  reload is worthless if another branch re-reads through `trustCache`). A **new** background handler is therefore
+  caught by CI instead of by a third production incident — this class was already found twice (seating, timers).
+  The three deliberate exceptions live in `deliberateStaleCacheTimerHandlers` with their reason; removing a name
+  from that map is a fix, adding one is a decision that needs written reasoning in a spec, not a way to go green.
+
+- **The session recap is derived at read time, never written (#310).** `GET /v1.0/players/me/sessions/:sessionId/recap`
+  (`sessionlog.Store.SessionRecap`) answers "how did that sitting go" — duration, buy-in/cash-out/P&L, hands
+  played/won, biggest win and biggest loss — from rows that already exist: one `GetItem` on the `SessionItem` plus
+  one bounded, table-GSI `Query` (`RecapHandScan` = 200) over that table's `HandItem`s. **Nothing is added to
+  `CloseSession` or to the post-hand pipeline**, so #204's budget is untouched and a session closed while a process
+  died still recaps correctly on the next read. The hands are filtered to the session's own `[JoinedAt, EndedAt]`
+  window in memory because the GSI is keyed by table alone and a player can sit at one table several times —
+  `aggregateRecap` is split out from the reads precisely so that rule is unit-tested without DynamoDB. Both reads are
+  keyed on the JWT's own `sub`, so the caller-supplied session id carries no IDOR surface; an unknown id is 404, not
+  an empty recap.
+
+- **Player notes: `Tag` is a colour, `Labels` are the searchable text — and search never leaves the viewer's own
+  partition (#345).** `playernotes.Note.Tag` keeps its fixed colour enum (an existing client is untouched);
+  `Labels []string` is additive, normalized the same way (trimmed, lowercased, deduped, `MaxLabels` 10 ×
+  `MaxLabelLength` 24). `GET /players/me/notes?label=&q=` filters **in memory** through `playernotes.Filter` over
+  the single `List` Query the endpoint already made — `label` is exact, `q` is a substring over the note text and
+  its labels. **Do not add a GSI for this**: search is always inside one viewer's own notes, so a secondary index
+  buys nothing over a Query the caller already pays for. A save still replaces the note wholesale (`PutItem`), so
+  omitting `labels` clears them, and an empty tag + text + label set still deletes the row.
+
+- **The hand timeline is a projection of the action log, never a second copy of it (#302).**
+  `GET /tables/:tableId/hands/:handId/timeline` (`tablestore.LoadTimeline`) reads the same
+  `poker_action_log` partition `LoadActionsSince` does, but through a **projected** `QueryRaw` that leaves
+  `frame` behind and drops the cosmetic events (chat, reaction, peek). #221's lesson is the constraint here: a
+  timeline that persisted its own per-event row would reproduce exactly the write amplification the `ReplayFrame`
+  already caused — so nothing new is written, and a caller that genuinely needs frames still uses
+  `LoadActionsSince`. It uses `QueryRaw` rather than `dynamo.QueryOpts.ProjectionExpression` because three of the
+  five projected attributes (`action`, `amount`, `timestamp`) are DynamoDB reserved words and the typed helper
+  cannot carry `ExpressionAttributeNames`.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see

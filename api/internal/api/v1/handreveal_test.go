@@ -32,6 +32,9 @@ func (f *fakeHandRevealSessions) GetHand(context.Context, string, string, string
 func (f *fakeHandRevealSessions) BestPublicHand(context.Context, string, string) (*sessionlog.PublicHandSummary, error) {
 	return nil, nil
 }
+func (f *fakeHandRevealSessions) SessionRecap(context.Context, string, string, string) (*sessionlog.Recap, error) {
+	return nil, nil
+}
 
 type fakeHandRevealStore struct {
 	record *handreveal.HandRecord
@@ -47,7 +50,9 @@ type fakeHandRevealService struct {
 	payCall int
 }
 
-func (f *fakeHandRevealService) HasPaid(context.Context, string, string) (bool, error) { return f.paid, nil }
+func (f *fakeHandRevealService) HasPaid(context.Context, string, string) (bool, error) {
+	return f.paid, nil
+}
 func (f *fakeHandRevealService) PayForReveal(context.Context, string, string, string, int64) error {
 	f.payCall++
 	return f.payErr

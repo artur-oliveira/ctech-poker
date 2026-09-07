@@ -47,6 +47,8 @@ type sessionLogReader interface {
 	// public attributes — never the full HandItem, which carries opponents,
 	// seeds and fairness maps a visitor may not see (#225).
 	BestPublicHand(ctx context.Context, playerID, mode string) (*sessionlog.PublicHandSummary, error)
+	// SessionRecap derives the end-of-session summary on read (#310).
+	SessionRecap(ctx context.Context, playerID, mode, sessionID string) (*sessionlog.Recap, error)
 }
 
 type playerAchievementStore interface {
@@ -127,6 +129,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	g.Delete("/me/avatar", h.avatarDelete)
 	g.Post("/:playerId/avatar/report", rateLimit(avatarLimiter, playerKey("avatar-report")), h.avatarReport)
 	g.Get("/me/sessions", h.sessionHistory)
+	g.Get("/me/sessions/:sessionId/recap", h.sessionRecap)
 	g.Get("/me/hands", h.handHistory)
 	g.Get("/me/hand/:id", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
@@ -390,6 +393,30 @@ func (h *playerHandlers) sessionHistory(c fiber.Ctx) error {
 		return problem.InternalServer("failed to list sessions", c, err).Send(c)
 	}
 	return sendPage(c, sessions, lastKey, cursor)
+}
+
+// sessionRecap answers "how did that sitting go" from rows that already
+// exist: the session item plus that table's own hands (#310). Nothing is
+// written and nothing is added to the post-hand pipeline — the recap is
+// derived on read, so a session closed while a process died still recaps.
+//
+// The session id is the SessionItem sort key returned by /me/sessions, and
+// both reads are keyed on the caller's own JWT sub, so there is no IDOR
+// surface even though the id is caller-supplied.
+func (h *playerHandlers) sessionRecap(c fiber.Ctx) error {
+	userID := c.Locals(localsUserID).(string)
+	sessionID := c.Params("sessionId")
+	if sessionID == "" {
+		return problem.BadRequest("session id is required").Send(c)
+	}
+	recap, err := h.sessions.SessionRecap(c.Context(), userID, currencyModeParam(c), sessionID)
+	if err != nil {
+		return problem.InternalServer("failed to build session recap", c, err).Send(c)
+	}
+	if recap == nil {
+		return problem.NotFound("session not found").Send(c)
+	}
+	return c.JSON(recap)
 }
 
 // myReports lets a player track the status of reports they themselves filed

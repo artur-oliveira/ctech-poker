@@ -14,7 +14,7 @@ import (
 type playerNoteStore interface {
 	List(ctx context.Context, viewerID string) ([]playernotes.Note, error)
 	GetMany(ctx context.Context, viewerID string, opponentIDs []string) ([]playernotes.Note, error)
-	Save(ctx context.Context, viewerID, opponentID, tag, text string) (*playernotes.Note, error)
+	Save(ctx context.Context, viewerID, opponentID, tag, text string, labels []string) (*playernotes.Note, error)
 }
 
 type playerNoteHandlers struct{ store playerNoteStore }
@@ -22,6 +22,10 @@ type playerNoteHandlers struct{ store playerNoteStore }
 type playerNoteRequest struct {
 	Tag  string `json:"tag"`
 	Note string `json:"note"`
+	// Labels are the searchable free-text tags (#345). Omitting the field
+	// clears them, the same way omitting note clears the text — a note is
+	// replaced wholesale by design (Store.Save is a PutItem).
+	Labels []string `json:"labels"`
 }
 
 func RegisterPlayerNotes(router fiber.Router, auth fiber.Handler, store playerNoteStore) {
@@ -31,10 +35,12 @@ func RegisterPlayerNotes(router fiber.Router, auth fiber.Handler, store playerNo
 	g.Post("/:opponentId", h.save)
 }
 
-// list answers the caller's private notes. With `?opponent_ids=` it reads
-// exactly the players on the screen asking (the seats at a table, the players
-// in one hand) in a single BatchGetItem; without it, it still returns the
-// whole unpaginated list, which no first-party screen uses any more (#209) —
+// list answers the caller's private notes, optionally filtered by `?label=`
+// (exact) and/or `?q=` (substring over the note text and its labels).
+//
+// With `?opponent_ids=` it reads exactly the players on the screen asking (the
+// seats at a table, the players in one hand) in a single BatchGetItem; without
+// it, it still returns the whole unpaginated list, which no first-party screen uses any more (#209) —
 // it is kept for a cached older client and for a future notes-management
 // screen, which will want a cursor before it ships.
 func (h *playerNoteHandlers) list(c fiber.Ctx) error {
@@ -56,7 +62,10 @@ func (h *playerNoteHandlers) list(c fiber.Ctx) error {
 	if err != nil {
 		return problem.InternalServer("failed to list private notes", c, err).Send(c)
 	}
-	return c.JSON(fiber.Map{"data": notes})
+	// Search runs in memory over the caller's own notes: List already reads
+	// the whole (bounded) partition in one Query, and a search that is always
+	// scoped to one viewer gains nothing from a GSI (#345).
+	return c.JSON(fiber.Map{"data": playernotes.Filter(notes, c.Query("label"), c.Query("q"))})
 }
 
 // parseOpponentIDs reports whether the caller scoped the request at all, and
@@ -94,12 +103,15 @@ func (h *playerNoteHandlers) save(c fiber.Ctx) error {
 		opponentID,
 		req.Tag,
 		req.Note,
+		req.Labels,
 	)
 	switch {
 	case errors.Is(err, playernotes.ErrInvalidOpponent):
 		return problem.BadRequest("opponent must be another player").Send(c)
 	case errors.Is(err, playernotes.ErrInvalidTag):
 		return problem.BadRequest("tag is invalid").Send(c)
+	case errors.Is(err, playernotes.ErrInvalidLabel):
+		return problem.BadRequest("labels must be at most 10, each with at most 24 characters").Send(c)
 	case errors.Is(err, playernotes.ErrNoteTooLong):
 		return problem.BadRequest("note must have at most 500 characters").Send(c)
 	case err != nil:

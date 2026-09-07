@@ -19,6 +19,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/handhook"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
@@ -148,7 +149,7 @@ func countingPipeline() (*handPipeline, *countingDynamo) {
 		pokerStats:   pokerstats.NewStore(db, env),
 		matchups:     matchup.NewStore(db, env),
 		highlights:   highlights.NewStore(db, env),
-		recent:       recentplayers.NewService(recentplayers.NewStore(db, env), nil, nil),
+		consumers:    []handhook.Consumer{recentPlayersConsumer(recentplayers.NewService(recentplayers.NewStore(db, env), nil, nil))},
 		players:      player.NewService(player.NewStore(db, env)),
 		tables:       tablestore.NewStore(db, env),
 		handReveals:  handreveal.NewStore(db, env),

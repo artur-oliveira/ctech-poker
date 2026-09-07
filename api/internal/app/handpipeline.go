@@ -12,6 +12,7 @@ import (
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/handhook"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
@@ -159,7 +160,7 @@ type handPipeline struct {
 	pokerStats   *pokerstats.Store
 	matchups     *matchup.Store
 	highlights   *highlights.Store
-	recent       *recentplayers.Service
+	consumers    []handhook.Consumer
 	players      *player.Service
 	tables       *tablestore.Store
 	handReveals  *handreveal.Store
@@ -385,13 +386,46 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 		stepFailed("matchup")
 		slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
 	}
-	if p.recent != nil {
-		recentStart := time.Now()
-		err := p.recent.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now())
-		recordStepDuration("recentplayers", recentStart)
-		if err != nil {
-			stepFailed("recentplayers")
-			slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
+	// Everything above is ordered on purpose (see the player-visible-first
+	// comment) or gated by the counter claim. Everything that is merely
+	// derived from "this hand finished" is a registered consumer instead,
+	// reached through the versioned handhook.Event contract so it never
+	// couples to the engine's hand.HandOutcome (#315).
+	handhook.Dispatch(ctx, handhook.Event{
+		SchemaVersion: handhook.EventSchemaVersion,
+		TableID:       tableID,
+		HandID:        handID,
+		CurrencyMode:  mode,
+		Participants:  outcome.Participants,
+		Winners:       outcome.Winners,
+		Names:         names,
+		CompletedAt:   time.Now(),
+	}, p.consumers, observeConsumer)
+}
+
+// observeConsumer gives every registered consumer the same duration/failure
+// instrumentation the hardcoded steps above have, keyed by the consumer's own
+// fixed Name.
+func observeConsumer(name string, started time.Time, err error) {
+	recordStepDuration(name, started)
+	if err != nil {
+		stepFailed(name)
+		slog.Error("gamification: post-hand consumer failed", "consumer", name, "err", err)
+	}
+}
+
+// recentPlayersConsumer records who a player just shared a table with. It is
+// the first consumer on the versioned contract (#315): purely derived from a
+// completed hand, order-independent, and needing nothing the engine's outcome
+// type carries beyond the participant list.
+func recentPlayersConsumer(svc *recentplayers.Service) handhook.Consumer {
+	return handhook.Consumer{
+		Name: "recentplayers",
+		Run: func(ctx context.Context, ev handhook.Event) error {
+			if svc == nil {
+				return nil
+			}
+			return svc.RecordHand(ctx, ev.TableID, ev.HandID, ev.Participants, ev.CompletedAt)
+		},
 	}
 }

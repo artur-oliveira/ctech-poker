@@ -25,10 +25,16 @@ type HistoryAction struct {
 
 type historyStore interface {
 	LoadActionsSince(ctx context.Context, tableID, handID string, afterSeq int) ([]HistoryAction, error)
+	// LoadTimeline is the frame-free projection of the same log (#302).
+	LoadTimeline(ctx context.Context, tableID, handID string) ([]tablestore.TimelineEvent, error)
 }
 
 type tablestoreAdapter struct {
 	store *tablestore.Store
+}
+
+func (a *tablestoreAdapter) LoadTimeline(ctx context.Context, tableID, handID string) ([]tablestore.TimelineEvent, error) {
+	return a.store.LoadTimeline(ctx, tableID, handID)
 }
 
 func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handID string, afterSeq int) ([]HistoryAction, error) {
@@ -52,6 +58,7 @@ type handHistoryHandlers struct{ store historyStore }
 func RegisterHandHistory(router fiber.Router, auth fiber.Handler, store historyStore) {
 	h := &handHistoryHandlers{store: store}
 	router.Get("/tables/:tableId/hands/:handId/history", auth, h.history)
+	router.Get("/tables/:tableId/hands/:handId/timeline", auth, h.timeline)
 }
 
 func (h *handHistoryHandlers) history(c fiber.Ctx) error {
@@ -62,4 +69,18 @@ func (h *handHistoryHandlers) history(c fiber.Ctx) error {
 		return problem.InternalServer("failed to load hand history", c, err).Send(c)
 	}
 	return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "actions": actions})
+}
+
+// timeline is the compact view of the same hand: the decisions, without every
+// action's ReplayFrame and without chat/reactions. It exists so a post-hand
+// review or a support lookup does not have to read (and ship) the full action
+// log to answer "what happened here" — see tablestore.LoadTimeline.
+func (h *handHistoryHandlers) timeline(c fiber.Ctx) error {
+	tableID := c.Params("tableId")
+	handID := c.Params("handId")
+	events, err := h.store.LoadTimeline(c.Context(), tableID, handID)
+	if err != nil {
+		return problem.InternalServer("failed to load hand timeline", c, err).Send(c)
+	}
+	return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "events": events})
 }
