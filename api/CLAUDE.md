@@ -487,6 +487,18 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   build. Run `go vet -tags integration ./...` (and `-tags exhaustive`, `-tags load`) after any signature change — it
   compiles every tagged file in seconds without needing DynamoDB Local.
 
+- **The daily reward is a 30-day streak trail, not a draw (#293).** `internal/dailyreward` pays `trail[cycleDay]`
+  deterministically — a calendar whose day N advertises a value and then pays a random one is not a calendar, so
+  `pickTier`/`tiers` are gone. The streak lives as **one extra item in the existing `poker_daily_reward` table**
+  (`pk = playerID`, `sk = "streak"`, **no TTL** — the day rows expire after 48h and the streak row is the only durable
+  history of them); no new table, no new GSI. It is written in the **same transaction** as the create-only day row, so
+  the day row's `attribute_not_exists` condition guards both and a duplicate claim can never advance a streak twice —
+  which is what makes the wallet-credit retry path safe. `Service.Spin` recomputes the streak only when
+  `last_claim_day != today`; `advance` is deliberately pure so the retry path can decline to run it. Cost is unchanged
+  at one transaction per player per day (2 items instead of 1) and the cooldown read got *cheaper*: `Status` is one
+  `GetItem` serving the cooldown, the streak and all 30 calendar slots, replacing the old `IsFirstReward` `Query`.
+  A missed day is absorbed by a protection (one granted every 7 consecutive days); two missed days reset to day 1.
+  See `docs/specs/2026-09-06-daily-streak-calendar.md`.
 - **Profile milestones are derived at read time, never written (#330).** `player.Milestones`
   (`internal/player/milestones.go`) is a pure function over three counters that already exist — account age
   (`PlayerProfile.CreatedAt`), the `hands_played` aggregate `achievements` has materialized since #198, and the
@@ -512,8 +524,16 @@ config/data change tracked in `cli/CLAUDE.md`, not in this repo.
 Player-facing auth requires a **user token**: non-empty `sub` AND non-empty `sid` (an empty `sid` marks an M2M
 `client_credentials` token — ecosystem convention, see `jwtverify.Claims`). Enforced in `authMiddleware`
 (`internal/api/v1/auth.go`) and in the WS gateway's token check (`tablews.go`), so M2M credentials can never act as
-players. `GET /leaderboard` and `GET /tables/:tableId/hands/:handId/history` now sit behind the same auth middleware
-(`leaderboard.go` / `handhistory.go` / `router.go`).
+players. `GET /tables/:tableId/hands/:handId/history` sits behind the same auth middleware (`handhistory.go` /
+`router.go`).
+
+**`GET /leaderboard` is deliberately PUBLIC (fixed 2026-09-06).** B9 had put it behind `authMiddleware` too, which
+broke the ranking page — it is linkable and meant to be readable without an account. It is mounted with an IP rate
+limiter (`leaderboardReadLimiter`, 120/min) instead of `auth`, the same shape `RegisterAvatars` uses for its public
+reads. It exposes nothing a signed-in player could not already read and takes no caller-supplied player id, so there
+is no IDOR surface. `GET /leaderboard/me` keeps `auth` — it ranks the JWT's own `sub`. Because
+`enforceReadOnlyScope` runs *inside* `authMiddleware`, `poker:leaderboard:read` now gates `/leaderboard/me` only.
+See `docs/specs/2026-09-06-public-leaderboard.md`. Do not re-mount the public board behind `auth`.
 `playerID := claims.Sub` is kept everywhere (IDOR safety). There is still **no scope / kyc / role check** on user
 routes — none is defined for poker's user surface today; revisit before real-money mode ships if scopes are added to the
 catalog.

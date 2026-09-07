@@ -103,10 +103,12 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
     setClaiming(true);
     setError('');
     try {
-      const result = await spin();
-      setClaimedAmount(result.amount);
-      queryClient.setQueryData(['dailyReward', 'cooldown'],
-        {remaining_time_seconds: result.remaining_time_seconds});
+      const {amount, ...status} = await spin();
+      setClaimedAmount(amount);
+      // The spin response already carries the refreshed streak status, so the
+      // whole thing is seeded — writing only the cooldown here would leave the
+      // store's trail reading a half-populated cache entry (#293).
+      queryClient.setQueryData(['dailyReward', 'cooldown'], status);
       // The new balance decides whether a rebuy is now possible at all, so the
       // profile is re-read instead of being patched locally.
       await queryClient.invalidateQueries({queryKey: ['player', 'me']});

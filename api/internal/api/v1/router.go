@@ -111,6 +111,9 @@ func Register(
 	// view legitimately fetches up to nine images. Keyed per IP, not per
 	// player — the route is unauthenticated.
 	avatarReadLimiter := NewRateLimiter(cacheBackend, 600, time.Minute)
+	// GET /leaderboard is public (see RegisterLeaderboard), so an IP limiter
+	// is the only thing standing between it and an unauthenticated scraper.
+	leaderboardReadLimiter := NewRateLimiter(cacheBackend, 120, time.Minute)
 	purchaseLimiter := NewRateLimiter(cacheBackend, 10, time.Minute)
 	socialMutationPlayerLimiter := NewRateLimiter(cacheBackend, 120, time.Minute)
 	socialMutationIPLimiter := NewRateLimiter(cacheBackend, 240, time.Minute)
@@ -137,7 +140,7 @@ func Register(
 	RegisterHighlights(router, auth, sessionStore, highlightsStore)
 	RegisterPokerStats(router, auth, pokerStatsStore, players)
 	RegisterMatchups(router, auth, matchupStore)
-	RegisterLeaderboard(router, auth, leaderboardSvc, players)
+	RegisterLeaderboard(router, auth, leaderboardSvc, players, leaderboardReadLimiter)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)

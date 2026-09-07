@@ -77,7 +77,7 @@ boundaries, `not-found.tsx` and `unavailable/` stay ungrouped.
 | `/hands/replay?table_id=&hand_id=` | `(app)/hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
 | `/leaderboard` | `(app)/leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
 | `/achievements` | `(app)/achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
-| `/store` | `(app)/store/page.tsx` | Durable Fichas hub: sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity |
+| `/store` | `(app)/store/page.tsx` | Durable Fichas hub: sandbox balance, the daily streak teaser (opens the 30-day trail dialog, `DailyStreakDialog`), Pix chip packages, and expandable recent purchase activity |
 | `/people` | `(app)/people/page.tsx` | Friends, requests (in/out), recent players, blocked list and activity feed, plus the friend-code header |
 | `/profile?id=<playerId>` | `(app)/profile/page.tsx` | **Public read-only showcase** of another player: identity + tenure and derived profile milestones (`ProfileMilestones.tsx`, #330), featured achievements, best hand, matchup, with the shared player menu |
 | `/share?id=<token>` | `(app)/share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |

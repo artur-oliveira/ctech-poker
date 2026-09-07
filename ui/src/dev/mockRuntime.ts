@@ -439,6 +439,41 @@ const creditCooldown = () => {
   return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
 };
 
+// Mirrors api/internal/dailyreward's 30-day trail so the mock store renders the
+// same shape (and the same 1,000,000-chip finale) the server serves.
+const MOCK_STREAK_TRAIL = [
+  5_000, 7_500, 10_000, 12_500, 15_000, 20_000, 50_000,
+  25_000, 27_500, 30_000, 32_500, 35_000, 40_000, 100_000,
+  45_000, 50_000, 55_000, 60_000, 65_000, 70_000, 250_000,
+  80_000, 90_000, 100_000, 110_000, 120_000, 130_000, 140_000, 150_000,
+  1_000_000
+];
+const MOCK_MILESTONES = new Set([7, 14, 21, MOCK_STREAK_TRAIL.length]);
+let mockStreak = 5;
+
+function mockStreakStatus(remaining: number) {
+  const claimedToday = remaining > 0;
+  const cycleDay = ((mockStreak - (claimedToday ? 1 : 0)) % MOCK_STREAK_TRAIL.length) + 1;
+  return {
+    remaining_time_seconds: remaining,
+    current_streak: mockStreak,
+    best_streak: Math.max(mockStreak, 12),
+    total_claims: mockStreak,
+    cycle_day: cycleDay,
+    cycle_length: MOCK_STREAK_TRAIL.length,
+    protection_available: mockStreak >= 7,
+    claimed_today: claimedToday,
+    streak_at_risk: !claimedToday && mockStreak > 0,
+    days: MOCK_STREAK_TRAIL.map((amount, index) => ({
+      day: index + 1,
+      amount,
+      milestone: MOCK_MILESTONES.has(index + 1),
+      claimed: index + 1 < cycleDay || (claimedToday && index + 1 === cycleDay),
+      today: index + 1 === cycleDay
+    }))
+  };
+}
+
 function ok<T>(data: T, config: InternalAxiosRequestConfig): AxiosResponse<T> {
   return {data, status: 200, statusText: 'OK', headers: {}, config};
 }
@@ -1143,14 +1178,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return ok({mode, totals, achievements}, config);
   }
   if (method === 'GET' && /^\/v1\.0\/sandbox-credits\/?$/.test(path)) {
-    return ok({remaining_time_seconds: creditCooldown()}, config);
+    return ok(mockStreakStatus(creditCooldown()), config);
   }
   if (method === 'POST' && /^\/v1\.0\/sandbox-credits\/?$/.test(path)) {
-    if (creditCooldown() > 0) return ok({amount: 0, remaining_time_seconds: creditCooldown()}, config);
+    if (creditCooldown() > 0) return ok({amount: 0, ...mockStreakStatus(creditCooldown())}, config);
     nextCreditAt = Date.now() + MOCK_CREDIT_COOLDOWN_S * 1000;
     sessionStorage.setItem(CREDIT_KEY, String(nextCreditAt));
-    mockProfile.sandbox_balance += 250;
-    return ok({amount: 250, remaining_time_seconds: MOCK_CREDIT_COOLDOWN_S}, config);
+    mockStreak += 1;
+    const amount = MOCK_STREAK_TRAIL[(mockStreak - 1) % MOCK_STREAK_TRAIL.length];
+    mockProfile.sandbox_balance += amount;
+    return ok({amount, ...mockStreakStatus(MOCK_CREDIT_COOLDOWN_S)}, config);
   }
   if (method === 'GET' && /^\/v1\.0\/wallet\/cosmetic-purchase\/(deck|felt)\/catalog$/.test(path)) {
     const kind = path.includes('/deck/') ? 'deck' : 'felt';

@@ -2814,6 +2814,28 @@
     width: 26px;
     height: 26px
 }
+.store-reward-icon {
+    position: relative;
+    color: var(--muted)
+}
+.store-reward-icon[data-lit] {
+    color: var(--gold);
+    background: var(--gold-33)
+}
+.store-reward-count {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    min-width: 22px;
+    padding: 0 5px;
+    border-radius: var(--rounded-pill);
+    background: var(--brand);
+    color: var(--on-brand);
+    font: 700 var(--font-size-tiny) var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 22px;
+    text-align: center
+}
 .store-reward h2 {
     margin: 0;
     font-size: var(--font-size-subtitle)
@@ -6625,4 +6647,224 @@ button.deck-grid-slot:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap
+}
+
+
+/* Daily streak trail (#293). The dialog is wider than the 448px default
+   because the 30-day trail is the content, not a detail beside it. */
+.streak-dialog {
+    --streak-cols: 7
+}
+.streak-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 14px
+}
+.streak-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--white-08)
+}
+.streak-stat dt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-compact);
+    font-weight: 600
+}
+.streak-stat dt svg {
+    width: 14px;
+    height: 14px
+}
+.streak-stat dd {
+    margin: 0;
+    font: 700 var(--font-size-subtitle) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.streak-stat[data-tone="flame"] dt svg {
+    color: var(--brand-bright)
+}
+.streak-stat[data-tone="flame"] dd {
+    color: var(--gold)
+}
+.streak-stat[data-tone="shield"] dt svg,
+.streak-stat[data-tone="shield"] dd {
+    color: var(--success)
+}
+.streak-rule {
+    margin: 0 0 18px;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body);
+    line-height: 1.55
+}
+.streak-trail {
+    display: grid;
+    grid-template-columns: repeat(var(--streak-cols), minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+.streak-cell {
+    display: grid;
+    gap: 3px;
+    justify-items: center;
+    padding: 9px 4px 8px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-sm);
+    background: var(--white-03);
+    color: var(--muted)
+}
+.streak-cell-day {
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .08em
+}
+.streak-cell-mark {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    opacity: .45
+}
+.streak-cell-mark svg {
+    width: 15px;
+    height: 15px
+}
+.streak-cell-amount {
+    font: 700 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.streak-cell[data-milestone] {
+    border-color: var(--gold-33);
+    color: var(--gold-pale)
+}
+.streak-cell[data-milestone] .streak-cell-mark {
+    color: var(--gold);
+    opacity: .8
+}
+.streak-cell[data-state="claimed"] {
+    border-color: var(--gold-33);
+    background: var(--gold-33);
+    color: var(--gold-pale)
+}
+.streak-cell[data-state="claimed"] .streak-cell-mark {
+    color: var(--gold);
+    opacity: 1
+}
+.streak-cell[data-state="today"] {
+    border-color: var(--brand-bright);
+    box-shadow: 0 0 0 3px var(--brand-33);
+    background: var(--brand-13);
+    color: var(--on-brand)
+}
+.streak-cell[data-state="today"] .streak-cell-mark {
+    color: var(--brand-bright);
+    opacity: 1
+}
+.streak-grand {
+    grid-column: 2 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--gold-33);
+    border-radius: var(--rounded-sm);
+    background: var(--white-03);
+    color: var(--gold-pale)
+}
+.streak-grand[data-state="claimed"] {
+    background: var(--gold-33)
+}
+.streak-grand-icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--gold-33);
+    color: var(--gold)
+}
+.streak-grand-icon svg {
+    width: 19px;
+    height: 19px
+}
+.streak-grand-copy {
+    display: grid;
+    gap: 3px
+}
+.streak-grand-copy strong {
+    font: 700 var(--font-size-body) var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--gold)
+}
+.streak-grand-copy span {
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-compact);
+    line-height: 1.45
+}
+.streak-claim {
+    margin-top: 20px;
+    display: grid;
+    justify-items: center;
+    gap: 8px
+}
+.streak-claim > button {
+    min-width: 260px
+}
+.streak-claim-done {
+    margin: 0;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body);
+    text-align: center
+}
+.streak-claim-done strong {
+    color: var(--gold);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* One authored moment: the day that is claimable breathes so the eye lands
+       on it before it reads any number. Everything else on the trail is still. */
+    .streak-cell[data-state="today"] {
+        animation: streak-today-pulse 2.4s var(--ease-out-quart) infinite
+    }
+
+    @keyframes streak-today-pulse {
+        0%, 100% {
+            box-shadow: 0 0 0 3px var(--brand-33)
+        }
+        50% {
+            box-shadow: 0 0 0 6px var(--brand-08)
+        }
+    }
+}
+
+@media (max-width: 600px) {
+    .streak-dialog {
+        --streak-cols: 4
+    }
+
+    .streak-stats {
+        grid-template-columns: minmax(0, 1fr)
+    }
+
+    .streak-stat {
+        flex-direction: row;
+        align-items: baseline;
+        justify-content: space-between
+    }
+
+    .streak-claim > button {
+        min-width: 0;
+        width: 100%
+    }
 }
