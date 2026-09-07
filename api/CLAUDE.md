@@ -565,6 +565,16 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   buys nothing over a Query the caller already pays for. A save still replaces the note wholesale (`PutItem`), so
   omitting `labels` clears them, and an empty tag + text + label set still deletes the row.
 
+- **The hand timeline is a projection of the action log, never a second copy of it (#302).**
+  `GET /tables/:tableId/hands/:handId/timeline` (`tablestore.LoadTimeline`) reads the same
+  `poker_action_log` partition `LoadActionsSince` does, but through a **projected** `QueryRaw` that leaves
+  `frame` behind and drops the cosmetic events (chat, reaction, peek). #221's lesson is the constraint here: a
+  timeline that persisted its own per-event row would reproduce exactly the write amplification the `ReplayFrame`
+  already caused — so nothing new is written, and a caller that genuinely needs frames still uses
+  `LoadActionsSince`. It uses `QueryRaw` rather than `dynamo.QueryOpts.ProjectionExpression` because three of the
+  five projected attributes (`action`, `amount`, `timestamp`) are DynamoDB reserved words and the typed helper
+  cannot carry `ExpressionAttributeNames`.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see
