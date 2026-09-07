@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -33,23 +33,34 @@ var deliberateStaleCacheTimerHandlers = map[string]string{
 // ensureLoaded(..., true). A new background handler added later is therefore
 // caught here, not in production.
 func TestTimerFiredHandlersForceReload(t *testing.T) {
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(info fs.FileInfo) bool {
-		return !strings.HasSuffix(info.Name(), "_test.go")
-	}, 0)
+	// The package's own non-test sources, parsed directly: go/parser.ParseDir
+	// is deprecated, and golang.org/x/tools/go/packages would pull a
+	// dependency for a scan that needs nothing but the syntax.
+	paths, err := filepath.Glob("*.go")
 	if err != nil {
-		t.Fatalf("parse package: %v", err)
+		t.Fatalf("glob: %v", err)
 	}
-	pkg, ok := pkgs["table"]
-	if !ok {
-		t.Fatal("package table not found")
+	fset := token.NewFileSet()
+	files := make([]*ast.File, 0, len(paths))
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", path, parseErr)
+		}
+		files = append(files, file)
+	}
+	if len(files) == 0 {
+		t.Fatal("no package sources found — the scan itself broke")
 	}
 
 	timerCommands := map[string]bool{}
 	handlerForCommand := map[string]string{}
 	handlerBodies := map[string]*ast.FuncDecl{}
 
-	for _, file := range pkg.Files {
+	for _, file := range files {
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch node := n.(type) {
 			case *ast.CallExpr:
