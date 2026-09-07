@@ -523,6 +523,19 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   turns a constant into a per-player fan-out on an unauthenticated route; those belong on the profile/entitlement
   endpoints that already authenticate.
 
+- **A new derived post-hand writer is a `handhook.Consumer`, not another step in `handPipeline.run` (#315).**
+  `internal/handhook/event.go` defines the versioned contract: `handhook.Event` (`SchemaVersion`, table/hand,
+  `CurrencyMode`, participants, winners, names, completion time) — deliberately **not** `hand.HandOutcome`, so an
+  engine refactor is not a breaking change for bookkeeping that only ever needed "who played, who won, where".
+  `handhook.Dispatch` runs the registered list in order, reports each failure through `observeConsumer` (same
+  `recordStepDuration`/`stepFailed` instrumentation the hardcoded steps have, keyed by the consumer's fixed `Name`)
+  and **never aborts on one failing** — the hand is already Complete, broadcast and claimed, so stopping early
+  silently drops every later consumer's writes for a hand nobody retries. `recentPlayersConsumer` is the first one.
+  This adds no exclusivity of its own: `Service.Claim` is still the only thing deciding which instance runs a hand's
+  hooks, and dispatch stays a synchronous in-process call list, not an event bus. What stays hardcoded in
+  `handPipeline.run` is what is *ordered* on purpose (the player-visible `persistHandHistory`/`persistHandReveal`/
+  `highlights` writes) or gated by `ClaimHandCounters` — do not move those behind the consumer list.
+
 ## B9 authz — what is enforced (fixed 2026-07)
 
 **Interactive (non-GET) poker operations are gated by client id, not by scope** — see
