@@ -48,6 +48,9 @@ func (unacceptedProfiles) SetDeckVariant(context.Context, string, string) error 
 func (unacceptedProfiles) SetTableTheme(context.Context, string, string) error {
 	return nil
 }
+func (unacceptedProfiles) SetBetPresetMode(context.Context, string, string) error {
+	return nil
+}
 func (unacceptedProfiles) SetShowcase(context.Context, string, bool, bool, bool, []string) error {
 	return nil
 }

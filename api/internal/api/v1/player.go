@@ -30,6 +30,7 @@ type UpdatePlayerRequest struct {
 	WalletMode           *string                `json:"wallet_mode"`
 	DeckVariant          *string                `json:"deck_variant"`
 	TableTheme           *string                `json:"table_theme"`
+	BetPresetMode        *string                `json:"bet_preset_mode"`
 	ShowcasePublic       *bool                  `json:"showcase_public"`
 	TablePublic          *bool                  `json:"table_public"`
 	PlaystylePublic      *bool                  `json:"playstyle_public"`
@@ -361,6 +362,14 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return problem.InternalServer("failed to update profile showcase layout", c, err).Send(c)
 		}
 	}
+	if req.BetPresetMode != nil {
+		if _, err := h.players.SetBetPresetMode(c.Context(), userID, *req.BetPresetMode); err != nil {
+			if errors.Is(err, player.ErrInvalidBetPresetMode) {
+				return problem.BadRequest("bet_preset_mode must be one of mixed, bb, pot").Send(c)
+			}
+			return problem.InternalServer("failed to update bet preset mode", c, err).Send(c)
+		}
+	}
 	if req.FavoriteReactions != nil {
 		if _, err := h.players.SetFavoriteReactions(c.Context(), userID, *req.FavoriteReactions); err != nil {
 			if errors.Is(err, player.ErrInvalidFavoriteReactions) {
@@ -680,6 +689,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"wallet_mode":             profile.EffectiveWalletMode(),
 		"deck_variant":            profile.EffectiveDeckVariant(),
 		"table_theme":             profile.EffectiveTableTheme(),
+		"bet_preset_mode":         profile.EffectiveBetPresetMode(),
 		"showcase_public":         profile.ShowcasePublic,
 		"playstyle_public":        profile.PlaystylePublic,
 		"table_public":            profile.TablePublic,

@@ -358,6 +358,9 @@ func (s *fakeMultiProfileStore) SetName(context.Context, string, string) error  
 func (s *fakeMultiProfileStore) SetWalletMode(context.Context, string, string) error  { return nil }
 func (s *fakeMultiProfileStore) SetDeckVariant(context.Context, string, string) error { return nil }
 func (s *fakeMultiProfileStore) SetTableTheme(context.Context, string, string) error  { return nil }
+func (s *fakeMultiProfileStore) SetBetPresetMode(context.Context, string, string) error {
+	return nil
+}
 func (s *fakeMultiProfileStore) SetShowcase(context.Context, string, bool, bool, bool, []string) error {
 	return nil
 }

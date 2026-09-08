@@ -319,7 +319,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /avatars/:userId/:version.jpg`          | **none**        | published avatar bytes, streamed from the bucket's `av/` prefix; 600/min/IP                |
 | `GET /players/:playerId/showcase`            | **none**        | public profile showcase (+ `member_since` and derived `milestones`, #330); 404 when `showcase_public` is false |
 | `GET /players/me`                            | JWT             | profile + sandbox/real balances                                                            |
-| `POST /players/me`                           | JWT             | update name, wallet mode, deck variant, showcase settings and `showcase_layout`           |
+| `POST /players/me`                           | JWT             | update name, wallet mode, deck variant, `bet_preset_mode`, showcase settings and `showcase_layout` |
 | `POST /players/me/terms/accept`              | JWT             | accept the poker ToS addendum                                                              |
 | `POST /players/me/avatar/upload-url`         | JWT             | presigned S3 POST; 5/hour/player                                                           |
 | `POST /players/me/avatar/confirm`            | JWT             | validate quarantine object and publish avatar                                              |
@@ -427,6 +427,27 @@ returns one row per `(blinds, seats)` within the requested currency mode —
 current blinds are not a valid answer for a hand in the past. Hands recorded before the field existed derive it from
 the first pre-flop replay frame (the blind seats' contributions are still exactly the posted blinds there); anything
 else stays `0` = unknown, which clients must render by hiding the blind marker rather than assuming a default.
+
+### Bet-preset mode is server-normalized (#341)
+
+`bet_preset_mode` on the player profile decides what the table's quick-bet buttons are sized against. Exactly three
+values are accepted on `POST /v1.0/players/me`:
+
+| value     | meaning                                                        |
+|-----------|----------------------------------------------------------------|
+| `"mixed"` | **default** — pre-flop presets are big-blind based, post-flop presets are pot based |
+| `"bb"`    | always big-blind based                                          |
+| `"pot"`   | always pot based                                                |
+
+Anything else — including an empty string or whitespace — is a **400** (`bet_preset_mode must be one of mixed, bb,
+pot`); an absent JSON key still means "don't touch this field", the same as every other preference here. **The server
+normalizes on read**: `GET /v1.0/players/me` always answers one of the three values, defaulting an unset (or an
+unrecognised, e.g. written by an older build) stored value to `"mixed"`, so the client needs no fallback logic of its
+own. See `player.EffectiveBetPresetMode`.
+
+The earlier `favorite_bet_presets` field from the same issue was dropped before it shipped and never existed in this
+service. If a `favorite_bet_presets` attribute is ever found on a stored profile it is simply ignored — no migration
+and no backfill are needed, since nothing reads it.
 
 ### Private notes are read by seat, not by history (#209)
 
