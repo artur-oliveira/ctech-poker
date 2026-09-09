@@ -238,6 +238,42 @@ describe('table presentation', () => {
     expect(container.querySelector('.game-table > .viewer')).toHaveAttribute('data-seat-zone', 'bottom');
   });
 
+  // The regression this guards: `seat-join` was applied to every `.game-seat`,
+  // so an entrance animation that starts at `opacity: 0` produced a permanent
+  // seat's resting state. WebKit holds a pending animation at time 0
+  // indefinitely and rendered the whole ring invisible and 12px off its orbit
+  // point; the e2e suite caught it, but only in WebKit and only on `main`.
+  test('animates only the seats that just arrived, never the ones already seated', () => {
+    vi.useFakeTimers();
+    try {
+      const seated = snapshotForScenario('layout_5');
+      const joined = snapshotForScenario('six_max');
+      const stage = (snapshot: typeof seated) => <TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+        maxSeats={9} seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
+        holdOutcomeOpen={false}/>;
+      const {container, rerender} = render(stage(seated));
+      // Nobody watched the table's own seats arrive, so none of them animates.
+      expect(container.querySelectorAll('[data-seat-joining]')).toHaveLength(0);
+
+      const arrival = joined.seats.find(seat => !seated.seats.some(old => old.player_id === seat.player_id));
+      expect(arrival).toBeDefined();
+      rerender(stage(joined));
+      const marked = [...container.querySelectorAll('[data-seat-joining]')];
+      expect(marked).toHaveLength(1);
+      expect(marked[0]).toHaveAttribute('data-player-id', arrival!.player_id);
+
+      // And the mark is dropped after one animation, so an entrance that never
+      // starts costs at most that long rather than the life of the table.
+      act(() => void vi.advanceTimersByTime(400));
+      expect(container.querySelectorAll('[data-seat-joining]')).toHaveLength(0);
+      // A re-render that changes no membership must not re-arm it.
+      rerender(stage(joined));
+      expect(container.querySelectorAll('[data-seat-joining]')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('flies the house mark on the felt on both stages', () => {
     const desktop = render(<TableStage snapshot={snapshotForScenario('pre_flop')} viewer={MOCK_PLAYER_ID}
       pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
