@@ -75,6 +75,12 @@ func renderHomeHeader(maxWidth int) string {
 // Bubble Tea v1's diff renderer can otherwise skip an unchanged trailing line
 // and then erase it when a shorter frame replaces a taller one. Filling the
 // alternate screen is also the conventional shape for a full-screen TUI.
+//
+// The padding goes *above* the view, not below: a terminal client grows from
+// the bottom edge — the prompt sits on the last row and output rises out of
+// it, the way a shell, Claude Code, or any REPL behaves. Padding below left
+// the prompt stranded mid-screen with dead space under it, which is what
+// users reported as "everything is at the top".
 func padViewHeight(view string, height int) string {
 	if height <= 0 {
 		return view
@@ -83,6 +89,5 @@ func padViewHeight(view string, height int) string {
 	if len(lines) >= height {
 		return view
 	}
-	lines = append(lines, make([]string, height-len(lines))...)
-	return strings.Join(lines, "\n")
+	return strings.Repeat("\n", height-len(lines)) + view
 }

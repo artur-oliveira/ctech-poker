@@ -92,6 +92,7 @@ type TableModel struct {
 	log          []string
 	input        textinput.Model
 	menu         *commandMenu
+	hist         history // table command history (↑/↓)
 	viewport     viewport.Model
 	vpReady      bool
 	windowWidth  int
@@ -452,6 +453,17 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Esc while browsing history restores the draft first — see Shell.handleKey.
+	if msg.Type == tea.KeyEsc {
+		if draft, ok := m.hist.cancel(); ok {
+			m.input.SetValue(draft)
+			m.input.CursorEnd()
+			m.menu.hide()
+			m.menu.UpdateInput(draft)
+			m.syncViewport()
+			return m, nil
+		}
+	}
 	if m.menu.visible {
 		switch msg.Type {
 		case tea.KeyUp:
@@ -490,8 +502,27 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "enter" {
 		return m.submitLine()
 	}
+	switch msg.Type {
+	case tea.KeyUp, tea.KeyDown:
+		// Same history walk as the home shell — a separate list, since the
+		// table's command vocabulary is its own.
+		var val string
+		var ok bool
+		if msg.Type == tea.KeyUp {
+			val, ok = m.hist.prev(m.input.Value())
+		} else {
+			val, ok = m.hist.next()
+		}
+		if ok {
+			m.input.SetValue(val)
+			m.input.CursorEnd()
+			m.menu.UpdateInput(val)
+		}
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	m.hist.reset() // editing makes this a new line, not a recalled one
 	m.menu.UpdateInput(m.input.Value())
 	m.syncViewport()
 	return m, cmd
@@ -504,6 +535,7 @@ func (m *TableModel) submitLine() (tea.Model, tea.Cmd) {
 	if line == "" {
 		return m, nil
 	}
+	m.hist.add(line)
 	m.appendLog(m.input.Prompt + line)
 
 	// /note and /player are REST-backed, not table-socket ClientMessages —
@@ -996,6 +1028,9 @@ func (m *TableModel) layoutHeights(header string) (viewportH, menuRows int) {
 	if m.interactionStatus() != "" {
 		chrome++
 	}
+	if m.hist.browsing() {
+		chrome++ // the "histórico X/Y" line above the input
+	}
 	avail := m.windowHeight - chrome
 	if avail < 0 {
 		avail = 0
@@ -1049,6 +1084,9 @@ func (m *TableModel) View() string {
 		if status := m.interactionStatus(); status != "" {
 			lines = append(lines, truncateVisible(status, terminalLineWidth(m.windowWidth)))
 		}
+		if hint := m.hist.hint(); hint != "" {
+			lines = append(lines, hint)
+		}
 		lines = append(lines, m.input.View())
 		if menuRows > 0 {
 			if menuView := m.menu.View(menuRows, m.windowWidth); menuView != "" {
@@ -1065,6 +1103,9 @@ func (m *TableModel) View() string {
 		lines = append(lines, strings.Join(displayLog[start:], "\n"), rule)
 		if status := m.interactionStatus(); status != "" {
 			lines = append(lines, truncateVisible(status, terminalLineWidth(m.windowWidth)))
+		}
+		if hint := m.hist.hint(); hint != "" {
+			lines = append(lines, hint)
 		}
 		lines = append(lines, m.input.View())
 		if menuView := m.menu.View(maxMenuRows+1, 0); menuView != "" {
@@ -1087,29 +1128,34 @@ func (m *TableModel) header(maxWidth int) string {
 		return fmt.Sprintf("%d", n)
 	}
 
-	name := v.RoomName
-	if name == "" {
-		name = v.RoomID
-	}
 	stage := stageLabel(v.Stage)
 	board := game.FormatCards(v.Board, m.cfg.CardMode)
-	if board == "" {
-		board = "pré-flop"
-	}
-	// Board and hole cards each get their own line so they are easy to pick
-	// out (§5); the pot rides along on the board line.
-	boardLine := fmt.Sprintf("Board  %s · Pote %s", board, money(v.Pot))
-	hand := m.handSummary()
 
-	var lines []string
+	// One state line, in the order a player reads the table: what street it
+	// is, what's on the board, what it's worth. Room name, game type and the
+	// seated count used to ride here too — they never change during a hand,
+	// so they moved to the window title and /summary rather than costing a
+	// row of the log on every render.
+	state := stage
+	if board != "" {
+		state += "  " + board
+	}
+	// Between hands there is no pot and no hand to summarize; printing
+	// "· pote 0" and "Sua mão: —" is two rows saying nothing.
+	dealt := len(v.YourHole) > 0
+	if v.Pot > 0 || dealt {
+		state += " · pote " + money(v.Pot)
+	}
+	if width >= 72 {
+		state += mutedStyle.Render(" · blinds " + money(v.SmallBlind) + "/" + money(v.BigBlind))
+	}
+
+	lines := []string{state}
+	if dealt {
+		lines = append(lines, m.handSummary())
+	}
 	switch {
 	case width >= 72:
-		lines = append(lines,
-			fmt.Sprintf("Mesa %s · No-Limit Hold'em · %s · blinds %s/%s · %d/%d",
-				titleStyle.Render(name), stage, money(v.SmallBlind), money(v.BigBlind), v.Seated, v.MaxSeats),
-			boardLine,
-			hand,
-		)
 		// The per-seat table costs one line per seat; on a short terminal fall
 		// back to the packed two-line list so the log doesn't vanish.
 		if m.windowHeight > 0 && m.windowHeight < 20 {
@@ -1118,29 +1164,22 @@ func (m *TableModel) header(maxWidth int) string {
 			lines = append(lines, m.playerRows(money)...)
 		}
 	case width >= 48:
-		lines = append(lines,
-			fmt.Sprintf("Mesa %s · %s · blinds %s/%s", titleStyle.Render(name), stage, money(v.SmallBlind), money(v.BigBlind)),
-			boardLine,
-			hand,
-		)
 		lines = append(lines, packHeaderSegments("Em foco: ", m.playerSegments(money, true), width, 1)...)
-	default:
-		lines = append(lines,
-			fmt.Sprintf("%s · %s", titleStyle.Render(name), stage),
-			boardLine,
-			hand,
-		)
 	}
 
-	lines = append(lines, m.actorLine(money))
 	if warn := m.idleWarningLine(); warn != "" {
 		lines = append(lines, warn)
 	}
 	if badge := m.chatBadgeLine(); badge != "" {
 		lines = append(lines, badge)
 	}
+	// Whose turn it is and what you can do about it are one thought, on one
+	// line, directly above the input where the answer gets typed.
+	actor := m.actorLine(money)
 	if actions := m.actionSegments(money); len(actions) > 0 {
-		lines = append(lines, packHeaderSegments("Ações: ", actions, width, 3)...)
+		lines = append(lines, packHeaderSegments(actor+" · ", actions, width, 2)...)
+	} else {
+		lines = append(lines, actor)
 	}
 	for i := range lines {
 		lines[i] = truncateVisible(lines[i], width)
@@ -1150,6 +1189,8 @@ func (m *TableModel) header(maxWidth int) string {
 
 func stageLabel(stage string) string {
 	switch strings.ToLower(stage) {
+	case "waiting_for_players":
+		return "aguardando jogadores"
 	case "preflop", "pre_flop":
 		return "pré-flop"
 	case "flop":
@@ -1158,7 +1199,7 @@ func stageLabel(stage string) string {
 		return "turn"
 	case "river":
 		return "river"
-	case "complete":
+	case "showdown", "complete":
 		return "showdown"
 	default:
 		if stage == "" {
@@ -1224,8 +1265,7 @@ func (m *TableModel) playerRows(money func(int64) string) []string {
 		nameW = max(nameW, ansi.StringWidth(r.name))
 		stackW = max(stackW, len(r.stack))
 	}
-	out := make([]string, 0, len(rows)+1)
-	out = append(out, mutedStyle.Render("Jogadores"))
+	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		line := fmt.Sprintf("  %s %-*s  %-*s  %*s", r.marker, posW, r.pos, nameW, r.name, stackW, r.stack)
 		if r.note != "" {
@@ -1343,21 +1383,26 @@ func (m *TableModel) actorLine(money func(int64) string) string {
 }
 
 // idleWarningLine surfaces the server's pending idle removal (the web
-// IdleWarning). Shown for the viewer and for opponents alike.
+// IdleWarning). The deadline is always the *viewer's* own: actor_views.go
+// stamps IdleRemovalUnixMs from `p.LastActionAt + kickGrace` for the very
+// player the snapshot is being built for, so attributing it to whoever is on
+// the clock invented an opponent warning out of the viewer's own timer — and
+// showed it with nobody seated at all ("o jogador da vez sai por inatividade
+// em 297s" on an empty waiting_for_players table).
+//
+// idleWarningWindow matches the web component, which arms only inside the
+// last minute: a five-minute countdown is a permanent alarm, not a warning.
+const idleWarningWindow = 60
+
 func (m *TableModel) idleWarningLine() string {
 	if m.view.IdleRemovalMS <= 0 {
 		return ""
 	}
 	secs := ceilSecs(m.view.IdleRemovalMS - m.now.UnixMilli())
-	p := m.view.CurrentPlayer
-	if p.IsYou {
-		return errorStyle.Render(fmt.Sprintf("⚠ você sai por inatividade em %ds — aja ou /keep", secs))
+	if secs <= 0 || secs > idleWarningWindow {
+		return ""
 	}
-	who := "o jogador da vez"
-	if p.Name != "" {
-		who = p.Name
-	}
-	return mutedStyle.Render(fmt.Sprintf("⚠ %s sai por inatividade em %ds", who, secs))
+	return errorStyle.Render(fmt.Sprintf("⚠ você sai por inatividade em %ds — aja ou /keep", secs))
 }
 
 // recordChat appends one server chat message to the chat history (§3

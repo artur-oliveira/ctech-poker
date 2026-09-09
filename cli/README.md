@@ -70,8 +70,13 @@ the running program, `/command`-style (like Claude Code's own shell):
    ```
 
    Typing `/` opens a Claude-Code-style suggestion menu: `↑`/`↓` to move,
-   `Tab`/`Enter` to accept, `Esc` to dismiss. Long output (like the
-   achievements list) scrolls — `PgUp`/`PgDn`/`Home`/`End`.
+   `Tab`/`Enter` to accept, `Esc` to dismiss. With the menu closed, `↑`/`↓`
+   walk the command history instead, showing a `histórico 8/9` position badge
+   above the prompt (oldest is `1`, newest is `N`); `Esc` puts the line you were typing back. Long output
+   (like the achievements list) scrolls — `PgUp`/`PgDn`/`Home`/`End`.
+
+   The prompt sits on the last row of the terminal and output rises out of
+   it, like any other shell.
 
    `/hands` opens a dedicated history archive instead of printing into the
    home scrollback. It summarizes the current page's result, groups hands by
@@ -86,7 +91,8 @@ the running program, `/command`-style (like Claude Code's own shell):
    `/requests [sent] [next|prev]`.
 
 3. **At a table** the same conventions apply — a `/` prompt with menu +
-   Tab-complete, `PgUp`/`PgDn` scrollback, `Ctrl+L`/`/clear`:
+   Tab-complete, its own `↑`/`↓` command history, `PgUp`/`PgDn` scrollback,
+   `Ctrl+L`/`/clear`:
 
    ```
    /check /call /raise <v> /pot /allin /fold

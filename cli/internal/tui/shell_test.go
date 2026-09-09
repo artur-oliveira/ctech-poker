@@ -557,9 +557,10 @@ func TestHomeArrowKeysScrollLongOutput(t *testing.T) {
 	if strings.Contains(s.View(), "rolam") {
 		t.Fatal("scroll hint shown while already at the bottom")
 	}
-	// ArrowUp (menu closed) scrolls the scrollback back.
+	// PgUp (menu closed) scrolls the scrollback back — ArrowUp belongs to
+	// the command history now.
 	for i := 0; i < 5; i++ {
-		m, _ = s.Update(tea.KeyMsg{Type: tea.KeyUp})
+		m, _ = s.Update(tea.KeyMsg{Type: tea.KeyPgUp})
 		s = m.(*Shell)
 	}
 	if s.followBottom {

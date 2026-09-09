@@ -40,4 +40,8 @@ func TestPadViewHeightKeepsAStableFullScreenFrame(t *testing.T) {
 	if got := padViewHeight("one\ntwo", 1); got != "one\ntwo" {
 		t.Fatalf("must not clip a taller view, got %q", got)
 	}
+	// The filler goes above the view: the prompt has to land on the last row.
+	if got := padViewHeight("one\ntwo", 4); got != "\n\none\ntwo" {
+		t.Fatalf("view must be bottom-anchored, got %q", got)
+	}
 }

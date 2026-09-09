@@ -143,9 +143,6 @@ func TestTableSeatTableRendersAlignedRows(t *testing.T) {
 	m = nm.(*TableModel)
 
 	out := ansi.Strip(m.View())
-	if !strings.Contains(out, "\nJogadores\n") {
-		t.Fatalf("expected a Jogadores heading line:\n%s", out)
-	}
 	var seatLines []string
 	for _, l := range strings.Split(out, "\n") {
 		if strings.Contains(l, "VOCÊ") || strings.Contains(l, "Caio") || strings.Contains(l, "Duda") || strings.Contains(l, "Edu") {
@@ -452,8 +449,10 @@ func TestTableTimerRendersForOpponentWithBankAndIdleWarning(t *testing.T) {
 	if !strings.Contains(out, "Vez de Caio · stack 297 · 15s (+15s banco)") {
 		t.Fatalf("opponent clock with bank split missing:\n%s", out)
 	}
-	if !strings.Contains(out, "Caio sai por inatividade em 45s") {
-		t.Fatalf("idle warning for opponent missing:\n%s", out)
+	// IdleRemovalUnixMs is always the viewer's own removal deadline (see
+	// api actor_views.go), never the actor's — it must read as "você".
+	if !strings.Contains(out, "você sai por inatividade em 45s") {
+		t.Fatalf("viewer idle warning missing:\n%s", out)
 	}
 
 	// Push now past the base clock: the actor is now spending the reserve.
@@ -475,23 +474,41 @@ func TestTableIdleWarningForViewerTellsThemToAct(t *testing.T) {
 	}
 }
 
+func TestTableWaitingTableStaysQuiet(t *testing.T) {
+	msg := tableFixtureSnapshot()
+	msg.Snapshot.Stage = "waiting_for_players"
+	msg.Snapshot.CurrentPlayerId = ""
+	msg.Snapshot.IdleRemovalUnixMs = 400_000 // ~5min out: not a warning yet
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: msg})
+	m = nm.(*TableModel)
+	m.now = time.UnixMilli(100_000)
+
+	out := ansi.Strip(m.View())
+	if !strings.Contains(out, "aguardando jogadores") {
+		t.Errorf("waiting_for_players must be translated, not printed raw:\n%s", out)
+	}
+	if strings.Contains(out, "inatividade") {
+		t.Errorf("idle warning must stay quiet outside the last minute:\n%s", out)
+	}
+}
+
 func TestTableViewRendersLayoutBHeader(t *testing.T) {
 	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
 	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
 	m = nm.(*TableModel)
 
 	out := m.View()
-	if !strings.Contains(out, "No-Limit Hold'em") {
-		t.Errorf("missing game type: %q", out)
-	}
 	if !strings.Contains(out, "SUA VEZ") {
 		t.Errorf("missing turn indicator: %q", out)
 	}
-	if !strings.Contains(out, "Pote 24") {
+	if !strings.Contains(out, "pote 24") {
 		t.Errorf("sandbox pot should have no currency symbol: %q", out)
 	}
-	if !strings.Contains(out, "Board  ") {
-		t.Errorf("board should have its own labelled line: %q", out)
+	// One distilled state line: street, board, pot — no room name, no game
+	// type, no seat count competing with it.
+	if !strings.HasPrefix(ansi.Strip(out), "flop  Ah 7c Kd · pote 24") {
+		t.Errorf("state line should lead with street/board/pot: %q", out)
 	}
 	if strings.Contains(out, "R$") {
 		t.Errorf("sandbox table must not render R$: %q", out)
@@ -519,7 +536,11 @@ func TestTableHeaderPrioritizesExecutableLegalActions(t *testing.T) {
 	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
 	m = nm.(*TableModel)
 	out := m.View()
-	for _, want := range []string{"Ações:", "f desistir", "c pagar 8", "r aumentar 16–246"} {
+	// The legal actions ride on the turn line itself, not a separate "Ações:" block.
+	if !strings.Contains(ansi.Strip(out), "SUA VEZ") {
+		t.Errorf("turn line missing:\n%s", out)
+	}
+	for _, want := range []string{"f desistir", "c pagar 8", "r aumentar 16–246"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("decision surface missing %q:\n%s", want, out)
 		}

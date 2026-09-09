@@ -50,6 +50,7 @@ type Shell struct {
 	busy        bool
 
 	menu         *commandMenu
+	hist         history // home-screen command history (↑/↓)
 	viewport     viewport.Model
 	vpReady      bool
 	windowWidth  int
@@ -185,6 +186,9 @@ func (s *Shell) layoutHeights() (viewportH, menuRows int) {
 	chrome++                                  // input
 	if s.busy {
 		chrome++
+	}
+	if s.hist.browsing() {
+		chrome++ // the "histórico X/Y" line above the input
 	}
 	avail := s.windowHeight - chrome
 	if avail < 0 {
@@ -884,20 +888,42 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.followBottom = s.viewport.AtBottom()
 			return s, cmd
 		case tea.KeyUp, tea.KeyDown:
-			// Arrow keys scroll the scrollback when the command menu isn't
-			// steering them — the natural reach for reading long output
-			// (e.g. /achievements) without hunting for PgUp.
+			// Arrow keys walk the command history when the command menu
+			// isn't steering them, like every other shell. Scrollback moved
+			// to PgUp/PgDn/Home/End, which the "↓" hint advertises.
 			if !s.menu.visible {
-				var cmd tea.Cmd
-				s.viewport, cmd = s.viewport.Update(msg)
-				s.followBottom = s.viewport.AtBottom()
-				return s, cmd
+				var val string
+				var ok bool
+				if msg.Type == tea.KeyUp {
+					val, ok = s.hist.prev(s.input.Value())
+				} else {
+					val, ok = s.hist.next()
+				}
+				if ok {
+					s.input.SetValue(val)
+					s.input.CursorEnd()
+					s.menu.UpdateInput(val)
+				}
+				return s, nil
 			}
 		case tea.KeyCtrlL:
 			s.lines = nil
 			s.followBottom = true
 			s.syncViewport()
 			return s, nil
+		}
+		// Esc while browsing history restores the draft first — the recalled
+		// command usually opened the menu, and cancelling the recall without
+		// cancelling the browse would need two presses.
+		if msg.Type == tea.KeyEsc {
+			if draft, ok := s.hist.cancel(); ok {
+				s.input.SetValue(draft)
+				s.input.CursorEnd()
+				s.menu.hide()
+				s.menu.UpdateInput(draft)
+				s.syncViewport()
+				return s, nil
+			}
 		}
 		if s.menu.visible {
 			switch msg.Type {
@@ -938,6 +964,7 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
+		s.hist.reset() // editing makes this a new line, not a recalled one
 		s.menu.UpdateInput(s.input.Value())
 		s.syncViewport()
 		return s, cmd
@@ -1050,6 +1077,7 @@ func (s *Shell) submitHomeLine() (tea.Model, tea.Cmd) {
 	if line == "" {
 		return s, nil
 	}
+	s.hist.add(line)
 	s.appendLine(s.input.Prompt + line)
 	return s.dispatch(line)
 }
@@ -1438,11 +1466,14 @@ func (s *Shell) View() string {
 			if vpH > 0 {
 				lines = append(lines, s.viewport.View())
 				if !s.viewport.AtBottom() {
-					lines = append(lines, dimStyle.Render("↓ ↑↓/PgUp/PgDn rolam · End volta ao fim"))
+					lines = append(lines, dimStyle.Render("↓ PgUp/PgDn rolam · End volta ao fim"))
 				}
 			}
 			if s.busy {
 				lines = append(lines, accentStyle.Render(s.spin.View()))
+			}
+			if hint := s.hist.hint(); hint != "" {
+				lines = append(lines, hint)
 			}
 			lines = append(lines, s.input.View())
 			if menuRows > 0 {
@@ -1455,6 +1486,9 @@ func (s *Shell) View() string {
 			lines = append(lines, strings.Join(s.lines, "\n"))
 			if s.busy {
 				lines = append(lines, accentStyle.Render(s.spin.View()))
+			}
+			if hint := s.hist.hint(); hint != "" {
+				lines = append(lines, hint)
 			}
 			lines = append(lines, s.input.View())
 			if menuView := s.menu.View(maxMenuRows+1, 0); menuView != "" {

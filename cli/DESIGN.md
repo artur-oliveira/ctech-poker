@@ -119,6 +119,8 @@ This system uses no shadows and no simulated elevation. Depth is structural: a f
 
 **The Flat Table Rule.** Never imitate cards, modals, glass panels, or floating GUI controls with box-drawing decoration. A border is permitted only when it describes a real region, such as the compact home identity block.
 
+**The Bottom-Anchored View Rule.** Full-screen views fill unused height above the content, never below it. The prompt occupies the terminal's last row and output rises out of it, as in every other terminal client.
+
 **The Active Surface Rule.** When vertical space is contested, protect the input and command menu first, then reduce scrollback. Interaction outranks history.
 
 ## Components
@@ -141,7 +143,7 @@ This system uses no shadows and no simulated elevation. Depth is structural: a f
 
 - **Style:** A text list with aligned command names and descriptions, capped at eight visible items.
 - **Selected:** Dealer Gold bold text with a leading `›`; unselected options use Terminal Silver.
-- **Navigation:** Arrow keys move, Tab completes, Enter accepts, and Escape closes. A concise footer teaches these keys.
+- **Navigation:** Arrow keys move, Tab completes, Enter accepts, and Escape closes. A concise footer teaches these keys. With the menu closed the same arrow keys walk the command history, which announces itself as a muted `histórico X/Y` line (chronological index: oldest 1, newest N) directly above the prompt; scrollback moves to PgUp/PgDn/Home/End.
 - **Constrained state:** The menu clips to available terminal height, follows the active selection, and reports hidden rows above or below.
 
 ### Choice Lists
@@ -152,8 +154,8 @@ This system uses no shadows and no simulated elevation. Depth is structural: a f
 
 ### Table Header
 
-- **Style:** Three dense lines summarize room, Hold'em variant, blinds, occupancy, pot, board, hand strength, equity, positions, turn timer, and legal actions.
-- **Hierarchy:** Room name uses Dealer Gold; `VOCÊ` uses Dealer Gold bold; `SUA VEZ` uses Table Felt bold. Legal actions are always written out after an arrow.
+- **Style:** One state line (street, board, pot, and — on wide terminals — blinds), one hand line, the seat rows, and one turn line that carries the legal actions with it. Between hands the pot and hand lines disappear rather than print zeros and dashes, and the inactivity warning stays silent until the last minute, as on the web. Room name, Hold'em variant and occupancy are not repeated here: they never change during a hand and live in the window title and `/summary`.
+- **Hierarchy:** `VOCÊ` uses Dealer Gold bold; `SUA VEZ` uses Table Felt bold. Legal actions are always written out, on the turn line, immediately above the prompt that executes them.
 - **Boundaries:** Terminal Charcoal rules separate the header, scrollback, and prompt.
 - **Responsive behavior:** Content must never cause the full view to exceed terminal width or height; concise truncation or structural reflow takes priority over completeness on one line.
 
