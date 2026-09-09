@@ -170,6 +170,51 @@ function useDepartedSeats(seats: TableSnapshot['seats']): DepartedSeat[] {
   return departed;
 }
 
+/** How long a newly-seated player keeps `data-seat-joining`. Keep in sync with
+ * the `seat-join` keyframes in (app)/table/table.css. */
+const SEAT_ENTER_MS = 260;
+
+const NO_SEATS: ReadonlySet<string> = new Set();
+
+/** The player ids that appeared since the previous membership — the only seats
+ * that play `seat-join`.
+ *
+ * The animation was applied to every `.game-seat` unconditionally, which made
+ * an entrance animation the thing that produced a permanent seat's RESTING
+ * state: `seat-join` starts at `opacity: 0; translate: 0 12px` and holds it
+ * (`animation-fill-mode: both`) until the animation actually advances. WebKit
+ * leaves CSS animations pending — `startTime: null`, held at time 0 — whenever
+ * the page's rendering loop has not started ticking, so every seat on the table
+ * rendered invisible and 12px below its orbit point: an empty felt, and a seat
+ * ring 12px off the band centreline. Chromium and Firefox never showed it.
+ * Seats that are simply there now carry no animation at all, so their resting
+ * state is their stylesheet's, which is true in every engine.
+ *
+ * Derived during render rather than in an effect (React's supported "adjust
+ * state when a prop changes"): an effect runs after commit, so the seat would
+ * paint at full opacity for one frame and only then fade in from zero. The
+ * membership key doubles as the previous id list, and the mark is dropped after
+ * one animation so a stalled entrance can cost at most `SEAT_ENTER_MS` of
+ * invisibility rather than the life of the table. */
+function useJoinedSeats(seats: TableSnapshot['seats']): ReadonlySet<string> {
+  const seatKey = seats.map(seat => seat.player_id).join(',');
+  const [state, setState] = useState<{key: string; joined: ReadonlySet<string>}>(
+    () => ({key: seatKey, joined: NO_SEATS}));
+  if (state.key !== seatKey) {
+    // Seats present at mount are never "joining" — nobody watched them arrive.
+    const previous = new Set(state.key ? state.key.split(',') : []);
+    const arrived = seats.map(seat => seat.player_id).filter(id => !previous.has(id));
+    setState({key: seatKey, joined: arrived.length ? new Set(arrived) : NO_SEATS});
+  }
+  useEffect(() => {
+    if (!state.joined.size) return undefined;
+    const timer = setTimeout(() =>
+      setState(current => current.joined.size ? {...current, joined: NO_SEATS} : current), SEAT_ENTER_MS);
+    return () => clearTimeout(timer);
+  }, [state]);
+  return state.joined;
+}
+
 function calloutCopy(announcement: string) {
   const parts = announcement.split('. ').map(part => part.trim()).filter(Boolean);
   const event = parts.find(part => /^(Flop|Turn|River):/.test(part)) ||
@@ -298,6 +343,7 @@ function TableStageImpl({
   // hand every seat a new `winStanding` and defeat `memo(Seat)` (#230).
   const standings = useMemo(() => winnerStandings(snapshot), [snapshot]);
   const departed = useDepartedSeats(snapshot.seats);
+  const joined = useJoinedSeats(snapshot.seats);
   const departedNodes = (positioned: boolean) => departed.map(entry =>
     seatNode(entry.seat, entry.index, positioned ? seatLayoutPosition(entry.index, entry.count) : undefined, true));
   const seatNode = (seat: TableSnapshot['seats'][number], index: number, layoutPosition?: SeatLayoutPosition,
@@ -311,6 +357,7 @@ function TableStageImpl({
     const isTurn = snapshot.current_player_id === seat.player_id;
     return <Seat key={leaving ? `left:${seat.player_id}` : seat.player_id} seat={seat} index={index}
                  leaving={leaving}
+                 joining={!leaving && joined.has(seat.player_id)}
                  isTurn={isTurn}
                  credit={snapshot.payouts?.[seat.player_id] || 0}
                  winAmount={breakdown.won}

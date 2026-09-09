@@ -472,8 +472,20 @@
    the ring's own reflow (`left`/`top`) is deliberately not animated at all, so
    the seat that changed is the only motion on screen.
 
-   A departing seat is held for exactly one animation by TableStage's
-   `useDepartedSeats`; keep SEAT_EXIT_MS in sync with the duration here. */
+   Both animations are gated on an attribute, and neither is ever the reason a
+   seat is visible. `seat-join` starts at `opacity: 0` and holds it
+   (`animation-fill-mode: both`) until it actually advances, so applying it to
+   every `.game-seat` made an entrance animation the source of a permanent
+   seat's RESTING state — and WebKit leaves CSS animations pending (`startTime:
+   null`, held at time 0) whenever the page's rendering loop has not started
+   ticking, which rendered the whole ring invisible and 12px below its orbit
+   point in Safari while Chromium and Firefox looked fine. A seat that is
+   simply there carries no animation at all, so its resting state is this
+   stylesheet's in every engine.
+
+   A joining seat is marked for exactly one animation by TableStage's
+   `useJoinedSeats`, a departing one by `useDepartedSeats`; keep SEAT_ENTER_MS
+   and SEAT_EXIT_MS in sync with the durations here. */
 @keyframes seat-join {
     from {
         opacity: 0;
@@ -486,7 +498,7 @@
         translate: 0 12px
     }
 }
-.game-table .game-seat {
+.game-table .game-seat[data-seat-joining] {
     animation: seat-join 260ms var(--ease-out-quart) both
 }
 .game-table .game-seat[data-seat-leaving] {
@@ -507,7 +519,7 @@
             opacity: 0
         }
     }
-    .game-table .game-seat,
+    .game-table .game-seat[data-seat-joining],
     .game-table .game-seat[data-seat-leaving] {
         animation-duration: 120ms
     }

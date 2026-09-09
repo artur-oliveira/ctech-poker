@@ -138,7 +138,8 @@ function SeatImpl({
                        chatBubble,
                        renderActionsMenu,
                        layoutPosition,
-                       leaving = false
+                       leaving = false,
+                       joining = false
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -194,6 +195,14 @@ function SeatImpl({
   // TableStage's `useDepartedSeats`. Inert: it takes no pointer input and
   // publishes no reaction target.
   leaving?: boolean;
+  // A seat that appeared since the previous snapshot's membership, marked by
+  // TableStage's `useJoinedSeats` for exactly one entrance animation. A seat
+  // that was simply already there is never `joining`: `seat-join` fades in
+  // from `opacity: 0`, so gating a permanent seat's visibility on it means any
+  // browser that fails to start the animation renders no seat at all. WebKit
+  // does exactly that whenever the page's rendering loop has not begun
+  // ticking. See `.game-seat[data-seat-joining]` in (app)/table/table.css.
+  joining?: boolean;
 }) {
   const cards = seat.hole_cards;
   // Peeking is click-only: hover used to reveal too, which made the click that
@@ -303,6 +312,7 @@ function SeatImpl({
   const seatTapOpensMenu = !reactionTargetLabel;
   return <div ref={leaving ? undefined : seatElementRef}
               data-seat-leaving={leaving ? '' : undefined}
+              data-seat-joining={joining ? '' : undefined}
               aria-hidden={leaving ? 'true' : undefined}
               data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
