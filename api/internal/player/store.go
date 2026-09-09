@@ -392,6 +392,23 @@ func (s *Store) SetTableTheme(ctx context.Context, userID, theme string) error {
 	return nil
 }
 
+func (s *Store) SetBetPresetMode(ctx context.Context, userID, mode string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"bet_preset_mode": mode,
+		"updated_at":      dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set bet preset mode: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting bet preset mode")
+	}
+	return nil
+}
+
 func (s *Store) SetShowcase(ctx context.Context, userID string, public, playstylePublic, tablePublic bool, featured []string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

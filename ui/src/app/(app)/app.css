@@ -1004,14 +1004,16 @@
 .stage-v .table-callout {
     max-width: 86%
 }
+/* Four bare pips and the name of the street the hand is on — one line, one
+   word. The per-pip labels this replaced spent the felt's centre band naming
+   three streets nobody was on. */
 .street-progress {
     position: absolute;
     left: 50%;
     top: calc(100% + 14px);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 9px;
     transform: translateX(-50%);
     font: 700 8px var(--font-mono);
     letter-spacing: .05em;
@@ -1023,27 +1025,17 @@
     align-items: center;
     gap: 6px;
     font-size: 10px;
-    color: var(--felt-text-muted)
+    color: var(--felt-text)
 }
 .street-progress-pips {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 5px;
     color: var(--felt-text-muted)
 }
 .street-progress-pips span {
-    position: relative;
     display: flex;
-    align-items: center;
-    gap: 5px
-}
-.street-progress-pips span:not(:last-child)::after {
-    position: absolute;
-    left: calc(100% + 4px);
-    width: 6px;
-    height: 1px;
-    background: color-mix(in srgb, var(--felt-text-muted) 38%, transparent);
-    content: ""
+    align-items: center
 }
 .street-progress-pips i {
     width: 5px;
@@ -1051,19 +1043,31 @@
     border-radius: 50%;
     background: color-mix(in srgb, var(--felt-text-muted) 58%, transparent)
 }
+/* The pot is the single most-read number on the felt, and it was competing
+   with its own caption and with the street rail below it instead of leading
+   them: 14px of gold beside a 10px label, both at the same weight. The number
+   is now the largest type on the play surface and the word "POTE" steps back
+   to a quiet 9px marker — the abbreviated sandbox figure (round 1) is what
+   freed the width to do it. Baseline-aligned rather than centre-aligned so the
+   label sits on the number's own line rather than floating at its middle. */
 .game-pot {
-    font: 600 10px var(--font-mono);
-    letter-spacing: .13em;
-    color: var(--felt-text);
+    font: 700 var(--font-size-tiny) var(--font-mono);
+    letter-spacing: .16em;
+    color: var(--felt-text-muted);
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: center;
-    gap: 8px;
+    gap: 7px;
     margin-bottom: 14px
+}
+.game-pot .chip-stack {
+    align-self: center
 }
 .game-pot b {
     color: var(--gold-pale);
-    font-size: var(--font-size-body)
+    font: 700 var(--font-size-xl) var(--font-mono);
+    letter-spacing: -.01em;
+    line-height: 1
 }
 .game-pot small {
     margin-left: 10px;
@@ -1450,17 +1454,29 @@
 .hand-outcome-card > .hand-outcome-next {
     font-size: var(--font-size-mono)
 }
+/* Sticky, not absolute. The card caps its own height and scrolls internally
+   (see .hand-outcome-card), and an absolutely-positioned corner button is
+   positioned against the SCROLLED content: on a short viewport — a 320x568
+   portrait ring, a run-it-twice settlement — the player scrolled to reach the
+   pot rows and the only way to close the card went off the top with them.
+   Sticky keeps it in the corner for the whole scroll. Its own grid row is
+   collapsed by the negative bottom margin (28px button + the card's 10px gap),
+   so the card's layout is exactly what it was; the faint disc is what keeps it
+   legible once it is floating over the settlement rows rather than over the
+   heading's clear space. */
 .hand-outcome-dismiss {
-    position: absolute;
-    top: 8px;
-    right: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    justify-self: end;
     width: 28px;
     height: 28px;
+    margin: 0 -14px -38px 0;
     display: grid;
     place-items: center;
     border: 0;
     border-radius: 50%;
-    background: transparent;
+    background: color-mix(in srgb, currentColor 10%, transparent);
     color: inherit;
     opacity: .7;
     pointer-events: auto;
@@ -1603,18 +1619,10 @@
 @media (orientation: portrait) and (max-height: 760px),
        (orientation: landscape) and (max-height: 620px) {
 .street-progress {
-        gap: 4px
+        gap: 7px
     }
 .street-progress-pips {
-        gap: 12px
-    }
-.street-progress-pips span {
-        gap: 0;
-        font-size: 0
-    }
-.street-progress-pips span:not(:last-child)::after {
-        left: calc(100% + 3px);
-        width: 7px
+        gap: 4px
     }
 }
 .action-choices {
@@ -1656,16 +1664,27 @@
     height: 13px;
     color: var(--brand-bright)
 }
+/* One row at every width (#6): `grid-auto-flow: column` lays however many
+   options are legal this street side by side instead of wrapping the fifth
+   onto a line of its own, and the compact tiers below narrow the labels
+   rather than the 44px tap targets. */
 .action-preselectors {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns:repeat(5, max-content);
+    /* Neutralises renderer.css's earlier explicit two-column track at
+       max-width:800px, which would otherwise mix fixed and implicit columns. */
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     align-items: center;
     justify-content: center;
     gap: 7px
 }
+.action-preselectors .preselect-tight {
+    display: none
+}
 .action-preselectors > span {
-    grid-column: 1 / -1;
+    grid-row: 1;
     color: var(--muted);
     font-size: 11px
 }
@@ -1730,6 +1749,10 @@
 }
 .bet-control input[type=range] {
     min-width: 0;
+    /* Desktop-only in practice (the compact tiers hide it for the +/- stepper),
+       but a touchscreen laptop still has both: without this the horizontal
+       drag is claimed by the OS back-swipe gesture instead of the slider. */
+    touch-action: none;
     height: 44px;
     padding: 0;
     border: 0;
@@ -1747,7 +1770,9 @@
     opacity: .65;
     cursor: not-allowed
 }
-.bet-control output {
+/* Was an <output>; it is a text input now (see BetAmountField), so the box is
+   the wrapper and the number inside it is the control. */
+.bet-control .bet-output {
     min-height: 44px;
     display: flex;
     flex-direction: column;
@@ -1759,10 +1784,41 @@
     color: var(--gold);
     font-variant-numeric: tabular-nums
 }
+/* Reads as the number it replaced, not as a field: no chrome until it is
+   focused, at which point the focus ring is the whole affordance. */
+.bet-amount-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--rounded-xs);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: center
+}
+.bet-amount-input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.bet-amount-input:disabled {
+    color: var(--muted);
+    cursor: not-allowed
+}
+/* The number is the control, so on touch the number has to BE a target: the
+   box around it is 48px but only the input itself takes the tap. 30px clears
+   WCAG 2.2's 24px minimum without pushing the caption and meter out of the
+   box they share. */
+@media (pointer: coarse) {
+    .bet-amount-input {
+        min-height: 30px
+    }
+}
 /* Preset/slider clamp is otherwise invisible: a player taps "Pote" expecting
    that exact fraction and silently gets maxRaise instead. Surface the
    correction right under the total instead of only in the button state. */
-.bet-control output .bet-clamped-note {
+.bet-control .bet-output .bet-clamped-note {
     color: var(--danger-soft);
     opacity: 1
 }
@@ -3579,11 +3635,20 @@
     .action-preselectors {
         grid-column: auto;
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
         gap: 4px
     }
 .action-preselectors > span:first-child {
-        grid-column: 1 / -1
+        display: none
+    }
+.action-preselectors .preselect-wide,
+    .action-preselectors .preselect-amount {
+        display: none
+    }
+.action-preselectors .preselect-tight {
+        display: inline
     }
 .action-preselectors button {
         min-width: 0
@@ -3671,7 +3736,7 @@
     }
 .game-table.stage-v {
         min-height: 0;
-        padding: 4px calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang);
+        padding: var(--seat-caption-reserve) calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang);
         gap: 6px;
         overflow: hidden
     }
@@ -3691,34 +3756,14 @@
 .stage-v[data-capacity='2'] .stage-v-ring {
         max-width: min(94%, 640px)
     }
-/* A small field only sits on the top two-thirds of the capsule, so a
-       full-height pill leaves the lower half a dead green slab (the
-       "not full width / geometrically wrong" report). Deepen the rail's
-       top+bottom inset by occupancy so the walnut wraps the seats that are
-       actually there; the band and felt still derive from it (One Band
-       Rule), and the ring keeps flex:1 so the viewer HUD stays pinned. */
-.stage-v[data-player-count='2'],
-    .stage-v[data-player-count='3'] {
-        --table-rail-inset-top: 19%;
-        --table-rail-inset-bottom: 20%
-    }
-.stage-v[data-player-count='4'],
-    .stage-v[data-player-count='5'] {
-        --table-rail-inset-top: 10%;
-        --table-rail-inset-bottom: 11%
-    }
-@media (max-height: 760px) {
-        .stage-v[data-player-count='2'],
-        .stage-v[data-player-count='3'] {
-            --table-rail-inset-top: 15%;
-            --table-rail-inset-bottom: 16%
-        }
-        .stage-v[data-player-count='4'],
-        .stage-v[data-player-count='5'] {
-            --table-rail-inset-top: 8%;
-            --table-rail-inset-bottom: 9%
-        }
-    }
+/* Occupancy narrows the seat ring, never the felt (DESIGN.md, the One Band
+       Rule). This used to deepen --table-rail-inset-top/-bottom per
+       data-player-count, which drove the rail — and therefore the band and the
+       felt — off the same tokens: a heads-up capsule was visibly smaller and
+       rounder than a nine-handed one, and the whole table resized under the
+       player every time somebody sat down or stood up. The seats spread
+       themselves around the band already (`balancedSeatPosition`), so a short
+       field simply sits further apart on a table that stays put. */
 /* Short portrait phones (SE/8 class): the capsule steps down as a whole, so
        the band steps down with it instead of each side drifting on its own
        clamp. */
@@ -3835,17 +3880,31 @@
         white-space: normal
     }
 .action-preselectors {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
         gap: 6px;
         width: 100%
     }
 .action-preselectors > span {
         display: none
     }
+/* The fixed-amount Call keeps its figure in the accessible name only: the
+       number is what pushed a five-option row onto a second line, and it is
+       already on the Pagar button the moment it is the player's turn. Same
+       trade for the two two-word labels, which shrink to C/F and Any. */
+    .action-preselectors .preselect-wide,
+    .action-preselectors .preselect-amount {
+        display: none
+    }
+.action-preselectors .preselect-tight {
+        display: inline
+    }
 .action-bar .action-preselectors button {
         min-width: 0;
-        padding-inline: 6px;
+        padding-inline: 4px;
         overflow: hidden;
+        font-size: 11px;
         text-overflow: ellipsis;
         white-space: nowrap
     }

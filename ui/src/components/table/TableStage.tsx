@@ -1,5 +1,7 @@
 'use client';
-import {memo, type ReactNode, useCallback, useMemo, useState, useSyncExternalStore} from 'react';
+import {
+  memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
+} from 'react';
 import {Board} from '@/components/table/Board';
 import {Seat, type SeatLayoutPosition} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
@@ -110,22 +112,62 @@ function FeltWordmark() {
   </div>;
 }
 
+/** Four bare pips and one word: the name of the street the hand is actually
+ * on. Naming all four at once (the shape this shipped as) spent the felt's
+ * whole centre band on three labels nobody reads — where the hand *is* is the
+ * only one that matters, and the pips already carry how far along that is.
+ *
+ * It is a labelled image rather than aria-hidden decoration: "etapa 2 de 4" is
+ * progress the sr-only page heading does not otherwise convey. */
 function StreetProgress({stage}: { stage: string }) {
   const label = STAGE_LABELS[stage] || stage.replaceAll('_', ' ');
-  if (stage === 'waiting_for_players') return <div className="street-progress" aria-hidden="true">
-    <span className="street-progress-label">{label}</span>
+  if (stage === 'waiting_for_players') return <div className="street-progress" role="img" aria-label={label}>
+    <span className="street-progress-label" aria-hidden="true">{label}</span>
   </div>;
   const current = STREET_STAGES.indexOf(stage as typeof STREET_STAGES[number]);
   const resolved = stage === 'showdown' || stage === 'complete';
-  return <div className="street-progress" aria-hidden="true">
-    <span className="street-progress-label">{label}</span>
-    <div className="street-progress-pips">
+  const position = resolved ? STREET_STAGES.length : current + 1;
+  return <div className="street-progress" role="img"
+              aria-label={`${label} — etapa ${position} de ${STREET_STAGES.length}`}>
+    <div className="street-progress-pips" aria-hidden="true">
       {STREET_STAGES.map((street, index) => <span key={street}
         className={resolved || index < current ? 'is-complete' : index === current ? 'is-current' : ''}>
-        <i/>{street === 'pre_flop' ? 'Pré' : street[0].toUpperCase() + street.slice(1)}
+        <i/>
       </span>)}
     </div>
+    <span className="street-progress-label" aria-hidden="true">{label}</span>
   </div>;
+}
+
+/** How long a departing seat stays mounted to play its exit. Keep in sync with
+ * the `seat-leave` keyframes in (app)/table/table.css. */
+const SEAT_EXIT_MS = 260;
+
+/** Seats that left since the last snapshot, held for one exit animation with
+ * the geometry they last had (their old index in their old occupancy), so the
+ * ghost slides out from where the player was sitting while the survivors take
+ * their new places immediately — the ring's own reflow is `left`/`top`, which
+ * must never be animated. Rejoining players are not tracked: the ghost is
+ * inert (`pointer-events: none`) and gone within `SEAT_EXIT_MS`. */
+type DepartedSeat = { seat: TableSnapshot['seats'][number]; index: number; count: number };
+
+function useDepartedSeats(seats: TableSnapshot['seats']): DepartedSeat[] {
+  const [departed, setDeparted] = useState<DepartedSeat[]>([]);
+  const previous = useRef<DepartedSeat[]>([]);
+  const seatKey = seats.map(seat => seat.player_id).join(',');
+  useEffect(() => {
+    const live = new Set(seats.map(seat => seat.player_id));
+    const gone = previous.current.filter(entry => !live.has(entry.seat.player_id));
+    previous.current = seats.map((seat, index) => ({seat, index, count: seats.length}));
+    if (!gone.length) return undefined;
+    setDeparted(current => [...current, ...gone]);
+    const timer = setTimeout(() =>
+      setDeparted(current => current.filter(entry => !gone.includes(entry))), SEAT_EXIT_MS);
+    return () => clearTimeout(timer);
+    // Membership, not identity: a stack or a bet moving must not re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatKey]);
+  return departed;
 }
 
 function calloutCopy(announcement: string) {
@@ -255,7 +297,11 @@ function TableStageImpl({
   // fresh objects, and a chat bubble or a reaction arriving would otherwise
   // hand every seat a new `winStanding` and defeat `memo(Seat)` (#230).
   const standings = useMemo(() => winnerStandings(snapshot), [snapshot]);
-  const seatNode = (seat: TableSnapshot['seats'][number], index: number, layoutPosition?: SeatLayoutPosition) => {
+  const departed = useDepartedSeats(snapshot.seats);
+  const departedNodes = (positioned: boolean) => departed.map(entry =>
+    seatNode(entry.seat, entry.index, positioned ? seatLayoutPosition(entry.index, entry.count) : undefined, true));
+  const seatNode = (seat: TableSnapshot['seats'][number], index: number, layoutPosition?: SeatLayoutPosition,
+                    leaving = false) => {
     const breakdown = playerPotBreakdown(snapshot, seat.player_id);
     const standing = standings.find(item => item.playerId === seat.player_id);
     // Only the seat on the clock consumes the timing props, and only while it
@@ -263,7 +309,8 @@ function TableStageImpl({
     // isTurn). Handing them to the other eight would re-render all of them on
     // every frame for a clock none of them draws.
     const isTurn = snapshot.current_player_id === seat.player_id;
-    return <Seat key={seat.player_id} seat={seat} index={index}
+    return <Seat key={leaving ? `left:${seat.player_id}` : seat.player_id} seat={seat} index={index}
+                 leaving={leaving}
                  isTurn={isTurn}
                  credit={snapshot.payouts?.[seat.player_id] || 0}
                  winAmount={breakdown.won}
@@ -313,6 +360,7 @@ function TableStageImpl({
       <div className="game-rail"/>
       <div className="game-felt">{feltContent}</div>
       {seats.map((seat, index) => seatNode(seat, index, seatLayoutPosition(index, seats.length)))}
+      {departedNodes(true)}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                          onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
@@ -372,6 +420,7 @@ function TableStageImpl({
           const tableIndex = viewerFirst ? index + 1 : index;
           return seatNode(seat, tableIndex, seatLayoutPosition(tableIndex, seats.length));
         })}
+        {departedNodes(true)}
         {overlayStack}
       </div>
       {viewerFirst && seatNode(seats[0], 0)}

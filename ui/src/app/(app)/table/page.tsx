@@ -27,7 +27,8 @@ import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
-import {updateMe} from '@/lib/api/player';
+import {betPresetMode, updateMe} from '@/lib/api/player';
+import {ChipFormatContext} from '@/lib/chipFormat';
 import {currentReactionPurchase, type ReactionCatalogEntry} from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
@@ -111,7 +112,6 @@ function TableContent() {
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
-  const [betPresetFavoritesSaving, setBetPresetFavoritesSaving] = useState(false);
   const socialActions = useSocialActions();
   // Seated opponents, kept in state (not derived mid-render) because the
   // suppression set has to exist before useTableRealtime is called, while the
@@ -176,7 +176,6 @@ function TableContent() {
     Object.fromEntries(relationships.map(item => [item.player_id, item])), [relationships]);
   const favoriteReactions = useMemo(() =>
     (profile?.favorite_reactions || []).filter(isTableReaction), [profile?.favorite_reactions]);
-  const favoriteBetPresets = useMemo(() => profile?.favorite_bet_presets || [], [profile?.favorite_bet_presets]);
   const editPlayerNote = useCallback((seat: {player_id: string; name?: string}) =>
     setNoteOpponent({player_id: seat.player_id, name: seat.name}), []);
   const renderPlayerActions = useCallback((seat: {player_id: string; name?: string}) =>
@@ -209,18 +208,6 @@ function TableContent() {
       setFavoritesSaving(false);
     }
   }, [queryClient]);
-  const toggleFavoriteBetPreset = useCallback(async (id: string) => {
-    const next = favoriteBetPresets.includes(id)
-      ? favoriteBetPresets.filter(item => item !== id)
-      : [...favoriteBetPresets, id];
-    setBetPresetFavoritesSaving(true);
-    try {
-      const updated = await updateMe({favorite_bet_presets: next});
-      queryClient.setQueryData(['player', 'me'], updated);
-    } finally {
-      setBetPresetFavoritesSaving(false);
-    }
-  }, [favoriteBetPresets, queryClient]);
   if (bucket) return <>
     <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
       queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
@@ -287,6 +274,7 @@ function TableContent() {
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   const openSession = session.openSession;
   return (
+    <ChipFormatContext.Provider value={room?.currency_mode !== 'real'}>
     <main className="game" data-table-theme={profile?.table_theme || 'classic'}>
       <h1 className="sr-only">Mesa de poker: {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
       <div className="game-chrome">
@@ -424,11 +412,10 @@ function TableContent() {
         actionBaseDeadlineMs={s.action_base_deadline_unix_ms}
         timeBankMs={viewerSeat?.time_bank_ms ?? 0}
         voiceCommands={preferences.voiceCommands}
-        pot={pot}
         shortcutsEnabled={preferences.keyboardShortcuts}
-        favoriteBetPresets={favoriteBetPresets}
-        favoriteBetPresetsSaving={betPresetFavoritesSaving}
-        onToggleFavoriteBetPresetAction={toggleFavoriteBetPreset}
+        betPresetMode={betPresetMode(profile?.bet_preset_mode)}
+        stage={s.stage}
+        bigBlind={bigBlind}
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
@@ -495,6 +482,7 @@ function TableContent() {
       <AchievementToast unlock={rt.unlock} blocked={Boolean(handOutcome)} onConsumed={rt.clearUnlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
+    </ChipFormatContext.Provider>
   );
 }
 

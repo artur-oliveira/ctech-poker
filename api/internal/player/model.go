@@ -20,6 +20,28 @@ const DefaultDeckVariant = "four-color"
 // UI's src/lib/tablePreferences.ts.
 const DefaultTableTheme = "classic"
 
+// Bet-preset modes decide what the table's quick-bet buttons are sized
+// against. "mixed" is the default and the only value an absent preference
+// reads back as — the server normalizes, so the client needs no fallback.
+const (
+	BetPresetModeMixed = "mixed" // pre-flop in big blinds, post-flop in pot fractions
+	BetPresetModeBB    = "bb"    // always big-blind based
+	BetPresetModePot   = "pot"   // always pot based
+)
+
+const DefaultBetPresetMode = BetPresetModeMixed
+
+// IsValidBetPresetMode reports whether mode is one of the three accepted
+// values. Empty is not valid on write — an absent JSON key is how a caller
+// says "don't touch this"; the profile getter is what defaults it.
+func IsValidBetPresetMode(mode string) bool {
+	switch mode {
+	case BetPresetModeMixed, BetPresetModeBB, BetPresetModePot:
+		return true
+	}
+	return false
+}
+
 const (
 	ShowcaseSectionAchievements = "achievements"
 	ShowcaseSectionBestHand     = "best_hand"
@@ -45,6 +67,7 @@ type PlayerProfile struct {
 	WalletMode      string `dynamodbav:"wallet_mode,omitempty" json:"wallet_mode,omitempty"`
 	DeckVariant     string `dynamodbav:"deck_variant,omitempty" json:"deck_variant,omitempty"`
 	TableTheme      string `dynamodbav:"table_theme,omitempty" json:"table_theme,omitempty"`
+	BetPresetMode   string `dynamodbav:"bet_preset_mode,omitempty" json:"bet_preset_mode,omitempty"`
 	ShowcasePublic  bool   `dynamodbav:"showcase_public,omitempty" json:"showcase_public"`
 	PlaystylePublic bool   `dynamodbav:"playstyle_public,omitempty" json:"playstyle_public"`
 	// TablePublic lets friends see which PUBLIC room this player is sitting
@@ -100,4 +123,14 @@ func (p *PlayerProfile) EffectiveTableTheme() string {
 		return DefaultTableTheme
 	}
 	return p.TableTheme
+}
+
+// EffectiveBetPresetMode defaults an unset (or unrecognised, e.g. written by
+// an older build) preference to mixed, same rationale as
+// EffectiveDeckVariant.
+func (p *PlayerProfile) EffectiveBetPresetMode() string {
+	if p == nil || !IsValidBetPresetMode(p.BetPresetMode) {
+		return DefaultBetPresetMode
+	}
+	return p.BetPresetMode
 }

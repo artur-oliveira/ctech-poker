@@ -21,12 +21,16 @@ export function actionState(snapshot: TableSnapshot, viewer?: string) {
     effectiveStack: Math.min(seat?.stack || 0, Math.max(0, ...snapshot.seats
       .filter(item => item.player_id !== viewer && item.state !== 'folded' && item.state !== 'sitting_out')
       .map(item => item.stack))),
+    // The ⅓/½/⅔/Pote entries are only present when the server actually sent
+    // that raise-to figure: `stageBetPresets` reads them by label and drops the
+    // fraction it cannot price, rather than pricing it at the minimum and
+    // claiming a bigger fraction costs less than a smaller one.
     raisePresets: [
       {label: 'Mín', value: minRaise},
-      {label: '⅓ pote', value: serverActions?.one_third_pot_raise_to || minRaise},
-      {label: '½ pote', value: serverActions?.half_pot_raise_to || minRaise},
-      {label: '⅔ pote', value: serverActions?.two_thirds_pot_raise_to || minRaise},
-      {label: 'Pote', value: serverActions?.pot_raise_to || minRaise},
+      ...(serverActions?.one_third_pot_raise_to ? [{label: '⅓ pote', value: serverActions.one_third_pot_raise_to}] : []),
+      ...(serverActions?.half_pot_raise_to ? [{label: '½ pote', value: serverActions.half_pot_raise_to}] : []),
+      ...(serverActions?.two_thirds_pot_raise_to ? [{label: '⅔ pote', value: serverActions.two_thirds_pot_raise_to}] : []),
+      ...(serverActions?.pot_raise_to ? [{label: 'Pote', value: serverActions.pot_raise_to}] : []),
       {label: 'Máx', value: maxRaise}
     ]
   };

@@ -46,8 +46,19 @@ export default function TableGuide() {
       summary: 'A disposição muda com o formato da tela, não só o tamanho das coisas.',
       body: <><p>Em tela larga a mesa é um oval com os assentos na madeira ao redor do feltro e você embaixo.</p>
         <p>No <b>celular em pé</b> os adversários viram fichas de avatar na borda de uma cápsula e você sai do anel:
-          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Com poucos jogadores a
-          cápsula encolhe para não deixar feltro vazio.</p>
+          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Cada avatar do anel tem a
+          própria pilha na sua coluna — embaixo dele, ou acima quando são as cartas que ficam embaixo — no mesmo
+          dourado das fichas, com o tom ajustado por feltro para o número ficar legível sobre qualquer um deles. O
+          nome continua disponível para leitores de tela e aparece nos assentos em tela larga.</p>
+        <p>Nessa faixa estreita não cabe o rótulo de estado escrito, então ele sai da tela e o estado passa a ser
+          desenhado no avatar: <b>contorno tracejado</b> em cinza para quem desistiu, <b>anel dourado contínuo</b>
+          para quem está all-in, um <b>selo de sinal cortado</b> para quem caiu da conexão, e cinza sem cartas nem
+          selo para quem está ausente. São formas diferentes, não só cores. Os rótulos <b>Desistiu</b>,
+          <b> All-in</b>, <b>Desconectado</b> e <b>Ausente</b> continuam inteiros para leitores de tela, e visíveis
+          nos assentos em tela larga.</p>
+        <p>A mesa tem sempre o mesmo tamanho, com dois ou com nove jogadores: quem entra ou sai não redimensiona o
+          feltro debaixo de você. Só o assento em questão se move, entrando ou saindo com um deslize curto (uma
+          transparência simples, se o seu sistema pede menos movimento); os outros ficam onde estão.</p>
         <p>No <b>celular deitado</b> a tela vira duas colunas: à esquerda o mesmo oval com os adversários na madeira,
           à direita tudo que é seu — suas cartas, a ação preparada e a barra de ações. Você não fica no anel. Chat,
           reações e últimos vencedores passam para os ícones do cabeçalho, como no celular em pé.</p></>
@@ -60,10 +71,12 @@ export default function TableGuide() {
         <GuideTerm term="Fold">Desiste da mão. Você perde o que já colocou no pote.</GuideTerm>
         <GuideTerm term="Check">Passa a vez sem apostar, quando ninguém aumentou.</GuideTerm>
         <GuideTerm term="Pagar">Iguala o valor exigido. O botão mostra quanto sai da sua pilha.</GuideTerm>
-        <GuideTerm term="Aumentar">Define um total entre o mínimo e o máximo. Os atalhos de tamanho são Mín, ⅓, ½ e ⅔
-          do pote, Pote e Máx, além do controle deslizante e dos botões de mais e menos. Uma segunda fileira de
-          presets (¼, ½, ¾, 1× o pote e All-in) fica ao lado do controle de mais e menos — toque na estrela de
-          cada um para fixar seus favoritos; sem nenhum favorito, todos aparecem.</GuideTerm>
+        <GuideTerm term="Aumentar">Define um total entre o mínimo e o máximo, com o controle deslizante, os botões de
+          mais e menos, ou a fileira de presets acima deles. Os presets mudam com a rua e com a sua preferência
+          (veja <b>Presets de aposta</b> em Preferências da mesa): na opção padrão, <b>BB</b>, <b>2BB</b>, <b>3BB</b> e
+          <b> All in</b> no pré-flop, e <b>1/3</b>, <b>1/2</b>, <b>2/3</b> e <b>All in</b> do flop em diante. Todo
+          preset já vem dentro dos limites da rodada; quando dois deles chegam ao mesmo valor — pilha curta, por
+          exemplo — sobra o de nome mais alto, para nenhum botão prometer um valor que não é o dele.</GuideTerm>
         <GuideTerm term="All In">O botão troca de rótulo sozinho quando o valor escolhido alcança o
           máximo.</GuideTerm>
       </GuideTerms>
@@ -72,6 +85,13 @@ export default function TableGuide() {
           disputado contra quem continua na mão.</p>
         <p>No celular, o primeiro toque em <b>Aumentar</b> abre o seletor de valor e o segundo confirma. Segurar mais
           ou menos acelera o ajuste.</p>
+        <p>O número em <b>TOTAL</b> também aceita digitação: toque nele e escreva o valor exato. O campo só aceita
+          dígitos — letras, sinais e texto colado de fora são recusados na hora, com um aviso curto abaixo, como
+          <b> Apenas números.</b> ou <b>Máximo</b> seguido do teto da rodada. Em mesas sandbox não há centavos, então vírgula e ponto não
+          entram. O teto bloqueia a digitação; o mínimo e o incremento da mesa, não — assim um valor alto pode ser
+          escrito por inteiro e o ajuste acontece uma vez só, ao sair do campo ou apertar Enter, avisando
+          <b> ajustado ao mínimo</b> ou <b>arredondado para</b> o valor válido. Esc devolve o número que estava
+          lá.</p>
         <GuideCallout kind="warning" title="Uma ação é definitiva">O botão fica em estado de envio enquanto o servidor
           confirma. Não há desfazer depois do aceite. Se a ação for recusada, a barra explica o motivo e devolve as
           escolhas ainda válidas.</GuideCallout></>
@@ -106,6 +126,12 @@ export default function TableGuide() {
         <p>O contorno do assento marca o tempo da decisão. Quando ele termina, entra o <b>time bank</b>: uma reserva
           pessoal que recupera 5 segundos por mão até o limite de 30. Enquanto ela é consumida, uma ampulheta aparece
           no assento — a mesa inteira vê que o jogador ainda está decidindo, não que caiu.</p>
+        <p>Nos últimos 10 segundos o assento de quem está decidindo ganha os segundos em número, ao lado do contorno,
+          para o prazo deixar de ser só uma estimativa. Se o seu sistema pede menos movimento, o número aparece
+          durante toda a decisão, porque aí o contorno não anima.</p>
+        <p>Quando a vez é <b>sua</b>, o seu assento pulsa em dourado e o aparelho dá uma vibração curta, uma única
+          vez por vez sua — nunca pela vez de outro jogador, nunca com a aba em segundo plano, e só onde o aparelho
+          tem vibração.</p>
         <p>Sem nenhuma ação até o fim do prazo, o sistema aplica a decisão segura daquele estado: check quando é
           grátis, fold quando há aposta.</p>
         <GuideBullets>
@@ -117,6 +143,9 @@ export default function TableGuide() {
         </GuideBullets>
         <p>A ação preparada dispara sozinha e a barra avisa que está executando. Tocar de novo na mesma opção cancela
           a preparação.</p>
+        <p>As opções ficam sempre em uma única fileira. Em telas estreitas os rótulos encurtam — <b>C/F</b> para
+          Check / Fold, <b>Any</b> para Call Any, e <b>Call</b> sem o valor ao lado — sem diminuir a área de toque;
+          o valor exato continua no nome que o leitor de tela anuncia, e na barra de ações quando a vez chega.</p>
       </>
     },
     {
@@ -130,6 +159,10 @@ export default function TableGuide() {
           espia as duas cartas, ou quando a mão termina.</GuideTerm>
         <GuideTerm term="Mostrar cartas">Terminada a mão, você escolhe quais das suas cartas revelar para a mesa —
           uma, as duas ou nenhuma.</GuideTerm>
+        <GuideTerm term="Pilha e valores">Em mesas sandbox os números de fichas aparecem abreviados para caber ao
+          lado do avatar: <b>1,2K</b> são 1.250 fichas, <b>600K</b> são 600.000, <b>1,5M</b> são 1.500.000. O valor
+          exato continua no nome que o leitor de tela anuncia. Em dinheiro real nada é abreviado — todo valor aparece
+          por inteiro.</GuideTerm>
         <GuideTerm term="Sequência">Um selo V ou D no assento conta as vitórias ou derrotas seguidas daquele
           jogador.</GuideTerm>
         <GuideTerm term="Estilo de jogo">Rótulo de tendência de quem tornou o próprio estilo público. É leitura, não
@@ -151,6 +184,8 @@ export default function TableGuide() {
         <li><span><b>River:</b> a quinta completa o board.</span></li>
         <li><span><b>Showdown:</b> quem ficou compara a melhor combinação de cinco cartas.</span></li>
       </GuideSteps>
+        <p>Embaixo do board ficam quatro pontos, um por rua: os já percorridos acesos, o atual em destaque. Ao lado
+          deles aparece o nome de uma rua só — a atual (<b>Pré-flop</b>, <b>Flop</b>, <b>Turn</b>, <b>River</b>).</p>
         <p>O dealer anuncia cada evento em uma faixa curta sobre o feltro; com o dealer auditivo ligado, o mesmo texto
           é falado.</p></>
     },
@@ -158,7 +193,9 @@ export default function TableGuide() {
       id: 'potes',
       title: 'Potes, empate e rodar duas vezes',
       summary: 'Um all-in pode dividir tanto as fichas quanto o board.',
-      body: <><GuideTerms>
+      body: <><p>No centro do feltro, <b>POTE</b> é uma marca discreta e o valor ao lado é o número maior da mesa —
+        é o que se lê primeiro, antes da trilha de ruas logo abaixo.</p>
+        <GuideTerms>
         <GuideTerm term="Pote principal">Valor disputado por todos os jogadores elegíveis.</GuideTerm>
         <GuideTerm term="Pote lateral">Nasce quando um all-in menor não cobre as apostas seguintes. Cada pote tem seu
           valor e só pode ser ganho por quem contribuiu para ele.</GuideTerm>
@@ -189,7 +226,8 @@ export default function TableGuide() {
         </GuideTerms>
         <p>Enquanto o resultado está na tela, um contador mostra quanto falta para a próxima distribuição. No
           celular em pé o painel encosta na base da mesa, deixando o board e o pote à vista; toque no X para
-          recolhê-lo em um selo.</p></>
+          recolhê-lo em um selo. Quando o acerto é longo — dois boards, vários potes — o painel rola por dentro, sem
+          arrastar a mesa junto, e o X fica parado no canto durante a rolagem.</p></>
     },
     {
       id: 'social',
@@ -213,7 +251,9 @@ export default function TableGuide() {
         <li><span><b>Últimos vencedores:</b> resumo das últimas mãos resolvidas nesta mesa.</span></li>
       </GuideBullets>
         <p>O mesmo menu do assento tem adicionar amigo, silenciar, bloquear, denunciar e abrir a vitrine do
-          jogador.</p></>
+          jogador. No celular basta <b>tocar no assento</b> do adversário para abri-lo; em tela larga, o
+          <b> ⋮</b> discreto no canto do cartão do assento faz o mesmo. Enquanto você está escolhendo o assento que
+          vai receber uma reação, o toque pertence à reação e o menu não abre.</p></>
     },
     {
       id: 'preferencias',
@@ -234,6 +274,9 @@ export default function TableGuide() {
         <li><span><b>Treinador:</b> explica sua mão depois que você age, só em mesas sandbox. Fica indisponível
           durante a sua decisão, para nunca funcionar como dica em tempo real; ao fim da mão, mostra como a sua chance
           mudou rua a rua.</span></li>
+        <li><span><b>Presets de aposta:</b> decide contra o que a fileira de presets de aumento é medida.
+          <b> Mista (padrão)</b> abre em big blinds no pré-flop e passa a frações do pote do flop em diante;
+          <b> Big blind</b> e <b>Pote</b> mantêm o mesmo conjunto em todas as ruas. Fica salvo na sua conta.</span></li>
         <li><span><b>Lembrete de sessão:</b> a cada 30, 60, 90 ou 120 minutos, ou desativado.</span></li>
         <li><span><b>Atalhos de teclado:</b> liga ou desliga F, C, P, R e os atalhos de preparar jogada, sem
           remapeamento. Uma lista mostra o que cada tecla faz enquanto o recurso está ligado.</span></li>

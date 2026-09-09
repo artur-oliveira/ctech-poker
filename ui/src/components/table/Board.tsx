@@ -2,6 +2,8 @@ import {ChipStack} from '@/components/table/ChipStack';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {PotView} from '@/lib/api/table';
 import {Repeat2} from 'lucide-react';
+import {useChipFormat} from '@/lib/chipFormat';
+import {chipsExact} from '@/lib/chips';
 
 const SLOT_SUITS = ['♠', '♥', '♣', '♦', '♠'];
 
@@ -38,15 +40,17 @@ export function Board({cards, boardTwo, splitAt = 0, pot, pots, rake, bigBlind}:
   rake?: number;
   bigBlind?: number
 }) {
+  const chips = useChipFormat();
   return <div className="board">{pot > 0 && <span className="game-pot">
     <ChipStack amount={pot} bigBlind={bigBlind} size="pot"/>
-    POTE <b key={pot}
-            className="pot-value">{pot.toLocaleString('pt-BR')}</b>{rake ?
+    POTE <b key={pot} className="pot-value"
+            aria-label={`Pote de ${chipsExact(pot)} fichas`}>{chips(pot)}</b>{rake ?
     <small title="Comissão da casa cobrada sobre o pote (rake)"
-           aria-label={`Comissão da casa: ${rake.toLocaleString('pt-BR')} fichas`}>rake {rake.toLocaleString('pt-BR')}</small> : null}
+           aria-label={`Comissão da casa: ${chipsExact(rake)} fichas`}>rake {chips(rake)}</small> : null}
     {pots && pots.length > 1 && <span className="side-pots" aria-label="Divisão dos potes">
-      {pots.map((item, index) => <small key={`${index}-${item.amount}`}>
-        {index === 0 ? 'Principal' : `Lateral ${index}`}: {item.amount.toLocaleString('pt-BR')}
+      {pots.map((item, index) => <small key={`${index}-${item.amount}`}
+                                        aria-label={`${index === 0 ? 'Principal' : `Lateral ${index}`}: ${chipsExact(item.amount)} fichas`}>
+        {index === 0 ? 'Principal' : `Lateral ${index}`}: {chips(item.amount)}
       </small>)}
     </span>}</span>}
     {boardTwo?.length ? <div className="board-runouts" aria-label="Duas distribuições do board">

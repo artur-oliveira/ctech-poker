@@ -17,6 +17,7 @@ var ErrEmptyName = errors.New("player: name is empty")
 var ErrInvalidWalletMode = errors.New("player: wallet_mode must be sandbox or real")
 var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
 var ErrInvalidTableTheme = errors.New("player: table_theme must not be empty")
+var ErrInvalidBetPresetMode = errors.New("player: bet_preset_mode must be mixed, bb or pot")
 var ErrCosmeticNotOwned = errors.New("player: cosmetic is premium and not owned")
 var ErrInvalidShowcase = errors.New("player: invalid showcase")
 var ErrInvalidShowcaseLayout = errors.New("player: invalid showcase layout")
@@ -49,6 +50,7 @@ type profileStore interface {
 	SetWalletMode(context.Context, string, string) error
 	SetDeckVariant(context.Context, string, string) error
 	SetTableTheme(context.Context, string, string) error
+	SetBetPresetMode(context.Context, string, string) error
 	SetShowcase(context.Context, string, bool, bool, bool, []string) error
 	SetFavoriteReactions(context.Context, string, []string) error
 	SetReactionWheel(context.Context, string, []string) error
@@ -345,6 +347,20 @@ func (s *Service) SetShowcaseLayout(ctx context.Context, userID string, layout S
 		return nil, errors.New("player: showcase layouts unavailable")
 	}
 	if err := store.SetShowcaseLayout(ctx, userID, layout); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetBetPresetMode persists what the table's quick-bet buttons are sized
+// against. Unlike deck_variant/table_theme the value set is closed and
+// server-owned, so an unknown one is rejected outright rather than stored.
+func (s *Service) SetBetPresetMode(ctx context.Context, userID, mode string) (*PlayerProfile, error) {
+	mode = strings.TrimSpace(mode)
+	if !IsValidBetPresetMode(mode) {
+		return nil, ErrInvalidBetPresetMode
+	}
+	if err := s.store.SetBetPresetMode(ctx, userID, mode); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

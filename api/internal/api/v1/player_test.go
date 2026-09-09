@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -206,6 +207,11 @@ func (s *fakePlayerStore) SetDeckVariant(_ context.Context, id string, variant s
 func (s *fakePlayerStore) SetTableTheme(_ context.Context, id string, theme string) error {
 	s.profile.UserID = id
 	s.profile.TableTheme = theme
+	return nil
+}
+func (s *fakePlayerStore) SetBetPresetMode(_ context.Context, id string, mode string) error {
+	s.profile.UserID = id
+	s.profile.BetPresetMode = mode
 	return nil
 }
 func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public, playstylePublic, tablePublic bool, featured []string) error {
@@ -872,4 +878,65 @@ func TestShowcaseExposesMemberSinceAndMilestones(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestUpdateMeBetPresetMode(t *testing.T) {
+	newApp := func(store *fakePlayerStore) *fiber.App {
+		h := &playerHandlers{players: player.NewService(store)}
+		app := fiber.New()
+		auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
+		app.Post("/players/me", auth, h.updateMe)
+		app.Get("/players/me", auth, h.me)
+		return app
+	}
+	post := func(app *fiber.App, body string) *http.Response {
+		t.Helper()
+		req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	decodeMode := func(resp *http.Response) string {
+		t.Helper()
+		var body struct {
+			BetPresetMode string `json:"bet_preset_mode"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		return body.BetPresetMode
+	}
+
+	store := &fakePlayerStore{}
+	app := newApp(store)
+
+	// Absent preference is normalized to "mixed" on read.
+	resp := post(app, `{}`)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if got := decodeMode(resp); got != "mixed" {
+		t.Fatalf("bet_preset_mode = %q, want %q", got, "mixed")
+	}
+
+	for _, mode := range []string{"bb", "pot", "mixed"} {
+		resp := post(app, `{"bet_preset_mode":"`+mode+`"}`)
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d for %q", resp.StatusCode, mode)
+		}
+		if got := decodeMode(resp); got != mode {
+			t.Fatalf("bet_preset_mode = %q, want %q", got, mode)
+		}
+	}
+
+	resp = post(app, `{"bet_preset_mode":"potato"}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for an unknown bet_preset_mode", resp.StatusCode)
+	}
+	if store.profile.BetPresetMode != "mixed" {
+		t.Fatalf("BetPresetMode = %q after a rejected write, want the previous %q", store.profile.BetPresetMode, "mixed")
+	}
 }

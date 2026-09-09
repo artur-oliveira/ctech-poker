@@ -44,92 +44,6 @@
     font-size: var(--font-size-compact);
     color: var(--text-secondary)
 }
-/* Quick presets sit directly under the server ⅓/½/⅔ row and read as one
-   preset cluster with it. Favouriting is a corner badge on each pill, not a
-   second segmented button per pill (#341 shipped that; it doubled the item
-   count and left the row a wall of outlined stars). The badge stays faint
-   until hover/focus or once pinned, so an unpinned row is just clean pills. */
-.bet-quick-presets {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 7px
-}
-.bet-quick-presets-hint {
-    flex-basis: 100%;
-    margin: 0 0 1px;
-    font-size: var(--font-size-tiny);
-    color: var(--muted)
-}
-.bet-quick-preset {
-    position: relative;
-    display: inline-flex
-}
-.bet-quick-preset .bet-quick-preset-pick {
-    min-height: 40px;
-    /* right padding reserves the badge's corner so the longest label
-       ("All-in") never sits under the star */
-    padding: 2px 30px 2px 14px;
-    white-space: nowrap;
-    font: 600 var(--font-size-compact) var(--font-mono);
-    border-radius: var(--rounded-pill)
-}
-.bet-quick-preset[data-pinned] .bet-quick-preset-pick {
-    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-    color: var(--gold)
-}
-/* 24x24 hit target (WCAG 2.5.8); the star glyph itself stays small via svg size */
-.action-bar .bet-quick-preset-favorite {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    display: grid;
-    place-items: center;
-    width: 24px;
-    min-width: 0;
-    height: 24px;
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    border-radius: var(--rounded-pill);
-    background: transparent;
-    color: var(--muted);
-    opacity: .4;
-    transition: opacity 140ms var(--ease-out-quart), color 140ms var(--ease-out-quart), transform 140ms var(--ease-out-quart)
-}
-.action-bar .bet-quick-preset-favorite svg {
-    width: 12px;
-    height: 12px
-}
-.bet-quick-preset:hover .bet-quick-preset-favorite,
-.bet-quick-preset:focus-within .bet-quick-preset-favorite,
-.bet-quick-preset[data-pinned] .bet-quick-preset-favorite {
-    opacity: 1
-}
-.bet-quick-preset[data-pinned] .bet-quick-preset-favorite {
-    color: var(--gold)
-}
-.action-bar .bet-quick-preset-favorite:hover {
-    transform: scale(1.15)
-}
-@media (hover: none), (pointer: coarse) {
-    .action-bar .bet-quick-preset-favorite {
-        opacity: .5
-    }
-    .action-bar .bet-quick-preset-favorite svg {
-        width: 13px;
-        height: 13px
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    .action-bar .bet-quick-preset-favorite {
-        transition: color 140ms var(--ease-out-quart)
-    }
-    .action-bar .bet-quick-preset-favorite:hover {
-        transform: none
-    }
-}
 .reality-check-title {
     display: inline-flex;
     align-items: center;
@@ -548,4 +462,67 @@
     width: 15px;
     height: 15px;
     color: var(--gold)
+}
+
+/* Seats slide in and out (#8). The independent `translate` property, not
+   `transform`: a balanced seat is centred on its orbit point with
+   `transform: translate(-50%, -50%)` (renderer.css), and a keyframe on
+   `transform` would fling it off the band. `translate` composes with it and
+   stays off the layout path — no width/height/padding/margin is animated, and
+   the ring's own reflow (`left`/`top`) is deliberately not animated at all, so
+   the seat that changed is the only motion on screen.
+
+   A departing seat is held for exactly one animation by TableStage's
+   `useDepartedSeats`; keep SEAT_EXIT_MS in sync with the duration here. */
+@keyframes seat-join {
+    from {
+        opacity: 0;
+        translate: 0 12px
+    }
+}
+@keyframes seat-leave {
+    to {
+        opacity: 0;
+        translate: 0 12px
+    }
+}
+.game-table .game-seat {
+    animation: seat-join 260ms var(--ease-out-quart) both
+}
+.game-table .game-seat[data-seat-leaving] {
+    pointer-events: none;
+    animation: seat-leave 260ms var(--ease-out-quart) both
+}
+@media (prefers-reduced-motion: reduce) {
+    /* Opacity only, and short: the slide is what a vestibular-sensitive player
+       asked not to see, but a seat blinking into existence with no transition
+       at all is a worse read of "somebody sat down". */
+    @keyframes seat-join {
+        from {
+            opacity: 0
+        }
+    }
+    @keyframes seat-leave {
+        to {
+            opacity: 0
+        }
+    }
+    .game-table .game-seat,
+    .game-table .game-seat[data-seat-leaving] {
+        animation-duration: 120ms
+    }
+}
+/* Explanatory line under a preference Select — secondary to the control, and
+   the slot the save error takes over when a mutation is rejected. */
+.table-preference-hint {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: var(--font-size-compact);
+    line-height: 1.4
+}
+.table-preference-hint b {
+    display: block;
+    margin-top: 4px;
+    color: var(--danger-soft)
 }

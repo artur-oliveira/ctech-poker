@@ -53,6 +53,22 @@ off by default — do not build UI that assumes real money is on.
   as the one place the framing lives. `lobbyCodec.test.ts` walks `RealtimeBridge`'s static import
   graph and fails if `poker.ts` reappears in it. See
   `docs/2026-09-04-lobby-codec-and-reconnect-reconcile.md` and #228.
+- **One chip formatter, and abbreviation is opt-in.** `lib/chips.ts` owns
+  `chipsExact` (always `toLocaleString('pt-BR')`) and `chipsShort` (≤4 visible
+  characters: `1,2K`, `600K`, `1,5M`); `lib/chipFormat.ts`'s `useChipFormat()`
+  picks between them from `ChipFormatContext`, which defaults to **exact** and is
+  provided as `room.currency_mode !== 'real'` by the table page. Never abbreviate
+  a real-money figure, and never abbreviate without putting the exact number in
+  the accessible name. New chip readouts go through the hook, not through a bare
+  `toLocaleString`. See `docs/2026-09-08-table-polish-bet-presets.md`.
+- **The bet-preset row is derived, never re-derived.** `stageBetPresets`
+  (`lib/betShortcuts.ts`) is the only place the raise row is built, from the
+  `bet_preset_mode` profile field plus the street. Pot fractions are the
+  server's own `*_raise_to` figures — a pot-size raise absorbs the outstanding
+  call, so `pot * fraction` computed here is a number the server would reject —
+  and `actionState` omits a fraction the server did not send rather than pricing
+  it at the minimum. Every value is snapped, clamped, and duplicates collapse
+  onto the *last* holder so `All in` survives a short stack.
 - **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
   `lib/tableOutcome.ts` etc. instead of inlining URLs, paths or event strings. The same holds in
   CSS: every colour and radius is a token in `globals.css`'s `:root` (the only literals left there
@@ -141,6 +157,20 @@ off by default — do not build UI that assumes real money is on.
   bubble = 1 seat, an equity delta = 1 seat, a full `state` frame ≤ 3). Frame time itself is not
   measured — jsdom has no layout engine and there is no metrics sink. See
   `docs/2026-09-04-table-render-budget.md` and #230.
+- **The seat body is the player menu on touch, unless a reaction is being aimed.**
+  `Seat` sets `data-seat-tap` on `.seat-actions-trigger` whenever
+  `reactionTargetLabel` is absent; the coarse-pointer CSS stretches the same
+  `<button>` over the whole seat only under that attribute. It is one control in
+  both modes — flat and quiet inside the card on desktop, full-bleed and
+  icon-less on touch — so keyboard access and its accessible name never change.
+  Two affordances must never both claim the same tap.
+- **Occupancy narrows the ring, never the felt — including its height.** The
+  per-`data-player-count` rail insets are gone: they resized the table under the
+  player on every join and leave. A seat joining or leaving animates on
+  `translate`/`opacity` (never `transform`, which carries the orbit centring),
+  and the survivors' `left`/`top` reflow is deliberately not animated. A
+  departing seat is held one animation long by `useDepartedSeats` in
+  `TableStage`, inert and unregistered from `lib/seatRects.ts`.
 - **Seats publish their own position.** `lib/seatRects.ts` is where `Seat` registers its element
   and where the reaction layer reads seat centres from. Do not locate a seat with a DOM query, and
   re-measure on `resize`/`orientationchange` rather than caching a rect for the length of an

@@ -6,6 +6,20 @@ import type {TableThemeId} from '../tablePreferences';
 
 export type WalletMode = 'sandbox' | 'real';
 
+/** What the table's quick-bet presets are sized against (#341). The server
+ * normalizes an unset or unrecognised value to 'mixed' on read; the client
+ * still defaults defensively, because an older server answers with no field
+ * at all. */
+export type BetPresetMode = 'mixed' | 'bb' | 'pot';
+export const DEFAULT_BET_PRESET_MODE: BetPresetMode = 'mixed';
+export const BET_PRESET_MODES: BetPresetMode[] = ['mixed', 'bb', 'pot'];
+
+/** Guards a profile value that may be absent (older server) or a string the
+ * client does not know (newer server). */
+export function betPresetMode(value?: string): BetPresetMode {
+  return (BET_PRESET_MODES as string[]).includes(value ?? '') ? value as BetPresetMode : DEFAULT_BET_PRESET_MODE;
+}
+
 // Showcase layout (#335). Achievements is reorderable but never hideable —
 // it already has its own "no achievement selected" empty copy, so hiding it
 // entirely would just duplicate that with less explanation. Best hand and
@@ -54,7 +68,7 @@ export interface PlayerProfile {
   playstyle_public: boolean;
   featured_achievements?: string[];
   favorite_reactions?: string[];
-  favorite_bet_presets?: string[];
+  bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
   playstyle?: PlaystyleBadge[];
 }
@@ -85,7 +99,7 @@ export async function updateMe(input: {
   playstyle_public?: boolean;
   featured_achievements?: string[];
   favorite_reactions?: string[];
-  favorite_bet_presets?: string[];
+  bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
