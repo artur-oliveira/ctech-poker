@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
-import {betShortcutAmount, FAST_STEP_STRIDE, stageBetPresets} from './betShortcuts.ts';
+import {betShortcutAmount, clampSnapRaise, FAST_STEP_STRIDE, stageBetPresets} from './betShortcuts.ts';
 import {actionState} from './tableActions.ts';
 
 test('A selects all-in amount without representing submission', () => {
@@ -94,4 +94,19 @@ test('actionState omits a pot fraction the server did not send', () => {
   } as unknown as Parameters<typeof actionState>[0];
   const labels = actionState(snapshot, 'me').raisePresets.map(preset => preset.label);
   assert.deepEqual(labels, ['Mín', '½ pote', 'Máx']);
+});
+
+test('clampSnapRaise snaps a typed amount to the table increment', () => {
+  assert.equal(clampSnapRaise(733, 100, 1000, 25), 725);
+  assert.equal(clampSnapRaise(740, 100, 1000, 25), 750);
+});
+
+test('clampSnapRaise clamps AFTER snapping, so a bound off the increment grid still wins', () => {
+  // 610 is not a multiple of 25; snapping 605 to 600 must not fall below the minimum.
+  assert.equal(clampSnapRaise(605, 610, 1000, 25), 610);
+  assert.equal(clampSnapRaise(9999, 100, 990, 25), 990);
+});
+
+test('clampSnapRaise treats a zero increment as one chip rather than dividing by it', () => {
+  assert.equal(clampSnapRaise(733, 100, 1000, 0), 733);
 });

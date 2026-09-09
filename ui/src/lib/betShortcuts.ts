@@ -4,6 +4,19 @@ import type {BetPresetMode} from '@/lib/api/player';
  * by it; the hold-repeat ramp scales the same way. */
 export const FAST_STEP_STRIDE = 3;
 
+/** Snap to the table's raise increment, then clamp into `[min, max]`.
+ *
+ * The one place that turns "a number a player asked for" into "a number the
+ * server will accept": the quick-bet row snaps its fractions with it, and the
+ * typed amount field applies it once on blur/Enter (never per keystroke — see
+ * `checkBetInput`). Clamping last is deliberate: `min` and `max` are the
+ * server's own figures and need not sit on the increment grid, so snapping
+ * after them could push a value back outside the legal range. */
+export function clampSnapRaise(value: number, min: number, max: number, step: number): number {
+  const safeStep = Math.max(1, step);
+  return Math.min(max, Math.max(min, Math.round(value / safeStep) * safeStep));
+}
+
 export function betShortcutAmount(
   key: string,
   current: number,
@@ -49,8 +62,7 @@ export function stageBetPresets({mode, stage, bigBlind, serverPresets, minRaise,
   raiseStep: number;
 }): { label: string; value: number }[] {
   if (maxRaise < minRaise) return [];
-  const clamp = (value: number) =>
-    Math.min(maxRaise, Math.max(minRaise, Math.round(value / Math.max(1, raiseStep)) * Math.max(1, raiseStep)));
+  const clamp = (value: number) => clampSnapRaise(value, minRaise, maxRaise, raiseStep);
   const useBigBlind = mode === 'bb' || (mode === 'mixed' && stage === 'pre_flop');
   const base = useBigBlind
     ? BB_PRESETS.map(({label, multiple}) => ({label, value: clamp(multiple * Math.max(1, bigBlind))}))

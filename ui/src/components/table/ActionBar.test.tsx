@@ -2,6 +2,7 @@ import {act, fireEvent, render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, test, vi} from 'vitest';
 import {type ActionAvailability, ActionBar} from './ActionBar';
+import {ChipFormatContext} from '@/lib/chipFormat';
 
 const allActions: ActionAvailability = {fold: true, check: true, call: true, raise: true};
 
@@ -485,3 +486,148 @@ function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof Act
     stage: 'pre_flop', bigBlind: 100, ...overrides,
   } as React.ComponentProps<typeof ActionBar>;
 }
+
+describe('ActionBar typed raise amount', () => {
+  // The table wraps the bar in a sandbox ChipFormatContext; without one the
+  // bar is in real-money mode, which has different input rules.
+  const renderSandbox = (overrides: Partial<React.ComponentProps<typeof ActionBar>> = {}) =>
+    render(<ChipFormatContext value={true}><ActionBar {...renderActionBarProps(overrides)}/></ChipFormatContext>);
+  // Desktop and the compact sheet each render one; CSS shows one at a time and
+  // they share the same amount, so the tests drive the first.
+  const field = () => screen.getAllByRole('textbox')[0] as HTMLInputElement;
+  const note = () => document.querySelector('.bet-clamped-note')?.textContent ?? null;
+  const retype = (keys: string) => userEvent.keyboard('{Control>}a{/Control}' + keys);
+
+  test('is a filterable text field, never a number input', () => {
+    renderSandbox();
+    expect(field()).toHaveAttribute('type', 'text');
+    expect(field()).toHaveAttribute('inputmode', 'numeric');
+  });
+
+  test('shows the exact figure once it is editable, abbreviated when it is not', async () => {
+    renderSandbox({minRaise: 250_000, maxRaise: 900_000, raiseStep: 1});
+    expect(field()).toHaveValue('250K');
+    await userEvent.click(field());
+    expect(field()).toHaveValue('250000');
+  });
+
+  test('takes an exact amount the stepper could not reach and moves the slider with it', async () => {
+    renderSandbox();
+    await userEvent.click(field());
+    await retype('725');
+    expect(field()).toHaveValue('725');
+    expect(slider()).toHaveValue('725');
+  });
+
+  test.each([
+    ['a letter', 'a', '150', 'Apenas números.'],
+    ['an exponent', 'e', '150', 'Apenas números.'],
+    ['a minus sign', '-', '150', 'Apenas números.'],
+    ['a plus sign', '+', '150', 'Apenas números.'],
+    ['a space', ' ', '150', 'Apenas números.'],
+    ['a decimal separator in sandbox chips', ',', '150', 'Fichas sandbox não têm centavos.'],
+    ['a digit after a leading zero', '05', '0', 'Sem zero à esquerda.']
+  ])('refuses %s and says why', async (_label, keys, expected, message) => {
+    renderSandbox();
+    await userEvent.click(field());
+    await retype(keys);
+    expect(field()).toHaveValue(expected);
+    expect(note()).toBe(message);
+  });
+
+  test('blocks the keystroke that would cross maxRaise, on the value and not the digit count', async () => {
+    renderSandbox();
+    await userEvent.click(field());
+    await retype('999');
+    expect(field()).toHaveValue('999');
+    // The ceiling itself is typable...
+    await retype('1000');
+    expect(field()).toHaveValue('1000');
+    // ...one chip past it is not, and neither is a fourth digit on 999.
+    await userEvent.keyboard('0');
+    expect(field()).toHaveValue('1000');
+    expect(note()).toBe('Máximo 1.000 fichas.');
+  });
+
+  test('runs a paste through the same filter', async () => {
+    renderSandbox();
+    await userEvent.click(field());
+    await userEvent.keyboard('{Control>}a{/Control}');
+    await userEvent.paste('99999');
+    expect(field()).toHaveValue('150');
+    expect(note()).toBe('Máximo 1.000 fichas.');
+    await userEvent.keyboard('{Control>}a{/Control}');
+    await userEvent.paste('400');
+    expect(field()).toHaveValue('400');
+    expect(note()).toBeNull();
+  });
+
+  test('lets a below-minimum prefix be typed, then clamps it on blur', async () => {
+    renderSandbox();
+    await userEvent.click(field());
+    await retype('7');
+    // Not blocked: blocking here is what makes a deep raise untypable.
+    expect(field()).toHaveValue('7');
+    await userEvent.tab();
+    expect(slider()).toHaveValue('150');
+    expect(note()).toBe('ajustado ao mínimo');
+  });
+
+  test('snaps an off-increment amount on blur and names where it landed', async () => {
+    renderSandbox();
+    await userEvent.click(field());
+    await retype('733');
+    await userEvent.tab();
+    expect(slider()).toHaveValue('725');
+    expect(note()).toBe('arredondado para 725');
+  });
+
+  test('accepts an empty field while focused and resets to the minimum on blur', async () => {
+    renderSandbox();
+    await userEvent.click(field());
+    await retype('{Backspace}');
+    expect(field()).toHaveValue('');
+    await userEvent.tab();
+    expect(slider()).toHaveValue('150');
+  });
+
+  test('Enter commits without submitting, Escape abandons the draft', async () => {
+    const {onActAction} = renderActionBarWithSpy();
+    await userEvent.click(field());
+    await retype('733{Enter}');
+    expect(slider()).toHaveValue('725');
+    expect(onActAction).not.toHaveBeenCalled();
+
+    await userEvent.click(field());
+    await retype('900{Escape}');
+    expect(slider()).toHaveValue('725');
+  });
+
+  test('keeps the action shortcuts out of the field while it has focus', async () => {
+    const {onActAction} = renderActionBarWithSpy();
+    await userEvent.click(field());
+    await userEvent.keyboard('f');
+    expect(onActAction).not.toHaveBeenCalled();
+    expect(field()).toHaveValue('150');
+  });
+
+  test('takes centavos in real money, where the chips are not play money', async () => {
+    render(<ActionBar {...renderActionBarProps({})}/>);
+    const money = field();
+    expect(money).toHaveAttribute('inputmode', 'decimal');
+    await userEvent.click(money);
+    await retype('200,25');
+    expect(money).toHaveValue('200,25');
+    await userEvent.keyboard('5');
+    expect(money).toHaveValue('200,25');
+    expect(note()).toBe('No máximo 2 casas decimais.');
+  });
+
+  function renderActionBarWithSpy() {
+    const onActAction = vi.fn(() => true);
+    render(<ChipFormatContext value={true}>
+      <ActionBar {...renderActionBarProps({onActAction})}/>
+    </ChipFormatContext>);
+    return {onActAction};
+  }
+});

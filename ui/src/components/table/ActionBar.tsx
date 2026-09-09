@@ -8,15 +8,17 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
-import {betShortcutAmount, FAST_STEP_STRIDE, stageBetPresets} from '@/lib/betShortcuts';
+import {betShortcutAmount, clampSnapRaise, FAST_STEP_STRIDE, stageBetPresets} from '@/lib/betShortcuts';
+import {betCommitNote, checkBetInput} from '@/lib/betInput';
 import type {BetPresetMode} from '@/lib/api/player';
-import {useChipFormat} from '@/lib/chipFormat';
+import {useChipFormat, useSandboxChips} from '@/lib/chipFormat';
 import {chipsExact} from '@/lib/chips';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {isPlainKey, isTypingTarget} from '@/lib/utils';
 import {useHoldRepeat} from '@/lib/hooks/useHoldRepeat';
+import {useTurnHaptic} from '@/lib/hooks/useTurnHaptic';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -104,27 +106,121 @@ function BetStepButton({direction, disabled, onStep}: {
   );
 }
 
-function BetAmountOutput({amount, maxAmount, isAllIn, wasClamped, className}: {
+/** The raise total, and the one place a player can type it.
+ *
+ * It was a read-only `<output>`: the `+`/`−` hold-repeat tops out at a stride
+ * of 10x`raiseStep` and the range slider is desktop-only, so on a deep stack
+ * there was no way to name an exact number at all.
+ *
+ * `type="text"`, never `type="number"`: a number input silently accepts `e`,
+ * `+` and `-`, and reports `value === ''` for anything it considers invalid,
+ * which leaves nothing to filter. Validation is a controlled-value revert —
+ * one `onChange` path, so a keystroke, a paste, a drop and an IME commit all
+ * go through `checkBetInput` and a rejected candidate simply never becomes
+ * state. `minRaise`/`raiseStep` are NOT enforced here (see `checkBetInput`):
+ * they land once, on blur or Enter, via `clampSnapRaise`. */
+function BetAmountField({id, amount, minAmount, maxAmount, raiseStep, isAllIn, wasClamped, disabled, className,
+                          onAmountAction}: {
+  id: string;
   amount: number;
+  minAmount: number;
   maxAmount: number;
+  raiseStep: number;
   isAllIn: boolean;
   wasClamped: boolean;
+  disabled: boolean;
   className: string;
+  onAmountAction: (amount: number) => void;
 }) {
   const progress = maxAmount > 0 ? Math.min(1, amount / maxAmount) : 0;
   const chips = useChipFormat();
+  const sandbox = useSandboxChips();
+  // null means "not being edited": the field then shows the same abbreviated
+  // figure every other chip readout on the table shows. The moment it is
+  // editable it holds exact, round-trippable digits instead.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [rejected, setRejected] = useState('');
+  // Escape blurs the field synchronously, before React has flushed the state
+  // update that cleared the draft — so `commit` would still see (and commit)
+  // the very draft Escape was abandoning. A ref is read at the same instant it
+  // is written, which is the whole point here.
+  const abandoned = useRef(false);
+  // What the field held when editing started, so Escape can put it back: every
+  // accepted keystroke has already published its amount to the slider and the
+  // raise button, and "abandon" has to undo those too, not just the text.
+  const enteredWith = useRef(amount);
+
+  function commit() {
+    if (abandoned.current) {
+      abandoned.current = false;
+      setDraft(null);
+      setRejected('');
+      return;
+    }
+    const parsed = draft === null || draft === '' ? minAmount : Number(draft.replace(',', '.'));
+    const typed = Number.isFinite(parsed) ? parsed : minAmount;
+    const settled = clampSnapRaise(typed, minAmount, maxAmount, raiseStep);
+    onAmountAction(settled);
+    setDraft(null);
+    // `wasClamped` cannot carry this any more: commit snaps `amount` itself,
+    // so amount === safeAmount by the time the note would have rendered.
+    setRejected(betCommitNote(typed, settled, minAmount));
+  }
+
   return (
-    <output className={`${className}${isAllIn ? ' is-all-in' : ''}`} htmlFor="raise-amount"
-            aria-label={`${isAllIn ? 'All In' : 'Total'} ${chipsExact(amount)}`}>
+    <span className={`${className}${isAllIn ? ' is-all-in' : ''}`}>
       <small>{isAllIn ? 'All In' : 'Total'}</small>
-      {chips(amount)}
+      <input id={id} className="bet-amount-input" type="text" disabled={disabled}
+             inputMode={sandbox ? 'numeric' : 'decimal'} autoComplete="off" enterKeyHint="done"
+             aria-label={`Valor total do aumento, em fichas. Máximo ${chipsExact(maxAmount)}`}
+             aria-describedby="action-context"
+             value={draft ?? chips(amount)}
+             onFocus={event => {
+               // Write the exact figure straight to the node before the state
+               // update so `select()` selects THAT, not the abbreviation it is
+               // replacing — typing then overwrites instead of appending.
+               const exact = String(amount);
+               enteredWith.current = amount;
+               event.currentTarget.value = exact;
+               event.currentTarget.select();
+               setDraft(exact);
+             }}
+             onChange={event => {
+               const check = checkBetInput(event.target.value, {maxRaise: maxAmount, allowFraction: !sandbox});
+               if (!check.ok) {
+                 setRejected(check.reason);
+                 return;
+               }
+               setRejected('');
+               setDraft(event.target.value);
+               if (check.amount != null) onAmountAction(check.amount);
+             }}
+             onBlur={commit}
+             onKeyDown={event => {
+               if (event.key === 'Enter') {
+                 event.preventDefault();
+                 commit();
+                 event.currentTarget.blur();
+               } else if (event.key === 'Escape') {
+                 abandoned.current = true;
+                 onAmountAction(enteredWith.current);
+                 setDraft(null);
+                 setRejected('');
+                 event.currentTarget.blur();
+               }
+             }}/>
       <span className="bet-commitment-meter" aria-hidden="true">
         <i style={{'--bet-progress': progress} as CSSProperties}/>
       </span>
-      {wasClamped && <small className="bet-clamped-note" role="status">
-        {isAllIn ? 'ajustado ao máximo' : 'ajustado ao mínimo'}
-      </small>}
-    </output>
+      {/* A rejected keystroke that just vanishes reads as a broken field, so
+          it says why. The clamp note is suppressed mid-edit: "ajustado ao
+          mínimo" while someone is still typing the first digit of 250.000 is
+          a lie about a value they have not finished naming. */}
+      {rejected ? <small className="bet-clamped-note" role="status">{rejected}</small> :
+        draft === null && wasClamped ? <small className="bet-clamped-note" role="status">
+          {isAllIn ? 'ajustado ao máximo' : 'ajustado ao mínimo'}
+        </small> : null}
+    </span>
   );
 }
 
@@ -388,12 +484,14 @@ function RaiseControl({
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}
              aria-valuetext={`Total ${chipsExact(safeAmount)} fichas${isAllIn ? ', All In' : ''}`}/>
-      <BetAmountOutput className="bet-output bet-output-desktop" amount={safeAmount} maxAmount={maxRaise}
-                       isAllIn={isAllIn} wasClamped={wasClamped}/>
+      <BetAmountField id="raise-amount-typed" className="bet-output bet-output-desktop" amount={safeAmount}
+                      minAmount={minRaise} maxAmount={maxRaise} raiseStep={raiseStep} disabled={inactive}
+                      isAllIn={isAllIn} wasClamped={wasClamped} onAmountAction={setAmount}/>
       <div className="bet-stepper" role="group" aria-label="Ajustar valor do aumento">
         <BetStepButton direction={-1} disabled={inactive} onStep={multiplier => adjust(-1, multiplier)}/>
-        <BetAmountOutput className="bet-output bet-output-mobile" amount={safeAmount} maxAmount={maxRaise}
-                         isAllIn={isAllIn} wasClamped={wasClamped}/>
+        <BetAmountField id="raise-amount-typed-compact" className="bet-output bet-output-mobile" amount={safeAmount}
+                        minAmount={minRaise} maxAmount={maxRaise} raiseStep={raiseStep} disabled={inactive}
+                        isAllIn={isAllIn} wasClamped={wasClamped} onAmountAction={setAmount}/>
         <BetStepButton direction={1} disabled={inactive} onStep={multiplier => adjust(1, multiplier)}/>
       </div>
     </label>
@@ -447,6 +545,8 @@ export function ActionBar({
                             bigBlind
                           }: Props) {
   const chips = useChipFormat();
+  // One short buzz when the turn opens, for the player who has looked away.
+  useTurnHaptic(isTurn);
   const [raiseSizing, setRaiseSizing] = useState(false);
   const [raiseScope, setRaiseScope] = useState(actionKey);
   if (raiseScope !== actionKey) {

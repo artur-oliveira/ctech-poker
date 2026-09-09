@@ -18,3 +18,9 @@ export const ChipFormatContext = createContext(false);
 export function useChipFormat(): (amount: number) => string {
   return useContext(ChipFormatContext) ? chipsShort : chipsExact;
 }
+
+/** True where the surface renders play-money chips: abbreviated on display,
+ * and whole units on input — sandbox has no fractional chip. */
+export function useSandboxChips(): boolean {
+  return useContext(ChipFormatContext);
+}
