@@ -5021,6 +5021,10 @@
 .stage-v-ring .seat-info span {
     display: block;
     overflow: hidden;
+    /* On the ring the caption sits straight on the felt, with no seat card
+       behind it — --gold does not clear AA there. See --seat-stack-ink. */
+    color: var(--seat-stack-ink);
+    font-weight: 700;
     text-overflow: ellipsis;
     font-size: var(--font-size-tiny);
     white-space: nowrap
@@ -6372,7 +6376,11 @@ html:has(.game),
         max-width: 78px;
         padding: 3px 4px
     }
-.stage-v-ring .seat-info b,
+/* The name stays out of the ring caption on handhelds (#9): two 10px lines
+       under a 40px avatar meant neither one was readable, and the avatar's own
+       initials plus its colour already identify the player. The name is still
+       in the DOM (and in the seat's title) for assistive tech; desktop keeps
+       it on the seat card. */
     .stage-v-ring .seat-info .seat-state {
         position: static;
         display: block;
@@ -6396,9 +6404,12 @@ html:has(.game),
         text-overflow: clip;
         line-height: 1.05
     }
-.stage-v-ring .seat-info span {
-        color: var(--text-secondary);
-        font-size: 11px;
+/* The stack is the caption now, so it gets the size and the contrast the
+       name used to share with it. */
+    .stage-v-ring .seat-info span {
+        color: var(--seat-stack-ink);
+        font-size: 13px;
+        font-weight: 700;
         line-height: 1.15
     }
 /* "fichas" costs ~33px of a caption lane that is 64-78px wide, and a
@@ -8533,14 +8544,17 @@ html:has(.has-tab-bar) {
     cursor: not-allowed;
     opacity: .6
 }
-/* Sits exactly where the old single-purpose note trigger did, but stays
-   visible: it now opens the whole player menu (profile, friendship, note,
-   mute, block, report), so it is not a hover-only affordance any more. */
+/* A flat affordance inside the seat card, not a chip floating off its corner:
+   the circular badge read as a second, louder control than the seat it belongs
+   to and hung over the neighbouring stack at 9-max. Quiet by default, full
+   strength once the seat is hovered or anything inside it has focus, and never
+   over the stack or the hole cards. The note dot stays at full opacity in both
+   states — it is information, not an affordance. */
 .seat-actions-trigger {
     position: absolute;
     z-index: 5;
-    top: -10px;
-    right: -10px;
+    top: 3px;
+    right: 3px;
     display: grid;
     place-items: center
 }
@@ -8554,14 +8568,32 @@ html:has(.has-tab-bar) {
 }
 .seat-actions-trigger button {
     position: relative;
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     min-width: 0;
     min-height: 0;
     padding: 0;
+    border: 0;
     border-radius: var(--rounded-pill);
-    background: var(--surface-control);
-    color: var(--muted-rose)
+    background: transparent;
+    color: var(--muted-rose);
+    opacity: .45;
+    transition: opacity 150ms var(--ease-out-quart), background-color 150ms var(--ease-out-quart)
+}
+.seat-actions-trigger button svg {
+    width: 15px;
+    height: 15px
+}
+.game-seat:hover .seat-actions-trigger button,
+.game-seat:focus-within .seat-actions-trigger button,
+.seat-actions-trigger button[aria-expanded='true'] {
+    opacity: 1;
+    background: var(--surface-control)
+}
+@media (prefers-reduced-motion: reduce) {
+    .seat-actions-trigger button {
+        transition: none
+    }
 }
 /* Same invisible-padding trick as .seat-note-trigger: keep the 44px touch
    target without inflating the visible badge. */
@@ -8873,5 +8905,47 @@ html:has(.has-tab-bar) {
     .stage-v-ring .seat-zone-right .seat-bet b {
         padding: 2px 5px;
         font-size: 9px
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Touch: the seat body IS the player menu (#5). There is no hover to reveal a
+   trigger with, and a 22px badge on a 40px avatar chip is not a tap target, so
+   on coarse pointers the trigger stretches over the whole seat and its icon
+   goes away. `data-seat-tap` is Seat's own gate: while a reaction is being
+   aimed at this seat the attribute is absent, the overlay collapses back to
+   the badge, and the tap belongs to .seat-reaction-target (z-index 8) instead.
+   Keyboard is unaffected — it is the same <button>, still focusable, still
+   named "Ações para <jogador>". */
+@media (hover: none), (pointer: coarse) {
+    .seat-actions-trigger[data-seat-tap] {
+        position: absolute;
+        z-index: 3;
+        inset: 0;
+        display: block
+    }
+
+    .seat-actions-trigger[data-seat-tap] button,
+    .stage-v-ring .seat-actions-trigger[data-seat-tap] button {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: transparent;
+        opacity: 1
+    }
+
+    .seat-actions-trigger[data-seat-tap] button svg {
+        display: none
+    }
+
+    .seat-actions-trigger[data-seat-tap] button::before {
+        inset: 0
+    }
+
+    .seat-actions-trigger[data-seat-tap] .player-note-dot {
+        top: 2px;
+        right: 2px
     }
 }

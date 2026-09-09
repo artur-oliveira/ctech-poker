@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, test, vi} from 'vitest';
 import {Seat} from './Seat';
 import type {SeatView} from '@/lib/api/table';
+import {ChipFormatContext} from '@/lib/chipFormat';
 
 vi.mock('@/lib/hooks/useReducedMotionCountdown', () => ({useReducedMotionCountdown: () => 7}));
 vi.mock('@/lib/hooks/useDeckVariant', () => ({useDeckVariant: () => 'four-color'}));
@@ -411,5 +412,39 @@ describe('Seat', () => {
   test('marks a seat still waiting for its player name', () => {
     const {container} = render_({seat: seat({name: undefined})});
     expect(container.querySelector('.game-seat')).toHaveClass('is-pending-name');
+  });
+});
+
+describe('Seat chip amounts and the touch tap target', () => {
+  test('sandbox abbreviates every visible chip amount and keeps the exact figure in the accessible name', () => {
+    const {container} = render(<ChipFormatContext.Provider value={true}>
+      <Seat seat={seat({stack: 1_250_000, contributed: 600_000})} isViewer={false} isTurn={false} index={0}
+            isWinner winAmount={1_500_000} refundAmount={2500}/>
+    </ChipFormatContext.Provider>);
+    expect(screen.getByLabelText('1.250.000 fichas')).toHaveTextContent('1,2M');
+    expect(screen.getByLabelText('Aposta de 600.000 fichas')).toHaveTextContent('600K');
+    expect(screen.getByLabelText('Ganhou 1.500.000 fichas')).toHaveTextContent('+1,5M');
+    expect(screen.getByLabelText('Devolvido 2.500 fichas')).toHaveTextContent('2,5K');
+    expect(container.textContent).not.toContain('1.250.000');
+  });
+
+  test('real money is never abbreviated — the default outside the sandbox provider', () => {
+    render_({seat: seat({stack: 1_250_000, contributed: 600_000})});
+    expect(screen.getByLabelText('1.250.000 fichas')).toHaveTextContent('1.250.000');
+    expect(screen.getByLabelText('Aposta de 600.000 fichas')).toHaveTextContent('600.000');
+  });
+
+  test('the whole seat is the menu trigger on touch, until a reaction is being aimed at it', () => {
+    const menu = () => <button type="button">seat-menu</button>;
+    const {container, rerender} = render(<Seat seat={seat()} isViewer={false} isTurn={false} index={0}
+                                               renderActionsMenu={menu}/>);
+    expect(container.querySelector('.seat-actions-trigger')).toHaveAttribute('data-seat-tap');
+
+    // Aiming a reaction hands the seat body to .seat-reaction-target instead;
+    // the trigger collapses back to its badge so the two cannot both claim the tap.
+    rerender(<Seat seat={seat()} isViewer={false} isTurn={false} index={0} renderActionsMenu={menu}
+                   reactionTargetLabel="Jogar tomate" onReactionTarget={vi.fn()}/>);
+    expect(container.querySelector('.seat-actions-trigger')).not.toHaveAttribute('data-seat-tap');
+    expect(container.querySelector('.seat-reaction-target')).toBeInTheDocument();
   });
 });

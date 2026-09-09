@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, test, vi} from 'vitest';
 import {type ActionAvailability, ActionBar} from './ActionBar';
@@ -40,11 +40,10 @@ function renderActionBar(overrides: Partial<React.ComponentProps<typeof ActionBa
     onPreselectAction: vi.fn(() => true),
     timeBankMs: 30_000,
     voiceCommands: false,
-    pot: 200,
     shortcutsEnabled: true,
-    favoriteBetPresets: [],
-    favoriteBetPresetsSaving: false,
-    onToggleFavoriteBetPresetAction: vi.fn(),
+    betPresetMode: 'mixed',
+    stage: 'pre_flop',
+    bigBlind: 100,
     ...overrides,
   };
   render(<ActionBar {...props}/>);
@@ -290,7 +289,13 @@ describe('table presentation', () => {
     expect(container.querySelectorAll('.seat-playstyle')).toHaveLength(1);
     expect(container.querySelector('.table-callout')).toHaveTextContent('Flop: ás de copas');
     expect(container.querySelector('.table-callout')).not.toHaveTextContent('Etapa: flop');
-    expect(container.querySelector('.street-progress .is-current')).toHaveTextContent('Pré');
+    // Bare pips plus one word: the current pip carries no label of its own,
+    // the single .street-progress-label names the street the hand is on, and
+    // the whole strip announces its position as one image.
+    expect(container.querySelector('.street-progress .is-current')).toBeInTheDocument();
+    expect(container.querySelector('.street-progress-pips')?.textContent).toBe('');
+    expect(container.querySelector('.street-progress-label')).toHaveTextContent('Pré-flop');
+    expect(container.querySelector('.street-progress')).toHaveAttribute('aria-label', 'Pré-flop — etapa 1 de 4');
   });
 
   test('the felt names the current stage and, once armed, the next-hand countdown', () => {
@@ -708,5 +713,45 @@ describe('hand outcome', () => {
     rerender(<HandOutcomeBanner outcome={{key: 20, kind: 'win', handCategory: 'pair'}} holdOpen/>);
     expect(document.querySelector('.hand-outcome-card')).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /Ver resultado/})).not.toBeInTheDocument();
+  });
+});
+
+describe('TableStage seat departures (#8)', () => {
+  const stage = (snapshot: ReturnType<typeof snapshotForScenario>) =>
+    <TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={9} seatLayoutKey="room-1"
+                pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>;
+
+  test('keeps a departed seat mounted for one exit animation, then drops it', () => {
+    vi.useFakeTimers();
+    try {
+      const full = snapshotForScenario('pre_flop');
+      const leaver = full.seats.find(seat => seat.player_id !== MOCK_PLAYER_ID)!;
+      const shorter = {...full, seats: full.seats.filter(seat => seat.player_id !== leaver.player_id)};
+      const {container, rerender} = render(stage(full));
+      expect(container.querySelectorAll('[data-seat-leaving]')).toHaveLength(0);
+
+      rerender(stage(shorter));
+      const ghost = container.querySelector('[data-seat-leaving]');
+      expect(ghost).toBeInTheDocument();
+      // Inert while it plays: no reaction target, no seat registration, nothing
+      // for assistive tech to read twice.
+      expect(ghost).toHaveAttribute('aria-hidden', 'true');
+      expect(container.querySelectorAll('.game-seat')).toHaveLength(full.seats.length);
+
+      act(() => void vi.advanceTimersByTime(400));
+      expect(container.querySelectorAll('[data-seat-leaving]')).toHaveLength(0);
+      expect(container.querySelectorAll('.game-seat')).toHaveLength(shorter.seats.length);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a seat arriving leaves no ghost behind', () => {
+    const full = snapshotForScenario('pre_flop');
+    const shorter = {...full, seats: full.seats.slice(0, 2)};
+    const {container, rerender} = render(stage(shorter));
+    rerender(stage(full));
+    expect(container.querySelectorAll('[data-seat-leaving]')).toHaveLength(0);
+    expect(container.querySelectorAll('.game-seat')).toHaveLength(full.seats.length);
   });
 });

@@ -32,11 +32,10 @@ function renderActionBar(overrides: Partial<React.ComponentProps<typeof ActionBa
     onPreselectAction,
     timeBankMs: 30_000,
     voiceCommands: false,
-    pot: 200,
     shortcutsEnabled: true,
-    favoriteBetPresets: [],
-    favoriteBetPresetsSaving: false,
-    onToggleFavoriteBetPresetAction: vi.fn(),
+    betPresetMode: 'mixed',
+    stage: 'pre_flop',
+    bigBlind: 100,
     ...overrides,
   };
   const view = render(<ActionBar {...props}/>);
@@ -56,32 +55,18 @@ afterEach(() => {
 describe('ActionBar raise controls', () => {
   test('jumps the amount to a preset and keeps the raise button in sync', async () => {
     renderActionBar();
-    await userEvent.click(screen.getByRole('button', {name: '½ pote'}));
-    expect(slider()).toHaveValue('250');
-    expect(slider()).toHaveAttribute('aria-valuetext', 'Total 250 fichas');
-    expect(document.querySelector('.bet-commitment-meter i')).toHaveStyle('--bet-progress: 0.25');
+    await userEvent.click(screen.getByRole('button', {name: '2BB: aumentar para 200'}));
+    expect(slider()).toHaveValue('200');
+    expect(slider()).toHaveAttribute('aria-valuetext', 'Total 200 fichas');
+    expect(document.querySelector('.bet-commitment-meter i')).toHaveStyle('--bet-progress: 0.2');
   });
 
   test('reads the maximum raise as an all-in instead of a number', async () => {
     renderActionBar();
-    await userEvent.click(screen.getByRole('button', {name: 'Máx'}));
+    await userEvent.click(screen.getByRole('button', {name: 'All in: aumentar para 1.000'}));
     expect(screen.getByRole('button', {name: /All In/})).toBeInTheDocument();
     expect(slider()).toHaveAttribute('aria-valuetext', 'Total 1.000 fichas, All In');
     expect(document.querySelector('.bet-output.is-all-in .bet-commitment-meter i')).toHaveStyle('--bet-progress: 1');
-  });
-
-  test('keeps the explicit minimum and maximum names when clamped presets duplicate them', () => {
-    renderActionBar({
-      minRaise: 100,
-      maxRaise: 1000,
-      raisePresets: [
-        {label: 'Mín', value: 100}, {label: '½ pote', value: 75},
-        {label: 'Pote', value: 1200}, {label: 'Máx', value: 1000},
-      ],
-    });
-    expect(screen.getByRole('button', {name: 'Mín'})).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Máx'})).toBeInTheDocument();
-    expect(screen.queryByRole('button', {name: '½ pote'})).not.toBeInTheDocument();
   });
 
   test('clamps an amount the server no longer allows and says which bound it hit', () => {
@@ -230,21 +215,6 @@ describe('ActionBar raise controls', () => {
     expect(slider()).toHaveValue(String(stopped));
   });
 
-  test('falls back to first and last duplicate presets when explicit bound names are absent', () => {
-    renderActionBar({
-      minRaise: 100,
-      maxRaise: 1000,
-      raisePresets: [
-        {label: 'Abrir', value: 50}, {label: 'Dobrar', value: 100},
-        {label: 'Pote', value: 1200}, {label: 'Tudo', value: 1400},
-      ],
-    });
-    expect(screen.getByRole('button', {name: 'Abrir'})).toBeInTheDocument();
-    expect(screen.queryByRole('button', {name: 'Dobrar'})).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', {name: 'Pote'})).not.toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Tudo'})).toBeInTheDocument();
-  });
-
   test('closes mobile sizing when the action scope changes', async () => {
     vi.mocked(window.matchMedia).mockReturnValue({matches: true} as MediaQueryList);
     const {view} = renderActionBar();
@@ -340,7 +310,7 @@ describe('ActionBar preselection', () => {
       canPreselect: true, selectionScope: 'hand-1:flop', isTurn: false,
     });
     const option = () => within(document.querySelector<HTMLElement>('.action-preselectors')!)
-      .getByRole('button', {name: 'FoldDesistir quando chegar sua vez'});
+      .getByRole('button', {name: 'Fold'});
     await userEvent.click(option());
     expect(onPreselectAction).toHaveBeenCalledWith('fold', 0);
     expect(option()).toHaveAttribute('aria-pressed', 'false');
@@ -451,35 +421,56 @@ describe('ActionBar keyboard shortcuts toggle', () => {
   });
 });
 
-describe('ActionBar quick bet presets', () => {
-  test('shows every preset by default and fills the raise amount on tap', async () => {
-    renderActionBar();
-    // pot=200, step=25 -> the pot preset lands on 200 exactly (well inside
-    // [minRaise 150, maxRaise 1000], so this assertion isn't just testing the clamp).
-    await userEvent.click(screen.getByRole('button', {name: /^Preset 1×:/}));
-    expect(slider()).toHaveValue('200');
+describe('ActionBar stage-aware bet presets (#341)', () => {
+  const potPresets = [
+    {label: 'Mín', value: 150}, {label: '⅓ pote', value: 220}, {label: '½ pote', value: 250},
+    {label: '⅔ pote', value: 300}, {label: 'Pote', value: 400}, {label: 'Máx', value: 1000},
+  ];
+
+  test('mixed opens in big blinds pre-flop', () => {
+    renderActionBar({betPresetMode: 'mixed', stage: 'pre_flop'});
+    for (const label of ['BB', '2BB', '3BB', 'All in']) {
+      expect(screen.getByRole('button', {name: new RegExp(`^${label}: `)})).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', {name: /^1\/2: /})).not.toBeInTheDocument();
   });
 
-  test('a fraction below the minimum clamps up to it, same as the server presets do', async () => {
-    renderActionBar();
-    await userEvent.click(screen.getByRole('button', {name: /^Preset ¼:/}));
+  test('mixed sizes against the pot from the flop on, using the server raise-to figures', async () => {
+    renderActionBar({betPresetMode: 'mixed', stage: 'flop', raisePresets: potPresets});
+    expect(screen.getByRole('button', {name: '1/3: aumentar para 225'})).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: '2/3: aumentar para 300'}));
+    expect(slider()).toHaveValue('300');
+    expect(screen.queryByRole('button', {name: /^2BB: /})).not.toBeInTheDocument();
+  });
+
+  test('bb keeps big blinds on every street', () => {
+    renderActionBar({betPresetMode: 'bb', stage: 'river', raisePresets: potPresets});
+    expect(screen.getByRole('button', {name: '3BB: aumentar para 300'})).toBeInTheDocument();
+  });
+
+  test('pot keeps pot fractions pre-flop', () => {
+    renderActionBar({betPresetMode: 'pot', stage: 'pre_flop', raisePresets: potPresets});
+    expect(screen.getByRole('button', {name: '1/2: aumentar para 250'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /^BB: /})).not.toBeInTheDocument();
+  });
+
+  test('a preset below the minimum clamps up to it instead of disappearing', async () => {
+    // BB = 100 against a 150 minimum.
+    renderActionBar({betPresetMode: 'mixed', stage: 'pre_flop'});
+    await userEvent.click(screen.getByRole('button', {name: 'BB: aumentar para 150'}));
     expect(slider()).toHaveValue('150');
   });
 
-  test('narrows to favorites once some are saved, and toggling calls back with the id', async () => {
-    const onToggleFavoriteBetPresetAction = vi.fn();
-    renderActionBar({favoriteBetPresets: ['half_pot'], onToggleFavoriteBetPresetAction});
-    expect(screen.getByRole('button', {name: /^Preset ½:/})).toBeInTheDocument();
-    expect(screen.queryByRole('button', {name: /^Preset ¼:/})).not.toBeInTheDocument();
-    expect(screen.queryByText('Toque na estrela para fixar seus favoritos.')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', {name: /Remover ½ dos favoritos/}));
-    expect(onToggleFavoriteBetPresetAction).toHaveBeenCalledWith('half_pot');
+  test('a short stack collapses the row onto All in rather than a fraction that lies', () => {
+    renderActionBar({betPresetMode: 'pot', stage: 'flop', minRaise: 150, maxRaise: 150, raisePresets: potPresets});
+    expect(screen.getByRole('button', {name: 'All in: aumentar para 150'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /^1\/3: /})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /^1\/2: /})).not.toBeInTheDocument();
   });
 
-  test('empty favorites show every preset plus a hint', () => {
-    renderActionBar({favoriteBetPresets: []});
-    expect(screen.getByText('Toque na estrela para fixar seus favoritos.')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: /^Preset All-in:/})).toBeInTheDocument();
+  test('no raise is legal at all, so no preset is offered', () => {
+    renderActionBar({minRaise: 400, maxRaise: 0});
+    expect(document.querySelectorAll('.bet-presets button')).toHaveLength(0);
   });
 });
 
@@ -490,7 +481,7 @@ function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof Act
     actionKey: 'hand-1:pre_flop', isTurn: true, connected: true, pending: null, error: null,
     onDismissErrorAction: vi.fn(), canPreselect: false, supportsCallPreselection: false, selectionScope: '',
     preselection: null, preselectionAmount: 0, prospectiveCallAmount: 0, onPreselectAction: vi.fn(() => true),
-    timeBankMs: 30_000, voiceCommands: false, pot: 200, shortcutsEnabled: true, favoriteBetPresets: [],
-    favoriteBetPresetsSaving: false, onToggleFavoriteBetPresetAction: vi.fn(), ...overrides,
+    timeBankMs: 30_000, voiceCommands: false, shortcutsEnabled: true, betPresetMode: 'mixed',
+    stage: 'pre_flop', bigBlind: 100, ...overrides,
   } as React.ComponentProps<typeof ActionBar>;
 }

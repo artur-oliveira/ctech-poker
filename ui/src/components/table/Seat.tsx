@@ -14,6 +14,8 @@ import type {PlayerNote} from '@/lib/api/playerNotes';
 import {playstyleMeta} from '@/lib/playstyle';
 import type {WinnerStanding} from '@/lib/tableOutcome';
 import {useSeatElementRef} from '@/lib/seatRects';
+import {useChipFormat} from '@/lib/chipFormat';
+import {chipsExact} from '@/lib/chips';
 
 // chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
 // bet amounts on this same seat card), > 60% green.
@@ -135,7 +137,8 @@ function SeatImpl({
                        onReactionTarget,
                        chatBubble,
                        renderActionsMenu,
-                       layoutPosition
+                       layoutPosition,
+                       leaving = false
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -187,6 +190,10 @@ function SeatImpl({
   // TableStage owns visual geometry. Keeping it presentation-only means the
   // server-authored player order and all hidden-card data remain untouched.
   layoutPosition?: SeatLayoutPosition;
+  // A seat the player already left, kept mounted for one exit animation by
+  // TableStage's `useDepartedSeats`. Inert: it takes no pointer input and
+  // publishes no reaction target.
+  leaving?: boolean;
 }) {
   const cards = seat.hole_cards;
   // Peeking is click-only: hover used to reveal too, which made the click that
@@ -287,7 +294,16 @@ function SeatImpl({
   const isTopSeat = layoutPosition?.zone === 'top' || (!layoutPosition && TOP_SEAT_INDICES.includes(index));
   // Publishes this element for the reaction layer, which has no ref path here.
   const seatElementRef = useSeatElementRef(seat.player_id);
-  return <div ref={seatElementRef}
+  const chips = useChipFormat();
+  // Tapping the seat body opens the player menu on touch (the trigger button
+  // stretches to cover the card — see .seat-actions-trigger in renderer.css).
+  // While a reaction is being aimed, the whole seat belongs to the reaction
+  // layer instead: the attribute goes away, the overlay shrinks back to its
+  // flat badge, and the tap lands on .seat-reaction-target.
+  const seatTapOpensMenu = !reactionTargetLabel;
+  return <div ref={leaving ? undefined : seatElementRef}
+              data-seat-leaving={leaving ? '' : undefined}
+              aria-hidden={leaving ? 'true' : undefined}
               data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
               data-seat-zone={layoutPosition?.zone}
@@ -341,7 +357,8 @@ function SeatImpl({
     </span>}
     <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
                   isViewer={isViewer} decorative/>
-    {!isViewer && renderActionsMenu && <span className="seat-actions-trigger">
+    {!isViewer && renderActionsMenu && <span className="seat-actions-trigger"
+                                              data-seat-tap={seatTapOpensMenu ? '' : undefined}>
       {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
       {renderActionsMenu(seat)}
     </span>}
@@ -356,7 +373,8 @@ function SeatImpl({
     <div className="seat-info">
       {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
       <b
-        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')}<i
+        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span
+        aria-label={`${chipsExact(displayStack)} fichas`}>{chips(displayStack)}<i
         className="seat-stack-unit"> fichas</i></span>{showEquity && chance != null &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
@@ -370,17 +388,18 @@ function SeatImpl({
     </div>
     {seat.contributed > 0 && <span key={`bet-${seat.contributed}`} className="seat-bet">
         <ChipStack amount={seat.contributed} bigBlind={bigBlind}/>
-        <b aria-label={`Aposta de ${seat.contributed.toLocaleString('pt-BR')} fichas`}>{seat.contributed.toLocaleString('pt-BR')}</b>
+        <b aria-label={`Aposta de ${chipsExact(seat.contributed)} fichas`}>{chips(seat.contributed)}</b>
       </span>}
     {isWinner && winAmount > 0 &&
         <span key={`win-${winAmount}`} className="seat-win" role="status">
           <small>{winStanding?.tied ? 'Empate' : winStanding?.place ? `${winStanding.place}º lugar` : 'Venceu'}</small>
-          +{winAmount.toLocaleString('pt-BR')}
+          <span aria-label={`Ganhou ${chipsExact(winAmount)} fichas`}>+{chips(winAmount)}</span>
         </span>
     }
     {refundAmount > 0 &&
-        <span key={`refund-${refundAmount}`} className="seat-refund">
-          ↩ {refundAmount.toLocaleString('pt-BR')}
+        <span key={`refund-${refundAmount}`} className="seat-refund"
+              aria-label={`Devolvido ${chipsExact(refundAmount)} fichas`}>
+          ↩ {chips(refundAmount)}
         </span>
     }</div>;
 }

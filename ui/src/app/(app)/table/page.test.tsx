@@ -157,7 +157,8 @@ vi.mock('@/components/reactions/ReactionPurchaseDialog', () => ({
     }}>purchase-dialog</button> : null;
   },
 }));
-vi.mock('@/lib/api/player', () => ({
+vi.mock('@/lib/api/player', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/player')>(),
   getHands: vi.fn(), getMe: vi.fn(), getSessions: vi.fn(), updateMe: mocks.updateMe,
 }));
 

@@ -21,7 +21,9 @@ vi.mock('@/lib/tablePreferences', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/tablePreferences')>(),
   useTablePreferences,
 }));
-vi.mock('@/lib/api/player', () => ({getMe, updateMe}));
+vi.mock('@/lib/api/player', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/player')>(), getMe, updateMe,
+}));
 vi.mock('@/lib/api/cosmeticPurchases', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/api/cosmeticPurchases')>(),
   listCosmeticCatalog, listCosmeticPurchases,
@@ -221,5 +223,48 @@ describe('TablePreferencesDialog', () => {
     await userEvent.click(midnight);
     expect(updateMe).toHaveBeenCalledWith({table_theme: 'midnight'}, expect.anything());
     expect(onLockedFeltAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('TablePreferencesDialog bet presets (#341)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useTablePreferences.mockReturnValue({
+      preferences: {
+        soundEffects: false, dealerVoice: false, voiceCommands: true, realityCheckMinutes: 60,
+        equityTrainer: false, keyboardShortcuts: true
+      },
+      update,
+    });
+    listCosmeticCatalog.mockResolvedValue(catalog);
+    listCosmeticPurchases.mockResolvedValue([]);
+  });
+
+  test('offers the three modes and persists the chosen one through updateMe', async () => {
+    getMe.mockResolvedValue(player({bet_preset_mode: 'bb'}));
+    updateMe.mockResolvedValue(player({bet_preset_mode: 'pot'}));
+    renderDialog();
+    await screen.findByText('Presets de aposta');
+    for (const label of ['Mista (padrão)', 'Big blind', 'Pote']) {
+      expect(screen.getByRole('button', {name: label})).toBeInTheDocument();
+    }
+    await userEvent.click(screen.getByRole('button', {name: 'Pote'}));
+    expect(updateMe).toHaveBeenCalledWith({bet_preset_mode: 'pot'}, expect.anything());
+  });
+
+  test('an unknown stored mode falls back to the mixed default instead of blanking the control', async () => {
+    getMe.mockResolvedValue(player({bet_preset_mode: 'roulette' as never}));
+    renderDialog();
+    expect(await screen.findByText('Presets de aposta')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Mista (padrão)'})).toBeInTheDocument();
+  });
+
+  test('a rejected save reports itself instead of silently reverting', async () => {
+    getMe.mockResolvedValue(player());
+    updateMe.mockRejectedValue(new Error('nope'));
+    renderDialog();
+    await screen.findByText('Presets de aposta');
+    await userEvent.click(screen.getByRole('button', {name: 'Big blind'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível salvar. Tente de novo.');
   });
 });

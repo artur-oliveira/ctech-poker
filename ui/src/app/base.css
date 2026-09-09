@@ -46,6 +46,14 @@
        half — which is what happened to the win/loss streak badge on the
        portrait viewer dock, flush against .game-table's overflow:hidden edge. */
     --seat-badge-overhang: 8px;
+    /* The stack under an avatar on the portrait ring is the one number a
+       player reads mid-hand, and it sits directly on the felt — no seat card
+       behind it. --text-secondary (#cbbfc0) reached only 3.9:1 on the lightest
+       premium felt; --gold is worse still at 2.9:1. Pure white clears WCAG AA
+       (4.5:1) on all four felts — classic 5.5, ocean 5.1, midnight 8.0,
+       burgundy 8.4 — and on the walnut rail (6.3) and the room (18.4). See
+       DESIGN.md, "Seat stack legibility". */
+    --seat-stack-ink: #ffffff;
     /* Table geometry, one derivation. The rail's inset is authored per side
        (the portrait capsule is pushed down inside its ring to leave the top
        seats' cards room under the header), but the felt is ALWAYS the rail

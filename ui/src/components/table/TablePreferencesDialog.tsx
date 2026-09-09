@@ -14,9 +14,17 @@ import {
 import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Switch} from '@/components/ui/switch';
-import {getMe, updateMe} from '@/lib/api/player';
+import {type BetPresetMode, betPresetMode, getMe, updateMe} from '@/lib/api/player';
 import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {PREMIUM_FELT_IDS, TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
+
+// #341. "Mista" is the server default and the only one that changes with the
+// street, so it names the behaviour rather than the setting.
+const BET_PRESET_OPTIONS: { value: BetPresetMode; label: string }[] = [
+  {value: 'mixed', label: 'Mista (padrão)'},
+  {value: 'bb', label: 'Big blind'},
+  {value: 'pot', label: 'Pote'}
+];
 
 const REALITY_OPTIONS = [
   {value: '0', label: 'Desativado'},
@@ -63,6 +71,7 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
     onSuccess: data => queryClient.setQueryData(['player', 'me'], data),
   });
   const theme: TableThemeId = me?.table_theme || 'classic';
+  const presetMode = betPresetMode(me?.bet_preset_mode);
 
   function chooseTheme(value: TableThemeId | null) {
     if (!value) return;
@@ -111,6 +120,24 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
               })}
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <Label id="bet-preset-mode-label">Presets de aposta</Label>
+          <Select value={presetMode} disabled={save.isPending}
+                  onValueChange={value => value && save.mutate({bet_preset_mode: value as BetPresetMode})}>
+            <SelectTrigger aria-labelledby="bet-preset-mode-label" disabled={save.isPending}>
+              <SelectValue>
+                {(value: BetPresetMode) =>
+                  BET_PRESET_OPTIONS.find(option => option.value === value)?.label ?? BET_PRESET_OPTIONS[0].label}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {BET_PRESET_OPTIONS.map(option =>
+                <SelectItem key={option.value} value={option.value} label={option.label}>{option.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <small className="table-preference-hint">Mista abre em big blinds no pré-flop e passa a frações do pote
+            depois. {save.isError && <b role="alert">Não foi possível salvar. Tente de novo.</b>}</small>
         </div>
         <div className="table-preference-toggle">
           <span><AudioLines aria-hidden="true"/><span><Label id="sound-effects-label">Sons da mesa</Label>

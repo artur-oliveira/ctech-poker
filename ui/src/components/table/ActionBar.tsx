@@ -1,11 +1,17 @@
 'use client';
-import {type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState} from 'react';
-import {CircleAlert, Clock3, LoaderCircle, Minus, Plus, Star, X} from 'lucide-react';
+import {
+  type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode,
+  useCallback, useEffect, useRef, useState
+} from 'react';
+import {CircleAlert, Clock3, LoaderCircle, Minus, Plus, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
-import {betShortcutAmount, FAST_STEP_STRIDE} from '@/lib/betShortcuts';
+import {betShortcutAmount, FAST_STEP_STRIDE, stageBetPresets} from '@/lib/betShortcuts';
+import type {BetPresetMode} from '@/lib/api/player';
+import {useChipFormat} from '@/lib/chipFormat';
+import {chipsExact} from '@/lib/chips';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
@@ -40,11 +46,12 @@ type Props = {
   actionBaseDeadlineMs?: number;
   timeBankMs: number;
   voiceCommands: boolean;
-  pot: number;
   shortcutsEnabled: boolean;
-  favoriteBetPresets: string[];
-  favoriteBetPresetsSaving: boolean;
-  onToggleFavoriteBetPresetAction: (id: string) => void;
+  // Sizing inputs for the quick-bet row: which set the player asked for, and
+  // the street/blind it is sized against. See `stageBetPresets`.
+  betPresetMode: BetPresetMode;
+  stage: string;
+  bigBlind: number;
 }
 
 const actionLabel: Record<PokerAction, string> = {
@@ -68,22 +75,6 @@ function isBetAdjustKey(event: KeyboardEvent) {
 // taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
 // the collapsed class outside this query).
 const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation: landscape)';
-
-/** Client-computed quick presets (issue #341) — distinct from the server-provided
- * ⅓/½/⅔/pot fractions above, which stay untouched. `fraction: null` means "max
- * raise" (all-in) rather than a pot multiple. Favoriting narrows which of these
- * show; it never touches the server-provided presets. */
-// Labels are deliberately distinct from the server presets' own text (Mín, ⅓
-// pote, ½ pote, ⅔ pote, Pote, Máx) — a screen reader (and getByRole('button',
-// {name})) must never see two buttons announced identically that raise to
-// different amounts. The full description lives in each button's aria-label.
-const QUICK_PRESET_DEFS: { id: string; label: string; fraction: number | null }[] = [
-  {id: 'quarter_pot', label: '¼', fraction: 0.25},
-  {id: 'half_pot', label: '½', fraction: 0.5},
-  {id: 'three_quarter_pot', label: '¾', fraction: 0.75},
-  {id: 'pot', label: '1×', fraction: 1},
-  {id: 'all_in', label: 'All-in', fraction: null}
-];
 
 function BetStepButton({direction, disabled, onStep}: {
   direction: -1 | 1;
@@ -121,10 +112,12 @@ function BetAmountOutput({amount, maxAmount, isAllIn, wasClamped, className}: {
   className: string;
 }) {
   const progress = maxAmount > 0 ? Math.min(1, amount / maxAmount) : 0;
+  const chips = useChipFormat();
   return (
-    <output className={`${className}${isAllIn ? ' is-all-in' : ''}`} htmlFor="raise-amount">
+    <output className={`${className}${isAllIn ? ' is-all-in' : ''}`} htmlFor="raise-amount"
+            aria-label={`${isAllIn ? 'All In' : 'Total'} ${chipsExact(amount)}`}>
       <small>{isAllIn ? 'All In' : 'Total'}</small>
-      {amount.toLocaleString('pt-BR')}
+      {chips(amount)}
       <span className="bet-commitment-meter" aria-hidden="true">
         <i style={{'--bet-progress': progress} as CSSProperties}/>
       </span>
@@ -201,6 +194,7 @@ function PreselectionControls({
     }
   }, [selection, selectionAmount, isTurn, connected, pending, available, callAmount, maxRaise, onAct]);
 
+  const chips = useChipFormat();
   const hasFixedCall = supportsCallPreselection && prospectiveCallAmount > 0;
   // Shared by both the button's onClick and the keyboard shortcuts below, so
   // there is exactly one place that decides what selecting/deselecting a
@@ -242,60 +236,32 @@ function PreselectionControls({
     onSelectAction, toggle]);
 
   if (!canPreselect && !selection) return null;
-  const option = (value: ActionPreselection, label: string, description: string, key?: string, amount = 0) =>
+  // `label` is what a sighted player reads, `name` what assistive tech
+  // announces — they differ for the fixed-amount Call, whose figure is a
+  // `.preselect-amount` the compact tier hides so all four options stay on one
+  // row without shrinking a tap target (see .action-preselectors in app.css).
+  const option = (value: ActionPreselection, label: ReactNode, name: string, description: string,
+                  key?: string, amount = 0) =>
     <button type="button" className={selection === value ? 'selected' : ''}
-            aria-pressed={selection === value} title={description}
+            aria-pressed={selection === value} aria-label={name} title={description}
             disabled={!connected || pending !== null}
             onClick={() => toggle(value, amount)}>
       <span>{label}{key && shortcutsEnabled && <kbd aria-hidden="true">{key}</kbd>}<small>{description}</small></span>
     </button>;
   return <div className="action-preselectors" role="group" aria-label="Preparar próxima ação">
     <span>Próxima ação</span>
-    {option('check_fold', 'Check / Fold', 'Check se for grátis; caso contrário, fold', 'X')}
-    {option('fold', 'Fold', 'Desistir quando chegar sua vez', 'F')}
-    {supportsCallPreselection && hasFixedCall && option('call', `Call ${prospectiveCallAmount.toLocaleString('pt-BR')}`,
+    {option('check_fold', <><span className="preselect-wide">Check / Fold</span>
+      <span className="preselect-tight">C/F</span></>, 'Check / Fold',
+      'Check se for grátis; caso contrário, fold', 'X')}
+    {option('fold', <>Fold</>, 'Fold', 'Desistir quando chegar sua vez', 'F')}
+    {supportsCallPreselection && hasFixedCall && option('call',
+      <>Call <i className="preselect-amount">{chips(prospectiveCallAmount)}</i></>,
+      `Call ${chipsExact(prospectiveCallAmount)}`,
       'Pagar somente este valor; cancela se a aposta aumentar', 'C', prospectiveCallAmount)}
-    {supportsCallPreselection && option('call_any', 'Call Any', 'Pagar qualquer valor quando chegar sua vez', hasFixedCall ? undefined : 'C')}
-    {option('all_in', 'All In', 'Apostar tudo quando chegar sua vez', 'A')}
-  </div>;
-}
-
-/** Client-computed quick presets next to the bet stepper (issue #341) — a
- * one-tap fill for the raise amount, separate from the server-provided ⅓/½/⅔/pot
- * buttons above. Favoriting narrows the row to the player's picks; empty
- * favorites show every preset (the default, and the "no favorites yet" state).
- * All-in maps to the same server 'all_in' preselection already offered above
- * (PreselectionControls) — there's no wire support for preselecting a raise to
- * an arbitrary pot fraction, so the ¼/½/¾/pot presets only ever fill the amount
- * during the player's own turn, same as the existing server presets. */
-function QuickPresetRow({pot, minRaise, maxRaise, raiseStep, disabled, favorites, favoritesSaving, onPick, onToggleFavorite}: {
-  pot: number; minRaise: number; maxRaise: number; raiseStep: number; disabled: boolean;
-  favorites: string[]; favoritesSaving: boolean;
-  onPick: (amount: number) => void;
-  onToggleFavorite: (id: string) => void;
-}) {
-  const presets = QUICK_PRESET_DEFS.map(preset => {
-    const raw = preset.fraction === null ? maxRaise : Math.round((pot * preset.fraction) / raiseStep) * raiseStep;
-    return {...preset, value: Math.min(maxRaise, Math.max(minRaise, raw))};
-  });
-  const visible = favorites.length ? presets.filter(preset => favorites.includes(preset.id)) : presets;
-  if (maxRaise < minRaise) return null;
-  return <div className="bet-quick-presets" role="group" aria-label="Presets rápidos de aposta">
-    {!favorites.length && <p className="bet-quick-presets-hint">Toque na estrela para fixar seus favoritos.</p>}
-    {visible.map(preset => {
-      const pinned = favorites.includes(preset.id);
-      return <span key={preset.id} className="bet-quick-preset" data-pinned={pinned || undefined}>
-        <button type="button" className="bet-quick-preset-pick" disabled={disabled}
-                aria-label={`Preset ${preset.label}: aumentar para ${preset.value.toLocaleString('pt-BR')}`}
-                onClick={() => onPick(preset.value)}>{preset.label}</button>
-        <button type="button" className="bet-quick-preset-favorite" disabled={favoritesSaving}
-                aria-pressed={pinned}
-                aria-label={`${pinned ? 'Remover' : 'Marcar'} ${preset.label} dos favoritos`}
-                onClick={() => onToggleFavorite(preset.id)}>
-          <Star aria-hidden="true" fill={pinned ? 'currentColor' : 'none'}/>
-        </button>
-      </span>;
-    })}
+    {supportsCallPreselection && option('call_any', <><span className="preselect-wide">Call Any</span>
+      <span className="preselect-tight">Any</span></>, 'Call Any',
+      'Pagar qualquer valor quando chegar sua vez', hasFixedCall ? undefined : 'C')}
+    {option('all_in', <>All In</>, 'All In', 'Apostar tudo quando chegar sua vez', 'A')}
   </div>;
 }
 
@@ -303,17 +269,16 @@ function QuickPresetRow({pot, minRaise, maxRaise, raiseStep, disabled, favorites
  * resets to the street minimum on every new decision without an effect. */
 function RaiseControl({
                         minRaise, maxRaise, raiseStep, presets, disabled, pending, onRaise, onExpandedChange,
-                        pot, shortcutsEnabled, favoriteBetPresets, favoriteBetPresetsSaving, onToggleFavoriteBetPresetAction
+                        shortcutsEnabled, betPresetMode, stage, bigBlind
                       }: {
   minRaise: number; maxRaise: number; raiseStep: number; disabled: boolean; pending: boolean;
   presets: { label: string; value: number }[];
   onRaise: (amount: number) => void;
   onExpandedChange: (expanded: boolean) => void;
-  pot: number;
   shortcutsEnabled: boolean;
-  favoriteBetPresets: string[];
-  favoriteBetPresetsSaving: boolean;
-  onToggleFavoriteBetPresetAction: (id: string) => void;
+  betPresetMode: BetPresetMode;
+  stage: string;
+  bigBlind: number;
 }) {
   const [amount, setAmount] = useState(minRaise);
   const [expanded, setExpanded] = useState(false);
@@ -322,31 +287,13 @@ function RaiseControl({
   // Raising to the max is shoving the whole stack, so call it what it is
   // instead of a "Pay" label with a number that happens to equal the stack.
   const isAllIn = safeAmount >= maxRaise;
-  // A short stack clamps several fractions (½ pote, ⅔ pote, Pote...) down to
-  // the same all-in total. Keeping the LAST match instead of the first means
-  // the surviving button is the highest-named preset for that value (ideally
-  // Máx), not e.g. "Mín" silently standing in for an all-in it doesn't read
-  // as — the raise button already says "All In" once clicked, but the preset
-  // itself shouldn't lie about which one it is.
-  const uniquePresets = presets
-    .map(preset => ({...preset, raw: preset.value, value: Math.min(maxRaise, Math.max(minRaise, preset.value))}))
-    .filter((preset, index, all) => {
-      const matches = all.map((item, itemIndex) => item.value === preset.value ? itemIndex : -1)
-        .filter(itemIndex => itemIndex >= 0);
-      if (preset.value === minRaise) {
-        const namedMinimum = all.findIndex(item => item.value === preset.value && item.label === 'Mín');
-        return index === (namedMinimum >= 0 ? namedMinimum : matches[0]);
-      }
-      if (preset.value === maxRaise) {
-        const namedMaximum = all.findIndex(item => item.value === preset.value && item.label === 'Máx');
-        return index === (namedMaximum >= 0 ? namedMaximum : matches.at(-1));
-      }
-      return index === matches[0];
-    });
-  // Presets carry their pre-clamp `raw` value into `amount` (not the already-
-  // clamped `value` used for button dedup/display) so a short stack clamp
-  // shows up as amount !== safeAmount below, instead of vanishing silently.
   const wasClamped = amount !== safeAmount;
+  const chips = useChipFormat();
+  // Already snapped and clamped by `stageBetPresets`, so a pick can never be
+  // the silent clamp the old server-preset row had to signal.
+  const quickPresets = stageBetPresets({
+    mode: betPresetMode, stage, bigBlind, serverPresets: presets, minRaise, maxRaise, raiseStep
+  });
 
   const hold = useHoldRepeat();
   const adjust = useCallback((direction: -1 | 1, multiplier: number) => {
@@ -431,20 +378,16 @@ function RaiseControl({
     <label className={`bet-control${expanded ? '' : ' bet-control-collapsed'}`} htmlFor="raise-amount">
       <span className="sr-only">Valor total do aumento. Setas esquerda e direita ajustam; segure para acelerar</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
-        {uniquePresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
-                                             className={['Mín', '½ pote', 'Pote', 'Máx'].includes(preset.label) ?
-                                               undefined : 'bet-preset-mobile-hidden'}
-                                             onClick={() => setAmount(preset.raw)}>{preset.label}</button>)}
+        {quickPresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
+                                            aria-label={`${preset.label}: aumentar para ${chipsExact(preset.value)}`}
+                                            onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
       </div>
-      <QuickPresetRow pot={pot} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep} disabled={inactive}
-                      favorites={favoriteBetPresets} favoritesSaving={favoriteBetPresetsSaving}
-                      onPick={setAmount} onToggleFavorite={onToggleFavoriteBetPresetAction}/>
       <Input id="raise-amount" className="bet-range" aria-describedby="action-context" type="range"
              aria-keyshortcuts={shortcutsEnabled ? 'a h ArrowUp ArrowDown ArrowLeft ArrowRight' : undefined}
              min={minRaise} max={maxRaise} step={raiseStep} value={safeAmount}
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}
-             aria-valuetext={`Total ${safeAmount.toLocaleString('pt-BR')} fichas${isAllIn ? ', All In' : ''}`}/>
+             aria-valuetext={`Total ${chipsExact(safeAmount)} fichas${isAllIn ? ', All In' : ''}`}/>
       <BetAmountOutput className="bet-output bet-output-desktop" amount={safeAmount} maxAmount={maxRaise}
                        isAllIn={isAllIn} wasClamped={wasClamped}/>
       <div className="bet-stepper" role="group" aria-label="Ajustar valor do aumento">
@@ -461,7 +404,7 @@ function RaiseControl({
         // "para" makes explicit this is a raise-to-total, not an amount added on top
         // of the current bet (unlike Pagar's amount above, which is additive). Same
         // Verb + Amount shape as Pagar otherwise read as the same kind of number.
-        <span>{expanded ? (isAllIn ? `All In ${safeAmount.toLocaleString('pt-BR')}` : `Aumentar para ${safeAmount.toLocaleString('pt-BR')}`) : (isAllIn ? 'All In' : 'Aumentar')}
+        <span aria-label={expanded ? `${isAllIn ? 'All In' : 'Aumentar para'} ${chipsExact(safeAmount)}` : undefined}>{expanded ? (isAllIn ? `All In ${chips(safeAmount)}` : `Aumentar para ${chips(safeAmount)}`) : (isAllIn ? 'All In' : 'Aumentar')}
           {shortcutsEnabled && <kbd aria-hidden="true">R</kbd>}</span>}
     </Button>
     {expanded && <Button type="button" variant="ghost" className="raise-cancel"
@@ -498,12 +441,12 @@ export function ActionBar({
                             actionBaseDeadlineMs,
                             timeBankMs,
                             voiceCommands,
-                            pot,
                             shortcutsEnabled,
-                            favoriteBetPresets,
-                            favoriteBetPresetsSaving,
-                            onToggleFavoriteBetPresetAction
+                            betPresetMode,
+                            stage,
+                            bigBlind
                           }: Props) {
+  const chips = useChipFormat();
   const [raiseSizing, setRaiseSizing] = useState(false);
   const [raiseScope, setRaiseScope] = useState(actionKey);
   if (raiseScope !== actionKey) {
@@ -521,7 +464,7 @@ export function ActionBar({
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] :
     executingPreparedAction ? 'Executando sua ação preparada…' : !isTurn ?
       'Aguarde sua vez.' : effectiveStack > 0 ?
-        `Sua vez de agir. Stack efetivo: ${effectiveStack.toLocaleString('pt-BR')} fichas.` : 'Sua vez de agir.';
+        `Sua vez de agir. Stack efetivo: ${chipsExact(effectiveStack)} fichas.` : 'Sua vez de agir.';
   const label = (action: PokerAction, idle: string, key?: string) => {
     if (pending === action) {
       return <><LoaderCircle className="action-spinner"/> {actionLabel[action]}</>;
@@ -581,15 +524,15 @@ export function ActionBar({
             <Button type="button" variant="outline" disabled={unavailable || !available.call}
                     aria-describedby="action-context" aria-keyshortcuts={shortcutsEnabled ? 'p' : undefined}
                     onClick={() => onActAction('call')}
-                    className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
+                    aria-label={callAmount > 0 ? `Pagar ${chipsExact(callAmount)}` : undefined}
+                    className="call">{label('call', callAmount > 0 ? `Pagar ${chips(callAmount)}` : 'Pagar', 'P')}</Button>
         </div>}
     {!noLegalActions && !executingPreparedAction &&
         <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
                       disabled={unavailable || !available.raise} presets={raisePresets}
                       pending={pending === 'raise'} onRaise={onRaise} onExpandedChange={setRaiseSizing}
-                      pot={pot} shortcutsEnabled={shortcutsEnabled} favoriteBetPresets={favoriteBetPresets}
-                      favoriteBetPresetsSaving={favoriteBetPresetsSaving}
-                      onToggleFavoriteBetPresetAction={onToggleFavoriteBetPresetAction}/>}
+                      shortcutsEnabled={shortcutsEnabled} betPresetMode={betPresetMode}
+                      stage={stage} bigBlind={bigBlind}/>}
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"

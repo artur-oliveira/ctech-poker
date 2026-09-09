@@ -1004,14 +1004,16 @@
 .stage-v .table-callout {
     max-width: 86%
 }
+/* Four bare pips and the name of the street the hand is on — one line, one
+   word. The per-pip labels this replaced spent the felt's centre band naming
+   three streets nobody was on. */
 .street-progress {
     position: absolute;
     left: 50%;
     top: calc(100% + 14px);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 9px;
     transform: translateX(-50%);
     font: 700 8px var(--font-mono);
     letter-spacing: .05em;
@@ -1023,27 +1025,17 @@
     align-items: center;
     gap: 6px;
     font-size: 10px;
-    color: var(--felt-text-muted)
+    color: var(--felt-text)
 }
 .street-progress-pips {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 5px;
     color: var(--felt-text-muted)
 }
 .street-progress-pips span {
-    position: relative;
     display: flex;
-    align-items: center;
-    gap: 5px
-}
-.street-progress-pips span:not(:last-child)::after {
-    position: absolute;
-    left: calc(100% + 4px);
-    width: 6px;
-    height: 1px;
-    background: color-mix(in srgb, var(--felt-text-muted) 38%, transparent);
-    content: ""
+    align-items: center
 }
 .street-progress-pips i {
     width: 5px;
@@ -1603,18 +1595,10 @@
 @media (orientation: portrait) and (max-height: 760px),
        (orientation: landscape) and (max-height: 620px) {
 .street-progress {
-        gap: 4px
+        gap: 7px
     }
 .street-progress-pips {
-        gap: 12px
-    }
-.street-progress-pips span {
-        gap: 0;
-        font-size: 0
-    }
-.street-progress-pips span:not(:last-child)::after {
-        left: calc(100% + 3px);
-        width: 7px
+        gap: 4px
     }
 }
 .action-choices {
@@ -1656,16 +1640,27 @@
     height: 13px;
     color: var(--brand-bright)
 }
+/* One row at every width (#6): `grid-auto-flow: column` lays however many
+   options are legal this street side by side instead of wrapping the fifth
+   onto a line of its own, and the compact tiers below narrow the labels
+   rather than the 44px tap targets. */
 .action-preselectors {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns:repeat(5, max-content);
+    /* Neutralises renderer.css's earlier explicit two-column track at
+       max-width:800px, which would otherwise mix fixed and implicit columns. */
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     align-items: center;
     justify-content: center;
     gap: 7px
 }
+.action-preselectors .preselect-tight {
+    display: none
+}
 .action-preselectors > span {
-    grid-column: 1 / -1;
+    grid-row: 1;
     color: var(--muted);
     font-size: 11px
 }
@@ -3579,11 +3574,20 @@
     .action-preselectors {
         grid-column: auto;
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
         gap: 4px
     }
 .action-preselectors > span:first-child {
-        grid-column: 1 / -1
+        display: none
+    }
+.action-preselectors .preselect-wide,
+    .action-preselectors .preselect-amount {
+        display: none
+    }
+.action-preselectors .preselect-tight {
+        display: inline
     }
 .action-preselectors button {
         min-width: 0
@@ -3691,34 +3695,14 @@
 .stage-v[data-capacity='2'] .stage-v-ring {
         max-width: min(94%, 640px)
     }
-/* A small field only sits on the top two-thirds of the capsule, so a
-       full-height pill leaves the lower half a dead green slab (the
-       "not full width / geometrically wrong" report). Deepen the rail's
-       top+bottom inset by occupancy so the walnut wraps the seats that are
-       actually there; the band and felt still derive from it (One Band
-       Rule), and the ring keeps flex:1 so the viewer HUD stays pinned. */
-.stage-v[data-player-count='2'],
-    .stage-v[data-player-count='3'] {
-        --table-rail-inset-top: 19%;
-        --table-rail-inset-bottom: 20%
-    }
-.stage-v[data-player-count='4'],
-    .stage-v[data-player-count='5'] {
-        --table-rail-inset-top: 10%;
-        --table-rail-inset-bottom: 11%
-    }
-@media (max-height: 760px) {
-        .stage-v[data-player-count='2'],
-        .stage-v[data-player-count='3'] {
-            --table-rail-inset-top: 15%;
-            --table-rail-inset-bottom: 16%
-        }
-        .stage-v[data-player-count='4'],
-        .stage-v[data-player-count='5'] {
-            --table-rail-inset-top: 8%;
-            --table-rail-inset-bottom: 9%
-        }
-    }
+/* Occupancy narrows the seat ring, never the felt (DESIGN.md, the One Band
+       Rule). This used to deepen --table-rail-inset-top/-bottom per
+       data-player-count, which drove the rail — and therefore the band and the
+       felt — off the same tokens: a heads-up capsule was visibly smaller and
+       rounder than a nine-handed one, and the whole table resized under the
+       player every time somebody sat down or stood up. The seats spread
+       themselves around the band already (`balancedSeatPosition`), so a short
+       field simply sits further apart on a table that stays put. */
 /* Short portrait phones (SE/8 class): the capsule steps down as a whole, so
        the band steps down with it instead of each side drifting on its own
        clamp. */
@@ -3835,17 +3819,31 @@
         white-space: normal
     }
 .action-preselectors {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
         gap: 6px;
         width: 100%
     }
 .action-preselectors > span {
         display: none
     }
+/* The fixed-amount Call keeps its figure in the accessible name only: the
+       number is what pushed a five-option row onto a second line, and it is
+       already on the Pagar button the moment it is the player's turn. Same
+       trade for the two two-word labels, which shrink to C/F and Any. */
+    .action-preselectors .preselect-wide,
+    .action-preselectors .preselect-amount {
+        display: none
+    }
+.action-preselectors .preselect-tight {
+        display: inline
+    }
 .action-bar .action-preselectors button {
         min-width: 0;
-        padding-inline: 6px;
+        padding-inline: 4px;
         overflow: hidden;
+        font-size: 11px;
         text-overflow: ellipsis;
         white-space: nowrap
     }
