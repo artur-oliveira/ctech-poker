@@ -86,6 +86,19 @@ off by default — do not build UI that assumes real money is on.
 - **Never animate a layout property.** `width`, `height`, `padding` and `margin` transitions are
   banned; use `transform`/`opacity` (a progress fill is `scaleX(var(--fill))`, a hover inset is a
   `translateX` on the row's contents). The design hook flags regressions.
+- **An entrance animation is never what makes something visible.** A fade-in starts at
+  `opacity: 0` and holds it (`animation-fill-mode: both`, the convention here) until the animation
+  actually advances — and WebKit leaves CSS animations pending indefinitely, `startTime: null` and
+  held at time 0, whenever the page's rendering loop has not started ticking. `seat-join` was applied
+  to every `.game-seat` rather than to the seat that just sat down, so in Safari the table rendered
+  with **no seats at all**: nine elements at `opacity: 0`, each 12px below its orbit point, which the
+  e2e suite saw as a 12px centreline drift, a 4px clip and a −11px badge. So: mark what actually just
+  arrived (`data-seat-joining` from `useJoinedSeats`, mirroring `data-seat-leaving` /
+  `useDepartedSeats`), animate only that, and drop the mark after one animation duration. Derive the
+  arrival **during render**, never in an effect — an effect runs after commit, so the element paints
+  at rest for one frame and only then fades in from zero. Anything that is simply *there* wears its
+  stylesheet's resting state and nothing else. See
+  `docs/2026-09-08-table-polish-bet-presets.md` ("Round 3").
 - **Landmarks and headings survive every state.** Loading, empty, error and invalid-link branches
   render inside the same `main` with a real `h1` as the success branch — the recovery vocabulary is
   `SystemState` (whole-app) or `RecoveryState` (in-app), not a bare `.form-error` line.

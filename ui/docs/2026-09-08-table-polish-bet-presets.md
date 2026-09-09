@@ -426,3 +426,85 @@ back-swipe gesture.
   the viewport. Growing it past the ring would push the sheet under
   `.game-table.stage-v`'s clip edge, and covering the whole felt is the thing the
   docked-sheet design deliberately avoided.
+
+---
+
+## Round 3 — the WebKit regression this pass shipped (2026-09-09)
+
+`main` went red on the **Cross-browser layout** job immediately after #376 merged.
+Five WebKit specs failed and seven more were flaky; Chromium and Firefox were
+green. That job only runs in the Deploy workflow, i.e. only on `main`, so the
+branch's own Frontend run never executed WebKit — and WebKit could not be
+launched on the author's Fedora host at all (Playwright's bundled
+`libWPEWebKit-2.0.so` wants an ICU older than the system's:
+`undefined symbol: ureldatefmt_format_74`), so every local run reported
+"130 passed" with all 65 WebKit specs erroring at `browserType.launch` in ~1ms.
+The whole pass shipped blind to one of the three engines.
+
+### One cause, three numbers
+
+Reproduced in the matching official container
+(`mcr.microsoft.com/playwright:v1.63.0-jammy`). Measured against Chromium, every
+`.game-seat` in WebKit sat **exactly 12px lower** while `offsetTop` was
+byte-identical — a transform residue, not a layout difference. The three
+failures are that one 12px seen from three angles:
+
+| assertion | reported | arithmetic |
+|---|---|---|
+| `every balanced seat sits on the band centreline` | `11.99` vs `<= 1` | the 12px itself |
+| `nine_max: nothing a player needs is clipped` | viewer seat `4` past `bottom` | 12 − the 8px `--seat-badge-overhang` the stage pads with |
+| `the win/loss streak badge fits inside the stage` | `-11` vs `>= 0` | the badge hangs 8px below a seat that is 12px low |
+
+### Root cause
+
+Round 1 (`7567126`) added the join/leave slide:
+
+```css
+@keyframes seat-join { from { opacity: 0; translate: 0 12px } }
+.game-table .game-seat { animation: seat-join 260ms var(--ease-out-quart) both }
+```
+
+applied to **every** seat, on every mount. `animation-fill-mode: both` holds the
+`from` keyframe until the animation advances — and in WebKit it never did:
+`document.getAnimations()` reported all 73 animations on the page `pending`,
+`startTime: null`, held at `currentTime: 0`, with `requestAnimationFrame` never
+firing. Every seat therefore rendered at `opacity: 0` and `translate: 0 12px`
+permanently.
+
+The 12px was only what the suite could measure. The real state of the page was
+worse: **in WebKit the table had no seats at all** — no players, no stacks, no
+hole cards, just the felt, the pot and the board.
+
+The rendering stall itself is *pre-existing and not ours*: the same probe on
+`9e2a8d0` (the commit before #376) reports `rAF: 0` and 63 pending animations
+too. What changed is that #376 made a permanent element's **resting state** the
+output of an entrance animation. Everything else in the app that animates with
+`both` animates something that genuinely just appeared, so a stalled animation
+costs a transition, not the content.
+
+### The fix
+
+An entrance animation is applied only to what actually just entered.
+`useJoinedSeats` (TableStage) mirrors the existing `useDepartedSeats`: it diffs
+seat membership **during render** — an effect runs after commit, so the seat
+would paint at rest for one frame and then fade in from zero — marks the arrivals
+with `data-seat-joining`, and drops the mark after `SEAT_ENTER_MS`. The CSS moves
+from `.game-table .game-seat` to `.game-table .game-seat[data-seat-joining]`.
+
+Seats that are simply seated now carry no animation at all, so their resting
+state is the stylesheet's in every engine. Round 1's slide on join/leave is
+unchanged for the case it was designed for, and the geometry tokens
+(`--table-rail-inset-*`, `--table-rail-band`, `--table-orbit-*`) were not touched
+— the One Band Rule was never the problem. Even a joining seat now degrades
+better: a stalled entrance costs `SEAT_ENTER_MS` of invisibility instead of the
+life of the table.
+
+After: **195 passed** across Chromium, Firefox and WebKit (was 190 passed /
+5 failed / 7 flaky), with no assertion or tolerance changed.
+
+### Why the gate did not gate
+
+`Cross-browser layout` lives in `.github/workflows/deploy.yml` and runs on
+`main` only. Moving the job (or a WebKit-only subset of it) into the `Frontend`
+workflow's PR trigger is what would have caught this on the branch; it costs
+roughly the 2 minutes the WebKit project takes.
