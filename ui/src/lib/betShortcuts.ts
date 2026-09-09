@@ -54,8 +54,18 @@ export function stageBetPresets({mode, stage, bigBlind, serverPresets, minRaise,
   const useBigBlind = mode === 'bb' || (mode === 'mixed' && stage === 'pre_flop');
   const base = useBigBlind
     ? BB_PRESETS.map(({label, multiple}) => ({label, value: clamp(multiple * Math.max(1, bigBlind))}))
-    : POT_PRESETS.map(({label, serverLabel}) =>
-      ({label, value: clamp(serverPresets.find(preset => preset.label === serverLabel)?.value ?? minRaise)}));
+    // A bigger fraction must never cost less than a smaller one. An older
+    // server (or the dev mock) omits some of the raise-to fields, and
+    // `actionState` fills the gap with `minRaise` — which would have painted
+    // "2/3" for less money than "1/2". Keep the set strictly increasing and
+    // the missing fraction simply does not appear.
+    : POT_PRESETS.reduce<{ label: string; value: number }[]>((kept, {label, serverLabel}) => {
+      const server = serverPresets.find(preset => preset.label === serverLabel)?.value;
+      if (server == null) return kept;
+      const value = clamp(server);
+      const previous = kept.at(-1);
+      return previous && value <= previous.value ? kept : [...kept, {label, value}];
+    }, []);
   const all = [...base, {label: ALL_IN_PRESET_LABEL, value: maxRaise}];
   return all.filter((preset, index) => !all.slice(index + 1).some(later => later.value === preset.value));
 }

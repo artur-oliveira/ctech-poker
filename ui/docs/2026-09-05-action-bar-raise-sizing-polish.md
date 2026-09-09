@@ -1,5 +1,11 @@
 # Action bar — raise sizing polish (2026-09-05)
 
+> **Superseded (2026-09-08).** `QuickPresetRow` and the favourite-preset stars
+> were removed; the row is now the stage-aware `stageBetPresets` set driven by
+> the `bet_preset_mode` preference. See
+> `docs/2026-09-08-table-polish-bet-presets.md`. The `RaiseControl` sizing and
+> layout notes below still hold.
+
 Visual pass over `RaiseControl` / `QuickPresetRow` in `src/components/table/ActionBar.tsx`.
 No behaviour, wire, or copy change — the favourite lifecycle, keyboard shortcuts, clamp
 dedup and preselection are untouched.

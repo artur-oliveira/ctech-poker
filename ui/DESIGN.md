@@ -18,6 +18,7 @@ colors:
   muted-rose: "#ad9fa0"
   text-secondary: "#cbbfc0"
   felt-text: "#e3f1ea"
+  seat-stack-ink: "#ffffff"
   success: "#48c98c"
   danger: "#dc2626"
   danger-soft: "#f5b0b3"
@@ -243,6 +244,7 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 - **Muted Rose** (colors.muted-rose): secondary copy that remains readable on dark surfaces. Do not fade it further for essential information.
 - **Text Secondary** (colors.text-secondary): brighter supporting labels and state readouts.
 - **Felt Text** (colors.felt-text): labels and values placed directly over the brightest felt.
+- **Seat Stack Ink** (colors.seat-stack-ink, `--seat-stack-ink`): the one number a player reads mid-hand — the chip stack in the portrait/landscape ring caption, which sits directly on the felt with no seat card behind it. Pure white, because it is the only value that clears WCAG AA against every felt theme: classic 5.5:1, ocean 5.1:1, midnight 8.0:1, burgundy 8.4:1, plus 6.3:1 on the walnut rail. Text Secondary reached only 3.9:1 there and gold 2.9:1. Reserved for that caption; a stack inside a seat card keeps gold.
 
 ### Named Rules
 
@@ -251,6 +253,8 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 **The Oxblood Signal Rule.** Oxblood identifies the primary commitment, current location, or active identity. One dominant oxblood signal per decision group is enough; a player's turn is gold so it cannot be confused with danger.
 
 **The Semantic Pair Rule.** Suit, connection, turn, win, and error colors always travel with text, iconography, shape, or position. Hue alone never carries game state.
+
+**Seat stack legibility.** A value painted straight onto the felt is contrast-checked against *every* `[data-table-theme]`, not just Classic — the premium felts are lighter, not darker. That is what `--seat-stack-ink` exists for, and why the ring's caption drops the player name and the "fichas" unit rather than shrinking the number to fit them: the identity is carried by the avatar and stays in the accessibility tree.
 
 ## Typography
 
@@ -301,7 +305,7 @@ Spacing follows a 4px base rhythm with recurring 8, 12, 16, 24, 32, 48, 64, and 
 
 **The Seat Overhang Rule.** A seat's corner badges hang outside the seat box by exactly `--seat-badge-overhang` (8px), and every container that clips a seat reserves at least that much padding on the edges it clips. The portrait stage's own padding, and the outward hang of the mid-side captions, are both written in terms of that one token, so no tier can reserve less room than a badge needs. The reported symptom of breaking this is a win/loss streak badge sliced in half on the viewer's dock.
 
-**The One Band Rule.** The table is three shapes — the walnut rail, the green felt and the ring of seats — and they come from one set of numbers. `--table-rail-inset-top/-inline/-bottom` place the rail; the felt is always that inset **plus `--table-rail-band`**; the seats sit on `--table-orbit-*`, the band's centreline. Never tune one side of the felt on its own: the rail inset is authored per side (the portrait capsule is pushed down inside its ring so the top seats' cards clear the header), and only the derivation keeps the walnut the same thickness the whole way round. Occupancy changes the ring's width, never the felt's inset — squeezing the felt inside a full-width rail is what left a heads-up table with a 63px rim at the sides against 14px at the bottom.
+**The One Band Rule.** The table is three shapes — the walnut rail, the green felt and the ring of seats — and they come from one set of numbers. `--table-rail-inset-top/-inline/-bottom` place the rail; the felt is always that inset **plus `--table-rail-band`**; the seats sit on `--table-orbit-*`, the band's centreline. Never tune one side of the felt on its own: the rail inset is authored per side (the portrait capsule is pushed down inside its ring so the top seats' cards clear the header), and only the derivation keeps the walnut the same thickness the whole way round. Occupancy changes the ring's width, never the felt's inset — squeezing the felt inside a full-width rail is what left a heads-up table with a 63px rim at the sides against 14px at the bottom. And occupancy changes *nothing at all* about the table's height: the per-`data-player-count` rail insets that once deepened for a short field are gone, because they resized the felt under a player every time somebody sat down or stood up. A short field simply sits further apart on a table that stays put.
 
 **The Length-Not-Percentage Rule.** Table geometry is expressed in lengths. An `inset` percentage resolves against width on the horizontal axis and height on the vertical, so the same number on four sides is four different thicknesses, and it silently changes shape with every aspect ratio. Percentages are allowed only where the value is *meant* to scale with one axis (the rail's own inset), never for the band.
 
@@ -367,7 +371,7 @@ Components feel tactile and decisive: pressable, fast, explicit about state, and
 ### Cards / Containers
 
 - **Room and content cards:** 16px corners, one low-contrast border, dark tonal fill, and 16–24px internal padding. Hover may lift up to 5px when the whole card is actionable.
-- **Player seats:** 14px corners, Seat Surface, a one-pixel border, 7×10px padding, and compact shadow. Turn and winner use gold; desktop viewer identity uses oxblood.
+- **Player seats:** 14px corners, Seat Surface, a one-pixel border, 7×10px padding, and compact shadow. Turn and winner use gold; desktop viewer identity uses oxblood. The player-actions affordance is flat and quiet inside the card (full strength on hover or focus within the seat), never a chip floating off its corner; on coarse pointers it stretches over the whole seat so the seat body is the trigger — except while a reaction is being aimed at that seat, which owns the tap instead. A seat joining or leaving animates on `translate` and `opacity` only, and the surviving seats do not animate their reflow at all.
 - **Playing cards:** warm card stock, 6px physical corners, and proportional 2px corners only at thumbnail scale. Archives reveal together; live play and replay may retain deal sequence.
 - **Empty states:** dashed 1px outline, plain explanation, and one clear recovery or creation path.
 

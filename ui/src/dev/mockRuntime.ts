@@ -1472,7 +1472,8 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       current_player_id: MOCK_PLAYER_ID,
       legal_actions: {
         actions: ['fold', 'check', 'raise'], min_raise_to: 100, max_raise_to: 4900, step: 25,
-        current_bet: 50, current_contribution: 50, half_pot_raise_to: 175, pot_raise_to: 300
+        current_bet: 50, current_contribution: 50,
+        one_third_pot_raise_to: 125, half_pot_raise_to: 175, two_thirds_pot_raise_to: 225, pot_raise_to: 300
       },
       dealer_player_id: layoutSeats.at(-1)?.player_id,
       small_blind_player_id: layoutSeats[1]?.player_id,
@@ -1526,6 +1527,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         call_amount: 25,
         min_raise_to: 150,
         max_raise_to: 4900,
+        one_third_pot_raise_to: 175,
+        half_pot_raise_to: 225,
+        two_thirds_pot_raise_to: 250,
+        pot_raise_to: 325,
         step: 25
       },
       rake: 5,
@@ -1692,6 +1697,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       call_amount: 0,
       min_raise_to: 100,
       max_raise_to: 4900,
+      one_third_pot_raise_to: 325,
+      half_pot_raise_to: 500,
+      two_thirds_pot_raise_to: 650,
+      pot_raise_to: 975,
       step: 25
     },
     rake: 8,
@@ -1709,6 +1718,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       call_amount: 0,
       min_raise_to: 175,
       max_raise_to: 4900,
+      one_third_pot_raise_to: 400,
+      half_pot_raise_to: 600,
+      two_thirds_pot_raise_to: 800,
+      pot_raise_to: 1200,
       step: 25
     },
     rake: 11,
@@ -2100,11 +2113,23 @@ export class MockTableService {
     const minTo = currentBet + 25;
     const actions: PokerAction[] = callAmount > 0 ? ['fold', 'call'] : ['fold', 'check'];
     if (maxTo > currentBet && seat.stack > callAmount) actions.push('raise');
+    // The real server publishes a raise-to figure per pot fraction, and the
+    // action bar's preset row reads those rather than re-deriving them (see
+    // `stageBetPresets`). Without them the mock offered a row of just "All in",
+    // which is not what a player or a guide screenshot should see.
+    const pot = seats.reduce((sum, item) => sum + (item.contributed || 0), 0);
+    const potAfterCall = pot + callAmount;
+    const raiseTo = (fraction: number) => Math.min(Math.max(0, maxTo),
+      Math.max(Math.min(maxTo, minTo), Math.round((currentBet + fraction * potAfterCall) / 25) * 25));
     return {
       actions,
       call_amount: callAmount,
       min_raise_to: Math.min(maxTo, minTo),
       max_raise_to: Math.max(0, maxTo),
+      one_third_pot_raise_to: raiseTo(1 / 3),
+      half_pot_raise_to: raiseTo(0.5),
+      two_thirds_pot_raise_to: raiseTo(2 / 3),
+      pot_raise_to: raiseTo(1),
       step: 25
     };
   }

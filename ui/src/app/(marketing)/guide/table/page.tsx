@@ -46,8 +46,12 @@ export default function TableGuide() {
       summary: 'A disposição muda com o formato da tela, não só o tamanho das coisas.',
       body: <><p>Em tela larga a mesa é um oval com os assentos na madeira ao redor do feltro e você embaixo.</p>
         <p>No <b>celular em pé</b> os adversários viram fichas de avatar na borda de uma cápsula e você sai do anel:
-          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Com poucos jogadores a
-          cápsula encolhe para não deixar feltro vazio.</p>
+          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Sob cada avatar fica só a
+          pilha, em branco, para o número ficar legível sobre o feltro — o nome continua disponível para leitores de
+          tela e aparece nos assentos em tela larga.</p>
+        <p>A mesa tem sempre o mesmo tamanho, com dois ou com nove jogadores: quem entra ou sai não redimensiona o
+          feltro debaixo de você. Só o assento em questão se move, entrando ou saindo com um deslize curto (uma
+          transparência simples, se o seu sistema pede menos movimento); os outros ficam onde estão.</p>
         <p>No <b>celular deitado</b> a tela vira duas colunas: à esquerda o mesmo oval com os adversários na madeira,
           à direita tudo que é seu — suas cartas, a ação preparada e a barra de ações. Você não fica no anel. Chat,
           reações e últimos vencedores passam para os ícones do cabeçalho, como no celular em pé.</p></>
@@ -60,10 +64,12 @@ export default function TableGuide() {
         <GuideTerm term="Fold">Desiste da mão. Você perde o que já colocou no pote.</GuideTerm>
         <GuideTerm term="Check">Passa a vez sem apostar, quando ninguém aumentou.</GuideTerm>
         <GuideTerm term="Pagar">Iguala o valor exigido. O botão mostra quanto sai da sua pilha.</GuideTerm>
-        <GuideTerm term="Aumentar">Define um total entre o mínimo e o máximo. Os atalhos de tamanho são Mín, ⅓, ½ e ⅔
-          do pote, Pote e Máx, além do controle deslizante e dos botões de mais e menos. Uma segunda fileira de
-          presets (¼, ½, ¾, 1× o pote e All-in) fica ao lado do controle de mais e menos — toque na estrela de
-          cada um para fixar seus favoritos; sem nenhum favorito, todos aparecem.</GuideTerm>
+        <GuideTerm term="Aumentar">Define um total entre o mínimo e o máximo, com o controle deslizante, os botões de
+          mais e menos, ou a fileira de presets acima deles. Os presets mudam com a rua e com a sua preferência
+          (veja <b>Presets de aposta</b> em Preferências da mesa): na opção padrão, <b>BB</b>, <b>2BB</b>, <b>3BB</b> e
+          <b> All in</b> no pré-flop, e <b>1/3</b>, <b>1/2</b>, <b>2/3</b> e <b>All in</b> do flop em diante. Todo
+          preset já vem dentro dos limites da rodada; quando dois deles chegam ao mesmo valor — pilha curta, por
+          exemplo — sobra o de nome mais alto, para nenhum botão prometer um valor que não é o dele.</GuideTerm>
         <GuideTerm term="All In">O botão troca de rótulo sozinho quando o valor escolhido alcança o
           máximo.</GuideTerm>
       </GuideTerms>
@@ -117,6 +123,9 @@ export default function TableGuide() {
         </GuideBullets>
         <p>A ação preparada dispara sozinha e a barra avisa que está executando. Tocar de novo na mesma opção cancela
           a preparação.</p>
+        <p>As opções ficam sempre em uma única fileira. Em telas estreitas os rótulos encurtam — <b>C/F</b> para
+          Check / Fold, <b>Any</b> para Call Any, e <b>Call</b> sem o valor ao lado — sem diminuir a área de toque;
+          o valor exato continua no nome que o leitor de tela anuncia, e na barra de ações quando a vez chega.</p>
       </>
     },
     {
@@ -130,6 +139,10 @@ export default function TableGuide() {
           espia as duas cartas, ou quando a mão termina.</GuideTerm>
         <GuideTerm term="Mostrar cartas">Terminada a mão, você escolhe quais das suas cartas revelar para a mesa —
           uma, as duas ou nenhuma.</GuideTerm>
+        <GuideTerm term="Pilha e valores">Em mesas sandbox os números de fichas aparecem abreviados para caber ao
+          lado do avatar: <b>1,2K</b> são 1.250 fichas, <b>600K</b> são 600.000, <b>1,5M</b> são 1.500.000. O valor
+          exato continua no nome que o leitor de tela anuncia. Em dinheiro real nada é abreviado — todo valor aparece
+          por inteiro.</GuideTerm>
         <GuideTerm term="Sequência">Um selo V ou D no assento conta as vitórias ou derrotas seguidas daquele
           jogador.</GuideTerm>
         <GuideTerm term="Estilo de jogo">Rótulo de tendência de quem tornou o próprio estilo público. É leitura, não
@@ -151,6 +164,8 @@ export default function TableGuide() {
         <li><span><b>River:</b> a quinta completa o board.</span></li>
         <li><span><b>Showdown:</b> quem ficou compara a melhor combinação de cinco cartas.</span></li>
       </GuideSteps>
+        <p>Embaixo do board ficam quatro pontos, um por rua: os já percorridos acesos, o atual em destaque. Ao lado
+          deles aparece o nome de uma rua só — a atual (<b>Pré-flop</b>, <b>Flop</b>, <b>Turn</b>, <b>River</b>).</p>
         <p>O dealer anuncia cada evento em uma faixa curta sobre o feltro; com o dealer auditivo ligado, o mesmo texto
           é falado.</p></>
     },
@@ -213,7 +228,9 @@ export default function TableGuide() {
         <li><span><b>Últimos vencedores:</b> resumo das últimas mãos resolvidas nesta mesa.</span></li>
       </GuideBullets>
         <p>O mesmo menu do assento tem adicionar amigo, silenciar, bloquear, denunciar e abrir a vitrine do
-          jogador.</p></>
+          jogador. No celular basta <b>tocar no assento</b> do adversário para abri-lo; em tela larga, o
+          <b> ⋮</b> discreto no canto do cartão do assento faz o mesmo. Enquanto você está escolhendo o assento que
+          vai receber uma reação, o toque pertence à reação e o menu não abre.</p></>
     },
     {
       id: 'preferencias',
@@ -234,6 +251,9 @@ export default function TableGuide() {
         <li><span><b>Treinador:</b> explica sua mão depois que você age, só em mesas sandbox. Fica indisponível
           durante a sua decisão, para nunca funcionar como dica em tempo real; ao fim da mão, mostra como a sua chance
           mudou rua a rua.</span></li>
+        <li><span><b>Presets de aposta:</b> decide contra o que a fileira de presets de aumento é medida.
+          <b> Mista (padrão)</b> abre em big blinds no pré-flop e passa a frações do pote do flop em diante;
+          <b> Big blind</b> e <b>Pote</b> mantêm o mesmo conjunto em todas as ruas. Fica salvo na sua conta.</span></li>
         <li><span><b>Lembrete de sessão:</b> a cada 30, 60, 90 ou 120 minutos, ou desativado.</span></li>
         <li><span><b>Atalhos de teclado:</b> liga ou desliga F, C, P, R e os atalhos de preparar jogada, sem
           remapeamento. Uma lista mostra o que cada tecla faz enquanto o recurso está ligado.</span></li>

@@ -512,3 +512,17 @@
         animation-duration: 120ms
     }
 }
+/* Explanatory line under a preference Select — secondary to the control, and
+   the slot the save error takes over when a mutation is rejected. */
+.table-preference-hint {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: var(--font-size-compact);
+    line-height: 1.4
+}
+.table-preference-hint b {
+    display: block;
+    margin-top: 4px;
+    color: var(--danger-soft)
+}

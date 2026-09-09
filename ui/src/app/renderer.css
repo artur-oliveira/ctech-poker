@@ -5029,6 +5029,18 @@
     font-size: var(--font-size-tiny);
     white-space: nowrap
 }
+/* "fichas" costs ~33px of a 64-78px caption lane, and a number beside an
+   avatar at a poker table is never anything but a stack. The unit stays in the
+   accessibility tree; only the ring drops it, so the viewer's own HUD and every
+   desktop seat still read "4.850 fichas". Ring-wide, not portrait-only: short
+   landscape has the same lane, and a bold caption overflowed it there. */
+.stage-v-ring .seat-info .seat-stack-unit {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%)
+}
 /* Side captions stay centered on their avatar and narrow to the established
    64px compact lane. This keeps the 3/4-player diamond's extreme left/right
    labels inside a 320–390px viewport without pushing them toward the board. */
@@ -6401,6 +6413,11 @@ html:has(.game),
        ellipsis — those are unbounded. */
     .stage-v-ring .seat-info .seat-state {
         white-space: normal;
+        /* Deliberately no `overflow-wrap: anywhere`: "Desconectado" has no
+           break opportunity, so it breaks mid-word into "Desconect / ado",
+           which reads worse than the clip. The state word is a known 78px-lane
+           casualty on the tallest portrait tier; the avatar already greys out
+           for it, and the shorter tier below sr-onlys the word entirely. */
         text-overflow: clip;
         line-height: 1.05
     }
@@ -8577,7 +8594,7 @@ html:has(.has-tab-bar) {
     border-radius: var(--rounded-pill);
     background: transparent;
     color: var(--muted-rose);
-    opacity: .45;
+    opacity: .6;
     transition: opacity 150ms var(--ease-out-quart), background-color 150ms var(--ease-out-quart)
 }
 .seat-actions-trigger button svg {
@@ -8916,8 +8933,13 @@ html:has(.has-tab-bar) {
    aimed at this seat the attribute is absent, the overlay collapses back to
    the badge, and the tap belongs to .seat-reaction-target (z-index 8) instead.
    Keyboard is unaffected — it is the same <button>, still focusable, still
-   named "Ações para <jogador>". */
-@media (hover: none), (pointer: coarse) {
+   named "Ações para <jogador>".
+
+   `(pointer: coarse)` alone, not `(hover: none), (pointer: coarse)`: every real
+   touch device reports a coarse primary pointer, while a headless browser can
+   report `hover: none` with a fine pointer and would then screenshot the touch
+   variant of a desktop table (which is exactly what the guide capture did). */
+@media (pointer: coarse) {
     .seat-actions-trigger[data-seat-tap] {
         position: absolute;
         z-index: 3;
