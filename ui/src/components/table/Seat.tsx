@@ -8,8 +8,8 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, isPlainKey, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
-import {useReducedMotionCountdown} from '@/lib/hooks/useReducedMotionCountdown';
-import {Hourglass, NotebookPen} from 'lucide-react';
+import {useTurnCountdown} from '@/lib/hooks/useTurnCountdown';
+import {Hourglass, NotebookPen, WifiOff} from 'lucide-react';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {playstyleMeta} from '@/lib/playstyle';
 import type {WinnerStanding} from '@/lib/tableOutcome';
@@ -74,7 +74,7 @@ function SeatTurnTimer({baseDeadlineMs, observedAtMs, durationMs}: {
   // reconnects) must not rewrite a running CSS animation's duration/offset.
   const [initialElapsedMs] = useState(() => Math.min(durationMs, Math.max(0,
     observedAtMs - (baseDeadlineMs - durationMs))));
-  const secondsLeft = useReducedMotionCountdown(baseDeadlineMs);
+  const secondsLeft = useTurnCountdown(baseDeadlineMs);
   return <>
     <PerimeterTimer className="seat-turn-ring" durationMs={durationMs}
                     elapsedMs={initialElapsedMs} restartKey={baseDeadlineMs} radius={14}/>
@@ -95,7 +95,7 @@ function SeatTimeBank({baseDeadlineMs, actionDeadlineMs, observedAtMs}: {
 }) {
   const durationMs = Math.max(0, actionDeadlineMs - baseDeadlineMs);
   const [initialElapsedMs] = useState(() => Math.min(durationMs, Math.max(0, observedAtMs - baseDeadlineMs)));
-  const secondsLeft = useReducedMotionCountdown(actionDeadlineMs);
+  const secondsLeft = useTurnCountdown(actionDeadlineMs);
   return <>
     <PerimeterTimer className="seat-timebank-ring" durationMs={durationMs}
                     elapsedMs={initialElapsedMs} restartKey={actionDeadlineMs} radius={14}/>
@@ -324,6 +324,14 @@ function SeatImpl({
     {showTimeBank && baseDeadlineMs && actionDeadlineMs && clockNow &&
         <SeatTimeBank key={actionDeadlineMs} baseDeadlineMs={baseDeadlineMs}
                      actionDeadlineMs={actionDeadlineMs} observedAtMs={clockNow}/>}
+    {/* The visible "Desconectado" caption is clipped to the accessibility tree
+        on coarse pointers (renderer.css), where the lane cannot hold it — this
+        glyph is what carries the state visually there. It is a shape, not a
+        hue: folded and disconnected both mean "not acting" and grayscale alone
+        would collapse them into the same seat. CSS shows it only where the
+        word is hidden. */}
+    {(isDisconnected || seat.state === 'disconnected') &&
+        <span className="seat-disconnect-badge" aria-hidden="true"><WifiOff/></span>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     {streak !== 0 && <span className={`seat-streak ${streak > 0 ? 'is-hot' : 'is-cold'}`}

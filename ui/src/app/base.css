@@ -46,14 +46,18 @@
        half — which is what happened to the win/loss streak badge on the
        portrait viewer dock, flush against .game-table's overflow:hidden edge. */
     --seat-badge-overhang: 8px;
-    /* The stack under an avatar on the portrait ring is the one number a
-       player reads mid-hand, and it sits directly on the felt — no seat card
-       behind it. --text-secondary (#cbbfc0) reached only 3.9:1 on the lightest
-       premium felt; --gold is worse still at 2.9:1. Pure white clears WCAG AA
-       (4.5:1) on all four felts — classic 5.5, ocean 5.1, midnight 8.0,
-       burgundy 8.4 — and on the walnut rail (6.3) and the room (18.4). See
+    /* The stack under an avatar on the ring is the one number a player reads
+       mid-hand, and it sits straight on the felt or the walnut — no seat card
+       behind it. It is a chip count, so it wears the chips' own gold rather
+       than the white it shipped as: --gold-pale (#efe1b7) IS the chip face's
+       highlight stop (see .chip's radial-gradient), lightened toward white
+       only as far as WCAG AA demands. At 75% it measures #f3e9c9 — 4.56:1 on
+       the classic felt, 4.70 on ocean, 5.83/7.46 on their rails, 15.8 on the
+       room. --gold-pale itself would be 4.26 on classic, which is why the
+       lift exists at all. The two dark felts can carry the full --gold instead
+       and say so in their own [data-table-theme] blocks (renderer.css). See
        DESIGN.md, "Seat stack legibility". */
-    --seat-stack-ink: #ffffff;
+    --seat-stack-ink: color-mix(in srgb, var(--gold-pale) 75%, #ffffff);
     /* Table geometry, one derivation. The rail's inset is authored per side
        (the portrait capsule is pushed down inside its ring to leave the top
        seats' cards room under the header), but the felt is ALWAYS the rail
@@ -74,6 +78,13 @@
        narrow together, or the outermost captions hang past .game-table's clip
        edge on the narrowest phones. */
     --seat-caption-lane: 64px;
+    /* Headroom the portrait stage reserves ABOVE its ring, for the top-arc
+       seats whose caption hangs over the avatar (the hole cards own the lane
+       below it there). Same job as --seat-badge-overhang on the other three
+       sides: without it the caption lands outside .game-table.stage-v's clip
+       box, which is what the 320x568 heads-up ring did — 7px of the only stack
+       figure on screen, gone. The ring's flex:1 absorbs it. */
+    --seat-caption-reserve: 16px;
 
     /* Private note tags. The six are a categorical palette the *player* assigns
        meaning to (the labels are the colour names), so they are named by hue on

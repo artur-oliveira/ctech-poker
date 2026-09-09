@@ -1043,19 +1043,31 @@
     border-radius: 50%;
     background: color-mix(in srgb, var(--felt-text-muted) 58%, transparent)
 }
+/* The pot is the single most-read number on the felt, and it was competing
+   with its own caption and with the street rail below it instead of leading
+   them: 14px of gold beside a 10px label, both at the same weight. The number
+   is now the largest type on the play surface and the word "POTE" steps back
+   to a quiet 9px marker — the abbreviated sandbox figure (round 1) is what
+   freed the width to do it. Baseline-aligned rather than centre-aligned so the
+   label sits on the number's own line rather than floating at its middle. */
 .game-pot {
-    font: 600 10px var(--font-mono);
-    letter-spacing: .13em;
-    color: var(--felt-text);
+    font: 700 var(--font-size-tiny) var(--font-mono);
+    letter-spacing: .16em;
+    color: var(--felt-text-muted);
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: center;
-    gap: 8px;
+    gap: 7px;
     margin-bottom: 14px
+}
+.game-pot .chip-stack {
+    align-self: center
 }
 .game-pot b {
     color: var(--gold-pale);
-    font-size: var(--font-size-body)
+    font: 700 var(--font-size-xl) var(--font-mono);
+    letter-spacing: -.01em;
+    line-height: 1
 }
 .game-pot small {
     margin-left: 10px;
@@ -1442,17 +1454,29 @@
 .hand-outcome-card > .hand-outcome-next {
     font-size: var(--font-size-mono)
 }
+/* Sticky, not absolute. The card caps its own height and scrolls internally
+   (see .hand-outcome-card), and an absolutely-positioned corner button is
+   positioned against the SCROLLED content: on a short viewport — a 320x568
+   portrait ring, a run-it-twice settlement — the player scrolled to reach the
+   pot rows and the only way to close the card went off the top with them.
+   Sticky keeps it in the corner for the whole scroll. Its own grid row is
+   collapsed by the negative bottom margin (28px button + the card's 10px gap),
+   so the card's layout is exactly what it was; the faint disc is what keeps it
+   legible once it is floating over the settlement rows rather than over the
+   heading's clear space. */
 .hand-outcome-dismiss {
-    position: absolute;
-    top: 8px;
-    right: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    justify-self: end;
     width: 28px;
     height: 28px;
+    margin: 0 -14px -38px 0;
     display: grid;
     place-items: center;
     border: 0;
     border-radius: 50%;
-    background: transparent;
+    background: color-mix(in srgb, currentColor 10%, transparent);
     color: inherit;
     opacity: .7;
     pointer-events: auto;
@@ -1725,6 +1749,10 @@
 }
 .bet-control input[type=range] {
     min-width: 0;
+    /* Desktop-only in practice (the compact tiers hide it for the +/- stepper),
+       but a touchscreen laptop still has both: without this the horizontal
+       drag is claimed by the OS back-swipe gesture instead of the slider. */
+    touch-action: none;
     height: 44px;
     padding: 0;
     border: 0;
@@ -1742,7 +1770,9 @@
     opacity: .65;
     cursor: not-allowed
 }
-.bet-control output {
+/* Was an <output>; it is a text input now (see BetAmountField), so the box is
+   the wrapper and the number inside it is the control. */
+.bet-control .bet-output {
     min-height: 44px;
     display: flex;
     flex-direction: column;
@@ -1754,10 +1784,41 @@
     color: var(--gold);
     font-variant-numeric: tabular-nums
 }
+/* Reads as the number it replaced, not as a field: no chrome until it is
+   focused, at which point the focus ring is the whole affordance. */
+.bet-amount-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--rounded-xs);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: center
+}
+.bet-amount-input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.bet-amount-input:disabled {
+    color: var(--muted);
+    cursor: not-allowed
+}
+/* The number is the control, so on touch the number has to BE a target: the
+   box around it is 48px but only the input itself takes the tap. 30px clears
+   WCAG 2.2's 24px minimum without pushing the caption and meter out of the
+   box they share. */
+@media (pointer: coarse) {
+    .bet-amount-input {
+        min-height: 30px
+    }
+}
 /* Preset/slider clamp is otherwise invisible: a player taps "Pote" expecting
    that exact fraction and silently gets maxRaise instead. Surface the
    correction right under the total instead of only in the button state. */
-.bet-control output .bet-clamped-note {
+.bet-control .bet-output .bet-clamped-note {
     color: var(--danger-soft);
     opacity: 1
 }
@@ -3675,7 +3736,7 @@
     }
 .game-table.stage-v {
         min-height: 0;
-        padding: 4px calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang);
+        padding: var(--seat-caption-reserve) calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang);
         gap: 6px;
         overflow: hidden
     }

@@ -5,7 +5,7 @@ import {Seat} from './Seat';
 import type {SeatView} from '@/lib/api/table';
 import {ChipFormatContext} from '@/lib/chipFormat';
 
-vi.mock('@/lib/hooks/useReducedMotionCountdown', () => ({useReducedMotionCountdown: () => 7}));
+vi.mock('@/lib/hooks/useTurnCountdown', () => ({useTurnCountdown: () => 7, TURN_COUNTDOWN_SECONDS: 10}));
 vi.mock('@/lib/hooks/useDeckVariant', () => ({useDeckVariant: () => 'four-color'}));
 
 afterEach(() => {
@@ -48,6 +48,24 @@ describe('Seat', () => {
     const {container} = render_({seat: seat({state: 'active', connection_state: 'disconnected'})});
     expect(screen.getByText('Desconectado')).toBeInTheDocument();
     expect(container.querySelector('.game-seat')).toHaveClass('disconnected');
+  });
+
+  // The state WORD is clipped to the accessibility tree on coarse pointers
+  // (renderer.css), so a badge — a shape, not a hue — has to carry
+  // "disconnected" visually there. Folded and disconnected both mean "not
+  // acting" and would otherwise be the same grey seat.
+  test.each<[string, Partial<SeatView>]>([
+    ['a dropped connection on a live seat', {state: 'active', connection_state: 'disconnected'}],
+    ['a seat whose state is itself disconnected', {state: 'disconnected'}]
+  ])('renders the disconnect badge for %s', (_label, overrides) => {
+    const {container} = render_({seat: seat(overrides)});
+    expect(container.querySelector('.seat-disconnect-badge')).toBeInTheDocument();
+  });
+
+  test.each([['active'], ['folded'], ['all_in'], ['sitting_out']])
+  ('renders no disconnect badge for a connected %s seat', state => {
+    const {container} = render_({seat: seat({state})});
+    expect(container.querySelector('.seat-disconnect-badge')).toBeNull();
   });
 
   test('announces a pause that only takes effect after this hand', () => {

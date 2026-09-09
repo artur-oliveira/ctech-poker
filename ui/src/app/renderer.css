@@ -1365,7 +1365,12 @@
     --felt-shadow: #061923;
     --table-rail: #3e4d59;
     --table-rail-edge: #17232b;
-    --table-rail-highlight: #718694
+    --table-rail-highlight: #718694;
+    /* Dark felts can carry the full chip gold at AA, so they do: #e6b85c is
+       5.01:1 on this felt and 4.72:1 on its rail, where the classic/ocean
+       default has to lift toward white to clear 4.5 (see --seat-stack-ink in
+       base.css and DESIGN.md, "Seat stack legibility"). */
+    --seat-stack-ink: var(--gold)
 }
 .game[data-table-theme=burgundy] {
     --table-felt-light: #71323b;
@@ -1373,7 +1378,9 @@
     --felt-shadow: #210b0f;
     --table-rail: #63392f;
     --table-rail-edge: #291411;
-    --table-rail-highlight: #9a6252
+    --table-rail-highlight: #9a6252;
+    /* 5.12:1 on this felt, 5.27:1 on its rail. See the midnight block above. */
+    --seat-stack-ink: var(--gold)
 }
 .game[data-table-theme=ocean] {
     --table-felt-light: #14717a;
@@ -1545,13 +1552,70 @@
 .seat-timer-seconds {
     position: absolute;
     z-index: 4;
-    inset: 0;
-    display: grid;
-    place-items: center;
+    /* Hung off the seat's top edge, dead centre: the two upper corners belong
+       to the role pill and the player-actions trigger, and stretching the
+       digits across the whole seat box (which is what `inset: 0` did while
+       this was reduced-motion-only) drops them straight onto the hero card's
+       own stack figure. Its own pill, so the contrast is the pill's, not
+       whatever the seat happens to sit on. */
+    top: -10px;
+    left: 50%;
+    min-width: 20px;
+    padding: 1px 6px;
+    transform: translateX(-50%);
+    border-radius: var(--rounded-pill);
+    background: var(--black-0b);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent);
     font: 800 11px var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
     color: var(--gold);
-    text-shadow: 0 1px 2px var(--black-08);
+    text-align: center;
     pointer-events: none
+}
+/* On the ring the seat IS the avatar chip and its hole cards already own the
+   edge above it, so the digits go on the chip. For the last seconds of a turn
+   they outrank the initial underneath; the caption below still names the
+   stack, and the perimeter ring still names whose turn it is. */
+.stage-v-ring .seat-timer-seconds {
+    top: 50%;
+    padding: 0 4px;
+    transform: translate(-50%, -50%);
+    font-size: 10px
+}
+/* The viewer's own turn, and only the viewer's: a halo that breathes outward
+   from the seat. The perimeter ring says how much time is left and the gold
+   border says whose turn it is, but neither pulls the eye back to a table the
+   player has looked away from. transform + opacity only (never a layout
+   property), on a pseudo-element the seat is not otherwise using. */
+.game-seat.viewer.is-turn:before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: -3px;
+    border: 2px solid var(--gold);
+    border-radius: inherit;
+    opacity: 0;
+    pointer-events: none;
+    animation: viewer-turn-halo 1.8s var(--ease-out-quart) infinite
+}
+@keyframes viewer-turn-halo {
+    0% {
+        opacity: .55;
+        transform: scale(1)
+    }
+    70%, 100% {
+        opacity: 0;
+        transform: scale(1.12)
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    /* No breathing, but the halo still has to exist: it is the viewer's "it is
+       on you" signal, not decoration. Frozen at its resting ring. */
+    .game-seat.viewer.is-turn:before {
+        opacity: .5 !important;
+        transform: none !important
+    }
 }
 /* Fills whatever box it's given (the dismiss button, the badge, or the
    standalone corner dot — see the hand-outcome-* rules near .hand-outcome
@@ -2528,7 +2592,7 @@
 /* "Total"/"All in" caption: the raise slider's value is always a raise-TO
    total, unlike Pagar's additive amount, so the output repeats that framing
    right where players actually watch the number change while dragging. */
-.bet-control output small {
+.bet-control .bet-output small {
     font: 700 8px var(--font-sans);
     letter-spacing: .03em;
     text-transform: uppercase;
@@ -4837,7 +4901,7 @@
        the last flex child, so without it .seat-streak renders past the stage's
        clip edge. The ring's flex:1 absorbs the difference, so this costs no
        felt height. */
-    padding: 8px calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang)
+    padding: var(--seat-caption-reserve) calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang)
 }
 /* The ring used to derive its width from aspect-ratio(3/4) against the
    height flex:1 hands it — a flex-basis-from-cross-size transfer that some
@@ -4881,6 +4945,12 @@
 .stage-v .board-runout-row > div > span:not(.playing-card) {
     width: 38px;
     height: 53px
+}
+/* The pot leads the felt on every stage, but the ring's centre band is a
+   fraction of the oval's — one step down the same scale, not the 32px desktop
+   figure, which would have crowded the board group it sits above. */
+.stage-v .game-pot b {
+    font-size: var(--font-size-large)
 }
 .stage-v-ring .seat-turn-ring rect {
     rx: 50%;
@@ -5266,27 +5336,14 @@
     top: calc(100% + 8px);
     bottom: auto
 }
-/* A top-rail seat has three independent lanes: cards drop inward, identity
-   reads outward along the rail, and chips move sideways onto the felt. This
-   prevents the top player's cards and wager from occupying the same pixels. */
-.stage-v-ring .seat-zone-top .seat-info {
-    top: 50%;
-    bottom: auto;
-    width: 54px;
-    max-width: 54px;
-    margin: 0;
-    transform: translateY(-50%)
-}
-.stage-v-ring .seat-zone-top:is([data-seat-side='left'], [data-seat-side='center']) .seat-info {
-    left: auto;
-    right: calc(100% + 2px);
-    text-align: right
-}
-.stage-v-ring .seat-zone-top[data-seat-side='right'] .seat-info {
-    left: calc(100% + 2px);
-    right: auto;
-    text-align: left
-}
+/* A top-rail seat has three independent lanes: cards drop inward, chips move
+   sideways onto the felt, and identity keeps the avatar's own vertical lane —
+   mirrored above, because the cards own the space below (see the
+   .seat-zone-top .seat-info rule further up, which this block used to
+   override with a sideways lane). One caption placement for every ring seat:
+   a stack figure parked beside an avatar chip read as a loose number belonging
+   to nobody, while every other seat centred it under (or, where the cards are
+   below, over) its own avatar. */
 .stage-v-ring .seat-zone-top:is([data-seat-side='left'], [data-seat-side='center']) .seat-bet {
     top: 50%;
     left: calc(100% + 8px);
@@ -5392,6 +5449,12 @@
 .stage-v > .game-seat .seat-info span {
     max-width: none;
     margin-top: 4px;
+    /* Same ink as every ring caption beside it. The hero card's dark surface
+       could carry the deeper --gold at 10:1, and the desktop oval's seat cards
+       still do — but here the hero sits in the same glance as eight ring
+       captions the felt forces to the lifted tone, and one quantity painted in
+       two golds on one screen reads as two different things. */
+    color: var(--seat-stack-ink);
     font: 700 15px var(--font-mono);
     font-variant-numeric: tabular-nums
 }
@@ -6249,6 +6312,10 @@
 
     .stage-v .game-pot {
         margin-bottom: 8px
+    }
+
+    .stage-v .game-pot b {
+        font-size: var(--font-size-subtitle)
     }
 
     .stage-v-ring .game-seat {
@@ -8970,4 +9037,89 @@ html:has(.has-tab-bar) {
         top: 2px;
         right: 2px
     }
+}
+
+/* ---------------------------------------------------------------------------
+   Touch: the seat's state WORD goes, its state does not (#round-2 item 1).
+   "Desistiu", "All-in", "Ausente" and "Desconectado" each cost a caption line
+   in a 64-78px lane that already has to hold a stack figure, and the longest
+   of them clipped outright on the tallest portrait ring ("Desconecta…"). The
+   short-portrait tier already dropped them for exactly this reason; coarse
+   pointers as a whole have the same lane and the same problem, so the gate
+   moves to the pointer rather than to one viewport slice. The word stays in
+   the accessibility tree verbatim (clipped, not `display: none`), so nothing
+   a screen reader hears changes; desktop keeps every visible label.
+
+   Each state that mattered gets a non-text cue in the word's place, and each
+   cue differs by SHAPE, not only by hue (WCAG 1.4.1):
+     - all-in       solid gold ring on the avatar, backed by a dark ring so the
+                    3:1 non-text boundary (1.4.11) holds against all four felts
+                    and both rails regardless of what is behind it;
+     - folded       dashed muted outline + the grayscale the seat already had,
+                    plus its own hole cards still visible at 50%;
+     - disconnected an explicit plug/wifi-off badge — a glyph, because "this
+                    player is gone" has no colour anyone would read correctly,
+                    and because folded and disconnected both mean "not acting"
+                    and must not collapse into the same grey;
+     - sitting out  grayscale with no badge and no cards at all.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+    .game-seat .seat-info .seat-state {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    /* Gold reads 3.01:1 on the brightest felt on its own — under 1.4.11's 3:1
+       once antialiasing is counted — so the indicator is the gold ring AND the
+       ink ring under it, whose own boundary is 10.4:1 wherever it lands. */
+    .game-seat.all_in .seat-avatar {
+        box-shadow: 0 0 0 3px var(--gold), 0 0 0 5px var(--ink)
+    }
+
+    /* outline, not box-shadow: only an outline can be dashed, and the dash is
+       the whole point — it is the shape that separates a folded seat from a
+       disconnected one without asking anybody to read a hue. */
+    .game-seat.folded .seat-avatar {
+        outline: 2px dashed color-mix(in srgb, var(--paper) 55%, transparent);
+        outline-offset: 2px
+    }
+
+    .game-seat .seat-disconnect-badge {
+        display: grid
+    }
+}
+/* Rendered on every seat that reports a dropped connection, shown only where
+   the state word is hidden (the coarse-pointer block above). Paper on ink so
+   the badge itself clears 1.4.11 on any felt, any rail and the room. */
+.seat-disconnect-badge {
+    position: absolute;
+    z-index: 5;
+    display: none;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: 0 0 0 1.5px var(--ink), 0 2px 4px var(--black-06);
+    pointer-events: none
+}
+.seat-disconnect-badge svg {
+    width: 11px;
+    height: 11px
+}
+.stage-v-ring .seat-disconnect-badge {
+    top: -3px;
+    right: -3px;
+    width: 13px;
+    height: 13px
+}
+.stage-v-ring .seat-disconnect-badge svg {
+    width: 8px;
+    height: 8px
 }
