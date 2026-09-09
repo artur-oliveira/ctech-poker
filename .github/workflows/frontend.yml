@@ -67,13 +67,16 @@ jobs:
       - name: Test (incl. axe assertions)
         run: npx vitest run
 
-      # Deliberately the webpack builder: it is what bundle-budget.json was
-      # pinned with, and Turbopack splits chunks differently, so mixing the two
-      # would compare unlike numbers. The deploy job still ships the Turbopack
-      # build — this one exists only to produce out/ for the two gates below.
+      # `npm run build` on purpose: Turbopack plus strip-inline-scripts.mjs is
+      # exactly what the deploy ships, so the budget and Lighthouse both measure
+      # the bytes a player downloads. This used to be `next build --webpack`,
+      # which splits chunks differently and never produces the stripped inline
+      # chunks — it under-reported /guide/* by ~12%, and anyone who built the
+      # normal way got eleven bogus over-budget routes. bundle-budget.json
+      # records the builder it was pinned with and the check refuses a mismatch.
       - name: Build static export for measurement
         if: github.event_name != 'pull_request'
-        run: npx next build --webpack
+        run: npm run build
 
       # Per-route first-load JS against the pinned budget, plus the proof that
       # the dev mock runtime is not on any route's critical path.
@@ -106,7 +109,6 @@ jobs:
   # handset before it ships.
   layout-changed:
     name: Detect layout-affecting changes
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-26.04
     outputs:
       slow: ${{ steps.filter.outputs.slow }}
@@ -143,12 +145,18 @@ jobs:
 
   browsers:
     name: Cross-browser layout
-    # Three engines plus their system deps is the most expensive job here, and
-    # the class of defect it catches (layout/geometry) is not what #277 was
-    # about. Push only, and (same idea as api.yml's turn-order gate)
-    # further gated on paths that can actually move layout/geometry — a
-    # copy-only or lib-only push doesn't need three browser engines.
-    if: github.event_name != 'pull_request' && needs.layout-changed.outputs.slow == 'true'
+    # Three engines plus their system deps is the most expensive job here, so
+    # it stays gated (same idea as api.yml's turn-order gate) on paths that can
+    # actually move layout/geometry — a copy-only or lib-only change doesn't
+    # need three browser engines.
+    #
+    # It runs pre-merge as well as on push. It used to be push-only, which meant
+    # a PR could go green having never executed WebKit: #376 merged that way and
+    # turned every seat in Safari invisible (a `both`-filled entrance animation
+    # that WebKit leaves pending forever), caught only by the post-merge run on
+    # a red main. The engine that catches a defect has to run before the merge,
+    # not after it.
+    if: needs.layout-changed.outputs.slow == 'true'
     needs: [layout-changed]
     runs-on: ubuntu-26.04
     defaults:
