@@ -20,6 +20,16 @@ import {join, relative} from 'node:path';
 
 const OUT_DIR = 'out';
 const BUDGET_FILE = 'bundle-budget.json';
+/** Which builder produced `out/`. Webpack emits a `webpack-<hash>.js` runtime
+ * chunk and Turbopack does not, which is the cheapest reliable tell. The two
+ * split chunks differently, so their numbers are not comparable: measuring one
+ * against a budget pinned with the other reports most of the app over budget
+ * and none of it is real. */
+function builderOf(paths) {
+  return paths.some(path => /\/_next\/static\/chunks\/webpack-[^/]+\.js$/.test(path))
+    ? 'webpack'
+    : 'turbopack';
+}
 /** Growth allowed over the pinned value before CI fails. */
 const TOLERANCE = 0.08;
 /** Fixture data that exists only inside `src/dev/mockRuntime.ts` — not in the
@@ -40,6 +50,7 @@ function walk(dir) {
 
 const files = walk(OUT_DIR);
 const sizes = new Map(files.map(path => [`/${relative(OUT_DIR, path)}`, statSync(path).size]));
+const builder = builderOf(files.map(path => `/${relative(OUT_DIR, path)}`));
 
 /** `/lobby.html` → `/lobby`, `/index.html` → `/`. */
 function routeOf(htmlPath) {
@@ -70,14 +81,24 @@ function measure() {
 const kb = value => `${(value / 1024).toFixed(1)} kB`;
 const measured = measure();
 
+const pinned = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'));
+
 if (process.argv.includes('--update')) {
   const sorted = Object.fromEntries(Object.entries(measured).sort(([a], [b]) => a.localeCompare(b)));
-  writeFileSync(BUDGET_FILE, `${JSON.stringify({tolerance: TOLERANCE, routes: sorted}, null, 2)}\n`);
-  console.log(`Pinned ${Object.keys(sorted).length} route budgets in ${BUDGET_FILE}.`);
+  const next = {_comment: pinned._comment, _builder: builder, tolerance: TOLERANCE, routes: sorted};
+  writeFileSync(BUDGET_FILE, `${JSON.stringify(next, null, 2)}\n`);
+  console.log(`Pinned ${Object.keys(sorted).length} route budgets in ${BUDGET_FILE} from the ${builder} build.`);
   process.exit(0);
 }
 
-const {routes: budget} = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'));
+const {routes: budget, _builder: pinnedBuilder} = pinned;
+if (pinnedBuilder && pinnedBuilder !== builder) {
+  console.error(`out/ was built with ${builder}, but ${BUDGET_FILE} is pinned against ${pinnedBuilder}.` +
+    `\nTheir chunk splits differ, so every route would be compared against an unrelated number.` +
+    `\nRebuild with ${pinnedBuilder === 'webpack' ? '`npx next build --webpack`' : '`npm run build`'} and re-run.`);
+  process.exit(1);
+}
+
 const failures = [];
 
 for (const [route, size] of Object.entries(measured).sort(([a], [b]) => a.localeCompare(b))) {

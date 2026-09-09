@@ -18,7 +18,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['github'], ['html', {open: 'never'}]] : [['list']],
+  // ./everyProjectRan.ts is always on: a run that quietly executed one
+  // engine instead of three must not report success.
+  reporter: process.env.CI
+    ? [['github'], ['html', {open: 'never'}], ['./e2e/everyProjectRan.ts']]
+    : [['list'], ['./e2e/everyProjectRan.ts']],
   use: {
     baseURL: 'http://127.0.0.1:3003',
     trace: 'on-first-retry',

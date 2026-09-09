@@ -333,7 +333,12 @@ off by default — do not build UI that assumes real money is on.
   `min-height` regression that looked fine in DevTools' device toolbar and squeezed the real table
   on iOS. Any table-geometry change needs a pass on a real handset on top of a green run. Prefer
   length tokens over percentage insets (which resolve against a different axis per side) and over
-  anything that has to travel through a flex cross size. See
+  anything that has to travel through a flex cross size. The job runs **before** a merge as well
+  as on push — it was push-only until #376 merged green having never executed WebKit at all — and
+  is path-gated on what can actually move geometry, so a copy-only change still costs nothing.
+  `e2e/everyProjectRan.ts` is always-on and fails a run in which a configured project contributed
+  no tests: an engine that executes nothing still leaves a passing count behind for the ones that
+  did, and that reads as success. Narrowing on purpose (`--project`, `--shard`) is exempt. See
   `docs/2026-09-03-cross-browser-layout-suite.md`.
 - **Automated a11y and size gates.** `src/test/axe.ts`'s `expectNoAxeViolations(container)` runs axe-core in jsdom
   and fails on a new `serious`/`critical` violation; it is asserted in the six main route tests and
@@ -341,6 +346,12 @@ off by default — do not build UI that assumes real money is on.
   `bundle-budget.json` (re-pin with `npm run bundle:pin`, in the same commit as the change that moved it) and proves
   the dev mock runtime is off every route's critical path. `lighthouserc.json` audits the static export. All three run
   in the `quality` job of `.github/workflows/frontend.yml`.
+  **The budget measures what deploy ships**: `npm run build`, Turbopack plus
+  `strip-inline-scripts.mjs`. It used to be pinned against `next build --webpack`, which splits
+  chunks differently and never produces the stripped inline chunks — it under-reported `/guide/*`
+  by ~12%, and anyone who built the normal way saw eleven bogus over-budget routes and had no way
+  to tell them from real ones. `bundle-budget.json`'s `_builder` records which builder pinned it
+  and the check refuses a mismatched `out/` instead of comparing unlike numbers.
 - **Every new feature must ship with the tests that cover it** — including the error, empty and
   disabled branches, not just the happy path. Uncovered `??`/optional-field branches are exactly
   where type-shaped bugs survive `tsc`. Never lower a coverage threshold to land a change; write
