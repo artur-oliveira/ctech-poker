@@ -46,9 +46,16 @@ export default function TableGuide() {
       summary: 'A disposição muda com o formato da tela, não só o tamanho das coisas.',
       body: <><p>Em tela larga a mesa é um oval com os assentos na madeira ao redor do feltro e você embaixo.</p>
         <p>No <b>celular em pé</b> os adversários viram fichas de avatar na borda de uma cápsula e você sai do anel:
-          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Sob cada avatar fica só a
-          pilha, em branco, para o número ficar legível sobre o feltro — o nome continua disponível para leitores de
-          tela e aparece nos assentos em tela larga.</p>
+          vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Cada avatar do anel tem a
+          própria pilha na sua coluna — embaixo dele, ou acima quando são as cartas que ficam embaixo — no mesmo
+          dourado das fichas, com o tom ajustado por feltro para o número ficar legível sobre qualquer um deles. O
+          nome continua disponível para leitores de tela e aparece nos assentos em tela larga.</p>
+        <p>Nessa faixa estreita não cabe o rótulo de estado escrito, então ele sai da tela e o estado passa a ser
+          desenhado no avatar: <b>contorno tracejado</b> em cinza para quem desistiu, <b>anel dourado contínuo</b>
+          para quem está all-in, um <b>selo de sinal cortado</b> para quem caiu da conexão, e cinza sem cartas nem
+          selo para quem está ausente. São formas diferentes, não só cores. Os rótulos <b>Desistiu</b>,
+          <b> All-in</b>, <b>Desconectado</b> e <b>Ausente</b> continuam inteiros para leitores de tela, e visíveis
+          nos assentos em tela larga.</p>
         <p>A mesa tem sempre o mesmo tamanho, com dois ou com nove jogadores: quem entra ou sai não redimensiona o
           feltro debaixo de você. Só o assento em questão se move, entrando ou saindo com um deslize curto (uma
           transparência simples, se o seu sistema pede menos movimento); os outros ficam onde estão.</p>
@@ -78,6 +85,13 @@ export default function TableGuide() {
           disputado contra quem continua na mão.</p>
         <p>No celular, o primeiro toque em <b>Aumentar</b> abre o seletor de valor e o segundo confirma. Segurar mais
           ou menos acelera o ajuste.</p>
+        <p>O número em <b>TOTAL</b> também aceita digitação: toque nele e escreva o valor exato. O campo só aceita
+          dígitos — letras, sinais e texto colado de fora são recusados na hora, com um aviso curto abaixo, como
+          <b> Apenas números.</b> ou <b>Máximo</b> seguido do teto da rodada. Em mesas sandbox não há centavos, então vírgula e ponto não
+          entram. O teto bloqueia a digitação; o mínimo e o incremento da mesa, não — assim um valor alto pode ser
+          escrito por inteiro e o ajuste acontece uma vez só, ao sair do campo ou apertar Enter, avisando
+          <b> ajustado ao mínimo</b> ou <b>arredondado para</b> o valor válido. Esc devolve o número que estava
+          lá.</p>
         <GuideCallout kind="warning" title="Uma ação é definitiva">O botão fica em estado de envio enquanto o servidor
           confirma. Não há desfazer depois do aceite. Se a ação for recusada, a barra explica o motivo e devolve as
           escolhas ainda válidas.</GuideCallout></>
@@ -112,6 +126,12 @@ export default function TableGuide() {
         <p>O contorno do assento marca o tempo da decisão. Quando ele termina, entra o <b>time bank</b>: uma reserva
           pessoal que recupera 5 segundos por mão até o limite de 30. Enquanto ela é consumida, uma ampulheta aparece
           no assento — a mesa inteira vê que o jogador ainda está decidindo, não que caiu.</p>
+        <p>Nos últimos 10 segundos o assento de quem está decidindo ganha os segundos em número, ao lado do contorno,
+          para o prazo deixar de ser só uma estimativa. Se o seu sistema pede menos movimento, o número aparece
+          durante toda a decisão, porque aí o contorno não anima.</p>
+        <p>Quando a vez é <b>sua</b>, o seu assento pulsa em dourado e o aparelho dá uma vibração curta, uma única
+          vez por vez sua — nunca pela vez de outro jogador, nunca com a aba em segundo plano, e só onde o aparelho
+          tem vibração.</p>
         <p>Sem nenhuma ação até o fim do prazo, o sistema aplica a decisão segura daquele estado: check quando é
           grátis, fold quando há aposta.</p>
         <GuideBullets>
@@ -173,7 +193,9 @@ export default function TableGuide() {
       id: 'potes',
       title: 'Potes, empate e rodar duas vezes',
       summary: 'Um all-in pode dividir tanto as fichas quanto o board.',
-      body: <><GuideTerms>
+      body: <><p>No centro do feltro, <b>POTE</b> é uma marca discreta e o valor ao lado é o número maior da mesa —
+        é o que se lê primeiro, antes da trilha de ruas logo abaixo.</p>
+        <GuideTerms>
         <GuideTerm term="Pote principal">Valor disputado por todos os jogadores elegíveis.</GuideTerm>
         <GuideTerm term="Pote lateral">Nasce quando um all-in menor não cobre as apostas seguintes. Cada pote tem seu
           valor e só pode ser ganho por quem contribuiu para ele.</GuideTerm>
@@ -204,7 +226,8 @@ export default function TableGuide() {
         </GuideTerms>
         <p>Enquanto o resultado está na tela, um contador mostra quanto falta para a próxima distribuição. No
           celular em pé o painel encosta na base da mesa, deixando o board e o pote à vista; toque no X para
-          recolhê-lo em um selo.</p></>
+          recolhê-lo em um selo. Quando o acerto é longo — dois boards, vários potes — o painel rola por dentro, sem
+          arrastar a mesa junto, e o X fica parado no canto durante a rolagem.</p></>
     },
     {
       id: 'social',

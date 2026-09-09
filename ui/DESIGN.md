@@ -18,7 +18,7 @@ colors:
   muted-rose: "#ad9fa0"
   text-secondary: "#cbbfc0"
   felt-text: "#e3f1ea"
-  seat-stack-ink: "#ffffff"
+  seat-stack-ink: "#f3e9c9"
   success: "#48c98c"
   danger: "#dc2626"
   danger-soft: "#f5b0b3"
@@ -244,7 +244,7 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 - **Muted Rose** (colors.muted-rose): secondary copy that remains readable on dark surfaces. Do not fade it further for essential information.
 - **Text Secondary** (colors.text-secondary): brighter supporting labels and state readouts.
 - **Felt Text** (colors.felt-text): labels and values placed directly over the brightest felt.
-- **Seat Stack Ink** (colors.seat-stack-ink, `--seat-stack-ink`): the one number a player reads mid-hand — the chip stack in the portrait/landscape ring caption, which sits directly on the felt with no seat card behind it. Pure white, because it is the only value that clears WCAG AA against every felt theme: classic 5.5:1, ocean 5.1:1, midnight 8.0:1, burgundy 8.4:1, plus 6.3:1 on the walnut rail. Text Secondary reached only 3.9:1 there and gold 2.9:1. Reserved for that caption; a stack inside a seat card keeps gold.
+- **Seat Stack Ink** (colors.seat-stack-ink, `--seat-stack-ink`): the one number a player reads mid-hand — the chip stack in the portrait/landscape ring caption and the viewer's hero HUD, which sit directly on the felt or the walnut with no seat card behind them. It is a chip count, so it wears the chips' own gold: `--gold-pale` (#efe1b7) is the highlight stop of `.chip`'s radial gradient, lifted toward white only as far as WCAG AA demands. The default is `color-mix(in srgb, var(--gold-pale) 75%, #ffffff)` = **#f3e9c9** — 4.56:1 on the classic felt, 4.70:1 on ocean, 5.83:1 / 7.46:1 on their rails, 15.8:1 on the room. `--gold-pale` unlifted reaches only 4.26:1 on classic, which is why the lift exists. The two dark felts need no lift and say so in their own `[data-table-theme]` blocks: **midnight** and **burgundy** override it to the full `--gold` (#e6b85c) at 5.01:1 / 5.12:1 on felt and 4.72:1 / 5.27:1 on rail. A stack inside a *desktop* seat card keeps plain gold — there the backdrop is Seat Surface at 10.2:1 and there is no ring caption beside it to disagree with.
 
 ### Named Rules
 
@@ -254,7 +254,13 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 
 **The Semantic Pair Rule.** Suit, connection, turn, win, and error colors always travel with text, iconography, shape, or position. Hue alone never carries game state.
 
-**Seat stack legibility.** A value painted straight onto the felt is contrast-checked against *every* `[data-table-theme]`, not just Classic — the premium felts are lighter, not darker. That is what `--seat-stack-ink` exists for, and why the ring's caption drops the player name and the "fichas" unit rather than shrinking the number to fit them: the identity is carried by the avatar and stays in the accessibility tree.
+**Seat stack legibility.** A value painted straight onto the felt is contrast-checked against *every* `[data-table-theme]`, not just Classic — the premium felts are lighter, not darker. That is what `--seat-stack-ink` exists for, and why the ring's caption drops the player name and the "fichas" unit rather than shrinking the number to fit them: the identity is carried by the avatar and stays in the accessibility tree. When one felt cannot carry the tone the rest can, the fix is that theme's own `[data-table-theme]` override, never a compromise value nobody chose and never a text-shadow halo — a halo on a felt reads as cheap.
+
+**One caption lane per seat.** Every ring seat parks its stack figure in its avatar's own vertical lane — centred underneath, or centred above where the hole cards already own the space below (the top arc, and a left/right seat riding high). A figure parked *beside* an avatar chip reads as a loose number belonging to nobody, which is what the top arc did until 2026-09-08. `--seat-caption-reserve` is the headroom the portrait stage keeps above its ring for the mirrored case, the same job `--seat-badge-overhang` does on the other three sides.
+
+**The pot leads the felt.** It is the single most-read number on the play surface, so it is the largest type on it: `--font-size-xl` on the oval, one step down (`--font-size-large`, then `--font-size-subtitle`) as the ring shrinks. The word "POTE" is a quiet mono marker beside it, baseline-aligned, never its equal.
+
+**A seat's state is never only a word, and never only a hue.** On coarse pointers the state caption is clipped to the accessibility tree — the lane cannot hold it, and the longest of them ("Desconectado") clipped outright — so each state that matters carries a cue that differs by *shape*: all-in a solid gold ring on the avatar backed by an ink ring (so the 3:1 non-text boundary holds against any felt or rail), folded a dashed muted outline plus the grayscale and the half-opacity hole cards it already had, disconnected an explicit wifi-off badge, sitting out grayscale with no badge and no cards. Two states that both mean "not acting" must stay distinguishable from each other, not just from a live seat.
 
 ## Typography
 
