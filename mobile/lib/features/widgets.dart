@@ -90,7 +90,11 @@ class AsyncPanel extends StatefulWidget {
 class _AsyncPanelState extends State<AsyncPanel> {
   late Future<dynamic> future = widget.load();
   void reload() {
-    if (mounted) setState(() => future = widget.load());
+    if (mounted) {
+      setState(() {
+        future = widget.load();
+      });
+    }
   }
 
   @override

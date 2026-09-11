@@ -6,14 +6,14 @@ homologado em produção ou em aparelho nesta sessão.
 
 | Área | Implementado no cliente | Ainda necessário para paridade/homologação |
 |---|---|---|
-| Login | AppAuth/PKCE, refresh seguro e serializado, revogação | Registrar cliente e viabilizar redirect nativo no Accounts; testar ida/volta Android/iOS |
+| Login | AppAuth/PKCE, refresh seguro e serializado, revogação | Registrar cliente público no Accounts e verificar implantação da PR Accounts #33 (integrada); testar ida/volta Android/iOS |
 | Lobby | Buckets, buy-in sandbox, mesa privada, convite, retorno à sessão, aceite dos termos | Modo real sob gate e taxas; recuperar chaves de operações incertas após reinício |
 | Mesa | Protobuf, snapshots versionados, ações legais, aumento, pré-seleções, pausa, saída/cancelamento, chat/moderação, reações, recompra automática com consentimento, cartas, dois boards, resultados | Homologar auto-rebuy e handoff entre dispositivos; cenários de duração longa |
 | Reconexão | Heartbeat, backoff, resync, lifecycle, não repetir aposta | Expiração de token durante socket, handoff e conflitos com web/CLI em integração |
 | Revelações | Mostrar cartas individuais/ambas, pedidos ao vencedor, rabbit hunt com prova local | Homologar custos/consentimento e devolução por prova inválida; histórico pago |
 | Histórico | Paginação, replay por ações, notas por street, coleções/revisão, filtros salvos, compartilhar/revogar, prova completa/parcial | Controles completos do replay e filtros adicionais |
 | Jornada | Estatísticas, conquistas com nomes editoriais, ranking, sessões | Ranking pessoal, todos os filtros e modos |
-| Perfil | Apelido, privacidade, foto, preferência de baralho/mesa, perfil público/confronto, showcase e favoritos | Homologar showcase e apresentação visual de todos os cosméticos |
+| Perfil | Apelido, privacidade, foto, preferência de baralho/mesa, perfil público com ordem/visibilidade normalizadas, confronto independente, showcase e favoritos | Homologar showcase e apresentação visual de todos os cosméticos |
 | Social | Amigos, pedidos recebidos/enviados e cancelamento, recentes, bloqueio, mute, denúncia, inbox, convite e perfil público | Todos os estados de privacidade, atualização de presença e acesso pela mesa |
 | Loja | Catálogos, compras PIX/fichas, QR visual, histórico paginado, status/reembolso, chave estável no retry de compra | Persistência após morte do processo, todos os estados de erro/expiração em aparelhos |
 | Recursos nativos | Foto, microfone com confirmação, preferências, entrada para desafio Turnstile | Validar permissões, TTS, sons, lembretes, treinador, domínio Turnstile em Android/iOS |
@@ -38,3 +38,14 @@ múltiplos jogadores e clientes, rede instável, bloqueio do aparelho, token exp
 compra seguida de reembolso e cartas privadas.
 
 A integração complementar no Accounts passou em `go test ./internal/domain/oauth/client ./internal/handler -race`; a API Poker passou em `go test ./... -race`. Os 22 testes Flutter passaram localmente; análise sem problemas. No commit 17570d2, o GitHub Actions aprovou quality, APK Android, simulador iOS e compilação iOS release sem assinatura (run 34619897621). A referência visual portrait passou também no Linux do Actions. Entrada/recompra agora preserva valor, consentimento e chave durante retries na mesma tela; a persistência após encerrar o processo continua pendente. Handoff interrompe a reconexão automática da conexão antiga. A análise estática não apontou problemas. Respostas HTTP de sucesso malformadas são rejeitadas; falhas ao carregar filtros salvos impedem sobrescrever a lista desconhecida.
+
+## Continuação após merge do Accounts #33
+
+O perfil público respeita a ordem configurada, elimina seções duplicadas ou
+desconhecidas e preserva a seção obrigatória de conquistas. O confronto possui
+carregamento/erro/retry próprios: falhas nele não ocultam o perfil. Se a seção
+está oculta ou o showcase é privado, o cliente não solicita o confronto.
+Testes de widget cobrem esses comportamentos e a recuperação de erro transitório.
+
+O carregador compartilhado também corrige o retry síncrono dentro de `setState`;
+um teste verifica falha de rede seguida de carregamento bem-sucedido.
