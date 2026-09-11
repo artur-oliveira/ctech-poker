@@ -21,7 +21,7 @@ require (
 	github.com/valyala/fasthttp v1.73.0
 	go.uber.org/fx v1.24.0
 	google.golang.org/protobuf v1.36.12
-	gopkg.aoctech.app/api-commons v1.9.2
+	gopkg.aoctech.app/api-commons v1.10.0
 )
 
 require (
@@ -42,7 +42,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.42.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.49.0 // indirect
 	github.com/gofiber/schema v1.8.5 // indirect
-	github.com/gofiber/utils/v2 v2.4.3 // indirect
+	github.com/gofiber/utils/v2 v2.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
