@@ -1,3 +1,4 @@
+import 'report_player.dart';
 import '../core/labels.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
@@ -203,6 +204,20 @@ class PublicProfile extends StatelessWidget {
                 }),
                 icon: const Icon(Icons.person_add),
                 label: const Text('Adicionar amigo'),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Denunciar perfil'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ReportPlayerScreen(
+                      api: api,
+                      playerId: playerId,
+                      surface: 'profile',
+                    ),
+                  ),
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: () => invite(context),

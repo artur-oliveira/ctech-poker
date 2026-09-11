@@ -11,8 +11,8 @@ homologado em produção ou em aparelho nesta sessão.
 | Mesa | Protobuf, snapshots versionados, ações legais, aumento, pré-seleções, pausa, saída/cancelamento, chat/moderação, reações, recompra automática com consentimento, cartas, dois boards, resultados | Homologar auto-rebuy e handoff entre dispositivos; cenários de duração longa |
 | Reconexão | Heartbeat, backoff, resync, lifecycle, não repetir aposta | Expiração de token durante socket, handoff e conflitos com web/CLI em integração |
 | Revelações | Mostrar cartas individuais/ambas, pedidos ao vencedor, rabbit hunt com prova local | Homologar custos/consentimento e devolução por prova inválida; histórico pago |
-| Histórico | Paginação, replay por ações, notas por street, coleções/revisão, filtros salvos, compartilhar com tipo/prazo/cartas e revogar, prova completa/parcial | Controles completos do replay e filtros adicionais |
-| Jornada | Estatísticas, conquistas com nomes editoriais, ranking, sessões | Ranking pessoal, todos os filtros e modos |
+| Histórico | Paginação, replay por ações com reprodução/velocidade/saltos por rodada, notas por street, coleções/revisão, filtros salvos, compartilhar com tipo/prazo/cartas e revogar, prova completa/parcial | Treinador do replay e filtros adicionais |
+| Jornada | Estatísticas com amostras/explicações/estilo, conquistas com nomes editoriais, ranking global e pessoal paginado, sessões | Filtros adicionais e modo real sob gate |
 | Perfil | Apelido, privacidade, foto, preferência de baralho/mesa, perfil público com ordem/visibilidade normalizadas, confronto independente, showcase e favoritos | Homologar showcase e apresentação visual de todos os cosméticos |
 | Social | Amigos, pedidos recebidos/enviados e cancelamento, recentes, bloqueio, mute, denúncia, inbox, convite e perfil público | Todos os estados de privacidade, atualização de presença e acesso pela mesa |
 | Loja | Catálogos, compras PIX/fichas, QR visual, histórico paginado, status/reembolso, chave estável no retry de compra | Homologar a conferência após morte do processo e todos os estados de erro/expiração em aparelhos |
@@ -70,3 +70,22 @@ copiado ou revogado na mesma tela; o perfil mantém a lista de links existentes.
 
 Mudanças de identidade durante a preparação impedem enviar a operação com a
 credencial da próxima conta; a pendência original é mantida para conferência.
+
+## Jornada, replay e denúncias
+
+O ranking pessoal usa `/leaderboard/me` (posição global, não índice da página),
+com erro/retry independente do ranking comunitário. A lista conserva posições
+entre páginas e abre o perfil público. Estatísticas exibem numeradores e amostras,
+explicações de VPIP/PFR/3-bet e badges de estilo enviados pelo servidor; ausência
+de oportunidade aparece como “Sem amostra”.
+
+Replay: reprodução/pausa, velocidades 0,5×/1×/2×, início, passos e saltos por rodada.
+A reprodução para ao chegar ao fim, ir ao segundo plano ou abrir notas/compartilhar.
+Resultados finais e cartas dos adversários só aparecem no showdown/encerramento;
+os frames não são reconstruídos a partir do resultado final. Treinador do replay
+continua pendente.
+
+Denúncias oferecem as seis categorias do Web, detalhes opcionais até 500 caracteres,
+origem perfil/jogador recente/comportamento na mesa e contexto da mesa/mão quando
+aplicável. Falhas preservam o mesmo conteúdo e chave no retry. Denúncia de mensagem
+ou reação individual com evidência de action_id ainda está pendente.

@@ -141,15 +141,17 @@ class PagedList extends StatefulWidget {
     super.key,
     required this.api,
     required this.path,
-    required this.item,
+    this.item,
+    this.indexedItem,
     this.query = const {},
     this.header,
     this.filter,
-  });
+  }) : assert(item != null || indexedItem != null);
   final PokerApi api;
   final String path;
   final Map<String, String> query;
-  final Widget Function(Json, VoidCallback) item;
+  final Widget Function(Json, VoidCallback)? item;
+  final Widget Function(Json, int, VoidCallback)? indexedItem;
   final Widget? header;
   final bool Function(Json)? filter;
   @override
@@ -207,8 +209,14 @@ class _PagedListState extends State<PagedList> {
       padding: const EdgeInsets.all(16),
       children: [
         ?widget.header,
-        for (final row in items.where(widget.filter ?? (_) => true))
-          widget.item(row, () => fetch(reset: true)),
+        for (var index = 0; index < items.length; index++)
+          if (widget.filter?.call(items[index]) ?? true)
+            widget.indexedItem?.call(
+                  items[index],
+                  index,
+                  () => fetch(reset: true),
+                ) ??
+                widget.item!(items[index], () => fetch(reset: true)),
         if (items.isEmpty && !busy && error == null)
           const Padding(
             padding: EdgeInsets.all(32),

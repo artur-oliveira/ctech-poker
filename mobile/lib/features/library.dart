@@ -1,3 +1,6 @@
+import '../core/replay.dart';
+import 'ranking.dart';
+import 'statistics.dart';
 import 'share_hand.dart';
 import '../core/labels.dart';
 import 'package:flutter/material.dart';
@@ -32,34 +35,7 @@ class LibraryScreen extends StatelessWidget {
           child: TabBarView(
             children: [
               HandBrowser(api: api),
-              AsyncPanel(
-                load: () => api.get(
-                  '/v1.0/players/me/poker-stats',
-                  query: {'mode': 'sandbox'},
-                ),
-                builder: (context, stats, _) => ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Text(
-                      '${chips(stats['hands'])} mãos jogadas',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    for (final entry in {
-                      'vpip_rate': 'Participação voluntária (VPIP)',
-                      'pfr_rate': 'Aumento pré-flop (PFR)',
-                      'three_bet_rate': '3-bet',
-                    }.entries)
-                      Card(
-                        child: ListTile(
-                          title: Text(entry.value),
-                          trailing: Text(
-                            '${((stats[entry.key] as num? ?? 0) * 100).toStringAsFixed(1)}%',
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              StatisticsScreen(api: api),
               AsyncPanel(
                 load: () => api.get(
                   '/v1.0/players/me/achievements/summary',
@@ -90,23 +66,7 @@ class LibraryScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              PagedList(
-                api: api,
-                path: '/v1.0/leaderboard',
-                query: const {'mode': 'sandbox'},
-                item: (player, _) => Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.emoji_events_outlined),
-                    title: Text(player['player_name'] ?? 'Jogador'),
-                    subtitle: Text(
-                      '${chips(player['hands_won'])} vitórias · ${chips(player['hands_played'])} mãos',
-                    ),
-                    trailing: Text(
-                      '${((player['win_rate'] as num? ?? 0) * 100).toStringAsFixed(1)}%',
-                    ),
-                  ),
-                ),
-              ),
+              RankingScreen(api: api),
               PagedList(
                 api: api,
                 path: '/v1.0/players/me/sessions',
@@ -140,8 +100,41 @@ class HandScreen extends StatefulWidget {
   State<HandScreen> createState() => _HandScreenState();
 }
 
-class _HandScreenState extends State<HandScreen> {
-  int frame = 0;
+class _HandScreenState extends State<HandScreen> with WidgetsBindingObserver {
+  final playback = ReplayController();
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    playback.addListener(changed);
+  }
+
+  void changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) playback.pause();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    playback.removeListener(changed);
+    playback.dispose();
+    super.dispose();
+  }
+
+  Future<Json> loadHistory() async {
+    playback.pause();
+    final history = await widget.api.get(
+      '/v1.0/tables/${segment(widget.hand['table_id'])}/hands/${segment(widget.hand['hand_id'])}/history',
+    );
+    if (mounted) playback.configure(rows(history, 'actions').length);
+    return history;
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -161,12 +154,10 @@ class _HandScreenState extends State<HandScreen> {
     ),
     body: SafeArea(
       child: AsyncPanel(
-        load: () => widget.api.get(
-          '/v1.0/tables/${segment(widget.hand['table_id'])}/hands/${segment(widget.hand['hand_id'])}/history',
-        ),
+        load: loadHistory,
         builder: (context, data, _) {
           final actions = rows(data, 'actions');
-          final index = frame.clamp(
+          final index = playback.index.clamp(
             0,
             actions.isEmpty ? 0 : actions.length - 1,
           );
@@ -200,23 +191,78 @@ class _HandScreenState extends State<HandScreen> {
                   min: 0,
                   max: (actions.length - 1).clamp(1, 99999).toDouble(),
                   divisions: (actions.length - 1).clamp(1, 99999),
-                  onChanged: (value) => setState(() => frame = value.round()),
+                  onChanged: (value) => playback.seek(value.round()),
                 ),
               Wrap(
                 alignment: WrapAlignment.center,
                 children: [
                   IconButton(
+                    tooltip: 'Primeira ação',
+                    onPressed: index > 0 ? () => playback.seek(0) : null,
+                    icon: const Icon(Icons.first_page),
+                  ),
+                  IconButton(
+                    tooltip: playback.playing
+                        ? 'Pausar replay'
+                        : 'Reproduzir replay',
+                    onPressed: actions.length > 1 ? playback.toggle : null,
+                    icon: Icon(
+                      playback.playing ? Icons.pause : Icons.play_arrow,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: playback.cycleSpeed,
+                    child: Text(
+                      'Velocidade ${playback.speed.toString().replaceAll('.', ',')}×',
+                    ),
+                  ),
+                  IconButton(
                     tooltip: 'Ação anterior',
-                    onPressed: index > 0 ? () => setState(() => frame--) : null,
+                    onPressed: index > 0
+                        ? () => playback.seek(index - 1)
+                        : null,
                     icon: const Icon(Icons.skip_previous),
                   ),
                   IconButton(
                     tooltip: 'Próxima ação',
                     onPressed: index < actions.length - 1
-                        ? () => setState(() => frame++)
+                        ? () => playback.seek(index + 1)
                         : null,
                     icon: const Icon(Icons.skip_next),
                   ),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final stage in [
+                    'preflop',
+                    'flop',
+                    'turn',
+                    'river',
+                    'showdown',
+                    'complete',
+                  ])
+                    if (actions.any(
+                      (action) => action['frame']?['stage'] == stage,
+                    ))
+                      ActionChip(
+                        label: Text(
+                          {
+                            'preflop': 'Pré-flop',
+                            'flop': 'Flop',
+                            'turn': 'Turn',
+                            'river': 'River',
+                            'showdown': 'Showdown',
+                            'complete': 'Resultado',
+                          }[stage]!,
+                        ),
+                        onPressed: () => playback.seek(
+                          actions.indexWhere(
+                            (action) => action['frame']?['stage'] == stage,
+                          ),
+                        ),
+                      ),
                 ],
               ),
               for (final seat in (replay?['seats'] as List? ?? []))
@@ -225,22 +271,25 @@ class _HandScreenState extends State<HandScreen> {
                   subtitle: Text(seat['state'] ?? ''),
                   trailing: Text(chips(seat['stack'])),
                 ),
-              const Divider(),
-              Text(
-                'Resultado da mão',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              for (final opponent in rows(widget.hand, 'opponents'))
-                ListTile(
-                  title: Text(opponent['name'] ?? 'Jogador'),
-                  subtitle: PlayingCards(
-                    List<String>.from(opponent['hole_cards'] ?? []),
-                    compact: true,
-                  ),
-                  trailing: opponent['won'] == true
-                      ? const Icon(Icons.emoji_events)
-                      : null,
+              if (actions.isEmpty ||
+                  ['showdown', 'complete'].contains(replay?['stage'])) ...[
+                const Divider(),
+                Text(
+                  'Resultado da mão',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
+                for (final opponent in rows(widget.hand, 'opponents'))
+                  ListTile(
+                    title: Text(opponent['name'] ?? 'Jogador'),
+                    subtitle: PlayingCards(
+                      List<String>.from(opponent['hole_cards'] ?? []),
+                      compact: true,
+                    ),
+                    trailing: opponent['won'] == true
+                        ? const Icon(Icons.emoji_events)
+                        : null,
+                  ),
+              ],
               const Divider(),
               FilledButton.tonalIcon(
                 onPressed: fairness,
@@ -276,14 +325,19 @@ class _HandScreenState extends State<HandScreen> {
     );
   }
 
-  Future<void> notes() => Navigator.push(
-    context,
-    MaterialPageRoute<void>(
-      builder: (_) =>
-          HandNotesEditor(api: widget.api, handId: widget.hand['hand_id']),
-    ),
-  );
+  Future<void> notes() {
+    playback.pause();
+    return Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            HandNotesEditor(api: widget.api, handId: widget.hand['hand_id']),
+      ),
+    );
+  }
+
   Future<void> share() async {
+    playback.pause();
     await Navigator.push(
       context,
       MaterialPageRoute<void>(

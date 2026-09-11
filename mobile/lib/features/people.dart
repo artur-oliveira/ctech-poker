@@ -1,3 +1,4 @@
+import 'report_player.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../core/api.dart';
@@ -188,17 +189,15 @@ class _PeopleScreenState extends State<PeopleScreen> {
   ) async {
     final id = segment(player['player_id']);
     if (action == 'report') {
-      final details = await input(context, 'Descreva o ocorrido');
-      if (details == null || !context.mounted) return;
-      await mutation(
+      await Navigator.push(
         context,
-        '/reports',
-        body: {
-          'target_player_id': player['player_id'],
-          'category': 'other',
-          'surface': 'recent_player',
-          'details': details,
-        },
+        MaterialPageRoute<void>(
+          builder: (_) => ReportPlayerScreen(
+            api: widget.api,
+            playerId: player['player_id'],
+            surface: 'recent_player',
+          ),
+        ),
       );
       return;
     }

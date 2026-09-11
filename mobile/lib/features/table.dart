@@ -1,3 +1,4 @@
+import 'report_player.dart';
 import 'buy_in.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -553,6 +554,23 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               if (context.mounted) Navigator.pop(context);
             }),
           ),
+          if (seat.playerId != widget.playerId)
+            ListTile(
+              title: const Text('Denunciar comportamento'),
+              leading: const Icon(Icons.flag_outlined),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ReportPlayerScreen(
+                    api: widget.api,
+                    playerId: seat.playerId,
+                    surface: 'table_behavior',
+                    tableId: widget.roomId,
+                    handId: realtime.snapshot?.handId,
+                  ),
+                ),
+              ),
+            ),
           if (seat.playerId == widget.playerId)
             for (var i = 0; i < 2; i++)
               ListTile(
