@@ -36,7 +36,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
     roomId: widget.roomId,
     shareCode: widget.shareCode,
   )..playerId = widget.playerId;
-  Timer? ticker;
+  Timer? ticker, socialRetry;
   final tts = FlutterTts();
   String narratedTurn = '';
   String rabbitFailureReported = '';
@@ -44,6 +44,8 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
   String socialRoster = '';
   Set<String> hiddenPlayers = {};
   bool socialReady = false;
+  final Map<String, Json> relationships = {};
+  final socialRevision = ValueNotifier<int>(0);
   int lastReminder = DateTime.now().millisecondsSinceEpoch;
   int now = DateTime.now().millisecondsSinceEpoch;
   @override
@@ -83,25 +85,36 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
           ..sort();
     final signature = roster.join(',');
     if (signature.isNotEmpty && signature != socialRoster) {
+      socialRetry?.cancel();
       socialRoster = signature;
       socialReady = false;
+      socialRevision.value++;
       widget.api
           .get('/v1.0/social/relationships', query: {'player_ids': signature})
           .then((response) {
             if (!mounted || socialRoster != signature) return;
             setState(() {
+              relationships
+                ..clear()
+                ..addEntries(
+                  rows(
+                    response,
+                  ).map((p) => MapEntry(p['player_id'] as String, p)),
+                );
               hiddenPlayers = rows(response)
                   .where((p) => p['muted'] == true || p['blocked'] == true)
                   .map((p) => p['player_id'] as String)
                   .toSet();
               socialReady = true;
+              socialRevision.value++;
             });
           })
           .catchError((Object error) {
-            if (mounted) {
-              toast(
-                context,
-                'Não foi possível carregar a moderação. Chat e reações aguardam atualização.',
+            if (mounted && socialRoster == signature) {
+              socialRetry?.cancel();
+              socialRetry = Timer(
+                const Duration(seconds: 10),
+                refreshModeration,
               );
             }
           });
@@ -136,9 +149,16 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  void refreshModeration() {
+    if (!mounted) return;
+    socialRoster = '';
+    changed();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      refreshModeration();
       if (!realtime.handedOff) realtime.connect();
     } else if (state == AppLifecycleState.paused) {
       realtime.suspend();
@@ -149,6 +169,8 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     ticker?.cancel();
+    socialRetry?.cancel();
+    socialRevision.dispose();
     tts.stop();
     realtime.removeListener(changed);
     realtime.dispose();
@@ -508,6 +530,11 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => ChatPanel(
+      api: widget.api,
+      roomId: widget.roomId,
+      moderation: socialRevision,
+      ready: () => socialReady,
+      retryModeration: refreshModeration,
       realtime: realtime,
       allowed: (id) => socialReady && !hiddenPlayers.contains(id),
     ),
@@ -554,6 +581,42 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               if (context.mounted) Navigator.pop(context);
             }),
           ),
+          if (seat.playerId != widget.playerId && socialReady)
+            for (final action in ['mute', 'block'])
+              ListTile(
+                title: Text(
+                  action == 'mute'
+                      ? (relationships[seat.playerId]?['muted'] == true
+                            ? 'Reativar mensagens'
+                            : 'Silenciar jogador')
+                      : (relationships[seat.playerId]?['blocked'] == true
+                            ? 'Desbloquear jogador'
+                            : 'Bloquear jogador'),
+                ),
+                onTap: () => safely(context, () async {
+                  final enabled =
+                      relationships[seat.playerId]?[action == 'mute'
+                          ? 'muted'
+                          : 'blocked'] ==
+                      true;
+                  if (action == 'block' &&
+                      !enabled &&
+                      !await confirm(
+                        context,
+                        'Bloquear jogador',
+                        'Bloquear ${seat.name}?',
+                      )) {
+                    return;
+                  }
+                  await socialMutation(
+                    widget.api,
+                    '/${action == 'mute' ? 'mutes' : 'blocks'}/${segment(seat.playerId)}',
+                    method: enabled ? 'DELETE' : 'PUT',
+                  );
+                  refreshModeration();
+                  if (context.mounted) Navigator.pop(context);
+                }),
+              ),
           if (seat.playerId != widget.playerId)
             ListTile(
               title: const Text('Denunciar comportamento'),
@@ -1209,7 +1272,21 @@ class ActionDock extends StatelessWidget {
 }
 
 class ChatPanel extends StatefulWidget {
-  const ChatPanel({super.key, required this.realtime, required this.allowed});
+  const ChatPanel({
+    super.key,
+    required this.api,
+    required this.roomId,
+    required this.moderation,
+    required this.ready,
+    required this.retryModeration,
+    required this.realtime,
+    required this.allowed,
+  });
+  final PokerApi api;
+  final String roomId;
+  final Listenable moderation;
+  final bool Function() ready;
+  final VoidCallback retryModeration;
   final bool Function(String) allowed;
   final PokerRealtime realtime;
   @override
@@ -1236,10 +1313,15 @@ class _ChatPanelState extends State<ChatPanel> {
           MediaQuery.viewInsetsOf(context).bottom + 12,
         ),
         child: ListenableBuilder(
-          listenable: widget.realtime,
+          listenable: Listenable.merge([widget.realtime, widget.moderation]),
           builder: (context, _) => Column(
             children: [
               const Text('Chat da mesa', style: TextStyle(fontSize: 24)),
+              if (!widget.ready())
+                TextButton(
+                  onPressed: widget.retryModeration,
+                  child: const Text('Atualizar preferências de moderação'),
+                ),
               Expanded(
                 child: ListView(
                   children: [
@@ -1258,6 +1340,51 @@ class _ChatPanelState extends State<ChatPanel> {
                                 'Jogador',
                           ),
                           subtitle: Text(message.message),
+                          trailing:
+                              message.playerId != widget.realtime.playerId &&
+                                  message.id.isNotEmpty &&
+                                  (widget
+                                          .realtime
+                                          .snapshot
+                                          ?.handId
+                                          .isNotEmpty ??
+                                      false)
+                              ? IconButton(
+                                  tooltip: 'Denunciar mensagem',
+                                  icon: const Icon(Icons.flag_outlined),
+                                  onPressed: () => safely(context, () async {
+                                    final handId =
+                                        widget.realtime.snapshot!.handId;
+                                    final history = await widget.api.get(
+                                      '/v1.0/tables/${segment(widget.roomId)}/hands/${segment(handId)}/history',
+                                    );
+                                    if (!rows(history, 'actions').any(
+                                      (action) =>
+                                          action['action_id'] == message.id &&
+                                          action['player_id'] ==
+                                              message.playerId,
+                                    )) {
+                                      throw StateError(
+                                        'Esta mensagem é de uma mão anterior. Use a denúncia de comportamento no assento do jogador.',
+                                      );
+                                    }
+                                    if (!context.mounted) return;
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => ReportPlayerScreen(
+                                          api: widget.api,
+                                          playerId: message.playerId,
+                                          surface: 'table_chat',
+                                          tableId: widget.roomId,
+                                          handId: handId,
+                                          actionId: message.id,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                )
+                              : null,
                         ),
                   ],
                 ),

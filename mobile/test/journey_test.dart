@@ -148,6 +148,7 @@ void main() {
           surface: 'table_behavior',
           tableId: 'table',
           handId: 'hand',
+          actionId: 'message-1',
         ),
       ),
     );
@@ -166,6 +167,7 @@ void main() {
     expect(api.bodies[0]!['category'], 'cheating');
     expect(api.bodies[0]!['table_id'], 'table');
     expect(api.bodies[0]!['hand_id'], 'hand');
+    expect(api.bodies[0]!['action_id'], 'message-1');
     expect(find.text('Denúncia registrada para revisão.'), findsOneWidget);
     api.close();
     api.session.dispose();

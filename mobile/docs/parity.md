@@ -87,5 +87,15 @@ continua pendente.
 
 Denúncias oferecem as seis categorias do Web, detalhes opcionais até 500 caracteres,
 origem perfil/jogador recente/comportamento na mesa e contexto da mesa/mão quando
-aplicável. Falhas preservam o mesmo conteúdo e chave no retry. Denúncia de mensagem
-ou reação individual com evidência de action_id ainda está pendente.
+aplicável. Falhas preservam o mesmo conteúdo e chave no retry. Denúncia de mensagem da mão atual verifica o action_id no histórico antes de abrir
+o formulário. O protocolo não identifica a mão das mensagens antigas; nesses
+casos o app orienta usar a denúncia de comportamento. Reação individual com
+evidência de action_id ainda está pendente.
+
+## Moderação pela mesa
+
+O menu do assento permite silenciar/reativar mensagens e bloquear/desbloquear,
+com confirmação antes de bloquear. Após a mutação, as relações são recarregadas;
+o chat aberto observa a mudança sem esperar outro frame. Chat e reações ficam
+ocultos até o carregamento das preferências. Falhas ganham retry em 10 segundos
+ou manual pelo chat; retornar ao app também atualiza as relações.

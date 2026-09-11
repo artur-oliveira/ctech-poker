@@ -19,10 +19,11 @@ class ReportPlayerScreen extends StatefulWidget {
     required this.surface,
     this.tableId,
     this.handId,
+    this.actionId,
   });
   final PokerApi api;
   final String playerId, surface;
-  final String? tableId, handId;
+  final String? tableId, handId, actionId;
   @override
   State<ReportPlayerScreen> createState() => _ReportPlayerScreenState();
 }
@@ -49,6 +50,7 @@ class _ReportPlayerScreenState extends State<ReportPlayerScreen> {
       'details': details.text.trim(),
       'table_id': ?widget.tableId,
       'hand_id': ?widget.handId,
+      'action_id': ?widget.actionId,
     };
     setState(() {
       busy = true;
