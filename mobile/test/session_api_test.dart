@@ -120,6 +120,32 @@ void main() {
       session.dispose();
     },
   );
+  test(
+    'malformed successful mutation response remains an error without retry',
+    () async {
+      var calls = 0;
+      final session = PokerSession(
+        httpClient: MockClient(
+          (_) async =>
+              http.Response('{"access_token":"token","expires_in":900}', 200),
+        ),
+      );
+      final api = PokerApi(
+        session,
+        client: MockClient((_) async {
+          calls++;
+          return http.Response('<html>proxy</html>', 200);
+        }),
+      );
+      await expectLater(
+        api.post('/join', {'idem_key': 'same'}),
+        throwsA(isA<ApiFailure>()),
+      );
+      expect(calls, 1);
+      api.close();
+      session.dispose();
+    },
+  );
   test('a failed purchase is not automatically retried on 503', () async {
     var calls = 0;
     final session = PokerSession(

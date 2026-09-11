@@ -19,6 +19,7 @@ class PokerSession extends ChangeNotifier {
   String? _access;
   DateTime _expires = DateTime.fromMillisecondsSinceEpoch(0);
   Future<String>? _refreshing;
+  bool _loggingOut = false;
   bool signedIn = false;
   static const _key = 'poker.mobile.refresh';
 
@@ -53,6 +54,7 @@ class PokerSession extends ChangeNotifier {
   }
 
   Future<String> token({bool force = false}) async {
+    if (_loggingOut) throw StateError('Encerrando a sessão.');
     if (!force && _access != null && DateTime.now().isBefore(_expires)) {
       return _access!;
     }
@@ -120,32 +122,38 @@ class PokerSession extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    // Finish an in-flight rotation before revoking its successor.
-    if (_refreshing != null) {
-      try {
-        await _refreshing;
-      } catch (_) {
-        /* Still revoke the persisted credential. */
+    if (_loggingOut) return;
+    _loggingOut = true;
+    try {
+      // Finish an in-flight rotation before revoking its successor.
+      if (_refreshing != null) {
+        try {
+          await _refreshing;
+        } catch (_) {
+          /* Still revoke the persisted credential. */
+        }
       }
-    }
-    final refresh = await _storage.read(key: _key);
-    if (refresh != null) {
-      final response = await _http
-          .post(
-            Uri.parse('${PokerConfig.accounts}/v1.0/revoke'),
-            body: {'token': refresh, 'client_id': PokerConfig.clientId},
-          )
-          .timeout(const Duration(seconds: 20));
-      if (response.statusCode >= 400) {
-        throw StateError(
-          'Não foi possível encerrar a sessão. Tente novamente.',
-        );
+      final refresh = await _storage.read(key: _key);
+      if (refresh != null) {
+        final response = await _http
+            .post(
+              Uri.parse('${PokerConfig.accounts}/v1.0/revoke'),
+              body: {'token': refresh, 'client_id': PokerConfig.clientId},
+            )
+            .timeout(const Duration(seconds: 20));
+        if (response.statusCode >= 400) {
+          throw StateError(
+            'Não foi possível encerrar a sessão. Tente novamente.',
+          );
+        }
       }
+      await _storage.delete(key: _key);
+      _access = null;
+      signedIn = false;
+      notifyListeners();
+    } finally {
+      _loggingOut = false;
     }
-    await _storage.delete(key: _key);
-    _access = null;
-    signedIn = false;
-    notifyListeners();
   }
 
   @override

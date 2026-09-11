@@ -37,7 +37,9 @@ controla state e PKCE; a troca HTTP captura apenas o cookie de refresh cujo nome
 é `ctech_rt_` mais os primeiros 16 caracteres do SHA-256 do client ID. O refresh
 é armazenado por `flutter_secure_storage`; o access token fica em memória.
 Renovações concorrentes compartilham uma operação. Falhas transitórias preservam
-a credencial; `invalid_grant` a remove. Logout revoga a cadeia deste cliente.
+a credencial; `invalid_grant` a remove. Logout bloqueia novas renovações enquanto revoga a cadeia deste cliente.
+O target iOS declara Keychain nos entitlements. Android preserva a afinidade
+padrão da Activity para permitir o retorno do navegador AppAuth.
 
 **Dependência de integração pendente:** registrar `poker-mobile` no Accounts com
 os 12 scopes `poker:*:read` e `openid profile`, audience da API Poker e a callback
@@ -62,8 +64,9 @@ será necessário Apple Developer, App ID `app.aoctech.poker`, certificado/distr
 profile e configuração protegida de assinatura no GitHub. Para Google Play,
 configurar keystore de release e gerar AAB. O projeto gerado ainda usa assinatura
 debug no target Android release; não publicar esse binário. O workflow atual não
-publica em lojas nem faz deploy da API. Os workflows ainda precisam ser executados
-no GitHub para confirmar toolchain/Xcode/Gradle em runners hospedados.
+publica em lojas nem faz deploy da API. A primeira execução remota (34619897621, commit 17570d2) aprovou os dois
+platform targets, incluindo compilação iOS para dispositivo sem assinatura.
+Cada atualização deve passar novamente pelo workflow antes de usar seus artifacts.
 
 ## Estrutura
 

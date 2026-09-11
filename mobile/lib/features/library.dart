@@ -1,3 +1,4 @@
+import '../core/labels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/api.dart';
@@ -78,9 +79,7 @@ class LibraryScreen extends StatelessWidget {
                                 ? Icons.workspace_premium
                                 : Icons.lock_outline,
                           ),
-                          title: Text(
-                            achievement['key'].toString().replaceAll('_', ' '),
-                          ),
+                          title: Text(achievementLabel(achievement['key'])),
                           subtitle: Text(
                             '${achievement['progress']} / ${achievement['next_target'] ?? achievement['max_target']}',
                           ),
@@ -319,7 +318,25 @@ class ProfileScreen extends StatelessWidget {
     builder: (context, profile, reload) => ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const CircleAvatar(radius: 40, child: Icon(Icons.person, size: 42)),
+        Center(
+          child: ClipOval(
+            child:
+                profile['avatar_url'] is String &&
+                    (profile['avatar_url'] as String).isNotEmpty
+                ? Image.network(
+                    profile['avatar_url'],
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, error, stack) =>
+                        const Icon(Icons.person, size: 80),
+                  )
+                : const CircleAvatar(
+                    radius: 40,
+                    child: Icon(Icons.person, size: 42),
+                  ),
+          ),
+        ),
         const SizedBox(height: 16),
         Text(
           profile['name'] ?? 'Jogador',

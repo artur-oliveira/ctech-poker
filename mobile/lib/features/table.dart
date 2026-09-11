@@ -1,3 +1,4 @@
+import 'buy_in.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -137,7 +138,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      realtime.connect();
+      if (!realtime.handedOff) realtime.connect();
     } else if (state == AppLifecycleState.paused) {
       realtime.suspend();
     }
@@ -244,7 +245,9 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
                   dense: true,
                   leading: const Icon(Icons.sync),
                   title: Text(
-                    realtime.phase == ConnectionPhase.removed
+                    realtime.handedOff
+                        ? 'Sessão transferida para outro aparelho'
+                        : realtime.phase == ConnectionPhase.removed
                         ? 'Você saiu da mesa'
                         : 'Reconectando e sincronizando a mesa…',
                   ),
@@ -361,25 +364,32 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
                 enabled: hero?.stack == Int64.ZERO,
                 onTap: hero?.stack == Int64.ZERO
                     ? () => safely(context, () async {
-                        final amount = await input(
-                          context,
-                          'Quantidade de fichas',
-                          initial: '${room?['buy_in_min'] ?? ''}',
-                          numeric: true,
+                        final currentRoom = await widget.api.get(
+                          '/v1.0/rooms/${segment(widget.roomId)}',
                         );
-                        if (amount == null) return;
-                        final value = int.tryParse(amount);
-                        if (value == null || value <= 0) {
-                          throw StateError('Informe uma quantidade válida.');
+                        if (!context.mounted) return;
+                        if (currentRoom['currency_mode'] != 'sandbox') {
+                          throw StateError(
+                            'Recompra disponível apenas em fichas recreativas nesta versão.',
+                          );
                         }
-                        await widget.api.post(
-                          '/v1.0/rooms/${segment(widget.roomId)}/join',
-                          {
-                            'amount': value,
-                            'share_code': widget.shareCode,
-                            'idem_key': const Uuid().v4(),
-                          },
+                        final result = await Navigator.push<Json>(
+                          context,
+                          MaterialPageRoute<Json>(
+                            builder: (_) => BuyInScreen(
+                              api: widget.api,
+                              path:
+                                  '/v1.0/rooms/${segment(widget.roomId)}/join',
+                              minimum: (currentRoom['buy_in_min'] as num)
+                                  .toInt(),
+                              maximum: (currentRoom['buy_in_max'] as num)
+                                  .toInt(),
+                              autoRebuy: hero?.autoRebuy ?? false,
+                              body: {'share_code': widget.shareCode},
+                            ),
+                          ),
                         );
+                        if (result == null) return;
                         if (context.mounted) Navigator.pop(context);
                       })
                     : null,

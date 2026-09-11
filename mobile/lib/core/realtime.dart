@@ -35,6 +35,7 @@ class PokerRealtime extends ChangeNotifier {
   TableSnapshot? snapshot;
   String playerId = '', error = '', pendingAction = '';
   bool challengeRequired = false;
+  bool handedOff = false;
   bool get canAct =>
       phase == ConnectionPhase.live &&
       !challengeRequired &&
@@ -44,6 +45,7 @@ class PokerRealtime extends ChangeNotifier {
       snapshot!.currentPlayerId == playerId;
 
   Future<void> connect() async {
+    handedOff = false;
     _stopped = false;
     final generation = ++_generation;
     _retry?.cancel();
@@ -87,7 +89,23 @@ class PokerRealtime extends ChangeNotifier {
           }
         },
         onError: (Object _) => _lost(generation),
-        onDone: () => _lost(generation),
+        onDone: () {
+          if (_stopped || generation != _generation) return;
+          if (channel.closeReason == 'session handoff to another device') {
+            handedOff = true;
+            _stopped = true;
+            _heartbeat?.cancel();
+            _retry?.cancel();
+            _ackTimer?.cancel();
+            pendingAction = '';
+            phase = ConnectionPhase.removed;
+            error =
+                'A sessão continua em outro aparelho. Reconecte somente se quiser voltar a esta mesa aqui.';
+            notifyListeners();
+          } else {
+            _lost(generation);
+          }
+        },
       );
       channel.sink.add(
         ClientMessage(

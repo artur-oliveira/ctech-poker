@@ -1,3 +1,4 @@
+import '../core/labels.dart';
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import 'widgets.dart';
@@ -59,9 +60,7 @@ class _ShowcaseEditorState extends State<ShowcaseEditor> {
                 'achievements',
               ).where((a) => a['unlocked'] == true))
                 CheckboxListTile(
-                  title: Text(
-                    achievement['key'].toString().replaceAll('_', ' '),
-                  ),
+                  title: Text(achievementLabel(achievement['key'])),
                   value: featured.contains(achievement['key']),
                   onChanged: (value) => setState(() {
                     if (value == true && featured.length < 3) {

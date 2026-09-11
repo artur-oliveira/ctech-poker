@@ -1,6 +1,6 @@
+import 'buy_in.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api.dart';
 import '../core/realtime.dart';
@@ -267,34 +267,25 @@ class LobbyScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 enabled: profile['poker_terms_accepted'] == true,
                 onTap: () => safely(context, () async {
-                  final value = await input(
+                  final bb = (bucket['big_blind'] as num).toInt();
+                  final room = await Navigator.push<Json>(
                     context,
-                    'Com quantas fichas quer entrar?',
-                    initial: '${(bucket['big_blind'] as int) * 100}',
-                    numeric: true,
+                    MaterialPageRoute<Json>(
+                      builder: (_) => BuyInScreen(
+                        api: api,
+                        path: '/v1.0/rooms/join-or-create',
+                        minimum: bb * 40,
+                        maximum: bb * 100,
+                        body: {
+                          'small_blind': bucket['small_blind'],
+                          'big_blind': bb,
+                          'max_seats': bucket['max_seats'],
+                          'currency_mode': 'sandbox',
+                        },
+                      ),
+                    ),
                   );
-                  if (value == null || !context.mounted) return;
-                  final amount = int.tryParse(value);
-                  if (amount == null || amount <= 0) {
-                    throw StateError(
-                      'Informe uma quantidade inteira de fichas.',
-                    );
-                  }
-                  if (!await confirm(
-                    context,
-                    'Entrar na mesa',
-                    'Reservar ${chips(amount)} fichas do seu saldo?',
-                  )) {
-                    return;
-                  }
-                  final room = await api.post('/v1.0/rooms/join-or-create', {
-                    'small_blind': bucket['small_blind'],
-                    'big_blind': bucket['big_blind'],
-                    'max_seats': bucket['max_seats'],
-                    'amount': amount,
-                    'currency_mode': 'sandbox',
-                    'idem_key': const Uuid().v4(),
-                  });
+                  if (room == null) return;
                   if (context.mounted) open(context, room['room_id'], id);
                 }),
               ),
@@ -331,7 +322,7 @@ class LobbyScreen extends StatelessWidget {
             uri?.queryParameters['code'] ??
             uri?.queryParameters['share_code'] ??
             '';
-        if (roomId == null || code.isEmpty) {
+        if (roomId == null || roomId.isEmpty) {
           throw StateError('Use um link de convite válido.');
         }
         await join(context, roomId, id, code);
@@ -349,24 +340,24 @@ class LobbyScreen extends StatelessWidget {
       open(context, roomId, id, shareCode: code);
       return;
     }
-    final value = await input(
-      context,
-      'Entrada: ${chips(room['buy_in_min'])} a ${chips(room['buy_in_max'])}',
-      initial: '${room['buy_in_min']}',
-      numeric: true,
-    );
-    if (value == null) return;
-    final amount = int.tryParse(value);
-    if (amount == null ||
-        amount < (room['buy_in_min'] as num) ||
-        amount > (room['buy_in_max'] as num)) {
-      throw StateError('Quantidade fora dos limites da mesa.');
+    if (room['currency_mode'] != 'sandbox') {
+      throw StateError(
+        'Esta versão ainda não permite entrada em mesas de dinheiro real.',
+      );
     }
-    await api.post('/v1.0/rooms/${segment(roomId)}/join', {
-      'amount': amount,
-      'share_code': code,
-      'idem_key': const Uuid().v4(),
-    });
+    final result = await Navigator.push<Json>(
+      context,
+      MaterialPageRoute<Json>(
+        builder: (_) => BuyInScreen(
+          api: api,
+          path: '/v1.0/rooms/${segment(roomId)}/join',
+          minimum: (room['buy_in_min'] as num).toInt(),
+          maximum: (room['buy_in_max'] as num).toInt(),
+          body: {'share_code': code},
+        ),
+      ),
+    );
+    if (result == null) return;
     if (context.mounted) open(context, roomId, id, shareCode: code);
   }
 }

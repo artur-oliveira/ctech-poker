@@ -31,6 +31,8 @@ class Sink implements WebSocketSink {
 }
 
 class Channel implements WebSocketChannel {
+  @override
+  String? closeReason;
   final incoming = StreamController<dynamic>.broadcast(sync: true);
   @override
   final Sink sink = Sink();
@@ -59,6 +61,30 @@ TableSnapshot state(
   ),
 );
 void main() {
+  testWidgets('handoff stops automatic reconnect and betting', (tester) async {
+    final channel = Channel(), session = Session();
+    var connections = 0;
+    final live = PokerRealtime(
+      session,
+      roomId: 'room',
+      connectChannel: (_) {
+        connections++;
+        return channel;
+      },
+    )..playerId = 'me';
+    await live.connect();
+    channel.receive(ServerMessage(type: 'state', snapshot: state(1)));
+    expect(live.canAct, true);
+    channel.closeReason = 'session handoff to another device';
+    unawaited(channel.incoming.close());
+    await tester.pump();
+    expect(live.handedOff, true);
+    expect(live.canAct, false);
+    await tester.pump(const Duration(seconds: 30));
+    expect(connections, 1);
+    live.dispose();
+    session.dispose();
+  });
   test(
     'binary auth first; no betting before snapshot; reject stale state and double tap',
     () async {
