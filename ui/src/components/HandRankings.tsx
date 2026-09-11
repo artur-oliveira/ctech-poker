@@ -7,7 +7,7 @@ export function HandRankings({compact = false}: { compact?: boolean }) {
   return <ol className={`hand-ranking-list${compact ? ' compact' : ''}`}>
     {HAND_RANKINGS.map((hand, i) => <li key={hand.key}>
       <b>{i + 1}</b>
-      <span className="hand-ranking-cards" aria-hidden="true">
+      <span className="hand-ranking-cards static-cards" aria-hidden="true">
         {hand.example.map((card, index) => (
           <PlayingCard key={card} card={card} index={index} size="hole"/>
         ))}

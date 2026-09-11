@@ -24,57 +24,67 @@
 @keyframes board-card-reveal {
     0% {
         opacity: 0;
-        transform: translate(80px, -62px) rotateZ(9deg) scale(.92)
+        transform: translate3d(80px, -62px, 0) rotateZ(9deg) scale(.92)
     }
     48% {
         opacity: 1;
-        transform: none
+        transform: translateZ(0)
     }
     100% {
         opacity: 1;
-        transform: none
+        transform: translateZ(0)
     }
 }
 @keyframes hole-card-reveal {
     0% {
         opacity: 0;
-        transform: translateY(-18px) rotateZ(5deg) scale(.9)
+        transform: translate3d(0, -18px, 0) rotateZ(5deg) scale(.9)
     }
     48% {
         opacity: 1;
-        transform: none
+        transform: translateZ(0)
     }
     100% {
         opacity: 1;
-        transform: none
+        transform: translateZ(0)
     }
 }
+/* translateZ(0) in every keyframe, not just as a base rule: these run with
+   `animation-fill-mode: both`, so a keyframe transform of a bare `scaleX()`
+   would clobber the `transform: translateZ(0)` layer-promotion from
+   `.board-card img` for the whole animation (and after it). Keeping the Z
+   nudge here holds the compositing layer stable across the turn, so WebKit
+   composites the scale instead of re-rasterising the card face — and its
+   drop-shadow filter — every frame. That per-frame raster is invisible on an
+   idle main thread (dev:mock) and drops frames when a ~150 kB protobuf
+   `state` decode + felt re-render lands on the same frame the flip mounts
+   (real play). See docs/2026-09-10-card-flip-safari-compositing.md. */
 @keyframes card-back-turn {
     0%, 44% {
         opacity: 1;
-        transform: scaleX(1)
+        transform: translateZ(0) scaleX(1)
     }
     50% {
         opacity: 1;
-        transform: scaleX(.04)
+        transform: translateZ(0) scaleX(.04)
     }
     50.1%, 100% {
         opacity: 0;
-        transform: scaleX(.04)
+        transform: translateZ(0) scaleX(.04)
     }
 }
 @keyframes card-front-turn {
     0%, 50% {
         opacity: 0;
-        transform: scaleX(.04)
+        transform: translateZ(0) scaleX(.04)
     }
     50.1% {
         opacity: 1;
-        transform: scaleX(.04)
+        transform: translateZ(0) scaleX(.04)
     }
     100% {
         opacity: 1;
-        transform: scaleX(1)
+        transform: translateZ(0) scaleX(1)
     }
 }
 /* "Look at me" wobble for a face-down hole card the viewer hasn't peeked yet.
@@ -1442,13 +1452,28 @@
     position: relative;
     display: block;
     width: 100%;
-    height: 100%
+    height: 100%;
+    backface-visibility: hidden
 }
-.board-card .card-reveal-inner {
+/* RESTING STATE IS VISIBLE. A revealed card's final look — front face shown at
+   full opacity, no transform — is its plain stylesheet state, with no
+   dependence on any animation advancing. The deal-in / flip below runs ONLY on the card
+   that just turned face-up this render (`data-card-revealing`, set during
+   render by PlayingCard) and is dropped after one duration. So a card whose
+   entrance animation an engine stranded `pending` (WebKit, on the saturated
+   snapshot-decode frame), or that mounted already face-up (reload, re-enter,
+   /hands archive), or under reduced motion, still paints.
+   See docs/2026-09-10-card-reveal-visibility.md. */
+.card-reveal[data-card-revealing] .card-reveal-inner,
+.card-reveal[data-card-revealing] .card-back,
+.card-reveal[data-card-revealing] .card-front {
+    will-change: transform, opacity
+}
+.board-card[data-card-revealing] .card-reveal-inner {
     animation: board-card-reveal 780ms var(--ease-out-expo) both;
     animation-delay: calc(var(--deal-index, 0) * 320ms)
 }
-.hole-card .card-reveal-inner {
+.hole-card[data-card-revealing] .card-reveal-inner {
     animation: hole-card-reveal 440ms var(--ease-out-expo) both;
     animation-delay: calc(var(--deal-index, 0) * 75ms)
 }
@@ -1486,30 +1511,47 @@
 .card-reveal .card-back,
 .card-reveal .card-front {
     transform-origin: center;
+    backface-visibility: hidden
+}
+/* Resting = the finished flip: back gone, front shown. */
+.card-reveal .card-back {
+    z-index: 2;
+    opacity: 0
+}
+.card-reveal .card-front {
+    z-index: 1;
+    opacity: 1
+}
+/* A failed face fetch: show the back face rather than a transparent hole. */
+.card-reveal.face-fallback .card-back {
+    opacity: 1;
+    animation: none;
+    transform: translateZ(0)
+}
+.card-reveal[data-card-revealing] .card-back,
+.card-reveal[data-card-revealing] .card-front {
     animation-duration: 560ms;
     animation-timing-function: var(--ease-out-expo);
     animation-fill-mode: both;
     animation-delay: calc(var(--deal-index, 0) * 80ms)
 }
-.card-reveal .card-back {
-    z-index: 2;
+.card-reveal[data-card-revealing] .card-back {
     animation-name: card-back-turn
 }
-.card-reveal .card-front {
-    z-index: 1;
+.card-reveal[data-card-revealing] .card-front {
     animation-name: card-front-turn
 }
-.card-flip-slow .card-back,
-.card-flip-slow .card-front {
+.card-flip-slow[data-card-revealing] .card-back,
+.card-flip-slow[data-card-revealing] .card-front {
     animation-duration: 900ms
 }
-.hole-card .card-back,
-.hole-card .card-front {
+.hole-card[data-card-revealing] .card-back,
+.hole-card[data-card-revealing] .card-front {
     animation-duration: 440ms;
     animation-delay: calc(var(--deal-index, 0) * 75ms)
 }
-.board-card .card-back,
-.board-card .card-front {
+.board-card[data-card-revealing] .card-back,
+.board-card[data-card-revealing] .card-front {
     animation-delay: calc(var(--deal-index, 0) * 320ms)
 }
 .board > div > span:not(.playing-card),
@@ -1980,8 +2022,8 @@
     height: calc(var(--chip-size) + (var(--tier) - 1) * var(--chip-gap))
 }
 .chip-stack-pot {
-    --chip-size: 22px;
-    --chip-gap: 4px
+    --chip-size: 18px;
+    --chip-gap: 3px
 }
 .chip {
     position: absolute;
@@ -3916,16 +3958,10 @@
 .hand-ranking-cards .hole-card:last-child {
     margin-right: 0
 }
-/* full list only (not the in-game compact dialog): slower, wider stagger so each
-   example card visibly finishes its flip before the next starts */
-.hand-ranking-list:not(.compact) .hand-ranking-cards .card-reveal-inner {
-    animation-duration: 460ms;
-    animation-delay: calc(var(--deal-index, 0) * 150ms)
-}
-.hand-ranking-list:not(.compact) .hand-ranking-cards .card-back,
+/* full list only (not the in-game compact dialog): a wider stagger as the
+   example hands fade in (`.static-cards` — illustrative, not dealt). */
 .hand-ranking-list:not(.compact) .hand-ranking-cards .card-front {
-    animation-duration: 460ms;
-    animation-delay: calc(var(--deal-index, 0) * 150ms)
+    animation-delay: calc(var(--deal-index, 0) * 90ms)
 }
 .hand-ranking-list strong {
     display: block;
@@ -4947,8 +4983,9 @@
     height: 53px
 }
 /* The pot leads the felt on every stage, but the ring's centre band is a
-   fraction of the oval's — one step down the same scale, not the 32px desktop
-   figure, which would have crowded the board group it sits above. */
+   fraction of the oval's — one step down the same scale (large, then subtitle
+   on short phones) from the oval's title figure, so it never crowds the board
+   group it sits above. */
 .stage-v .game-pot b {
     font-size: var(--font-size-large)
 }
@@ -7035,8 +7072,6 @@ html:has(.game),
     margin: 0;
     max-width: 62ch
 }
-.hand-history-board .card-reveal-inner,
-.hand-history-board .card-back,
 .hand-history-board .card-front {
     animation-duration: 420ms;
     animation-delay: calc(var(--deal-index, 0) * 50ms)

@@ -82,7 +82,10 @@ export default function TableGuide() {
       </GuideTerms>
         <p>O número em <b>Aumentar</b> é o total da sua aposta, não o que você acrescenta — diferente de
           <b> Pagar</b>, que soma. A linha acima da barra mostra o stack efetivo: o máximo que ainda pode ser
-          disputado contra quem continua na mão.</p>
+          disputado contra quem continua na mão. Quando alguém vai all in por menos que um aumento cheio, o
+          espaço para aumentar fica menor que o incremento da mesa: o controle segue habilitado, mas travado no
+          all in, e essa mesma linha avisa <b>Aumento mínimo é</b> seguido do valor e de <b>— só resta ir all
+          in.</b></p>
         <p>No celular, o primeiro toque em <b>Aumentar</b> abre o seletor de valor e o segundo confirma. Segurar mais
           ou menos acelera o ajuste.</p>
         <p>O número em <b>TOTAL</b> também aceita digitação: toque nele e escreva o valor exato. O campo só aceita

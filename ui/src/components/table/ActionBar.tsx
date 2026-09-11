@@ -561,10 +561,19 @@ export function ActionBar({
   // is rejected, the visible error releases the controls for a manual choice.
   const executingPreparedAction = preparedAction !== null && error === null;
   const unavailable = !connected || !isTurn || pending !== null || executingPreparedAction;
+  // The server still offers `raise` when the only legal raise-to band is a
+  // sliver near all-in (an opponent shoved for less than a full raise). The
+  // slider then pins to the stack and every preset collapses onto "All in" —
+  // without a word, players read that as "raising is disabled". `raiseStep` is
+  // the smallest legal increment, so a band narrower than one step has no room
+  // for a raise that is not also a shove.
+  const raiseBandCollapsed = available.raise && maxRaise - minRaise < raiseStep;
+  const turnContext = effectiveStack > 0 ?
+    `Sua vez de agir. Stack efetivo: ${chipsExact(effectiveStack)} fichas.` : 'Sua vez de agir.';
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] :
-    executingPreparedAction ? 'Executando sua ação preparada…' : !isTurn ?
-      'Aguarde sua vez.' : effectiveStack > 0 ?
-        `Sua vez de agir. Stack efetivo: ${chipsExact(effectiveStack)} fichas.` : 'Sua vez de agir.';
+    executingPreparedAction ? 'Executando sua ação preparada…' : !isTurn ? 'Aguarde sua vez.' :
+      raiseBandCollapsed ? `${turnContext} Aumento mínimo é ${chipsExact(minRaise)} — só resta ir all in.` :
+        turnContext;
   const label = (action: PokerAction, idle: string, key?: string) => {
     if (pending === action) {
       return <><LoaderCircle className="action-spinner"/> {actionLabel[action]}</>;

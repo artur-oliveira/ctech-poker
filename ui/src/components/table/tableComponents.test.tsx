@@ -447,7 +447,46 @@ describe('table presentation', () => {
     expect(screen.getByLabelText('Divisão dos potes')).toHaveTextContent('Lateral 1: 250');
     expect(container.querySelectorAll('.playing-card')).toHaveLength(3);
   });
-  
+
+  // The regression this guards: a revealed community/hole card was only visible
+  // while its deal-in/flip animation advanced (`opacity: 0` + `fill-mode: both`).
+  // On a busy reveal frame the engine could strand it and the felt showed a
+  // blank gap until F5. Now the entrance is gated on `[data-card-revealing]`,
+  // set only for cards dealt since the previous render.
+  test('flips only the cards dealt since the last render, not a board that was already there', () => {
+    vi.useFakeTimers();
+    try {
+      const {container, rerender} = render(<Board cards={['AH', 'KD', '2C']} pot={0}/>);
+      // Re-entering onto a three-card flop: nobody watched it land.
+      expect(container.querySelectorAll('.card-reveal[data-card-revealing]')).toHaveLength(0);
+      expect(container.querySelectorAll('.card-reveal')).toHaveLength(3);
+
+      rerender(<Board cards={['AH', 'KD', '2C', '9S']} pot={0}/>);
+      const marked = container.querySelectorAll('.card-reveal[data-card-revealing]');
+      expect(marked).toHaveLength(1);
+      expect(marked[0].querySelector('.card-front')).toBeInTheDocument();
+
+      act(() => void vi.advanceTimersByTime(1_600));
+      expect(container.querySelectorAll('[data-card-revealing]')).toHaveLength(0);
+      // Still there, just resting — visibility never depended on the animation.
+      expect(container.querySelectorAll('.card-reveal')).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+
+  test('a face-SVG that fails to load falls back to the card back, not a transparent gap', () => {
+    const {container} = render(<Board cards={['AH']} pot={0}/>);
+    const card = container.querySelector('.card-reveal')!;
+    expect(card).not.toHaveClass('face-fallback');
+    act(() => void fireEvent.error(card.querySelector('.card-front')!));
+    expect(card).toHaveClass('face-fallback');
+    expect(card.querySelector('.card-front')).toBeNull();
+    expect(card.querySelector('.card-back')).toBeInTheDocument();
+    expect(card).not.toHaveAttribute('data-card-revealing');
+  });
+
   test.each(['waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'complete'] as const)(
     'renders backend %s state without crashing',
     scenario => {

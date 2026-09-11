@@ -1,9 +1,10 @@
 import {ChipStack} from '@/components/table/ChipStack';
-import {PlayingCard} from '@/components/table/PlayingCard';
+import {CARD_REVEAL_MS, PlayingCard} from '@/components/table/PlayingCard';
 import type {PotView} from '@/lib/api/table';
 import {Repeat2} from 'lucide-react';
 import {useChipFormat} from '@/lib/chipFormat';
 import {chipsExact} from '@/lib/chips';
+import {useEnteredKeys} from '@/lib/hooks/useEnteredKeys';
 
 const SLOT_SUITS = ['♠', '♥', '♣', '♦', '♠'];
 
@@ -15,6 +16,23 @@ function EmptyCardSlots({count, offset = 0}: { count: number; offset?: number })
           aria-hidden="true"/>);
 }
 
+/** The community cards for one row. Keyed by slot, not by value, so a card node
+ * persists — and `useEnteredKeys` marks only the slots dealt since the previous
+ * render, so those play the deal-in flip and every other card (a re-enter with
+ * a full board, a replay scrub, reduced motion) just paints its resting face.
+ * See docs/2026-09-10-card-reveal-visibility.md. */
+function BoardCards({cards, slots, offset = 0}: { cards: string[]; slots: number; offset?: number }) {
+  const dealt = useEnteredKeys(cards.map((card, index) => `${offset + index}:${card}`), CARD_REVEAL_MS);
+  return <>
+    {cards.map((card, index) => {
+      const slot = offset + index;
+      return <PlayingCard key={slot} card={card} index={slot < 3 ? slot : 0} size="board"
+                          slow={slot === 4} revealing={dealt.has(`${slot}:${card}`)}/>;
+    })}
+    <EmptyCardSlots count={Math.max(0, slots - cards.length)} offset={offset + cards.length}/>
+  </>;
+}
+
 function CardRow({cards, slots, offset = 0, label}: {
   cards: string[];
   slots: number;
@@ -24,10 +42,7 @@ function CardRow({cards, slots, offset = 0, label}: {
   return <div className="board-runout-row">
     {label && <span className="board-runout-label" aria-hidden="true">{label}</span>}
     <div aria-label={label ? `${label} distribuição` : undefined}>
-      {cards.map((card, index) => <PlayingCard key={`${offset + index}-${card}`} card={card}
-                                               index={(offset + index) < 3 ? offset + index : 0}
-                                               size="board" slow={offset + index === 4}/>)}
-      <EmptyCardSlots count={Math.max(0, slots - cards.length)} offset={offset + cards.length}/></div>
+      <BoardCards cards={cards} slots={slots} offset={offset}/></div>
   </div>;
 }
 
@@ -66,9 +81,6 @@ export function Board({cards, boardTwo, splitAt = 0, pot, pots, rake, bigBlind}:
         <CardRow label="1ª" cards={cards.slice(splitAt)} slots={5 - splitAt} offset={splitAt}/>
         <CardRow label="2ª" cards={boardTwo} slots={5 - splitAt} offset={splitAt}/>
       </div>
-    </div> : <div>{cards.map((card, index) => <PlayingCard key={`${index}-${card}`} card={card}
-                                                           index={index < 3 ? index : 0} size="board"
-                                                           slow={index === 4}/>)}
-      <EmptyCardSlots count={5 - cards.length} offset={cards.length}/></div>}
+    </div> : <div><BoardCards cards={cards} slots={5}/></div>}
   </div>;
 }

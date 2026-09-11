@@ -138,6 +138,26 @@ describe('HandOutcomeBanner', () => {
     expect(screen.queryByText('Mesma combinação, o kicker decidiu.')).not.toBeInTheDocument();
   });
 
+  // Regression: a long rival name + a wide 5-card showdown row raised a
+  // horizontal scrollbar on the loss card on desktop. jsdom has no layout
+  // engine, so this only pins the structure the CSS fix relies on — the name
+  // sits in the truncating `.hand-outcome-hand-name small`, and the whole
+  // comparison renders without a width-forcing wrapper — while
+  // e2e/tableLayout.spec.ts asserts the actual no-scroll behaviour.
+  test('keeps a long rival name inside the truncating hand-name slot on a loss', () => {
+    const longName = 'Maximiliano Alexandre da Silva Nascimento Junior';
+    renderOutcome({
+      key: 61, kind: 'lose', winnerName: longName,
+      viewerCards: ['5H', '5D', 'KC', 'QS', '2D'], viewerHoleCards: ['5H', '5D'],
+      winningCards: ['2H', '5H', '9H', 'JH', 'KH'], opponentCategory: 'flush',
+    });
+    const nameEl = screen.getByText(longName);
+    expect(nameEl.tagName).toBe('SMALL');
+    expect(nameEl.closest('.hand-outcome-hand-name')).not.toBeNull();
+    expect(document.querySelectorAll('.hand-outcome-comparison-row')).toHaveLength(2);
+    expect(document.querySelector('.hand-outcome-cards')).not.toBeNull();
+  });
+
   test('falls back to generic hand labels when no cards were revealed', () => {
     renderOutcome({key: 7, kind: 'lose'});
     expect(screen.getByText('Vencedor')).toBeInTheDocument();

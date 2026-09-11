@@ -230,3 +230,48 @@ test.describe('table asides', () => {
     await expect(aside).not.toHaveClass(/open/);
   });
 });
+
+// A long rival name plus a wide 5-card showdown row used to sum past the loss
+// card and raise a horizontal scrollbar on the card itself (setting only
+// overflow-y makes overflow-x compute to `auto`). The banner must wrap its
+// content within the card at every width instead.
+test.describe('hand-outcome loss banner', () => {
+  for (const viewport of [
+    {name: '390x844', width: 390, height: 844},
+    {name: '1280x800', width: 1280, height: 800},
+    {name: '1440x900', width: 1440, height: 900},
+  ]) {
+    test(`${viewport.name}: a long-description loss banner never scrolls sideways`, async ({page}) => {
+      await page.setViewportSize({width: viewport.width, height: viewport.height});
+      await page.goto(`${TABLE}complete_loss`);
+      const card = page.locator('.hand-outcome-card.lose');
+      await card.waitFor({state: 'visible', timeout: 20000});
+
+      // Force the worst case the fixtures don't carry: a very long rival name
+      // and an unknown, unbreakable hand-category token.
+      await card.locator('.hand-outcome-comparison-row.winner .hand-outcome-hand-name small')
+        .evaluate(el => { el.textContent = 'Maximiliano Alexandre da Silva Nascimento Junior'; });
+      await card.locator('.hand-outcome-comparison-row.winner .hand-outcome-hand-name strong')
+        .evaluate(el => { el.textContent = 'sequencia_real_de_cor_maxima_desempatada'; });
+
+      const overflow = await page.evaluate(() => {
+        const card = document.querySelector('.hand-outcome-card.lose') as HTMLElement;
+        const row = card.querySelector('.hand-outcome-comparison-row.winner') as HTMLElement;
+        const root = document.documentElement;
+        return {
+          // The long copy lives in the comparison row: it must wrap within the
+          // card, not stretch it.
+          row: row.scrollWidth - row.clientWidth,
+          // No phantom horizontal scrollbar on the card (the bug: setting only
+          // overflow-y makes overflow-x compute to `auto`).
+          overflowX: getComputedStyle(card).overflowX,
+          page: root.scrollWidth - root.clientWidth,
+        };
+      });
+      expect(overflow.row).toBeLessThanOrEqual(1);
+      // clip/hidden, never the `auto`/`scroll` that a lone overflow-y implies.
+      expect(['clip', 'hidden']).toContain(overflow.overflowX);
+      expect(overflow.page).toBeLessThanOrEqual(0);
+    });
+  }
+});

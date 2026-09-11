@@ -230,6 +230,17 @@ describe('ActionBar raise controls', () => {
     renderActionBar({pending: 'raise', minRaise: 1000, maxRaise: 1000});
     expect(screen.getByRole('button', {name: /Indo All In…/})).toBeInTheDocument();
   });
+
+  test('explains an all-in-only raise band when the legal band is narrower than one step', () => {
+    renderActionBar({minRaise: 19_990, maxRaise: 20_000, raiseStep: 25, effectiveStack: 20_000});
+    expect(document.getElementById('action-context')).toHaveTextContent(
+      'Aumento mínimo é 19.990 — só resta ir all in.');
+  });
+
+  test('does not explain the raise band when a normal raise range is available', () => {
+    renderActionBar({minRaise: 150, maxRaise: 1000, raiseStep: 25});
+    expect(document.getElementById('action-context')).not.toHaveTextContent('só resta ir all in');
+  });
 });
 
 describe('ActionBar time bank', () => {

@@ -4,7 +4,8 @@ import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
 import {PerimeterTimer} from '@/components/table/PerimeterTimer';
-import {PlayingCard} from '@/components/table/PlayingCard';
+import {CARD_REVEAL_MS, PlayingCard} from '@/components/table/PlayingCard';
+import {useEnteredKeys} from '@/lib/hooks/useEnteredKeys';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, isPlainKey, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
@@ -205,6 +206,10 @@ function SeatImpl({
   joining?: boolean;
 }) {
   const cards = seat.hole_cards;
+  // Only a hole card that turned face-up since the previous render plays the
+  // flip; a card already face-up (re-enter, showdown recap, reduced motion)
+  // paints its resting face. See docs/2026-09-10-card-reveal-visibility.md.
+  const revealedCards = useEnteredKeys((cards ?? []).map((card, i) => `${i}:${card}`), CARD_REVEAL_MS);
   // Peeking is click-only: hover used to reveal too, which made the click that
   // followed it a no-op (the card was already face-up) and made hiding again
   // impossible while the pointer still sat on the card.
@@ -358,7 +363,8 @@ function SeatImpl({
     <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
       const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;
-      return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
+      return <PlayingCard key={i} card={card} index={i} size="hole"
+                          revealing={revealedCards.has(`${i}:${card}`)}
                           owner={isViewer ? 'viewer' : 'opponent'}
                           onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCardAction?.(i) : undefined}
                           revealPending={revealPending}
