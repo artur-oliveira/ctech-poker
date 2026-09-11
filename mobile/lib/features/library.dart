@@ -1,3 +1,4 @@
+import 'share_hand.dart';
 import '../core/labels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -282,31 +283,15 @@ class _HandScreenState extends State<HandScreen> {
           HandNotesEditor(api: widget.api, handId: widget.hand['hand_id']),
     ),
   );
-  Future<void> share() => safely(context, () async {
-    if (!await confirm(
+  Future<void> share() async {
+    await Navigator.push(
       context,
-      'Criar link público',
-      'Compartilhar esta mão por 7 dias, sem suas cartas privadas?',
-    )) {
-      return;
-    }
-    final result = await widget.api.post(
-      '/v1.0/players/me/hand/${segment(widget.hand['hand_id'])}/share',
-      {
-        'kind': 'brag',
-        'include_hero_cards': false,
-        'expiry_days': 7,
-        'mode': 'sandbox',
-      },
-    );
-    await Clipboard.setData(
-      ClipboardData(
-        text:
-            'https://poker.aoctech.app/share?token=${Uri.encodeComponent(result['token'])}',
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ShareHandScreen(api: widget.api, handId: widget.hand['hand_id']),
       ),
     );
-    if (mounted) toast(context, 'Link copiado. Você pode revogá-lo no perfil.');
-  });
+  }
 }
 
 class ProfileScreen extends StatelessWidget {

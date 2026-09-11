@@ -21,6 +21,7 @@ class PokerSession extends ChangeNotifier {
   Future<String>? _refreshing;
   bool _loggingOut = false;
   bool signedIn = false;
+  int identityVersion = 0;
   static const _key = 'poker.mobile.refresh';
 
   Future<void> restore() async {
@@ -29,6 +30,7 @@ class PokerSession extends ChangeNotifier {
   }
 
   Future<void> login() async {
+    identityVersion++;
     final auth = await const FlutterAppAuth().authorize(
       AuthorizationRequest(
         PokerConfig.clientId,
@@ -84,6 +86,7 @@ class PokerSession extends ChangeNotifier {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode != 200) {
       if (body['error'] == 'invalid_grant') {
+        identityVersion++;
         await _storage.delete(key: _key);
         _access = null;
         signedIn = false;
@@ -124,6 +127,7 @@ class PokerSession extends ChangeNotifier {
   Future<void> logout() async {
     if (_loggingOut) return;
     _loggingOut = true;
+    identityVersion++;
     try {
       // Finish an in-flight rotation before revoking its successor.
       if (_refreshing != null) {

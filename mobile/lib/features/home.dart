@@ -1,3 +1,4 @@
+import 'pending_operations.dart';
 import 'buy_in.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -81,6 +82,16 @@ class _PokerHomeState extends State<PokerHome> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(labels[selected]),
         actions: [
+          IconButton(
+            tooltip: 'Operações pendentes',
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => PendingOperationsScreen(api: widget.api),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: 'Guia do Poker',
             icon: const Icon(Icons.help_outline),

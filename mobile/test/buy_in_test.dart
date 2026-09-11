@@ -10,8 +10,8 @@ class BuyApi extends PokerApi {
   final calls = <Json>[];
   Completer<Json>? result;
   @override
-  Future<Json> post(String path, [Json? body]) {
-    calls.add(Map.of(body!));
+  Future<Json> durablePost(String path, Json body, {required String label}) {
+    calls.add(Map.of(body));
     return (result = Completer<Json>()).future;
   }
 }

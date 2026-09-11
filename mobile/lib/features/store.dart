@@ -191,7 +191,8 @@ class StoreScreen extends StatelessWidget {
         builder: (_) => Scaffold(
           appBar: AppBar(title: const Text('Confirmando compra')),
           body: AsyncPanel(
-            load: () => api.post('$path/', body),
+            load: () =>
+                api.durablePost('$path/', body, label: 'Compra de $title'),
             builder: (context, result, _) => PurchaseScreen(
               api: api,
               path: path,
@@ -363,9 +364,10 @@ class _PurchaseScreenState extends State<PurchaseScreen>
                       refundKey ??= const Uuid().v4();
                       setState(() => busy = true);
                       try {
-                        final next = await widget.api.post(
+                        final next = await widget.api.durablePost(
                           '${widget.path}/${segment(purchase['purchase_id'])}/refund',
                           {'idem_key': refundKey},
+                          label: 'Reembolso de compra',
                         );
                         if (mounted) setState(() => purchase = next);
                       } finally {

@@ -80,3 +80,11 @@ hand ID. Ações não são enfileiradas durante desconexão. A confirmação de 
 é descartada se a versão mudou enquanto o seletor estava aberto. Ao retornar do
 segundo plano, uma nova sincronização precede qualquer aposta. Histórico usa
 milissegundos e paginação do servidor; cartas `back` nunca são reconstruídas.
+
+## Operações sem confirmação
+
+Use “Operações pendentes” no menu superior para conferir sessões e compras após
+uma interrupção. Entradas, recompras, compras e reembolsos persistem uma pendência
+por conta antes de enviar. O app não repete operações automaticamente ao reiniciar.
+A retirada manual do aviso apenas libera novas operações; confira o resultado e o
+saldo antes de confirmar. Veja os limites em [paridade](docs/parity.md).

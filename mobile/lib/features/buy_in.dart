@@ -59,7 +59,11 @@ class _BuyInScreenState extends State<BuyInScreen> {
       error = null;
     });
     try {
-      final result = await widget.api.post(widget.path, submitted);
+      final result = await widget.api.durablePost(
+        widget.path,
+        submitted!,
+        label: 'Entrada ou recompra na mesa',
+      );
       if (mounted) Navigator.pop(context, result);
     } catch (failure) {
       if (mounted) setState(() => error = failure);
