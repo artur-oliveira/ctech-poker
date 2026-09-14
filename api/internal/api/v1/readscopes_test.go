@@ -98,6 +98,8 @@ func TestOnlyFirstPartyPokerSessionsAuthorizeWebSocket(t *testing.T) {
 		{"scoped Poker UI", &jwtverify.Claims{SID: "session", AZP: firstPartyPokerClientID, Scope: ScopeRoomsRead}, true},
 		{"legacy Poker UI", &jwtverify.Claims{SID: "session", AZP: firstPartyPokerClientID, Scope: "openid profile"}, true},
 		{"poker-cli with a user session", &jwtverify.Claims{SID: "session", AZP: "poker-cli", Scope: ScopeRoomsRead}, true},
+		{"poker-mobile with a user session", &jwtverify.Claims{SID: "session", AZP: "poker-mobile", Scope: ScopeRoomsRead}, true},
+		{"M2M poker-mobile client", &jwtverify.Claims{AZP: "poker-mobile", Scope: ScopeRoomsRead}, false},
 		{"API key", &jwtverify.Claims{SID: "session", AZP: "api-key", Scope: ScopeRoomsRead}, false},
 		{"third-party client", &jwtverify.Claims{SID: "session", AZP: "third-party", Scope: ScopeRoomsRead}, false},
 		{"M2M Poker client", &jwtverify.Claims{AZP: firstPartyPokerClientID, Scope: ScopeRoomsRead}, false},

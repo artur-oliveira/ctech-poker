@@ -81,3 +81,10 @@ Real-money online poker sits in a legally ambiguous zone under Brazilian gamblin
 a **P0 non-technical risk**. See OVERVIEW.md § 11. Get a legal opinion before flipping
 `REAL_MONEY_ENABLED` in any environment that faces real users, independent of how the
 engineering goes.
+
+## Flutter mobile (Android + iOS, em desenvolvimento)
+
+`mobile/` contém o novo cliente nativo Flutter. Veja [configuração e CI](mobile/README.md)
+e [matriz de paridade](mobile/docs/parity.md). O GitHub Actions prepara builds Android
+em Linux e iOS em macOS, sem exigir Mac local. O cliente ainda não está homologado
+como substituto completo da web; login depende do registro nativo no Accounts.

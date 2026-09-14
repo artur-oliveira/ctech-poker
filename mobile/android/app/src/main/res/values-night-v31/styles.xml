@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/poker_room</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/poker_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/poker_brand</item>
+        <item name="android:windowBackground">@color/poker_room</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

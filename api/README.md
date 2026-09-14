@@ -655,3 +655,11 @@ before this code and backfill pre-existing unresolved records with `gsi_status=o
 Poker co-writes an immutable fee-debit recovery intent with real-money seat admission. Failed fee collection is retried
 from that durable intent. Unresolved settlement records use sparse gsi_status=open; deploy the GSI and backfill existing
 unresolved rows before enabling this release.
+
+### Cliente Flutter
+
+A allowlist de sessões interativas inclui `poker-mobile`, além de `poker` e
+`poker-cli`. A mudança não cria scopes de escrita e continua rejeitando tokens
+M2M sem `sid` e clientes delegados. Ambos os gateways usam essa mesma política.
+O cadastro de primeira parte do cliente público no Accounts é uma dependência
+separada; consulte `../mobile/README.md`. Nenhum gate financeiro foi alterado.
