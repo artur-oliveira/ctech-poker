@@ -1,3 +1,4 @@
+import 'poker_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
@@ -81,7 +82,7 @@ class _BuyInScreenState extends State<BuyInScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Icon(Icons.style, size: 64, color: Color(0xffdfbc71)),
+            const PokerLogo(size: 64),
             const SizedBox(height: 24),
             Text(
               'De ${chips(widget.minimum)} a ${chips(widget.maximum)} fichas',

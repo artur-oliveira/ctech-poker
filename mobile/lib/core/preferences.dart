@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'design.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PokerPreferences extends ChangeNotifier {
@@ -49,14 +50,19 @@ class PokerAppearance {
   static Color suit(String suit) => Color(
     (decks[deck] ?? decks['four-color']!)['shdc'.indexOf(suit).clamp(0, 3)],
   );
-  static List<Color> get feltColors =>
-      (const {
-                'classic': [0xff18765b, 0xff084b38],
-                'midnight': [0xff244b65, 0xff102b3d],
-                'burgundy': [0xff71323b, 0xff35151b],
-                'ocean': [0xff14717a, 0xff073f49],
-              }[felt] ??
-              [0xff18765b, 0xff084b38])
-          .map(Color.new)
-          .toList();
+  static Color get railColor => switch (felt) {
+    'midnight' => const Color(0xff3e4d59),
+    'burgundy' => const Color(0xff63392f),
+    'ocean' => const Color(0xff574538),
+    _ => PokerColors.rail,
+  };
+  static Color get feltValueColor => felt == 'midnight' || felt == 'burgundy'
+      ? PokerColors.gold
+      : PokerColors.feltValue;
+  static List<Color> get feltColors => switch (felt) {
+    'midnight' => const [Color(0xff244b65), Color(0xff102b3d)],
+    'burgundy' => const [Color(0xff71323b), Color(0xff35151b)],
+    'ocean' => const [Color(0xff14717a), Color(0xff073f49)],
+    _ => const [PokerColors.feltLight, PokerColors.feltDark],
+  };
 }

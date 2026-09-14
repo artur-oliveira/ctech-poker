@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/api.dart';
+import 'core/design.dart';
+import 'features/poker_logo.dart';
 import 'core/preferences.dart';
 import 'core/session.dart';
 import 'features/home.dart';
@@ -59,22 +61,7 @@ class _PokerAppState extends State<PokerApp> {
     locale: const Locale('pt', 'BR'),
     supportedLocales: const [Locale('pt', 'BR')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xffdfbc71),
-        brightness: Brightness.dark,
-        surface: const Color(0xff111e25),
-      ),
-      scaffoldBackgroundColor: const Color(0xff0b151c),
-      useMaterial3: true,
-      visualDensity: VisualDensity.standard,
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(minimumSize: const Size(48, 52)),
-      ),
-    ),
+    theme: PokerTheme.dark,
     home: restoring
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
         : session.signedIn
@@ -104,10 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.style_rounded,
-                  size: 76,
-                  color: Color(0xffdfbc71),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: PokerLogo(size: 76),
                 ),
                 const SizedBox(height: 28),
                 Text(

@@ -1,5 +1,6 @@
-# Launch Screen Assets
+# CTech Poker launch assets
 
-You can customize the launch screen with your own desired assets by replacing the image files in this directory.
-
-You can also do it by opening your Flutter project's Xcode project with `open ios/Runner.xcworkspace`, selecting `Runner/Assets.xcassets` in the Project Navigator and dropping in the desired images.
+Generated from `ui/public/svgs/logo.svg` by `mobile/tool/generate-brand.mjs`.
+The 1×/2×/3× images display at 96pt on the room background defined in
+`Runner/Base.lproj/LaunchScreen.storyboard`. Update the source and regenerate;
+do not replace these files with unrelated artwork. See `mobile/DESIGN.md`.

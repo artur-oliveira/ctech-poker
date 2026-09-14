@@ -1,11 +1,16 @@
+import 'poker_logo.dart';
+import '../core/design.dart';
 import 'report_player.dart';
 import 'buy_in.dart';
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+
 import '../core/api.dart';
 import '../core/fairness.dart';
 import '../core/realtime.dart';
@@ -263,7 +268,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               ),
             if (!connected)
               Material(
-                color: const Color(0xff614815),
+                color: PokerColors.control,
                 child: ListTile(
                   dense: true,
                   leading: const Icon(Icons.sync),
@@ -708,8 +713,7 @@ class TableFelt extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(100),
           gradient: RadialGradient(colors: PokerAppearance.feltColors),
-          border: Border.all(color: const Color(0xff8d7447), width: 3),
-          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 20)],
+          border: Border.all(color: PokerAppearance.railColor, width: 3),
         ),
         child: Stack(
           children: [
@@ -721,19 +725,13 @@ class TableFelt extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    const Text(
-                      'CTECH POKER',
-                      style: TextStyle(
-                        letterSpacing: 3,
-                        color: Colors.white38,
-                        fontSize: 11,
-                      ),
-                    ),
+                    const PokerLogo(size: 26),
                     const SizedBox(height: 16),
                     Text(
                       'POTE ${chips(snapshot.pots.fold<int>(0, (sum, pot) => sum + pot.amount.toInt()))}',
-                      style: const TextStyle(
-                        color: Color(0xffedcd89),
+                      style: TextStyle(
+                        color: PokerAppearance.feltValueColor,
+                        fontFamily: PokerTheme.mono,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -838,10 +836,10 @@ class TableFelt extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               'POTE ${chips(snapshot.pots.fold<int>(0, (sum, p) => sum + p.amount.toInt()))}',
-              style: const TextStyle(
-                letterSpacing: 2,
+              style: TextStyle(
+                fontFamily: PokerTheme.mono,
                 fontWeight: FontWeight.bold,
-                color: Color(0xffedcd89),
+                color: PokerAppearance.feltValueColor,
               ),
             ),
             const SizedBox(height: 12),
@@ -928,10 +926,10 @@ class CompactSeat extends StatelessWidget {
               : const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: const Color(0xff12242d),
+            color: PokerColors.seat,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: active ? const Color(0xffedcd89) : Colors.white24,
+              color: active ? PokerColors.gold : PokerColors.seatBorder,
               width: 2,
             ),
           ),
@@ -950,7 +948,11 @@ class CompactSeat extends StatelessWidget {
                 '${chips(seat.stack.toInt())} $role',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Color(0xffedcd89)),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFamily: PokerTheme.mono,
+                  color: PokerColors.gold,
+                ),
               ),
               PlayingCards(seat.holeCards, compact: true),
               if (active)
@@ -1010,10 +1012,10 @@ class SeatTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: const Color(0xee14262d),
+            color: PokerColors.seat,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: active ? const Color(0xffedcd89) : Colors.white12,
+              color: active ? PokerColors.gold : PokerColors.seatBorder,
               width: active ? 2 : 1,
             ),
           ),
@@ -1029,10 +1031,7 @@ class SeatTile extends StatelessWidget {
               if (role.isNotEmpty)
                 Text(
                   role,
-                  style: const TextStyle(
-                    color: Color(0xffedcd89),
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(color: PokerColors.gold, fontSize: 11),
                 ),
               PlayingCards(seat.holeCards, compact: true),
               if (seat.contributed > Int64.ZERO)
@@ -1043,7 +1042,7 @@ class SeatTile extends StatelessWidget {
               if (active)
                 Text(
                   '${seconds}s',
-                  style: const TextStyle(color: Color(0xffedcd89)),
+                  style: const TextStyle(color: PokerColors.gold),
                 ),
               if (seat.connectionState == 'disconnected')
                 const Text('Reconectando', style: TextStyle(fontSize: 10)),
@@ -1130,6 +1129,12 @@ class ActionDock extends StatelessWidget {
               for (final action in ['fold', 'check', 'call'])
                 if (legal.actions.contains(action))
                   FilledButton.tonal(
+                    style: action == 'fold'
+                        ? null
+                        : FilledButton.styleFrom(
+                            backgroundColor: PokerColors.paper,
+                            foregroundColor: PokerColors.wine,
+                          ),
                     onPressed: realtime.canAct
                         ? () => realtime.act(action)
                         : null,
@@ -1325,6 +1330,42 @@ class _ChatPanelState extends State<ChatPanel> {
               Expanded(
                 child: ListView(
                   children: [
+                    for (final reaction
+                        in widget.realtime.snapshot?.reactions ??
+                            <TableReaction>[])
+                      if (widget.allowed(reaction.playerId))
+                        ListTile(
+                          leading: Text(
+                            reactionGlyphs[reaction.reactionId] ?? '☺',
+                            style: const TextStyle(fontSize: 28),
+                          ),
+                          title: Text(
+                            widget.realtime.snapshot?.seats
+                                    .where(
+                                      (s) => s.playerId == reaction.playerId,
+                                    )
+                                    .firstOrNull
+                                    ?.name ??
+                                'Jogador',
+                          ),
+                          subtitle: Text(
+                            reaction.targetPlayerId.isEmpty
+                                ? 'Reação na mesa'
+                                : 'Reação para ${widget.realtime.snapshot?.seats.where((s) => s.playerId == reaction.targetPlayerId).firstOrNull?.name ?? "jogador"}',
+                          ),
+                          trailing:
+                              reaction.playerId != widget.realtime.playerId
+                              ? TableEventReportButton(
+                                  api: widget.api,
+                                  tableId: widget.roomId,
+                                  handId:
+                                      widget.realtime.snapshot?.handId ?? '',
+                                  playerId: reaction.playerId,
+                                  actionId: reaction.id,
+                                  reaction: true,
+                                )
+                              : null,
+                        ),
                     for (final message
                         in widget.realtime.snapshot?.chatMessages ??
                             <ChatMessage>[])
@@ -1340,49 +1381,15 @@ class _ChatPanelState extends State<ChatPanel> {
                                 'Jogador',
                           ),
                           subtitle: Text(message.message),
-                          trailing:
-                              message.playerId != widget.realtime.playerId &&
-                                  message.id.isNotEmpty &&
-                                  (widget
-                                          .realtime
-                                          .snapshot
-                                          ?.handId
-                                          .isNotEmpty ??
-                                      false)
-                              ? IconButton(
-                                  tooltip: 'Denunciar mensagem',
-                                  icon: const Icon(Icons.flag_outlined),
-                                  onPressed: () => safely(context, () async {
-                                    final handId =
-                                        widget.realtime.snapshot!.handId;
-                                    final history = await widget.api.get(
-                                      '/v1.0/tables/${segment(widget.roomId)}/hands/${segment(handId)}/history',
-                                    );
-                                    if (!rows(history, 'actions').any(
-                                      (action) =>
-                                          action['action_id'] == message.id &&
-                                          action['player_id'] ==
-                                              message.playerId,
-                                    )) {
-                                      throw StateError(
-                                        'Esta mensagem é de uma mão anterior. Use a denúncia de comportamento no assento do jogador.',
-                                      );
-                                    }
-                                    if (!context.mounted) return;
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => ReportPlayerScreen(
-                                          api: widget.api,
-                                          playerId: message.playerId,
-                                          surface: 'table_chat',
-                                          tableId: widget.roomId,
-                                          handId: handId,
-                                          actionId: message.id,
-                                        ),
-                                      ),
-                                    );
-                                  }),
+                          trailing: message.playerId != widget.realtime.playerId
+                              ? TableEventReportButton(
+                                  api: widget.api,
+                                  tableId: widget.roomId,
+                                  handId:
+                                      widget.realtime.snapshot?.handId ?? '',
+                                  playerId: message.playerId,
+                                  actionId: message.id,
+                                  reaction: false,
                                 )
                               : null,
                         ),

@@ -17,7 +17,7 @@ homologado em produção ou em aparelho nesta sessão.
 | Social | Amigos, pedidos recebidos/enviados e cancelamento, recentes, bloqueio, mute, denúncia, inbox, convite e perfil público | Todos os estados de privacidade, atualização de presença e acesso pela mesa |
 | Loja | Catálogos, compras PIX/fichas, QR visual, histórico paginado, status/reembolso, chave estável no retry de compra | Homologar a conferência após morte do processo e todos os estados de erro/expiração em aparelhos |
 | Recursos nativos | Foto, microfone com confirmação, preferências, entrada para desafio Turnstile | Validar permissões, TTS, sons, lembretes, treinador, domínio Turnstile em Android/iOS |
-| UI | Material 3 escuro, navegação inferior, mesa portrait/landscape com disposição ao redor do board, SafeArea, cartas acessíveis | Revisão visual e usabilidade de todas as telas; disposição de nove jogadores em todos os tamanhos reais; referências visuais das outras telas |
+| UI | Identidade do Web (logo, cores, IBM Plex) documentada, Material 3, navegação inferior, mesa portrait/landscape com disposição ao redor do board, SafeArea, cartas acessíveis | Revisão visual e usabilidade de todas as telas; disposição de nove jogadores em todos os tamanhos reais; referências visuais das outras telas |
 | Distribuição | Workflow Android + macOS, APK debug, simulador, compile iOS sem assinatura | Assinatura Android/iOS; TestFlight; validação em aparelhos |
 
 ## Evidências automatizadas
@@ -89,8 +89,8 @@ Denúncias oferecem as seis categorias do Web, detalhes opcionais até 500 carac
 origem perfil/jogador recente/comportamento na mesa e contexto da mesa/mão quando
 aplicável. Falhas preservam o mesmo conteúdo e chave no retry. Denúncia de mensagem da mão atual verifica o action_id no histórico antes de abrir
 o formulário. O protocolo não identifica a mão das mensagens antigas; nesses
-casos o app orienta usar a denúncia de comportamento. Reação individual com
-evidência de action_id ainda está pendente.
+casos o app orienta usar a denúncia de comportamento. Reações individuais agora podem ser denunciadas pelo chat, com validação de
+autor, tipo e `action_id` no histórico antes de abrir o formulário.
 
 ## Moderação pela mesa
 
@@ -99,3 +99,51 @@ com confirmação antes de bloquear. Após a mutação, as relações são recar
 o chat aberto observa a mudança sem esperar outro frame. Chat e reações ficam
 ocultos até o carregamento das preferências. Falhas ganham retry em 10 segundos
 ou manual pelo chat; retornar ao app também atualiza as relações.
+
+
+## Continuação — denúncias de reações (2026-09-14)
+
+O chat apresenta as reações disponíveis no snapshot, com autor e destinatário.
+O botão de denúncia aponta para o autor, inclusive em reações direcionadas ao
+próprio jogador. Silenciados/bloqueados permanecem ocultos e não há botão para
+denunciar a si mesmo. A lista acompanha o snapshot; não é um histórico permanente
+de reações expiradas.
+
+Mensagens e reações compartilham a conferência no histórico: autor, tipo e
+identificador devem corresponder. Sem evidência na mão consultada, o app orienta
+a denúncia de comportamento. O botão indica carregamento, bloqueia cliques
+repetidos e permite nova tentativa após falha de rede. Os identificadores são
+capturados antes da consulta para preservar o contexto durante a troca de mão.
+O servidor continua sendo responsável pela validação e anexação da evidência.
+
+Validação local: `flutter analyze --no-pub` sem problemas e 44 testes aprovados,
+com Flutter 3.47.4 / Dart 3.13.3 (CI permanece em Flutter 3.47.3). Testes cobrem
+payload da denúncia, troca de mão durante consulta, evento/autor/tipo divergentes,
+falha de rede, ausência de hand ID e atualização imediata da moderação. A referência
+visual da mesa também passou. Não houve homologação autenticada ou em aparelhos.
+
+## Identidade visual — correção de 2026-09-14
+
+A implementação inicial usava um ícone genérico, superfícies azul-petróleo, seed
+dourada e fonte padrão. Essas escolhas divergiam do Web; a descrição anterior
+“Material 3 escuro” não demonstrava fidelidade à marca.
+
+Agora `PRODUCT.md` e `DESIGN.md` documentam a identidade aprovada em `ui/` e seu
+mapeamento no Flutter: monograma original, vermelho/vinho, neutros da sala, IBM
+Plex Sans/Mono locais, valores dourados e bordas correspondentes a cada feltro.
+Login, cabeçalho, buy-in, mesa, launcher icons e abertura usam a logo original.
+Temas e fontes de exemplo foram removidos do teste visual da mesa.
+
+Evidências: análise sem problemas; 54 testes aprovados, incluindo comparação com
+os tokens/SVG do Web, contraste ≥4,5:1 dos pares testados, referências visuais de
+login/lobby/buy-in/guia/mesa e texto 1×/2× nos novos cenários de 390×844. Os testes
+anteriores de layout da mesa em quatro tamanhos continuam passando. As imagens
+foram inspecionadas, incluindo a presença da logo após decodificar o asset.
+
+O renderer nativo ainda não reproduz toda a ilustração das cartas, materiais,
+geometria e cosméticos do Web. Os ícones e launch screens iOS foram gerados e
+seus metadados conferidos, mas não compilados/abertos em iOS nesta máquina Linux.
+Não confundir essa correção de identidade com homologação integral do aplicativo.
+
+Build local adicional: `flutter build apk --debug --no-pub` aprovado; logo e fontes
+IBM Plex conferidas dentro de `build/app/outputs/flutter-apk/app-debug.apk`.

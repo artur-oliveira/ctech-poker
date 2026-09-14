@@ -1,6 +1,6 @@
-import 'dart:io';
+import 'package:ctech_poker/core/design.dart';
+import 'support/brand_fonts.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ctech_poker/features/table.dart';
 import 'package:ctech_poker/core/realtime.dart';
@@ -16,18 +16,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final font = FontLoader('Roboto')
-      ..addFont(
-        Future.value(
-          ByteData.sublistView(
-            File('test/fonts/Roboto-Regular.ttf').readAsBytesSync(),
-          ),
-        ),
-      );
-    await font.load();
-    await (FontLoader(
-      'MaterialIcons',
-    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    await loadBrandFonts();
     final session = PokerSession();
     final live = PokerRealtime(session)
       ..playerId = 'me'
@@ -78,16 +67,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          fontFamily: 'Roboto',
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xffdfbc71),
-            brightness: Brightness.dark,
-          ),
-          scaffoldBackgroundColor: const Color(0xff0b151c),
-        ),
+        theme: PokerTheme.dark,
         home: RepaintBoundary(
           key: const Key('table'),
           child: Scaffold(
@@ -118,6 +98,12 @@ void main() {
             ),
           ),
         ),
+      ),
+    );
+    await tester.runAsync(
+      () => precacheImage(
+        const AssetImage('assets/brand/logo.png'),
+        tester.element(find.byType(MaterialApp)),
       ),
     );
     await tester.pumpAndSettle();

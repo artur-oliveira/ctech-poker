@@ -88,3 +88,24 @@ uma interrupção. Entradas, recompras, compras e reembolsos persistem uma pend�
 por conta antes de enviar. O app não repete operações automaticamente ao reiniciar.
 A retirada manual do aviso apenas libera novas operações; confira o resultado e o
 saldo antes de confirmar. Veja os limites em [paridade](docs/parity.md).
+
+## Identidade visual
+
+[PRODUCT.md](PRODUCT.md) e [DESIGN.md](DESIGN.md) registram a adaptação da identidade
+já existente em `../ui/`, documentada com `impeccable document`. A logo vem de
+`../ui/public/svgs/logo.svg`; cores e tipografia seguem o CSS e layout do Web.
+`PokerTheme.dark` é o único tema da aplicação e dos testes visuais. Não substituir
+os tokens por um tema gerado automaticamente.
+
+IBM Plex Sans/Mono estão no bundle em `assets/fonts`, com licença OFL e origem
+fixada no DESIGN.md. Para regenerar a logo e os recursos Android/iOS a partir do
+SVG original (requer as dependências de `ui/` já instaladas):
+
+```sh
+node tool/generate-brand.mjs
+flutter test --no-pub test/brand_test.dart test/table_golden_test.dart
+```
+
+Mudanças intencionais de aparência exigem inspeção das imagens antes de aceitar
+novos goldens. Veja a [conferência visual](docs/brand-review.md). Android/iOS ainda
+precisam de validação em aparelhos; testes de widget não validam o launcher do SO.

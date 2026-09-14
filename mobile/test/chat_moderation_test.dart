@@ -4,6 +4,7 @@ import 'package:ctech_poker/core/session.dart';
 import 'package:ctech_poker/features/table.dart';
 import 'package:ctech_poker/generated/poker.pb.dart';
 import 'package:flutter/material.dart';
+import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -16,6 +17,15 @@ void main() {
       realtime.snapshot = TableSnapshot(
         handId: 'hand',
         seats: [Seat(playerId: 'other', name: 'Outro')],
+        reactions: [
+          TableReaction(
+            id: 'reaction',
+            playerId: 'other',
+            reactionId: 'tomato',
+            targetPlayerId: 'me',
+            expiresAt: Int64(9999999999999),
+          ),
+        ],
         chatMessages: [
           ChatMessage(
             id: 'message',
@@ -41,15 +51,21 @@ void main() {
         ),
       );
       expect(find.text('Mensagem da mesa'), findsNothing);
+      expect(find.byTooltip('Denunciar reação'), findsNothing);
+      expect(find.text('🍅'), findsNothing);
       ready = true;
       revision.value++;
       await tester.pump();
       expect(find.text('Mensagem da mesa'), findsOneWidget);
       expect(find.byTooltip('Denunciar mensagem'), findsOneWidget);
+      expect(find.byTooltip('Denunciar reação'), findsOneWidget);
+      expect(find.text('🍅'), findsOneWidget);
       hidden = true;
       revision.value++;
       await tester.pump();
       expect(find.text('Mensagem da mesa'), findsNothing);
+      expect(find.byTooltip('Denunciar reação'), findsNothing);
+      expect(find.text('🍅'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       realtime.dispose();
       revision.dispose();

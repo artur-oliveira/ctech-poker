@@ -1,3 +1,4 @@
+import '../core/design.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/api.dart';
@@ -260,9 +261,9 @@ class PlayingCards extends StatelessWidget {
           height: compact ? 43 : 60,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: hidden ? const Color(0xff294f60) : const Color(0xfff7f1df),
+            color: hidden ? PokerColors.wine : PokerColors.paper,
             borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: const Color(0xffb3a887)),
+            border: Border.all(color: PokerColors.muted),
           ),
           child: ExcludeSemantics(
             child: hidden

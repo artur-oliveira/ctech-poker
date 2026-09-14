@@ -1,6 +1,83 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+
 import '../core/api.dart';
+import 'widgets.dart';
+
+/// Resolve the event against authoritative history before opening a report.
+/// Socket events carry no hand ID and can survive a hand transition.
+class TableEventReportButton extends StatefulWidget {
+  const TableEventReportButton({
+    super.key,
+    required this.api,
+    required this.tableId,
+    required this.handId,
+    required this.playerId,
+    required this.actionId,
+    required this.reaction,
+  });
+  final PokerApi api;
+  final String tableId, handId, playerId, actionId;
+  final bool reaction;
+
+  @override
+  State<TableEventReportButton> createState() => _TableEventReportButtonState();
+}
+
+class _TableEventReportButtonState extends State<TableEventReportButton> {
+  bool busy = false;
+
+  Future<void> open() async {
+    if (busy) return;
+    // Capture all evidence coordinates before the request: a new snapshot may
+    // arrive while history is loading.
+    final event = widget;
+    setState(() => busy = true);
+    await safely(context, () async {
+      final history = await event.api.get(
+        '/v1.0/tables/${segment(event.tableId)}/hands/${segment(event.handId)}/history',
+      );
+      if (!rows(history, 'actions').any(
+        (action) =>
+            action['action_id'] == event.actionId &&
+            action['player_id'] == event.playerId &&
+            action['action'] == (event.reaction ? 'reaction' : 'chat'),
+      )) {
+        throw StateError(
+          'Não foi possível vincular este evento à mão atual. Use a denúncia de comportamento no assento do jogador.',
+        );
+      }
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ReportPlayerScreen(
+            api: event.api,
+            playerId: event.playerId,
+            surface: event.reaction ? 'table_reaction' : 'table_chat',
+            tableId: event.tableId,
+            handId: event.handId,
+            actionId: event.actionId,
+          ),
+        ),
+      );
+    });
+    if (mounted) setState(() => busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: busy
+        ? 'Verificando evento…'
+        : widget.reaction
+        ? 'Denunciar reação'
+        : 'Denunciar mensagem',
+    onPressed: busy || widget.handId.isEmpty || widget.actionId.isEmpty
+        ? null
+        : open,
+    icon: Icon(busy ? Icons.hourglass_top : Icons.flag_outlined),
+  );
+}
 
 const reportCategories = {
   'harassment': 'Assédio ou ofensas',

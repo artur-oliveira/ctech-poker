@@ -1,3 +1,5 @@
+import 'poker_logo.dart';
+import '../core/design.dart';
 import 'pending_operations.dart';
 import 'buy_in.dart';
 import 'dart:async';
@@ -80,6 +82,7 @@ class _PokerHomeState extends State<PokerHome> with WidgetsBindingObserver {
     ];
     return Scaffold(
       appBar: AppBar(
+        leading: const Center(child: PokerLogo(size: 32)),
         title: Text(labels[selected]),
         actions: [
           IconButton(
@@ -385,7 +388,7 @@ class DailyScreen extends StatelessWidget {
         builder: (context, data, reload) => ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Icon(Icons.redeem, size: 76, color: Color(0xffdfbc71)),
+            const Icon(Icons.redeem, size: 76, color: PokerColors.gold),
             const SizedBox(height: 24),
             Text(
               '${data['current_streak']} dias de sequência',
@@ -460,6 +463,10 @@ class GuideScreen extends StatelessWidget {
           SizedBox(height: 16),
           Text(
             'Na mesa, suas cartas ficam junto às ações. Pagar, passar, desistir e aumentar só ficam disponíveis quando o servidor confirma sua vez. O valor de aumentar é o total da aposta nesta rodada.',
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Aumentar aparece em vermelho; Pagar e Passar usam botões claros. O dourado destaca fichas, pote e a vez do jogador. Leia sempre o nome e o valor da ação antes de confirmar.',
           ),
           SizedBox(height: 16),
           Text(
