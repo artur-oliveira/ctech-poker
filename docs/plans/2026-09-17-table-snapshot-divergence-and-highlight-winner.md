@@ -50,7 +50,7 @@
 - Consumes: `hand.HandOutcome{Winners []string, Payouts map[string]int64, PotResults []PotResult}`, `names map[string]string`.
 - Produces: `highlights.HighlightWinner{PlayerID string, Name string, Payout int64}` e o campo `Highlight.Winners []HighlightWinner` (JSON `winners`, dynamodbav `winners`). Task 3 consome o JSON.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar ao fim de `api/internal/highlights/store_test.go`:
 
@@ -119,12 +119,12 @@ func TestWinnersOf_WinnerWithoutAPayoutEntryIsStillNamed(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd api && go test ./internal/highlights/ -run TestWinnersOf -race`
 Expected: FAIL — `undefined: winnersOf`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `api/internal/highlights/store.go`, logo depois do bloco `RevealedHand`, adicionar:
 
@@ -190,12 +190,12 @@ func winnersOf(outcome hand.HandOutcome, names map[string]string) []HighlightWin
 
 Adicionar `"sort"` ao bloco de imports.
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `cd api && go test ./internal/highlights/ -race`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/internal/highlights/store.go api/internal/highlights/store_test.go
@@ -215,7 +215,7 @@ git commit -m "fix(highlights): persist the hand's real winner, not only reveale
 - Consumes: `TableHighlight.winners?: HighlightWinner[]` da Task 1.
 - Produces: `highlightWinnerLabel(board?, revealed?, winners?)` — assinatura estendida, terceiro parâmetro opcional; chamadores existentes continuam válidos.
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Acrescentar dentro do `describe('TodayHighlight', …)` em `ui/src/components/table/TodayHighlight.test.tsx`:
 
@@ -274,12 +274,12 @@ Acrescentar dentro do `describe('TodayHighlight', …)` em `ui/src/components/ta
   });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd ui && npx vitest run src/components/table/TodayHighlight.test.tsx`
 Expected: FAIL — os quatro primeiros testes não acham o texto (o caption ignora `winners`).
 
-- [ ] **Step 3: Implementar o tipo**
+- [x] **Step 3: Implementar o tipo**
 
 Em `ui/src/lib/api/highlights.ts`, acima de `TableHighlight`:
 
@@ -297,7 +297,7 @@ E dentro de `TableHighlight`, entre `board` e `revealed`:
   winners?: HighlightWinner[];
 ```
 
-- [ ] **Step 4: Implementar o caption**
+- [x] **Step 4: Implementar o caption**
 
 Em `ui/src/components/table/TodayHighlight.tsx`, substituir o bloco de comentário
 `// KNOWN LIMITATION: …` e a função `highlightWinnerLabel` inteira por:
@@ -360,17 +360,17 @@ Atualizar a chamada dentro do componente:
 Se `RevealedHand` de `@/lib/api/highlights` não expuser `player_id` no tipo usado aqui, ele já o
 expõe (`ui/src/lib/api/highlights.ts`), então nenhuma mudança extra é necessária.
 
-- [ ] **Step 5: Rodar e confirmar que passa**
+- [x] **Step 5: Rodar e confirmar que passa**
 
 Run: `cd ui && npx vitest run src/components/table/TodayHighlight.test.tsx`
 Expected: PASS, incluindo os testes pré-existentes de fallback.
 
-- [ ] **Step 6: Lint**
+- [x] **Step 6: Lint**
 
 Run: `cd ui && npm run lint`
 Expected: sem erros.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add ui/src/lib/api/highlights.ts ui/src/components/table/TodayHighlight.tsx ui/src/components/table/TodayHighlight.test.tsx
@@ -391,7 +391,7 @@ git commit -m "fix(ui): name the paid winner on the daily highlight, showdown or
 - Consumes: nada de tasks anteriores.
 - Produces: `(a *Actor) syncWithoutPublish()` e `(a *Actor) publishSnapshots()`; `notifyHandComplete()` passa a devolver `bool` (rodou os hooks nesta chamada).
 
-- [ ] **Step 1: Reescrever o teste de contrato**
+- [x] **Step 1: Reescrever o teste de contrato**
 
 Em `api/internal/table/changenotify_test.go`, substituir
 `TestHandleExternalChangeForcesReloadAndBroadcast` inteiro por:
@@ -439,12 +439,12 @@ func TestBroadcastAllPublishesToEverySeat(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd api && go test ./internal/table/ -run 'TestHandleExternalChangeReloadsWithoutRepublishing|TestBroadcastAllPublishesToEverySeat' -race`
 Expected: FAIL — `a sibling published 2 frames for a commit it did not run, want 0`.
 
-- [ ] **Step 3: Separar publish de sincronização**
+- [x] **Step 3: Separar publish de sincronização**
 
 Em `api/internal/table/actor_views.go`, substituir a função `broadcastAll` inteira (linhas 122-185)
 por:
@@ -555,7 +555,7 @@ func (a *Actor) publishSnapshots() {
 }
 ```
 
-- [ ] **Step 4: Fazer `notifyHandComplete` reportar se rodou**
+- [x] **Step 4: Fazer `notifyHandComplete` reportar se rodou**
 
 Em `api/internal/table/actor_hooks.go`, mudar a assinatura e os returns de `notifyHandComplete`:
 
@@ -595,7 +595,7 @@ func (a *Actor) notifyHandComplete() bool {
 }
 ```
 
-- [ ] **Step 5: Trocar a chamada no external change**
+- [x] **Step 5: Trocar a chamada no external change**
 
 Em `api/internal/table/actor_presence.go`, no comentário e corpo de `handleExternalChange`,
 trocar a última frase do comentário e a chamada:
@@ -618,18 +618,18 @@ func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) e
 }
 ```
 
-- [ ] **Step 6: Rodar o pacote inteiro**
+- [x] **Step 6: Rodar o pacote inteiro**
 
 Run: `cd api && go test ./internal/table/ -race`
 Expected: PASS. Se algum teste pré-existente afirmar que o external change publica, ele codifica o
 bug — atualize-o para a nova expectativa citando este plano no comentário.
 
-- [ ] **Step 7: Rodar tudo**
+- [x] **Step 7: Rodar tudo**
 
 Run: `cd api && go test ./... -race`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/internal/table/actor_views.go api/internal/table/actor_hooks.go api/internal/table/actor_presence.go api/internal/table/changenotify_test.go
@@ -648,7 +648,7 @@ git commit -m "fix(table): stop sibling instances from republishing an already f
 - Consumes: `makeCacheKey(hole, board, deadCards, numOpponents, iterations) (cacheKey, bool)` já existente.
 - Produces: `seedFor(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) uint64`.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar ao fim de `api/internal/engine/equity/equity_test.go`:
 
@@ -698,12 +698,12 @@ Se `Estimate` não existir com essa assinatura no pacote, use
 `EstimateWithStats(hole, board, nil, 2, 2000)` e descarte o segundo retorno — confira o topo do
 arquivo antes de escrever.
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd api && go test ./internal/engine/equity/ -run TestEstimateIsIdenticalAcrossProcesses -race -count=1`
 Expected: FAIL — os dois valores diferem.
 
-- [ ] **Step 3: Implementar a semente determinística**
+- [x] **Step 3: Implementar a semente determinística**
 
 Em `api/internal/engine/equity/equity.go`, logo acima de `EstimateForTableWithStats`:
 
@@ -773,7 +773,7 @@ por:
 Remover `"math/rand/v2"` do bloco de imports se ele ficar sem uso — rode
 `cd api && go build ./...` para confirmar.
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `cd api && go test ./internal/engine/equity/ -race -count=1`
 Expected: PASS, incluindo os testes de precisão pré-existentes. Se algum teste pré-existente
@@ -781,7 +781,7 @@ verificar uma margem de erro, ele continua válido: a semente mudou, não o esti
 apertada falhar para uma mão específica, amplie a margem no teste, nunca o número de iterações da
 produção.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/internal/engine/equity/equity.go api/internal/engine/equity/equity_test.go
@@ -801,7 +801,7 @@ git commit -m "fix(equity): seed the Monte-Carlo sample from the spot so every i
 - Consumes: `syncWithoutPublish()` da Task 3; `fakeStreakStore`/`streakActor` de `streakstore_test.go`; `fakeChangeNotifier` de `changenotify_test.go`.
 - Produces: nenhuma API nova.
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Criar `api/internal/table/streakfreshness_test.go`:
 
@@ -898,14 +898,14 @@ func forceComplete(t *testing.T, table *hand.Table) {
 }
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd api && go test ./internal/table/ -run 'TestPublishingStreaksNotifiesSiblingInstances|TestExternalChangeOnACompletedHandRefreshesTheBadge|TestExternalChangeMidHandKeepsThePacingWindow' -race`
 Expected: FAIL nos dois primeiros (nenhum notify; zero loads). Se `hand.Table` não expuser `Act` ou
 `StartHand` com essas assinaturas, ajuste `forceComplete` ao que o pacote oferece — confira
 `api/internal/engine/hand/hand.go` antes de escrever.
 
-- [ ] **Step 3: Notificar depois de publicar o streak**
+- [x] **Step 3: Notificar depois de publicar o streak**
 
 Em `api/internal/table/actor_views.go`, no fim de `SetStreaksForActor`, trocar:
 
@@ -930,7 +930,7 @@ por:
 	a.notifyChange()
 ```
 
-- [ ] **Step 4: Forçar a releitura no external change**
+- [x] **Step 4: Forçar a releitura no external change**
 
 Em `api/internal/table/actor_presence.go`, `handleExternalChange` passa a ser:
 
@@ -955,18 +955,18 @@ func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) e
 
 Garantir que `hand` e `time` estejam importados em `actor_presence.go`.
 
-- [ ] **Step 5: Rodar e confirmar que passa**
+- [x] **Step 5: Rodar e confirmar que passa**
 
 Run: `cd api && go test ./internal/table/ -race`
 Expected: PASS, incluindo `streakpacing_test.go` (a janela de 30 s continua valendo para comandos
 fora do `Complete`).
 
-- [ ] **Step 6: Rodar tudo**
+- [x] **Step 6: Rodar tudo**
 
 Run: `cd api && go test ./... -race`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/internal/table/actor_views.go api/internal/table/actor_presence.go api/internal/table/streakfreshness_test.go
@@ -985,7 +985,7 @@ git commit -m "fix(table): push the completed hand's streak badge to sibling ins
 - Consumes: tudo acima.
 - Produces: nada.
 
-- [ ] **Step 1: Escrever o teste de regressão cross-instance**
+- [x] **Step 1: Escrever o teste de regressão cross-instance**
 
 Ler `api/internal/table/crossinstance_integration_test.go` inteiro primeiro para reaproveitar os
 helpers de duas instâncias que ele já tem, e acrescentar:
@@ -1008,23 +1008,23 @@ Escreva o corpo com os helpers reais do arquivo; a asserção obrigatória é: p
 `SnapshotVersion`, todos os snapshots coletados têm o mesmo `CurrentStreak` e o mesmo `Equity` em
 cada assento.
 
-- [ ] **Step 2: Rodar**
+- [x] **Step 2: Rodar**
 
 Run: `cd api && go test ./internal/table/ -run TestTwoInstancesNeverPublishDivergentFramesForOneVersion -race -count=5`
 Expected: PASS de forma estável nas 5 execuções.
 
-- [ ] **Step 3: Registrar no índice de docs**
+- [x] **Step 3: Registrar no índice de docs**
 
 Acrescentar uma linha em `docs/README.md`, na seção de specs implementados, apontando para
 `docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md` e resumindo: highlight
 passa a persistir o vencedor; instâncias irmãs não republicam; equity e streak convergem.
 
-- [ ] **Step 4: Verificação final**
+- [x] **Step 4: Verificação final**
 
 Run: `cd api && go test ./... -race && cd ../ui && npm test && npm run lint`
 Expected: tudo PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/internal/table/crossinstance_integration_test.go docs/README.md
@@ -1048,3 +1048,33 @@ Se a captura mostrar o card parado em `opacity: 0` com `data-card-revealing` pre
 `CARD_REVEAL_MS`, a investigação continua em `ui/src/lib/hooks/useEnteredKeys.ts`. Se mostrar um
 fetch de face falhando, continua em `PlayingCard`'s `faceBroken`. Não mexa em nenhum dos dois antes
 de ter essa evidência.
+
+---
+
+## Execution notes (2026-09-17)
+
+Executado inteiro no branch `fix/table-snapshot-divergence-and-highlight-winner`. Desvios do plano,
+todos deliberados:
+
+- **Task 2** também atualizou `ui/src/app/(marketing)/guide/table/page.tsx` — a verba "Maior pote de
+  hoje" descrevia o comportamento antigo ("com a mão vencedora quando ela foi revelada"), e
+  `ui/CLAUDE.md` exige a atualização do guia no mesmo change.
+- **Task 3** precisou também de `internal/tablemanager/changelisten_test.go`:
+  `TestListenForExternalChangesDispatchesToTheMatchingLocalActor` afirmava o comportamento antigo.
+  Reescrito para observar o dispatch pela ordem do mailbox (`Dispatch` bloqueia até a resposta) em vez
+  do broadcast, e para falhar se um frame for publicado.
+- **Task 5** reaproveita o helper `completedTable` que já existia em `audit_regression_test.go` em vez
+  de criar `forceComplete`.
+- **Task 6** virou um teste de unidade (`internal/table/framedivergence_test.go`) em vez de entrar em
+  `crossinstance_integration_test.go`: aquele arquivo é `//go:build integration` e precisa de DynamoDB
+  Local, então o teste não rodaria no gate normal — que é exatamente onde esta regressão precisa ser
+  pega. Verificado que ele falha com a correção da Task 5 revertida
+  (`streak 1 from one instance, 0 from the other`).
+- O fixture da Task 6 exercita a metade do streak; o determinismo da equity entre processos fica
+  pinado por `TestEstimateIsIdenticalAcrossProcesses` em `internal/engine/equity`.
+
+`api/CLAUDE.md` ganhou a regra "Only the instance that ran the command publishes" e teve duas
+afirmações desatualizadas corrigidas (`handleExternalChange` já não chama `broadcastAll`).
+
+Gate final: `go test ./... -race` e `go vet -tags integration ./...` verdes; `npx vitest run`
+(1687 testes), `npx tsc --noEmit` e `npx eslint src --max-warnings 0` verdes.
