@@ -129,6 +129,15 @@ func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) e
 	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
+	// A sibling's signal may BE the hand completion that moved every badge
+	// (SetStreaksForActor notifies right after publishing them), so clear the
+	// pacing stamp and re-read. Gated on Complete: mid-hand commits are the
+	// common case and must not each pay a Valkey round trip on the actor
+	// goroutine (#222).
+	if a.cached != nil && a.cached.Stage() == hand.Complete {
+		a.streaksRefreshedAt = time.Time{}
+		a.refreshStreaks(ctx)
+	}
 	a.syncWithoutPublish()
 	return nil
 }

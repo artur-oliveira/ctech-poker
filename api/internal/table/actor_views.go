@@ -457,6 +457,13 @@ func (a *Actor) SetStreaksForActor(streaks map[string]int) {
 	if merged != nil {
 		a.streaks = merged
 	}
+	// Every other instance serving this table is still holding the previous
+	// hand's badges, and refreshStreaks alone would only heal them when the
+	// pacing window lapses — up to StreakRefreshInterval of a stale number on
+	// the wire. This is the one moment the value actually changed, so reuse
+	// the commit channel to tell them: handleExternalChange re-reads the badge
+	// whenever the reload lands on a completed hand.
+	a.notifyChange()
 }
 
 func equityStage(stage hand.Stage) bool {
