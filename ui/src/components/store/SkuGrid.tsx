@@ -3,10 +3,8 @@ import {ArrowRight, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {SandboxSKU} from '@/lib/api/wallet';
+import {moneyExact} from '@/lib/chips';
 
-function formatBRL(cents: number) {
-  return (cents / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-}
 
 export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction, pendingSku}: {
   skus: SandboxSKU[];
@@ -36,14 +34,14 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
     || left.total_credits - right.total_credits
     || left.id.localeCompare(right.id));
 
-  return <div className="store-sku-grid" role="group" aria-label="Pacotes de fichas sandbox">
+  return <div className="store-sku-grid" role="group" aria-label="Pacotes de fichas">
       {sortedSkus.map(sku => {
         const bonusCredits = Math.max(0, sku.total_credits - sku.base_credits);
         const totalLabel = sku.total_credits.toLocaleString('pt-BR');
         const baseLabel = sku.base_credits.toLocaleString('pt-BR');
         const bonusLabel = bonusCredits.toLocaleString('pt-BR');
         return <button key={sku.id} type="button" className="store-sku-card"
-                       aria-label={`Escolher ${totalLabel} fichas: ${baseLabel} base${bonusCredits > 0 ? ` mais ${bonusLabel} de bônus` : ', sem bônus'}, por ${formatBRL(sku.price_cents)}`}
+                       aria-label={`Escolher ${totalLabel} fichas: ${baseLabel} base${bonusCredits > 0 ? ` mais ${bonusLabel} de bônus` : ', sem bônus'}, por ${moneyExact(sku.price_cents)}`}
                        disabled={pendingSku !== null} onClick={event => onSelectAction(sku, event.currentTarget)}>
           <span className="store-sku-credits">{totalLabel} <small>fichas no total</small></span>
           <span className="store-sku-composition">
@@ -54,7 +52,7 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
               : <small>sem bônus</small>}
           </span>
           <span className="store-sku-price">
-            <span>{pendingSku === sku.id ? 'Preparando Pix…' : formatBRL(sku.price_cents)}</span>
+            <span>{pendingSku === sku.id ? 'Preparando Pix…' : moneyExact(sku.price_cents)}</span>
             <ArrowRight aria-hidden="true"/>
           </span>
         </button>;

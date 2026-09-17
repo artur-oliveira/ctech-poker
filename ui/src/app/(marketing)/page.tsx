@@ -20,6 +20,7 @@ import {
   Zap
 } from 'lucide-react';
 import {startOAuthFlow} from '@/lib/auth/oauth';
+import {useOptimisticSession} from '@/lib/auth/session';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {cardPath} from '@/lib/cards';
@@ -42,22 +43,22 @@ const features = [
   {
     icon: ShieldCheck,
     title: 'Embaralhamento seguro',
-    body: 'O baralho usa um sistema que permite verificar se tudo foi justo. O histórico fica gravado para conferência.'
+    body: 'Verifique você mesmo que o baralho foi justo. Cada mão fica registrada.'
   },
   {
     icon: Users,
     title: 'Convide seus amigos',
-    body: 'Crie uma mesa privada para 2 a 9 pessoas, escolha os stakes e jogue a vontade.'
+    body: 'Crie uma mesa privada para 2 a 9 pessoas, escolha os stakes e jogue à vontade.'
   },
   {
     icon: History,
     title: 'Melhores momentos',
-    body: 'Veja cada mão novamnete, compartilhe aquela virada incrível ou aquela derrota improvável.'
+    body: 'Reveja cada mão e compartilhe aquela virada incrível ou aquela derrota improvável.'
   },
   {
     icon: Trophy,
     title: 'Sua história',
-    body: 'Estatísticas, estilo de jogo, ranking, vitórias e conquistas tornam sua experiência ainda melhor.'
+    body: 'Estatísticas, estilo de jogo, ranking e conquistas.'
   },
   {
     icon: Award,
@@ -66,7 +67,27 @@ const features = [
   }
 ];
 
+/** The landing's primary action, which is the same destination either way:
+ * a player without a session signs in on the way to the lobby, a player who
+ * already has one just goes. `.cta-swap` cross-fades the label (opacity only)
+ * on the rare correction from the optimistic state to the confirmed one. */
+function PlayCta({authed, variant}: { authed: boolean; variant?: 'default' | 'light' }) {
+  if (authed) return (
+    <Button variant={variant} size="lg" render={<Link href="/lobby"/>}>
+      <span key="authed" className="cta-swap">Voltar ao lobby</span> <ArrowRight/>
+    </Button>
+  );
+  return (
+    <Button variant={variant} size="lg" onClick={() => startOAuthFlow('/lobby')}>
+      <span key="anon" className="cta-swap">Jogar agora</span> <ArrowRight/>
+    </Button>
+  );
+}
+
 export default function Home() {
+  // Label-only: it decides what the calls to action say and where they point,
+  // never what the player is allowed to do.
+  const {authed} = useOptimisticSession();
   return <main className="landing">
     <nav className="nav shell">
       <Link href="/" className="brand">
@@ -80,7 +101,13 @@ export default function Home() {
         <Link href="/poker-rules">Regras</Link>
         <Link href="/guide">Guia</Link>
         <Link href="/leaderboard">Ranking</Link>
-        <Button variant="ghost" onClick={() => startOAuthFlow()}>Entrar</Button>
+        {authed
+          ? <Button variant="ghost" render={<Link href="/lobby"/>}>
+            <span key="authed" className="cta-swap">Lobby</span>
+          </Button>
+          : <Button variant="ghost" onClick={() => startOAuthFlow()}>
+            <span key="anon" className="cta-swap">Entrar</span>
+          </Button>}
       </div>
     </nav>
     <section className="hero shell">
@@ -95,14 +122,14 @@ export default function Home() {
           Tudo no navegador, sem instalar nada.
         </p>
         <div className="hero-actions">
-          <Button size="lg" onClick={() => startOAuthFlow('/lobby')}>Jogar agora <ArrowRight/></Button>
+          <PlayCta authed={authed}/>
           <Button variant="outline" size="lg" render={<Link href="#novidades"/>}>Conhecer recursos</Button>
         </div>
         <div className="trust">
           <span>
-            <i/> Fichas sandbox
+            <i/> Fichas grátis
           </span>
-          <span>2–9 jogadores</span>
+          <span>2 a 9 jogadores</span>
           <span>Sem download</span>
           <span>Embaralhamento justo </span>
         </div>
@@ -113,8 +140,7 @@ export default function Home() {
       <header className="landing-new-heading">
         <h2>Mais recursos para suas partidas</h2>
         <p>
-          A experiência do poker vai além da aposta: entender os adversários, interagir com os amigos em tempo real
-          e compartilhar os melhores momentos que você terá jogando o CTech Poker.
+          Entender os adversários, conversar em tempo real e compartilhar os melhores momentos.
         </p>
       </header>
 
@@ -123,9 +149,8 @@ export default function Home() {
           <MessageCircleMore aria-hidden="true"/>
           <h3>Mais formas de interagir na mesa.</h3>
           <p>
-            Reações e conversa a vontade. Aplauda as melhores mãos, ria dos piores blefes e registre notas
-            privadas sobre os adversários. Em mesas habilitadas, um all-in ainda pode ter dois desfechos com
-            <em>Run it twice</em>.
+            Aplauda as melhores mãos, ria dos piores blefes e registre notas privadas sobre os adversários.
+            Em mesas habilitadas, um all-in ainda pode ter dois desfechos com <em>Run it twice</em>.
           </p>
           <ul className="landing-feature-list">
             <li><MessageCircleMore aria-hidden="true"/> Reações ao vivo</li>
@@ -163,11 +188,11 @@ export default function Home() {
         <div>
           <h3>Volte diariamente para resgatar fichas grátis.</h3>
           <p>
-            As fichas grátis podem ser obtidas diariamente na loja.
-            Você também pode comprar fichas com Pix ou conquistá-las da forma mais interessante: Jogando
+            Resgate as fichas grátis na loja todos os dias. Também dá para comprar com Pix, ou ganhar jogando.
           </p>
         </div>
-        <Button variant="outline" onClick={() => startOAuthFlow('/store')}>
+        <Button variant="outline"
+          {...(authed ? {render: <Link href="/store"/>} : {onClick: () => startOAuthFlow('/store')})}>
           Ver fichas
           <Coins aria-hidden="true"/>
         </Button>
@@ -177,7 +202,7 @@ export default function Home() {
       <header>
         <h2>Sua melhor experiência de poker online.</h2>
         <p>
-          Entre, compartilhe seus amigos e jogue, ação rápida e transparência em cada mão
+          Ação rápida e transparência em cada mão.
         </p>
       </header>
       <div className="feature-grid">
@@ -214,7 +239,7 @@ export default function Home() {
     <section id="showcase" className="showcase shell">
       <div className="showcase-copy">
         <h2>Do lobby ao showdown, em qualquer lugar.</h2>
-        <p>O CTech poker pode ser jogado em qualquer dispositivo mantendo todas suas funcionalidades.</p>
+        <p>Jogue em qualquer dispositivo, com todos os recursos.</p>
         <Link href="/guide">Acessar o guia completo <ArrowRight/></Link>
       </div>
       <div className="showcase-frame">
@@ -238,11 +263,9 @@ export default function Home() {
     <section className="cta shell">
       <div>
         <h2>Abra sua mesa em segundos.</h2>
-        <p>Entre com sua conta CTech e jogue de graça no sandbox com seus amigos.</p>
+        <p>Entre com sua conta CTech e jogue de graça com seus amigos.</p>
       </div>
-      <Button variant="light" size="lg" onClick={() => startOAuthFlow('/lobby')}>
-        Jogar agora <ArrowRight/>
-      </Button>
+      <PlayCta authed={authed} variant="light"/>
     </section>
     <footer className="footer shell">
       <div className="brand"><span className="brand-mark"><PokerLogo/></span><span>CTech <b>Poker</b></span></div>

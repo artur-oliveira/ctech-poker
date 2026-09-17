@@ -274,7 +274,7 @@ function TableContent() {
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   const openSession = session.openSession;
   return (
-    <ChipFormatContext.Provider value={room?.currency_mode !== 'real'}>
+    <ChipFormatContext.Provider value={room?.currency_mode === 'real' ? 'money' : 'chips'}>
     <main className="game" data-table-theme={profile?.table_theme || 'classic'}>
       <h1 className="sr-only">Mesa de poker: {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
       <div className="game-chrome">

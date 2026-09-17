@@ -1,9 +1,9 @@
 'use client';
-import {Suspense, useState} from 'react';
+import {Suspense} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {Lock, Pencil, Sparkles, Swords, Trophy} from 'lucide-react';
+import {ArrowLeft, Eye, Lock, Pencil, Sparkles, Swords, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {MatchupStats} from '@/lib/api/player';
@@ -17,7 +17,6 @@ import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
 import {ProfileMilestones} from '@/components/ProfileMilestones';
-import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
 import {getRelationship} from '@/lib/api/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
 import {SOCIAL_KEYS} from '@/lib/social';
@@ -46,30 +45,60 @@ function ShowcaseError({status}: {status?: number}) {
   </div>;
 }
 
-function OwnProfilePanel() {
-  const [editorOpen, setEditorOpen] = useState(false);
-  return <ShowcaseShell>
-    <div className="lobby-empty">
-      <Sparkles aria-hidden="true"/>
-      <h1>Esta é a sua vitrine</h1>
-      <p>Este link abre o seu perfil público — o que outros jogadores veem. Edite quais conquistas
-        aparecem e se a vitrine fica visível.</p>
-      <Button type="button" onClick={() => setEditorOpen(true)}><Pencil aria-hidden="true"/> Editar minha vitrine</Button>
+/** The owner's own strip above their showcase. Outside preview it offers the
+ * two things only the owner can do; inside preview it is the only thing on
+ * screen that a visitor would not see, and it says so. */
+function OwnerBar({playerID, preview}: {playerID: string; preview: boolean}) {
+  const visitorHref = `/profile?id=${encodeURIComponent(playerID)}&preview=1`;
+  return <div className="profile-owner-bar" data-preview={preview || undefined}>
+    <p>{preview
+      ? 'Pré-visualização: é assim que um visitante vê seu perfil.'
+      : 'Esta é a sua vitrine. Só você vê esta faixa.'}</p>
+    <div className="profile-owner-bar-actions">
+      {preview
+        ? <Button variant="outline" render={<Link href={`/profile?id=${encodeURIComponent(playerID)}`}/>}>
+          <ArrowLeft aria-hidden="true"/> Sair da pré-visualização
+        </Button>
+        : <Button variant="outline" render={<Link href={visitorHref}/>}>
+          <Eye aria-hidden="true"/> Ver como visitante
+        </Button>}
+      <Button render={<Link href="/player-profile"/>}><Pencil aria-hidden="true"/> Editar perfil</Button>
     </div>
-    <ProfileShowcaseDialog open={editorOpen} onOpenChangeAction={setEditorOpen}/>
-  </ShowcaseShell>;
+  </div>;
+}
+
+/** The owner asking for a showcase the server will not serve: the only reason
+ * their own showcase 404s is that it is not public. A visitor's copy would be
+ * a lie here, so the owner gets the real cause and the way out. */
+function OwnShowcasePrivate({preview}: {preview: boolean}) {
+  return <div className="lobby-empty">
+    <Lock aria-hidden="true"/>
+    <h1>Vitrine privada</h1>
+    <p>{preview
+      ? 'Enquanto ela estiver privada, um visitante não abre este link, e é só isso que ele vê.'
+      : 'Ninguém além de você abre este link. Deixe a vitrine pública para poder compartilhá-la.'}</p>
+    <Button render={<Link href="/player-profile"/>}>Editar perfil</Button>
+  </div>;
 }
 
 function ProfileContent() {
   const params = useSearchParams();
   const playerID = params.get('id') || '';
+  // The owner's own link used to dead-end on an "esta é a sua vitrine" panel,
+  // so nobody could see what they were publishing. It now renders the real
+  // showcase, and `preview` drops the owner-only affordances so what is left
+  // on screen is exactly the visitor's view.
+  const preview = params.get('preview') === '1';
   const {authed} = useOptionalSession();
   const viewerID = getViewerId();
   const isOwnProfile = Boolean(playerID) && playerID === viewerID;
+  // Enabled for the viewer's own id too: the endpoint has no viewer check, so
+  // it answers with the same payload a visitor gets, or 404s for exactly one
+  // reason — the showcase is not public.
   const showcase = useQuery({
     queryKey: ['profile-showcase', playerID],
     queryFn: () => getProfileShowcase(playerID),
-    enabled: Boolean(playerID) && !isOwnProfile
+    enabled: Boolean(playerID)
   });
   const matchup = useQuery({
     queryKey: ['profile-matchup', playerID],
@@ -87,12 +116,9 @@ function ProfileContent() {
     enabled: authed && Boolean(playerID) && !isOwnProfile
   });
 
-  if (isOwnProfile) {
-    return <AppPage authed={authed} footer={false}><OwnProfilePanel/></AppPage>;
-  }
-
   return <AppPage authed={authed} footer={false}>
     <ShowcaseShell>
+      {isOwnProfile && <OwnerBar playerID={playerID} preview={preview}/>}
       {showcase.isLoading ?
         <>
           <h1 className="sr-only">Vitrine do jogador</h1>
@@ -103,7 +129,9 @@ function ProfileContent() {
             <Skeleton style={{height: '150px'}}/>
           </LoadingRegion>
         </> :
-        showcase.isError || !showcase.data ? <ShowcaseError status={statusOf(showcase.error)}/> : <>
+        showcase.isError || !showcase.data
+          ? isOwnProfile ? <OwnShowcasePrivate preview={preview}/> : <ShowcaseError status={statusOf(showcase.error)}/>
+          : <>
           <header>
             <PlayerAvatar className="profile-showcase-avatar" name={showcase.data.name}
                           avatarUrl={showcase.data.avatar_url} size={68}/>

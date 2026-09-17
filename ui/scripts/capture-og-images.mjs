@@ -39,7 +39,11 @@ export const GUIDE_CAPTURES = [
     {slug: 'people-live', route: '/people', ready: '.people-page'},
     {slug: 'achievements-live', route: '/achievements', ready: '.achievements-grid'},
     {slug: 'store-live', route: '/store', ready: '.store-directory'},
-    {slug: 'profile-live', route: '/lobby', ready: '.lobby', prepare: 'open-profile-menu'},
+    {slug: 'profile-live', route: '/player-profile', ready: '.player-profile'},
+    {
+        slug: 'profile-showcase', route: '/player-profile', ready: '.player-profile',
+        prepare: 'scroll-to-showcase'
+    },
     {slug: 'leaderboard-live', route: '/leaderboard', ready: '.leaderboard-podium'}
 ].map(capture => ({
     ...capture,
@@ -134,6 +138,15 @@ async function prepareCapture(send, action) {
         await evaluate(send, `document.querySelector('button[aria-label="Preferências da mesa"]')?.click()`);
         await waitFor(send, `Boolean(document.querySelector('[role="dialog"]'))`, 'the preferences dialog');
     }
+    if (action === 'scroll-to-showcase') {
+        // The showcase picker sits below the fold: the rail of achievement
+        // cards is what the guide's "Montar a vitrine" section describes.
+        await waitFor(send, `Boolean(document.querySelector('.achievement-carousel-track'))`,
+            'the featured-achievement carousel');
+        await evaluate(send,
+            `document.querySelector('.player-profile-featured')?.scrollIntoView({block: 'start'})`);
+        await delay(300);
+    }
     if (action === 'advance-replay') {
         // Park the replay mid-hand: a first frame shows an empty board and
         // tells the reader nothing about what the replayer actually does.
@@ -143,13 +156,6 @@ async function prepareCapture(send, action) {
             await evaluate(send, `document.querySelector('button[aria-label="Próxima ação"]')?.click()`);
             await delay(150);
         }
-    }
-    if (action === 'open-profile-menu') {
-        await waitFor(send, `Boolean(document.querySelector('button[aria-label="Abrir perfil"]'))`,
-            'the profile button');
-        await evaluate(send, `document.querySelector('button[aria-label="Abrir perfil"]')?.click()`);
-        await waitFor(send, `Boolean(document.querySelector('[aria-label="Perfil e preferências"]'))`,
-            'the profile menu');
     }
 }
 

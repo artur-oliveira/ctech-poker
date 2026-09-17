@@ -7,7 +7,7 @@ export const BET_INPUT_FRACTION_DIGITS = 2;
 
 export const BET_INPUT_ERRORS = {
   digits: 'Apenas números.',
-  whole: 'Fichas sandbox não têm centavos.',
+  whole: 'As fichas não têm centavos.',
   oneSeparator: 'Use apenas uma vírgula.',
   fraction: `No máximo ${BET_INPUT_FRACTION_DIGITS} casas decimais.`,
   leadingZero: 'Sem zero à esquerda.'

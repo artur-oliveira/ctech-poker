@@ -58,7 +58,7 @@ describe('CosmeticPurchaseDialog', () => {
   test('blocks the fichas option when the sandbox balance is short', () => {
     render(<CosmeticPurchaseDialog kind="deck" entry={entry} sandboxBalance={10} onCloseAction={vi.fn()}/>, {wrapper});
     expect(screen.getByRole('button', {name: /500.000 fichas/})).toBeDisabled();
-    expect(screen.getByText('Saldo sandbox insuficiente')).toBeInTheDocument();
+    expect(screen.getByText('Saldo insuficiente')).toBeInTheDocument();
   });
 
   test('starts a Pix purchase and shows the QR code with the cosmetic-only note', async () => {

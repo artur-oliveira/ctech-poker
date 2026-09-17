@@ -31,7 +31,7 @@ export function LeaveDialog({stack, pending, onRequestExitAction}: {
       <DialogHeader>
         <DialogTitle>Sair da mesa?</DialogTitle>
         <DialogDescription>Você será pago com {stack.toLocaleString('pt-BR')} fichas assim que
-          estiver livre para sair — imediatamente, ou ao fim da mão atual se ainda estiver
+          estiver livre para sair: na hora, ou ao fim da mão atual se ainda estiver
           participando dela.</DialogDescription>
       </DialogHeader>
       <DialogFooter>

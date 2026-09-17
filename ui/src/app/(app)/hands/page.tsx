@@ -87,7 +87,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
       <div className="hand-row-category">
         {category
           ? <span className="hand-category">{category}</span>
-          : <span className="hand-category is-unknown" aria-hidden="true">—</span>}
+          : <span className="hand-category is-unknown" aria-hidden="true">-</span>}
       </div>
       <div className="hand-row-result">
         <OutcomeBadge outcome={hand.outcome}/>

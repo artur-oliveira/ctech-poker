@@ -1026,8 +1026,7 @@
 .showcase-privacy-row small {
     display: block
 }
-.showcase-privacy-row small,
-.showcase-achievements > p {
+.showcase-privacy-row small {
     margin-top: 3px;
     color: var(--muted-rose);
     font-size: 11px
@@ -1049,81 +1048,6 @@
 }
 .showcase-privacy-group > .showcase-privacy-row > span {
     max-width: 44ch
-}
-.showcase-achievements {
-    display: grid;
-    margin-top: 16px;
-    border: 0
-}
-.showcase-achievements legend {
-    width: 100%;
-    font-weight: 700
-}
-.showcase-achievements legend span {
-    float: right;
-    color: var(--gold);
-    font-variant-numeric: tabular-nums
-}
-.showcase-achievements > p {
-    margin-bottom: 10px
-}
-.showcase-achievements label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 48px;
-    padding: 8px 2px;
-    border-bottom: 1px solid var(--white-08);
-    cursor: pointer
-}
-.showcase-achievements label span span,
-.showcase-achievements label small {
-    display: block
-}
-.showcase-achievements label small {
-    color: var(--muted-rose);
-    font-size: 10px
-}
-.showcase-share-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 16px
-}
-.showcase-layout-editor {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--white-13)
-}
-.showcase-layout-editor summary {
-    cursor: pointer;
-    font-weight: 700
-}
-.showcase-layout-editor[open] summary {
-    margin-bottom: 10px
-}
-.showcase-layout-editor > p:not([role]) {
-    margin: 3px 0 10px;
-    color: var(--muted-rose);
-    font-size: 11px
-}
-.showcase-layout-editor ol {
-    display: grid;
-    gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none
-}
-.showcase-layout-editor li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-height: 44px;
-    padding: 6px 10px;
-    border-radius: var(--rounded-control);
-    background: var(--surface-control)
 }
 .showcase-layout-controls {
     display: flex;
@@ -7870,28 +7794,10 @@ html:has(.has-tab-bar) {
     color: var(--paper);
     font-size: var(--font-size-body)
 }
-.profile-menu-section-heading small,
-.profile-menu-setting small {
+.profile-menu-section-heading small {
     color: var(--text-secondary);
     font-size: var(--font-size-compact);
     line-height: 1.4
-}
-.profile-menu-setting {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    margin-top: 15px
-}
-.profile-menu-setting > span {
-    display: flex;
-    flex-direction: column;
-    gap: 3px
-}
-.profile-menu-setting label,
-.profile-deck-label label {
-    color: var(--paper);
-    font-size: var(--font-size-body)
 }
 .profile-deck-setting {
     display: grid;
@@ -7899,6 +7805,19 @@ html:has(.has-tab-bar) {
     align-items: end;
     gap: 12px;
     margin-top: 14px
+}
+/* The picker arrives as its own chunk on the menu's first open; the fallback
+   holds the same grid so the rows below it never shift. */
+.profile-deck-loading > span {
+    color: var(--paper);
+    font-size: var(--font-size-body)
+}
+.profile-deck-loading > .skeleton {
+    border-radius: var(--rounded-control)
+}
+.profile-deck-label label {
+    color: var(--paper);
+    font-size: var(--font-size-body)
 }
 .profile-deck-label {
     display: flex;
@@ -8008,7 +7927,7 @@ html:has(.has-tab-bar) {
     flex-direction: column;
     padding: 8px
 }
-.profile-menu-links > button {
+.profile-menu-links > :is(button, a) {
     justify-content: flex-start;
     width: 100%;
     height: auto;
@@ -8016,23 +7935,23 @@ html:has(.has-tab-bar) {
     padding: 9px 10px;
     text-align: left
 }
-.profile-menu-links > button > svg:first-child {
+.profile-menu-links > :is(button, a) > svg:first-child {
     width: 19px;
     height: 19px;
     color: var(--brand-bright-7)
 }
-.profile-menu-links > button > svg:last-child {
+.profile-menu-links > :is(button, a) > svg:last-child {
     width: 16px;
     height: 16px;
     margin-left: auto;
     color: var(--text-secondary);
     transition: transform 180ms var(--ease-out-quart)
 }
-.profile-menu-links > button:hover > svg:last-child,
-.profile-menu-links > button:focus-visible > svg:last-child {
+.profile-menu-links > :is(button, a):hover > svg:last-child,
+.profile-menu-links > :is(button, a):focus-visible > svg:last-child {
     transform: translateX(3px)
 }
-.profile-menu-links > button > span {
+.profile-menu-links > :is(button, a) > span {
     display: flex;
     min-width: 0;
     flex-direction: column;

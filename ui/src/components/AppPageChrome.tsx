@@ -119,7 +119,7 @@ function AppTabBar({current, rewardReady}: {current?: MainRoute; rewardReady: bo
       <PopoverTrigger render={<button type="button" className={activeSecondary ? 'is-active' : undefined}
                                       aria-current={activeSecondary ? 'page' : undefined}
                                       aria-label={activeSecondary
-                                        ? `${activeSecondary.label} — abrir mais destinos`
+                                        ? `${activeSecondary.label}: abrir mais destinos`
                                         : 'Mais destinos'}/>}>
         <MoreIcon aria-hidden="true"/><span>{activeSecondary?.label ?? 'Mais'}</span>
       </PopoverTrigger>

@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'vitest';
-import {chipsExact, chipsShort, chipTier} from './chips';
+import {chipsExact, chipsShort, chipTier, moneyExact} from './chips';
 
 describe('chipsExact', () => {
   test('groups pt-BR, always in full', () => {
@@ -49,6 +49,32 @@ describe('chipsShort', () => {
 
   test('a non-finite amount falls back to the exact formatter rather than inventing a unit', () => {
     expect(chipsShort(Number.NaN)).toBe(chipsExact(Number.NaN));
+  });
+});
+
+describe('moneyExact', () => {
+  test('reads integer centavos and prints exact BRL, never abbreviated', () => {
+    expect(moneyExact(0)).toBe('R$\u00A00,00');
+    expect(moneyExact(1)).toBe('R$\u00A00,01');
+    expect(moneyExact(98_760)).toBe('R$\u00A0987,60');
+    // The figure chipsShort would have turned into "1,2M". Money never rounds.
+    expect(moneyExact(125_000_000)).toBe('R$\u00A01.250.000,00');
+  });
+
+  test('separates the prefix with U+00A0, not a space bar — assert on that or on the digits', () => {
+    const formatted = moneyExact(12_345);
+    expect(formatted).toContain('\u00A0');
+    expect(formatted).not.toContain('R$ ');
+    expect(formatted).toBe('R$\u00A0123,45');
+  });
+
+  test('a missing balance is zero, not "R$ NaN" — the field is optional on the wire', () => {
+    expect(moneyExact(undefined)).toBe('R$\u00A00,00');
+    expect(moneyExact(null)).toBe('R$\u00A00,00');
+  });
+
+  test('a negative amount keeps its sign (a debit correction, never a balance)', () => {
+    expect(moneyExact(-2_500)).toBe('-R$\u00A025,00');
   });
 });
 

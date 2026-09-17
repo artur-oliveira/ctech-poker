@@ -10,6 +10,7 @@ import {currentCosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
+import {moneyExact} from '@/lib/chips';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -18,9 +19,6 @@ const STATUS_LABEL: Record<string, string> = {
   refunded: 'Estornada', expired: 'Expirada', failed: 'Falhou'
 };
 
-function formatBRL(cents?: number) {
-  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-}
 
 interface CosmeticSectionProps {
   catalog: CosmeticCatalogEntry[];
@@ -66,7 +64,7 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
       return <li key={entry.id} className={`cosmetic-store-item${owned ? ' owned' : ''}`}>
         <span className="cosmetic-store-preview" aria-hidden="true">{renderPreview(entry.id)}</span>
         <span className="cosmetic-store-copy"><strong>{labelFor(entry.id)}</strong>
-          {entry.premium && <small>{formatBRL(entry.price_cents)} <span aria-hidden="true">·</span>
+          {entry.premium && <small>{moneyExact(entry.price_cents)} <span aria-hidden="true">·</span>
             {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small>}</span>
         {!entry.premium ? <span className="cosmetic-store-free">Grátis</span>
           : owned ? <span className="cosmetic-store-owned"><Sparkles aria-hidden="true"/> Sua</span>

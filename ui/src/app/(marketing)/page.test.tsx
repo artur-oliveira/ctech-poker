@@ -5,9 +5,13 @@ import Home from './page';
 
 const mocks = vi.hoisted(() => ({
   startOAuthFlow: vi.fn(),
+  authed: false,
 }));
 
 vi.mock('@/lib/auth/oauth', () => ({startOAuthFlow: mocks.startOAuthFlow}));
+vi.mock('@/lib/auth/session', () => ({
+  useOptimisticSession: () => ({authed: mocks.authed, checking: false}),
+}));
 vi.mock('next/image', () => ({
   default: ({src, alt}: { src: string; alt: string }) =>
     <span role="img" aria-label={alt || 'decorative image'} data-src={src}/>,
@@ -19,6 +23,7 @@ vi.mock('@/components/table/PlayingCard', () => ({
 describe('landing page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.authed = false;
   });
   
   test('renders the complete public navigation and product proposition', () => {
@@ -31,8 +36,8 @@ describe('landing page', () => {
     expect(screen.getByRole('link', {name: 'Regras'})).toHaveAttribute('href', '/poker-rules');
     expect(screen.getByRole('link', {name: 'Guia'})).toHaveAttribute('href', '/guide');
     expect(screen.getByRole('link', {name: 'Ranking'})).toHaveAttribute('href', '/leaderboard');
-    expect(screen.getByText('Fichas sandbox')).toBeInTheDocument();
-    expect(screen.getByText('2–9 jogadores')).toBeInTheDocument();
+    expect(screen.getByText('Fichas grátis')).toBeInTheDocument();
+    expect(screen.getByText('2 a 9 jogadores')).toBeInTheDocument();
   });
   
   test('starts authentication with the correct destination from every call to action', () => {
@@ -46,6 +51,29 @@ describe('landing page', () => {
     expect(mocks.startOAuthFlow).toHaveBeenNthCalledWith(1);
     expect(mocks.startOAuthFlow).toHaveBeenNthCalledWith(2, '/lobby');
     expect(mocks.startOAuthFlow).toHaveBeenNthCalledWith(3, '/lobby');
+  });
+  
+  test('sends a signed-in player straight to the lobby instead of through sign-in', () => {
+    mocks.authed = true;
+    render(<Home/>);
+    
+    // `Button render={<Link/>}` keeps the button role on a real anchor, the
+    // same shape the page's other link-buttons already have.
+    expect(screen.getByRole('button', {name: 'Lobby'})).toHaveAttribute('href', '/lobby');
+    const play = screen.getAllByRole('button', {name: /Voltar ao lobby/});
+    expect(play).toHaveLength(2);
+    play.forEach(cta => expect(cta).toHaveAttribute('href', '/lobby'));
+    expect(screen.getByRole('button', {name: /Ver fichas/})).toHaveAttribute('href', '/store');
+    
+    expect(screen.queryByRole('button', {name: 'Entrar'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Jogar agora/})).not.toBeInTheDocument();
+    expect(mocks.startOAuthFlow).not.toHaveBeenCalled();
+  });
+  
+  test('is axe-clean for a signed-in player', async () => {
+    mocks.authed = true;
+    const {container} = render(<Home/>);
+    await expectNoAxeViolations(container);
   });
   
   test('shows all feature, achievement and table preview content without API data', () => {

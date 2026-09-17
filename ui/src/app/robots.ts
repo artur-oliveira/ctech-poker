@@ -9,6 +9,7 @@ export const PRIVATE_ROUTES = [
   '/leaderboard',
   '/lobby',
   '/people',
+  '/player-profile',
   '/store',
   '/table',
   '/unavailable'

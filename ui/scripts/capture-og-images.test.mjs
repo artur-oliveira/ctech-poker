@@ -21,9 +21,16 @@ describe('capture image targets', () => {
             'achievements-live.webp',
             'store-live.webp',
             'profile-live.webp',
+            'profile-showcase.webp',
             'leaderboard-live.webp'
         ]);
         expect(GUIDE_CAPTURES.find(capture => capture.slug === 'buyin').route).not.toContain('scenario=');
+        // Profile editing is a route: the shot is the page itself, not a popover
+        // opened on top of the lobby.
+        expect(GUIDE_CAPTURES.find(capture => capture.slug === 'profile-live'))
+            .toMatchObject({route: '/player-profile', ready: '.player-profile'});
+        expect(GUIDE_CAPTURES.find(capture => capture.slug === 'profile-showcase'))
+            .toMatchObject({route: '/player-profile', prepare: 'scroll-to-showcase'});
         // Every table shot waits for the live felt; the street shots reach their
         // state through a scenario alone, while the panel shots need one click.
         expect(GUIDE_CAPTURES.filter(capture => capture.slug.startsWith('table-'))

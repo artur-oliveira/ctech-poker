@@ -129,7 +129,7 @@ function StreetProgress({stage}: { stage: string }) {
   const resolved = stage === 'showdown' || stage === 'complete';
   const position = resolved ? STREET_STAGES.length : current + 1;
   return <div className="street-progress" role="img"
-              aria-label={`${label} — etapa ${position} de ${STREET_STAGES.length}`}>
+              aria-label={`${label}, etapa ${position} de ${STREET_STAGES.length}`}>
     <div className="street-progress-pips" aria-hidden="true">
       {STREET_STAGES.map((street, index) => <span key={street}
         className={resolved || index < current ? 'is-complete' : index === current ? 'is-current' : ''}>

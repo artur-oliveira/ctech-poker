@@ -15,8 +15,7 @@ import type {PlayerNote} from '@/lib/api/playerNotes';
 import {playstyleMeta} from '@/lib/playstyle';
 import type {WinnerStanding} from '@/lib/tableOutcome';
 import {useSeatElementRef} from '@/lib/seatRects';
-import {useChipFormat} from '@/lib/chipFormat';
-import {chipsExact} from '@/lib/chips';
+import {useChipExact, useChipFormat, useChipUnit} from '@/lib/chipFormat';
 
 // chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
 // bet amounts on this same seat card), > 60% green.
@@ -309,6 +308,8 @@ function SeatImpl({
   // Publishes this element for the reaction layer, which has no ref path here.
   const seatElementRef = useSeatElementRef(seat.player_id);
   const chips = useChipFormat();
+  const exact = useChipExact();
+  const unit = useChipUnit();
   // Tapping the seat body opens the player menu on touch (the trigger button
   // stretches to cover the card — see .seat-actions-trigger in renderer.css).
   // While a reaction is being aimed, the whole seat belongs to the reaction
@@ -398,8 +399,8 @@ function SeatImpl({
       {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
       <b
         title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span
-        aria-label={`${chipsExact(displayStack)} fichas`}>{chips(displayStack)}<i
-        className="seat-stack-unit"> fichas</i></span>{showEquity && chance != null &&
+        aria-label={`${exact(displayStack)}${unit}`}>{chips(displayStack)}<i
+        className="seat-stack-unit">{unit}</i></span>{showEquity && chance != null &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>
@@ -412,17 +413,17 @@ function SeatImpl({
     </div>
     {seat.contributed > 0 && <span key={`bet-${seat.contributed}`} className="seat-bet">
         <ChipStack amount={seat.contributed} bigBlind={bigBlind}/>
-        <b aria-label={`Aposta de ${chipsExact(seat.contributed)} fichas`}>{chips(seat.contributed)}</b>
+        <b aria-label={`Aposta de ${exact(seat.contributed)}${unit}`}>{chips(seat.contributed)}</b>
       </span>}
     {isWinner && winAmount > 0 &&
         <span key={`win-${winAmount}`} className="seat-win" role="status">
           <small>{winStanding?.tied ? 'Empate' : winStanding?.place ? `${winStanding.place}º lugar` : 'Venceu'}</small>
-          <span aria-label={`Ganhou ${chipsExact(winAmount)} fichas`}>+{chips(winAmount)}</span>
+          <span aria-label={`Ganhou ${exact(winAmount)}${unit}`}>+{chips(winAmount)}</span>
         </span>
     }
     {refundAmount > 0 &&
         <span key={`refund-${refundAmount}`} className="seat-refund"
-              aria-label={`Devolvido ${chipsExact(refundAmount)} fichas`}>
+              aria-label={`Devolvido ${exact(refundAmount)}${unit}`}>
           ↩ {chips(refundAmount)}
         </span>
     }</div>;

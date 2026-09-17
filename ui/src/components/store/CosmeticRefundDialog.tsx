@@ -10,6 +10,7 @@ import type {CosmeticKind, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
+import {moneyExact} from '@/lib/chips';
 
 function labelFor(kind: CosmeticKind, itemId: string) {
   return kind === 'deck' ? DECK_VARIANTS[itemId as DeckVariantId]?.label : TABLE_THEMES[itemId as TableThemeId]?.label;
@@ -24,7 +25,7 @@ function CosmeticPreview({kind, itemId}: { kind: CosmeticKind; itemId: string })
 
 function valueLabel(purchase: CosmeticPurchase) {
   return purchase.method === 'pix'
-    ? ((purchase.price_cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
+    ? moneyExact(purchase.price_cents)
     : `${(purchase.price_fichas ?? 0).toLocaleString('pt-BR')} fichas`;
 }
 
@@ -69,7 +70,7 @@ export function CosmeticRefundDialog({kind, purchase, finalFocusRef, onCloseActi
         <dl className="reaction-refund-summary">
           <div><dt>Item</dt><dd><CosmeticPreview kind={kind} itemId={purchase.item_id}/> {label}</dd></div>
           <div><dt>Valor devolvido</dt><dd>{valueLabel(purchase)}</dd></div>
-          <div><dt>Destino</dt><dd>{purchase.method === 'pix' ? 'Mesma compra Pix' : 'Saldo de fichas sandbox'}</dd></div>
+          <div><dt>Destino</dt><dd>{purchase.method === 'pix' ? 'Mesma compra Pix' : 'Saldo de fichas'}</dd></div>
         </dl>
         <p className="reaction-refund-rule"><CircleAlert aria-hidden="true"/>
           Depois de selecionado pela primeira vez, o item continua seu para sempre, mas perde a elegibilidade de estorno.</p>

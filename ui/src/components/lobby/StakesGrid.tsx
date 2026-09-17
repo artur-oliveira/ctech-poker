@@ -111,21 +111,21 @@ export function StakesGrid() {
           const waiting = joiningKey !== null && !isJoining;
           return <Button variant="ghost" key={key} className="room-card h-auto"
                          loading={isJoining} aria-disabled={waiting || undefined}
-                         aria-label={`${displayName}, até ${maxSeats} jogadores — ${
+                         aria-label={`${displayName}, até ${maxSeats} jogadores · ${
                            isJoining ? (active > 0 ? 'entrando…' : 'criando mesa…')
                              : waiting ? 'aguarde, outra mesa está sendo aberta' : actionLabel}`}
                          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
                          onClick={() => pickBucket(selectedStake.small_blind, selectedStake.big_blind, maxSeats)}>
             {active > 0 && <span className="status-dot"/>}
             <div>
-              <small>MESA SANDBOX</small>
+              <small>MESA</small>
               <b className="room-card-name">{displayName}</b>
               <span>
                 <Users/>
                 {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}` : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores
               </span>
               <span className="room-card-buy-in">
-                Entrada sandbox: {buyInMin.toLocaleString('pt-BR')}–{buyInMax.toLocaleString('pt-BR')} fichas ({BUY_IN_MIN_BB}–{BUY_IN_MAX_BB} BB)
+                Entrada: {buyInMin.toLocaleString('pt-BR')} a {buyInMax.toLocaleString('pt-BR')} fichas ({BUY_IN_MIN_BB}-{BUY_IN_MAX_BB} BB)
               </span>
               <span className="room-card-buy-in-hint">Buy-in é a quantidade de fichas que você leva para a mesa.</span>
               <strong className="room-card-action">

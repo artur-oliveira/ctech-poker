@@ -19,7 +19,7 @@ export function ExitStatus({pendingExit, isViewerTurn, onCancelAction}: {
   return <aside className="exit-status" data-urgent={isViewerTurn || undefined} role="status" aria-live="polite">
     <DoorOpen aria-hidden="true"/>
     <span className="exit-status-label">
-      {isViewerTurn ? 'Saindo — última jogada em andamento' : 'Saindo assim que a mão terminar'}
+      {isViewerTurn ? 'Saindo: última jogada em andamento' : 'Saindo assim que a mão terminar'}
     </span>
     {!isViewerTurn && <Button type="button" variant="ghost" size="sm" onClick={onCancelAction}>
       Cancelar saída

@@ -150,7 +150,7 @@ describe('useLobbyRealtime', () => {
   test('turns payment and system messages into localized notifications', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'payment_received', amount: 12345}));
-    expect(state.notify).toHaveBeenCalledWith('Pagamento recebido: R$ 123,45', 'info');
+    expect(state.notify).toHaveBeenCalledWith('Pagamento recebido: R$\u00A0123,45', 'info');
     
     act(() => state.options?.onMessage({type: 'system_broadcast', text: 'Manutenção em breve'}));
     expect(state.notify).toHaveBeenCalledWith('Manutenção em breve', 'info');
@@ -281,7 +281,7 @@ describe('useLobbyRealtime', () => {
   test('falls back to zero for a payment with no amount and an empty broadcast', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'payment_received'}));
-    expect(state.notify).toHaveBeenCalledWith('Pagamento recebido: R$ 0,00', 'info');
+    expect(state.notify).toHaveBeenCalledWith('Pagamento recebido: R$\u00A00,00', 'info');
 
     act(() => state.options?.onMessage({type: 'system_broadcast'}));
     expect(state.notify).toHaveBeenCalledWith('', 'info');

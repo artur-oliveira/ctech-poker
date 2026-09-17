@@ -9,6 +9,6 @@ export function PeopleNavBadge() {
   if (count <= 0) return null;
   return <>
     <span className="app-nav-people-badge" aria-hidden="true">{count > 9 ? '9+' : count}</span>
-    <span className="sr-only"> — {count} {count === 1 ? 'novidade' : 'novidades'} em Pessoas</span>
+    <span className="sr-only">, {count} {count === 1 ? 'novidade' : 'novidades'} em Pessoas</span>
   </>;
 }

@@ -9,14 +9,14 @@ export function CurrencyModeTabs({mode, onChangeAction}: {
   onChangeAction: (mode: WalletMode) => void;
 }) {
   const modes = [
-    {value: 'sandbox', label: 'Sandbox'},
+    {value: 'sandbox', label: 'Fichas'},
     {
       value: 'real',
       label: REAL_MONEY_UI_ENABLED ? 'Dinheiro real' : 'Dinheiro real · Indisponível',
       disabled: !REAL_MONEY_UI_ENABLED,
-      title: REAL_MONEY_UI_ENABLED ? undefined : 'Este modo ainda não está disponível.'
+      title: REAL_MONEY_UI_ENABLED ? undefined : 'Ainda não disponível.'
     }
   ] as const;
 
-  return <FilterGroup label="Modo das estatísticas" value={mode} options={modes} onChangeAction={onChangeAction}/>;
+  return <FilterGroup label="Carteira" value={mode} options={modes} onChangeAction={onChangeAction}/>;
 }

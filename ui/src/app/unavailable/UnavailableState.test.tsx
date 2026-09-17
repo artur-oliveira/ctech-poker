@@ -36,7 +36,7 @@ describe('UnavailableState', () => {
 
     expect(screen.getByText('Verificando se o serviço já voltou…')).toBeInTheDocument();
     const detail = await screen.findByText(/Ainda fora do ar/);
-    expect(detail).toHaveTextContent(/última verificação às \d{2}:\d{2}:\d{2}/);
+    expect(detail).toHaveTextContent(/Última verificação às \d{2}:\d{2}:\d{2}/);
     expect(detail).toHaveTextContent('nova tentativa automática em 60s');
     expect(detail).toHaveAttribute('role', 'status');
     expect(mocks.replace).not.toHaveBeenCalled();

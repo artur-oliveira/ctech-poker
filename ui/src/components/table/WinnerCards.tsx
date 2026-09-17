@@ -3,6 +3,7 @@
 import {Check, Eye, Hourglass, X} from 'lucide-react';
 import type {TableSnapshot} from '@/lib/api/table';
 import {useCountdownMs} from '@/components/store/useCountdown';
+import {useChipExact, useChipUnit} from '@/lib/chipFormat';
 
 // Paying no longer buys the cards outright — it buys a request the winner has
 // to accept, because those cards belong to them and not to the deck
@@ -18,6 +19,8 @@ export function WinnerCards({snapshot, viewer, bigBlind, pending, onRequestWinne
   onAnswerWinnerCardsAction?: (accept: boolean) => void;
   offerBlocked?: boolean;
 }) {
+  const exact = useChipExact();
+  const unit = useChipUnit();
   const request = snapshot.pending_winner_cards;
   // The server only sends the request to the two players it concerns, so its
   // mere presence is the authorization to render either half of the exchange.
@@ -26,8 +29,8 @@ export function WinnerCards({snapshot, viewer, bigBlind, pending, onRequestWinne
 
   if (request && request.winner_id === viewer) {
     return <aside className="winner-cards winner-cards-prompt" aria-live="assertive">
-      <p><b>{`${request.requester_name || 'Um jogador'} quer pagar ${request.fee.toLocaleString('pt-BR')} fichas para ver sua mão.`}</b>
-        <small>{`Você recebe metade. ${seconds}s para responder — sem resposta, a cobrança é devolvida.`}</small></p>
+      <p><b>{`${request.requester_name || 'Um jogador'} quer pagar ${exact(request.fee)}${unit} para ver sua mão.`}</b>
+        <small>{`Você recebe metade. ${seconds}s para responder. Sem resposta, a cobrança é devolvida.`}</small></p>
       <div className="winner-cards-answers">
         <button type="button" disabled={pending} onClick={() => onAnswerWinnerCardsAction?.(false)}>
           <X aria-hidden="true"/> Recusar
@@ -44,7 +47,7 @@ export function WinnerCards({snapshot, viewer, bigBlind, pending, onRequestWinne
     return <aside className="winner-cards" aria-live="polite">
       <p className="winner-cards-waiting"><Hourglass aria-hidden="true"/>
         <span><b>Aguardando resposta…</b>
-          <small>{`${seconds}s. Se recusar ou não responder, suas ${request.fee.toLocaleString('pt-BR')} fichas voltam.`}</small></span>
+          <small>{`${seconds}s. Se recusar ou não responder, a cobrança de ${exact(request.fee)}${unit} volta para você.`}</small></span>
       </p>
     </aside>;
   }
@@ -60,8 +63,8 @@ export function WinnerCards({snapshot, viewer, bigBlind, pending, onRequestWinne
   return <aside className="winner-cards" aria-live="polite">
     <button type="button" disabled={pending} onClick={onRequestWinnerCardsAction}>
       <Eye aria-hidden="true"/>
-      <span><b>{`Pedir a mão de ${winnerName} por ${bigBlind.toLocaleString('pt-BR')} fichas`}</b>
-        <small>{`${winnerName} decide se mostra; se recusar, você recebe as fichas de volta`}</small></span>
+      <span><b>{`Pedir a mão de ${winnerName} por ${exact(bigBlind)}${unit}`}</b>
+        <small>{`${winnerName} decide se mostra; se recusar, a cobrança é devolvida`}</small></span>
     </button>
   </aside>;
 }

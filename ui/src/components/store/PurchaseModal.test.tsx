@@ -46,12 +46,12 @@ describe('PurchaseModal', () => {
   test('celebrates a confirmed payment with the credited amount', () => {
     renderModal(purchase({status: 'confirmed', total_credits: 12_000}));
     expect(screen.getByText('Fichas adicionadas')).toBeInTheDocument();
-    expect(screen.getByText('12.000 fichas sandbox já estão no seu saldo.')).toBeInTheDocument();
+    expect(screen.getByText('12.000 fichas já estão no seu saldo.')).toBeInTheDocument();
   });
 
   test('confirms without an amount when the server did not publish one', () => {
     renderModal(purchase({status: 'confirmed'}));
-    expect(screen.getByText('Suas fichas sandbox já estão no saldo.')).toBeInTheDocument();
+    expect(screen.getByText('Suas fichas já estão no saldo.')).toBeInTheDocument();
   });
 
   test.each([

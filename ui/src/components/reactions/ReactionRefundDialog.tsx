@@ -8,10 +8,11 @@ import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ApiError} from '@/lib/api/client';
 import type {ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
+import {moneyExact} from '@/lib/chips';
 
 function valueLabel(purchase: ReactionPurchase) {
   return purchase.method === 'pix'
-    ? ((purchase.price_cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
+    ? moneyExact(purchase.price_cents)
     : `${(purchase.price_fichas ?? 0).toLocaleString('pt-BR')} fichas`;
 }
 
@@ -55,7 +56,7 @@ export function ReactionRefundDialog({purchase, finalFocusRef, onCloseAction, on
         <dl className="reaction-refund-summary">
           <div><dt>Reação</dt><dd>{definition?.glyph && <EmojiGlyph glyph={definition.glyph}/>} {definition?.label}</dd></div>
           <div><dt>Valor devolvido</dt><dd>{valueLabel(purchase)}</dd></div>
-          <div><dt>Destino</dt><dd>{purchase.method === 'pix' ? 'Mesma compra Pix' : 'Saldo de fichas sandbox'}</dd></div>
+          <div><dt>Destino</dt><dd>{purchase.method === 'pix' ? 'Mesma compra Pix' : 'Saldo de fichas'}</dd></div>
         </dl>
         <p className="reaction-refund-rule"><CircleAlert aria-hidden="true"/>
           Depois do primeiro envio, a reação continua sua para sempre, mas perde a elegibilidade de estorno.</p>

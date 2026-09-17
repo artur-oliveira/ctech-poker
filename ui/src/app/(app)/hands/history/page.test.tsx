@@ -142,7 +142,7 @@ describe('hand detail page', () => {
     expect(screen.getByText('outcome:won')).toBeInTheDocument();
     expect(screen.getByText('Resultado líquido')).toBeInTheDocument();
     expect(screen.getByText('+500 fichas')).toBeInTheDocument();
-    expect(screen.getByText('Sandbox')).toBeInTheDocument();
+    expect(screen.getByText('Fichas')).toBeInTheDocument();
     expect(screen.getAllByText('Royal flush').length).toBeGreaterThan(0);
     expect(screen.getByText('Cartas não reveladas')).toBeInTheDocument();
     expect(screen.getByTestId('timeline')).toHaveTextContent('1:Você|2:Bia');
@@ -171,7 +171,7 @@ describe('hand detail page', () => {
   test('does not honor a real-money URL while the UI capability is disabled', () => {
     mocks.params.set('mode', 'real');
     render(<HandHistoryPage/>);
-    expect(screen.getByText('Sandbox')).toBeInTheDocument();
+    expect(screen.getByText('Fichas')).toBeInTheDocument();
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({queryKey: ['hand', 'sandbox', 'hand one']}));
   });
   

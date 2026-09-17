@@ -53,7 +53,7 @@ describe('TodayHighlight', () => {
       revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Alice — Par')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alice · Par')).toBeInTheDocument());
     expect(screen.queryByText(/AhKd/)).not.toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe('TodayHighlight', () => {
       revealed: [{player_id: 'p1', hole_cards: ['2c', '7s']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Jogador — Dois pares')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Jogador · Dois pares')).toBeInTheDocument());
   });
 
   test('joins tied winners and names their shared made hand', async () => {
@@ -74,7 +74,7 @@ describe('TodayHighlight', () => {
       ],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Alice e Bia — Sequência')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alice e Bia · Sequência')).toBeInTheDocument());
   });
 
   test('selects a later revealed player when their hand beats the first candidate', async () => {
@@ -85,7 +85,7 @@ describe('TodayHighlight', () => {
       ],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Bia — Trinca')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Bia · Trinca')).toBeInTheDocument());
     expect(screen.queryByText(/Alice/)).not.toBeInTheDocument();
   });
 
@@ -123,7 +123,7 @@ describe('TodayHighlight', () => {
       revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Alice — Par')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alice · Par')).toBeInTheDocument());
   });
 
   test('names the paid winner, not the best hand shown, on a side pot', async () => {
@@ -156,7 +156,7 @@ describe('TodayHighlight', () => {
       revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Alice — Par')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alice · Par')).toBeInTheDocument());
   });
 
   test('is collapsed by default and expands on click (mobile\'s icon-only badge)', async () => {

@@ -559,6 +559,27 @@ h1 em {
     gap: 12px;
     margin-top: 34px
 }
+/* The landing's calls to action read their label from an optimistic session
+   guess and correct it when the silent refresh lands. The correction is a
+   cross-fade on opacity alone — no layout property animates, and the label's
+   resting state is the stylesheet's, so a browser that never advances the
+   animation still shows it (Safari holds pending animations at time 0). */
+.cta-swap {
+    animation: cta-swap 200ms var(--ease-out-quart)
+}
+@keyframes cta-swap {
+    from {
+        opacity: .25
+    }
+    to {
+        opacity: 1
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cta-swap {
+        animation: none
+    }
+}
 .trust {
     display: flex;
     gap: 22px;

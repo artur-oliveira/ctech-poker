@@ -23,6 +23,7 @@ import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
 import {buyInRange} from '@/lib/pokerRules';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
+import {chipsExact, moneyExact} from '@/lib/chips';
 
 const MAX_SEATS_OPTIONS = [6, 9] as const;
 
@@ -36,8 +37,7 @@ type Values = z.infer<typeof schema>
 
 /** Sandbox stakes are plain chip counts; real stakes are BRL cents (stakes.go: realPublicStakes). */
 function formatStake(value: number, mode: 'sandbox' | 'real') {
-  return mode === 'real' ? (value / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
-    : value.toLocaleString('pt-BR');
+  return mode === 'real' ? moneyExact(value) : chipsExact(value);
 }
 
 /** ARIA APG radiogroup pattern: arrow keys move the roving tab stop between options. */
@@ -102,7 +102,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
       <DialogHeader><p className="font-mono text-xs tracking-widest text-(--brand-bright)">MESA PRIVADA</p><DialogTitle>Configure
         sua mesa</DialogTitle><DialogDescription>Convide amigos por link. {currencyMode === 'real'
         ? 'Os valores abaixo são em dinheiro real, debitados da sua carteira ctech-wallet.'
-        : 'Os valores abaixo são fichas virtuais do sandbox.'}</DialogDescription></DialogHeader>
+        : 'Os valores abaixo são em fichas.'}</DialogDescription></DialogHeader>
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
         {REAL_MONEY_UI_ENABLED && realStakes.length > 0 &&
             <div className="space-y-2"><Label id="currency-label">Modo</Label><Controller control={form.control}
@@ -125,13 +125,13 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
                                                                                                       onKeyDown={e => radioGroupKeyDown(e, index, 2, next => {
                                                                                                         field.onChange((['sandbox', 'real'] as const)[next]);
                                                                                                         form.setValue('stakeIndex', 0);
-                                                                                                      })}>{option === 'real' ? 'Dinheiro real' : 'Sandbox'}</button>)}
+                                                                                                      })}>{option === 'real' ? 'Dinheiro real' : 'Fichas'}</button>)}
                                                                                           </div>}/></div>}
         {currencyMode === 'real' &&
             <p className="form-error" role="alert">Dinheiro real exige ativação de apostas na sua carteira
                 ctech-wallet. Jogue com responsabilidade.</p>}
         <div className="space-y-2"><Label
-          id="stake-label">Stakes {currencyMode === 'real' ? 'em dinheiro real' : 'sandbox'}</Label><Controller
+          id="stake-label">Stakes {currencyMode === 'real' ? 'em dinheiro real' : 'em fichas'}</Label><Controller
           control={form.control}
           name="stakeIndex"
           render={({field}) => <div

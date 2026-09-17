@@ -17,9 +17,9 @@ const mono = IBM_Plex_Mono({subsets: ['latin'], weight: ['400', '600', '700'], v
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {default: 'CTech Poker · a mesa está pronta', template: '%s · CTech Poker'},
-  description: 'Texas Hold’em prático, social e responsivo no navegador. Jogue em mesas sandbox de 2 a 9 jogadores com provably fair, ranking e conquistas com seus amigos.',
+  description: 'Texas Hold’em prático, social e responsivo no navegador. Jogue em mesas de 2 a 9 jogadores com provably fair, ranking e conquistas com seus amigos.',
   applicationName: 'CTech Poker',
-  keywords: ['poker online', 'Texas Hold’em', 'poker com amigos', 'CTech Poker', 'poker sandbox'],
+  keywords: ['poker online', 'Texas Hold’em', 'poker com amigos', 'CTech Poker', 'poker no navegador'],
   alternates: {canonical: '/'},
   icons: {
     icon: [

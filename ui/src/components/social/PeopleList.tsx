@@ -59,7 +59,7 @@ export function PeopleList({
   </div>;
 
   return <div className="people-list-shell">
-    {isStale && <p className="people-stale" role="status">Sem conexão agora — mostrando a última lista carregada.</p>}
+    {isStale && <p className="people-stale" role="status">Sem conexão agora. Mostrando a última lista carregada.</p>}
     <ul className="people-list">
       {items.map(player => {
         const busy = actions.pending?.id === player.player_id;

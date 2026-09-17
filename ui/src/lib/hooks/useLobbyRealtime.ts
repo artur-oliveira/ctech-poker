@@ -17,6 +17,7 @@ import {COSMETIC_PURCHASE_QUERY_ROOT} from '@/lib/api/cosmeticPurchases';
 import {ROOM_BUCKETS_QUERY_KEY} from '@/lib/lobbyBuckets';
 import {checkApiLiveness} from '@/lib/network/liveness';
 import {useApiLiveness} from '@/lib/network/NetworkProvider';
+import {moneyExact} from '@/lib/chips';
 
 interface LobbyMessage {
   type: string;
@@ -113,7 +114,7 @@ export function useLobbyRealtime() {
       void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
       void queryClient.invalidateQueries({queryKey: ['player', 'me']});
       const statusLabel: Record<string, string> = {
-        confirmed: 'Compra confirmada — créditos adicionados!',
+        confirmed: 'Compra confirmada, créditos adicionados!',
         refunded: 'Compra estornada.',
         expired: 'Compra expirou sem pagamento.',
         failed: 'Falha na compra.',
@@ -184,7 +185,7 @@ export function useLobbyRealtime() {
       queryClient.setQueryData(SOCIAL_KEYS.summary, {unread_count: message.unread_count});
     } else if (message.type === 'payment_received') {
       const amount = message.amount || 0;
-      pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'info');
+      pushNotification(`Pagamento recebido: ${moneyExact(amount)}`, 'info');
     } else if (message.type === 'system_broadcast') {
       pushNotification(message.text || '', 'info');
     }
