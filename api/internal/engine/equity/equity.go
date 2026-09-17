@@ -4,7 +4,6 @@ package equity
 import (
 	"container/list"
 	"fmt"
-	"math/rand/v2"
 	"sort"
 	"sync"
 
@@ -185,6 +184,48 @@ func EstimateWithStats(hole [2]deck.Card, board, deadCards []deck.Card, numOppon
 	return EstimateForTableWithStats("", hole, board, deadCards, numOpponents, iterations)
 }
 
+// seedFor derives the Monte-Carlo seed from the spot itself instead of the
+// process's RNG. Any API instance may serve any table and several of them
+// broadcast the same versioned snapshot to the same client, so a per-process
+// sample meant the same seat's win-% arrived as two different numbers and
+// visibly flipped. Deriving it here makes the estimate a pure function of its
+// inputs, which is also what the result cache above has always assumed.
+// tableID is deliberately NOT part of it: the estimate is table-independent,
+// tableID only scopes cache eviction.
+// See docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md.
+func seedFor(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) uint64 {
+	const (
+		offset64 uint64 = 14695981039346656037
+		prime64  uint64 = 1099511628211
+	)
+	h := offset64
+	mix := func(v uint64) {
+		for i := 0; i < 8; i++ {
+			h ^= (v >> (i * 8)) & 0xff
+			h *= prime64
+		}
+	}
+	mixSorted := func(cards []deck.Card) {
+		ids := make([]uint8, 0, len(cards))
+		for _, c := range cards {
+			ids = append(ids, handeval.CardID(c))
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		for _, id := range ids {
+			mix(uint64(id))
+		}
+	}
+	mixSorted(hole[:])
+	mixSorted(board)
+	mixSorted(deadCards)
+	mix(uint64(numOpponents))
+	mix(uint64(iterations))
+	if h == 0 {
+		return 0x853c49e6748fea9b
+	}
+	return h
+}
+
 // EstimateForTableWithStats scopes cached results to the actor that requested
 // them. The equity value itself is table-independent, but carrying tableID in
 // the key lets actor teardown promptly release everything that table retained.
@@ -224,7 +265,7 @@ func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCar
 		baseBoardState.AddCard(c)
 	}
 
-	rng := rng64{state: rand.Uint64()}
+	rng := rng64{state: seedFor(hole, board, deadCards, numOpponents, iterations)}
 
 	var cards [52]uint8
 	copy(cards[:poolLen], pool[:poolLen])

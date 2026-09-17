@@ -109,3 +109,56 @@ func BenchmarkEstimateProduction(b *testing.B) {
 		}
 	}
 }
+
+// Two API instances estimating the same spot must answer the same number.
+// The sample used to be seeded from rand.Uint64(), so each process produced a
+// different value for one identical (hole, board, opponents) — and because
+// several instances broadcast the same snapshot_version to the same client,
+// the seat's win-% visibly flipped between them (0.25, 0.19, 0.25, ...).
+// See docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md.
+func TestEstimateIsIdenticalAcrossProcesses(t *testing.T) {
+	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Hearts}, {Rank: deck.Queen, Suit: deck.Diamonds}}
+	board := []deck.Card{
+		{Rank: deck.Ace, Suit: deck.Spades},
+		{Rank: deck.Three, Suit: deck.Spades},
+		{Rank: deck.Two, Suit: deck.Spades},
+	}
+
+	// Distinct tableIDs so the process-global result cache cannot be what
+	// makes the two answers agree.
+	first, _, err := EstimateForTableWithStats("instance-a", hole, board, nil, 2, 200)
+	if err != nil {
+		t.Fatalf("estimate a: %v", err)
+	}
+	second, _, err := EstimateForTableWithStats("instance-b", hole, board, nil, 2, 200)
+	if err != nil {
+		t.Fatalf("estimate b: %v", err)
+	}
+	if first != second {
+		t.Fatalf("same spot estimated as %v and %v across instances", first, second)
+	}
+}
+
+// Different spots must not collapse onto one seed and one answer.
+func TestEstimateStillDiscriminatesBetweenSpots(t *testing.T) {
+	board := []deck.Card{
+		{Rank: deck.Ace, Suit: deck.Spades},
+		{Rank: deck.Three, Suit: deck.Spades},
+		{Rank: deck.Two, Suit: deck.Spades},
+	}
+	strong, err := Estimate([2]deck.Card{
+		{Rank: deck.Ace, Suit: deck.Hearts}, {Rank: deck.Ace, Suit: deck.Diamonds},
+	}, board, nil, 2, 2000)
+	if err != nil {
+		t.Fatalf("strong: %v", err)
+	}
+	weak, err := Estimate([2]deck.Card{
+		{Rank: deck.Seven, Suit: deck.Hearts}, {Rank: deck.Two, Suit: deck.Diamonds},
+	}, board, nil, 2, 2000)
+	if err != nil {
+		t.Fatalf("weak: %v", err)
+	}
+	if strong <= weak {
+		t.Fatalf("AA (%v) must beat 72o (%v) on this board", strong, weak)
+	}
+}
