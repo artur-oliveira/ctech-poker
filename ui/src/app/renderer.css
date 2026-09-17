@@ -7670,9 +7670,24 @@ html:has(.has-tab-bar) {
     border-radius: 50%;
     padding: 0
 }
-.profile-avatar-camera svg {
+.profile-avatar-camera svg,
+.profile-avatar-remove svg {
     width: 14px;
     height: 14px
+}
+.profile-avatar-remove.profile-avatar-remove {
+    align-self: start;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    margin: -4px -6px 0 0;
+    padding: 0;
+    color: var(--text-secondary)
+}
+.profile-avatar-remove:hover,
+.profile-avatar-remove:focus-visible {
+    color: var(--brand-bright-7)
 }
 .profile-menu-identity-copy {
     display: flex;
@@ -7684,6 +7699,60 @@ html:has(.has-tab-bar) {
 .profile-menu-identity-copy > small {
     color: var(--text-secondary);
     font-size: var(--font-size-compact)
+}
+.profile-menu .profile-name-display {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    gap: 7px;
+    padding: 0;
+    background: transparent;
+    color: var(--paper);
+    font-size: var(--font-size-subtitle);
+    line-height: 1.15
+}
+.profile-menu .profile-name-display span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+.profile-menu .profile-name-display svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    color: var(--text-secondary);
+    opacity: 0;
+    transform: translateX(-3px);
+    transition: opacity 180ms var(--ease-out-quart), transform 180ms var(--ease-out-quart), color 180ms var(--ease-out-quart)
+}
+.profile-menu .profile-name-display:hover,
+.profile-menu .profile-name-display:focus-visible {
+    background: transparent
+}
+.profile-menu .profile-name-display:hover svg,
+.profile-menu .profile-name-display:focus-visible svg {
+    color: var(--brand-bright-7);
+    opacity: 1;
+    transform: translateX(0)
+}
+.profile-name-edit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px 34px;
+    gap: 4px;
+    width: 100%
+}
+.profile-name-edit input {
+    min-width: 0;
+    height: 34px;
+    padding-inline: 9px
+}
+.profile-name-edit button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0
 }
 .profile-visibility {
     display: inline-flex;
@@ -7698,20 +7767,53 @@ html:has(.has-tab-bar) {
     border-radius: 50%;
     background: var(--success)
 }
+.profile-menu-section {
+    padding: 16px 18px 18px;
+    border-top: 1px solid var(--control-border)
+}
+.profile-menu-section-heading > div,
 .profile-wallet-heading {
     display: flex;
     align-items: center;
     gap: 9px
 }
+.profile-menu-section-heading > div > svg,
 .profile-wallet-heading > svg {
     width: 17px;
     height: 17px;
     flex: none;
     color: var(--gold)
 }
+.profile-menu-section-heading span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px
+}
+.profile-menu-section-heading b,
 .profile-wallet-heading b {
     color: var(--paper);
     font-size: var(--font-size-body)
+}
+.profile-menu-section-heading small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    line-height: 1.4
+}
+.profile-deck-setting {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px;
+    align-items: end;
+    gap: 12px;
+    margin-top: 14px
+}
+/* The picker arrives as its own chunk on the menu's first open; the fallback
+   holds the same grid so the rows below it never shift. */
+.profile-deck-loading > span {
+    color: var(--paper);
+    font-size: var(--font-size-body)
+}
+.profile-deck-loading > .skeleton {
+    border-radius: var(--rounded-control)
 }
 .profile-deck-label label {
     color: var(--paper);
@@ -7744,6 +7846,9 @@ html:has(.has-tab-bar) {
 .profile-deck-preview img:nth-child(2) { --card-index: 1 }
 .profile-deck-preview img:nth-child(3) { --card-index: 2 }
 .profile-deck-preview img:nth-child(4) { --card-index: 3 }
+.profile-deck-setting [data-slot='select-trigger'] {
+    width: 100%
+}
 .profile-deck-options.profile-deck-options {
     width: min(230px, calc(100vw - 24px));
     min-width: 0
@@ -7875,6 +7980,7 @@ html:has(.has-tab-bar) {
         width: calc(100vw - 16px)
     }
 .profile-menu-identity,
+    .profile-menu-section,
     .profile-wallet {
         padding-inline: 14px
     }

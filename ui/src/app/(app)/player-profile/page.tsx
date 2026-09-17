@@ -9,6 +9,7 @@ import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import {chipsExact, moneyExact} from '@/lib/chips';
 import {getMe, type PlayerProfile} from '@/lib/api/player';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
+import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
 import {IdentitySection} from './IdentitySection';
 import {ShowcaseSection} from './ShowcaseSection';
 import {TableSection} from './TableSection';
@@ -34,11 +35,16 @@ function BalancesSection({me}: {me: PlayerProfile}) {
  * The player's own profile, as a route rather than a popover and a dialog.
  * Name, photo, cosmetics and the whole public showcase used to be split across
  * a 360px menu and a 448px modal, which is what made each of them terse; here
- * they are one page with room to explain itself, and the menu keeps only the
- * shortcuts.
+ * they are one page with room to explain itself.
+ *
+ * This route is a superset of the header popover, not its replacement: name,
+ * photo and deck are quick enough to belong in both, and both render the same
+ * implementation of each (`useProfileEdits`, `ProfilePhotoEditor`,
+ * `DeckPicker`). What only exists here is what a 360px panel could never hold
+ * well: the showcase, the wallet mode, and the room to explain a field.
  */
 export default function PlayerProfilePage() {
-  const {data: me, isLoading} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
+  const {data: me, isLoading} = useQuery({queryKey: PLAYER_ME_KEY, queryFn: getMe});
 
   return <TermsGate>
     <AppPage authed>

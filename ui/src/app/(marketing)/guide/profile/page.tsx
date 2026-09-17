@@ -13,22 +13,24 @@ export default function ProfileGuide() {
           src: '/guide/profile-live.webp',
           alt: 'Página Seu perfil com a seção Identidade e, abaixo, os controles de privacidade de Sua vitrine'
         },
-        body: <><p>Toque no seu avatar, no topo, e escolha <b>Editar perfil</b>. Tudo que é seu fica nessa página, em quatro seções.</p>
+        body: <><p>Há dois caminhos, e eles combinam. Toque no seu avatar, no topo: o menu resolve na hora o que é rápido, ou seja, trocar o nome, trocar a foto e escolher o baralho. Ele também mostra se a sua vitrine está pública ou privada, os seus saldos, e leva à Loja, a <b>Seu jogo</b> e a <b>Sair da conta</b>.</p>
+          <p>No mesmo menu, <b>Editar perfil</b> abre a página <b>Seu perfil</b>, que tem tudo isso e mais, em quatro seções.</p>
           <GuideBullets><li><span><b>Identidade:</b> nome de exibição e foto.</span></li>
             <li><span><b>Sua vitrine:</b> privacidade, conquistas em destaque e ordem das seções.</span></li>
-            <li><span><b>Sua mesa:</b> o baralho que você vê.</span></li>
+            <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo.</span></li>
             <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li></GuideBullets>
-          <p>O avatar no topo continua sendo um atalho: ele mostra o seu nome, se a vitrine está pública ou privada, os saldos, e leva à Loja, a <b>Seu jogo</b> e a <b>Sair da conta</b>. Ele não edita nada.</p></>
+          <p>Nome, foto e baralho aparecem nos dois lugares de propósito: é o mesmo controle, salvando no mesmo lugar. Alterou num, o outro já mostra o valor novo.</p></>
       },
       {
         id: 'identidade', title: 'Nome e foto', summary: 'É assim que a mesa, a vitrine e o ranking chamam você.',
-        body: <><GuideSteps><li><span>Escreva em <b>Nome de exibição</b>, até 40 caracteres, e toque em <b>Salvar nome</b>.</span></li>
+        body: <><GuideSteps><li><span>Em <b>Seu perfil</b>, escreva em <b>Nome de exibição</b>, até 40 caracteres, e toque em <b>Salvar nome</b>.</span></li>
           <li><span>Na foto, use a câmera para enviar um JPG ou PNG. <b>Remover foto</b> apaga a imagem.</span></li></GuideSteps>
+          <p>No menu do avatar dá para fazer os dois sem sair da tela em que você está: toque no nome para editá-lo ali mesmo, com Enter para salvar e Esc para cancelar, e use a câmera sobre a foto para enviar ou o cesto para apagar.</p>
           <p>Sem foto, o jogo usa suas iniciais. O envio avisa quando termina e quando falha. Trocar de nome não afeta mãos já registradas.</p></>
       },
       {
         id: 'baralho', title: 'Escolher o baralho', summary: 'Preferência visual, aplicada às cartas que você vê.',
-        body: <><p>Em <b>Sua mesa</b>, o seletor mostra uma amostra dos quatro ases de cada variante. As gratuitas valem já na próxima mão; as premium aparecem com cadeado e preço, e levam à seção de baralhos da Loja.</p>
+        body: <><p>Em <b>Sua mesa</b>, o seletor mostra uma amostra dos quatro ases de cada variante. As gratuitas valem já na próxima mão; as premium aparecem com cadeado e preço, e levam à seção de baralhos da Loja. O mesmo seletor está no menu do avatar, em qualquer tela do jogo.</p>
           <GuideCallout kind="info" title="Somente apresentação">Trocar o baralho não interfere na distribuição, no hash da prova nem nas cartas que você recebe.</GuideCallout></>
       },
       {

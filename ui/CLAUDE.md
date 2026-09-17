@@ -407,13 +407,29 @@ root `layout.tsx`. See `docs/2026-09-02-marketing-app-route-split.md`.
 · `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
 modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `src/test/setup.ts`.
 
-Profile **editing** is the `/player-profile` route (`app/(app)/player-profile/`), not a dialog:
-`IdentitySection` (name, photo), `ShowcaseSection` (privacy, featured achievements, section order)
-and `TableSection` (deck, wallet mode), plus the balances block on the page itself.
-`components/lobby/ProfileMenu.tsx` is only the header shortcut — identity readout, balances, links,
-logout — and edits nothing, so no field has two editors. `app/(app)/profile/` is the **public**
-showcase: any player's, including the viewer's own (with an owner strip, and `?preview=1` for the
-visitor's view). See `docs/2026-09-17-player-profile-route.md`.
+**Profile editing has two surfaces and one implementation.** The full sheet is the
+`/player-profile` route (`app/(app)/player-profile/`): `IdentitySection` (name, photo),
+`ShowcaseSection` (privacy, featured achievements, section order) and `TableSection` (deck, wallet
+mode), plus the balances block on the page itself. `components/lobby/ProfileMenu.tsx` is the header
+shortcut and a **subset** of it: the three edits that fit in 360px (display name inline, photo,
+deck) plus the identity readout, balances, links and logout. Two entry points is the intent — the
+menu is in `AppPageChrome`, reachable from every authenticated page, and a name or deck change
+should not cost a navigation.
+What may never be duplicated is the write. `lib/hooks/useProfileEdits.ts` owns every mutation
+(`useProfileNameSave`, `useAvatarUpload`, `useAvatarRemove`, `useTablePreferenceSave`) and
+`components/profile/` owns the shared controls (`ProfilePhotoEditor`, `ProfilePhotoRemoveButton`,
+`DeckPicker`); both surfaces render those. Each mutation replaces `PLAYER_ME_KEY`
+(`['player','me']`) with the server's answer and neither surface mirrors the profile locally, so a
+save on one repaints the other. A new profile field editable from both goes into those modules, not
+into a second copy — that is how the `formatBRL` divergence started.
+**The picker is lazy in the menu on purpose.** `ProfileMenu` reaches `DeckPicker` through
+`next/dynamic` and mounts it only after the first open, so neither the `Select`/variant-catalogue
+chunk nor the `['wallet','cosmetic-catalog','deck']` read is on any authenticated route's critical
+path (#232). Importing it statically there measured ~57 kB of first-load JS on every route in
+`AppPageChrome`. `/player-profile` imports it directly — it is the picker's own route.
+`app/(app)/profile/` is the **public** showcase: any player's, including the viewer's own (with an
+owner strip, and `?preview=1` for the visitor's view). See
+`docs/2026-09-17-player-profile-route.md`.
 
 ## Auth flow
 
