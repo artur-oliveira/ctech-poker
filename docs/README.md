@@ -73,7 +73,13 @@ whenever a players store is wired) are all **fixed**; older docs that still list
   carry the current architecture punch list.
 - `specs/` — `2026-07-19-api-audit-remediation.md`, `2026-07-23-poker-reveal-timing-and-runout-pacing.md`,
   `2026-07-28-player-avatars-and-next-features.md` (proposed next features),
-  `2026-09-06-table-migration-notice.md` (visible maintenance-migration notice, #354).
+  `2026-09-06-table-migration-notice.md` (visible maintenance-migration notice, #354),
+  `2026-09-17-table-snapshot-divergence-and-highlight-winner.md` (**implementado**, plano irmão em
+  `plans/2026-09-17-…`): a partir de um HAR de 2026-09-15 com 465 frames decodificados — o highlight
+  "maior pote de hoje" passa a persistir o vencedor real (antes ficava sem nome quando todos corriam
+  ao all-in), instâncias irmãs deixam de republicar um snapshot cuja entrega já é fleet-wide, e a
+  equity Monte-Carlo passa a ser semeada pela própria mão, de modo que dois frames com o mesmo
+  `(hand_id, snapshot_version)` são idênticos venham de onde vierem.
 - Top-level `OVERVIEW.md` (product/game rules), `ARCHITECTURE.md` (technical design), `PLAN.md` (build history),
   `README.md` (status). Untracked `future.md` / `future_analysis.md` are brainstorm/feasibility notes — much of their
   Fase 1–2 backlog has since shipped.

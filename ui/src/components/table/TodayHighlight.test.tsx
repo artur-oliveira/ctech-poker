@@ -106,6 +106,59 @@ describe('TodayHighlight', () => {
     expect(screen.queryByText(/Ah|Kd/)).not.toBeInTheDocument();
   });
 
+  test('names the winner of a hand that had no showdown', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      pot: 150875,
+      board: ['As', '3s', '2s', '8h', 'Ac'],
+      winners: [{player_id: 'p1', name: 'Artur 1234', payout: 150875}],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Artur 1234')).toBeInTheDocument());
+  });
+
+  test('appends the made hand when the winner also showed their cards', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      board: ['Ac', '7d', '2s', '9h', '3c'],
+      winners: [{player_id: 'p1', name: 'Alice', payout: 1500}],
+      revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Alice — Par')).toBeInTheDocument());
+  });
+
+  test('names the paid winner, not the best hand shown, on a side pot', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      board: ['Ac', '7d', '2s', '9h', '3c'],
+      winners: [{player_id: 'p2', name: 'Bob', payout: 9000}],
+      revealed: [
+        {player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Ad']},
+        {player_id: 'p2', name: 'Bob', hole_cards: ['9c', '9s']},
+      ],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText(/^Bob/)).toBeInTheDocument());
+    expect(screen.queryByText(/Alice/)).not.toBeInTheDocument();
+  });
+
+  test('joins every winner of a split pot', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      winners: [
+        {player_id: 'p1', name: 'Alice', payout: 750},
+        {player_id: 'p2', name: 'Bob', payout: 750},
+      ],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Alice e Bob')).toBeInTheDocument());
+  });
+
+  test('still reads the revealed hands on a row written before winners existed', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Alice — Par')).toBeInTheDocument());
+  });
+
   test('is collapsed by default and expands on click (mobile\'s icon-only badge)', async () => {
     const user = userEvent.setup();
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
