@@ -2,7 +2,7 @@ import {routeMetadata} from '@/lib/routeMetadata';
 
 export const metadata = routeMetadata({
   title: 'Loja',
-  description: 'Use fichas sandbox para liberar reações, mesas e itens de perfil.',
+  description: 'Use suas fichas para liberar reações, mesas e itens de perfil.',
   path: '/store',
   image: 'store'
 });

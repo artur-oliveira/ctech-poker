@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Award,
   BookOpen,
-  CircleDollarSign,
   Compass,
   History,
   ShieldCheck,
@@ -66,7 +65,7 @@ export default function Guide() {
         icon={BookOpen}
         eyebrow="CENTRAL DE AJUDA"
         title="Aprenda no seu ritmo"
-        description="Comece uma partida em poucos minutos ou consulte uma função específica. Cada guia explica as funcionalidades do CTech poker."
+        description="Comece uma partida em poucos minutos ou consulte uma função específica."
       />
 
       <section className="guide-quickstart" aria-labelledby="quickstart-title">
@@ -75,9 +74,7 @@ export default function Guide() {
           <h2 id="quickstart-title">
             Sua primeira mão em quatro passos
           </h2>
-          <p>O CTech Poker usa fichas fictícias no modo sandbox.
-            Escolha uma stake, uma mesa, confirme o buy-in e espere a próxima mão começar.
-          </p>
+          <p>Escolha uma stake, uma mesa, confirme o buy-in e espere a próxima mão começar.</p>
           <Button render={<Link href="/guide/basics"/>}>Ver primeiros passos <ArrowRight aria-hidden="true"/></Button>
         </div>
         <ol className="guide-quickstart-steps">
@@ -106,14 +103,6 @@ export default function Guide() {
           <ArrowRight className="guide-directory-arrow" aria-hidden="true"/>
         </Link>)}
       </div>
-
-      <section className="guide-sandbox-note">
-        <CircleDollarSign aria-hidden="true"/>
-        <div><h2>Sobre fichas e dinheiro real</h2>
-          <p>O ambiente disponível é sandbox: fichas servem apenas para jogar e não podem ser sacadas. A interface pode
-            exibir a opção de carteira real, mas ela depende de liberação do serviço e nunca deve ser presumida como
-            ativa.</p></div>
-      </section>
     </AppPageBody>
   </AppPage>;
 }

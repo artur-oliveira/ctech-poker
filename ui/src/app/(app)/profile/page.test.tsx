@@ -5,6 +5,7 @@ import ProfilePage from './page';
 
 const mocks = vi.hoisted(() => ({
   playerID: 'player-42',
+  preview: null as string | null,
   viewerID: 'viewer-9' as string | undefined,
   session: {authed: true, checking: false},
   query: {} as Record<string, unknown>,
@@ -16,15 +17,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => ({get: (key: string) => key === 'id' ? mocks.playerID : null}),
+  useSearchParams: () => ({get: (key: string) => key === 'id' ? mocks.playerID : key === 'preview' ? mocks.preview : null}),
 }));
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => mocks.session}));
 vi.mock('@/lib/utils', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/lib/utils')>(),
   getViewerId: () => mocks.viewerID,
-}));
-vi.mock('@/components/lobby/ProfileShowcaseDialog', () => ({
-  ProfileShowcaseDialog: ({open}: {open: boolean}) => open ? <div>showcase-editor</div> : null,
 }));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => {
@@ -54,6 +52,7 @@ describe('public player profile page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.playerID = 'player-42';
+    mocks.preview = null;
     mocks.viewerID = 'viewer-9';
     mocks.session = {authed: true, checking: false};
     mocks.relationshipQuery = {data: undefined, isLoading: false, isError: true};
@@ -143,7 +142,7 @@ describe('public player profile page', () => {
     const marks = screen.getByRole('list', {name: 'Marcos do perfil'});
     expect(within(marks).getByText('1 ano de casa')).toBeInTheDocument();
     expect(within(marks).getByText('43.700 mãos jogadas')).toBeInTheDocument();
-    expect(within(marks).getByText('#62 no ranking sandbox')).toBeInTheDocument();
+    expect(within(marks).getByText('#62 no ranking de fichas')).toBeInTheDocument();
     // A key this client has no copy for is skipped, never rendered as a slug.
     expect(within(marks).queryByText(/from_a_newer_server/)).not.toBeInTheDocument();
     expect(within(marks).getAllByRole('listitem')).toHaveLength(3);
@@ -234,15 +233,50 @@ describe('public player profile page', () => {
     expect(screen.getByText('Este perfil não existe ou foi removido.')).toBeInTheDocument();
   });
 
-  test('offers the showcase editor when the link is the viewer own id', () => {
+  // The owner used to dead-end on a panel that only offered the editor, so
+  // nobody could see what they were publishing. They now get the real showcase.
+  test('renders the owner own showcase with the editor and preview affordances', () => {
     mocks.viewerID = 'player-42';
     render(<ProfilePage/>);
 
-    expect(mocks.queryOptions).toMatchObject({enabled: false});
+    expect(mocks.queryOptions).toMatchObject({queryKey: ['profile-showcase', 'player-42'], enabled: true});
+    // Head-to-head against yourself stays off: the endpoint 400s for own id.
     expect(mocks.matchupOptions).toMatchObject({enabled: false});
-    expect(screen.getByRole('heading', {level: 1, name: 'Esta é a sua vitrine'})).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', {name: /Editar minha vitrine/}));
-    expect(screen.getByText('showcase-editor')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {level: 1, name: 'Ás da Mesa'})).toBeInTheDocument();
+    expect(screen.getByText('Esta é a sua vitrine. Só você vê esta faixa.')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /Ver como visitante/}))
+      .toHaveAttribute('href', '/profile?id=player-42&preview=1');
+    expect(screen.getByRole('button', {name: /Editar perfil/})).toHaveAttribute('href', '/player-profile');
+  });
+
+  test('preview mode drops the owner affordances and offers the way back', () => {
+    mocks.viewerID = 'player-42';
+    mocks.preview = '1';
+    render(<ProfilePage/>);
+
+    expect(screen.getByText('Pré-visualização: é assim que um visitante vê seu perfil.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Ver como visitante/})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /Sair da pré-visualização/}))
+      .toHaveAttribute('href', '/profile?id=player-42');
+    // Everything below the strip is still the visitor view.
+    expect(screen.getByRole('heading', {level: 1, name: 'Ás da Mesa'})).toBeInTheDocument();
+  });
+
+  // A private showcase 404s for its own owner too, and only ever for that one
+  // reason — the visitor copy ("este perfil não existe") would be a lie.
+  test('tells the owner their own showcase is private, in both modes', () => {
+    mocks.viewerID = 'player-42';
+    mocks.query = queryState(undefined, {isError: true, error: {status: 404}});
+    const view = render(<ProfilePage/>);
+    expect(screen.getByRole('heading', {level: 1, name: 'Vitrine privada'})).toBeInTheDocument();
+    expect(screen.getByText(/Ninguém além de você abre este link/)).toBeInTheDocument();
+    for (const edit of screen.getAllByRole('button', {name: /Editar perfil/})) {
+      expect(edit).toHaveAttribute('href', '/player-profile');
+    }
+
+    mocks.preview = '1';
+    view.rerender(<ProfilePage/>);
+    expect(screen.getByText(/um visitante não abre este link/)).toBeInTheDocument();
   });
 
   test('keeps an h1 in the loading state', () => {

@@ -6,12 +6,19 @@ export interface RevealedHand {
   hole_cards: string[];
 }
 
+export interface HighlightWinner {
+  player_id: string;
+  name?: string;
+  payout: number;
+}
+
 export interface TableHighlight {
   table_id: string;
   date: string;
   hand_id: string;
   pot: number;
   board?: string[];
+  winners?: HighlightWinner[];
   revealed?: RevealedHand[];
   recorded_at: number;
 }

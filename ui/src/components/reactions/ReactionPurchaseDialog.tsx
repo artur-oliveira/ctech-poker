@@ -24,10 +24,8 @@ import {
 } from '@/lib/api/reactionPurchases';
 import {usePurchaseStatus} from '@/lib/hooks/usePurchaseStatus';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
+import {moneyExact} from '@/lib/chips';
 
-function formatBRL(cents?: number) {
-  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-}
 
 function purchaseError(error: unknown) {
   if (error instanceof ApiError && error.status === 409) {
@@ -134,11 +132,11 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
           <button type="button" disabled={pendingMethod !== null || insufficientFichas}
                   onClick={() => void buy('fichas')}>
             <Coins aria-hidden="true"/><span><strong>{(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</strong>
-              <small>{insufficientFichas ? 'Saldo sandbox insuficiente' : 'Confirmação imediata'}</small></span>
+              <small>{insufficientFichas ? 'Saldo insuficiente' : 'Confirmação imediata'}</small></span>
             {pendingMethod === 'fichas' && <LoaderCircle className="spin" aria-hidden="true"/>}
           </button>
           <button type="button" disabled={pendingMethod !== null} onClick={() => void buy('pix')}>
-            <QrCode aria-hidden="true"/><span><strong>{formatBRL(entry.price_cents)} via Pix</strong>
+            <QrCode aria-hidden="true"/><span><strong>{moneyExact(entry.price_cents)} via Pix</strong>
               <small>QR code no próximo passo</small></span>
             {pendingMethod === 'pix' && <LoaderCircle className="spin" aria-hidden="true"/>}
           </button>

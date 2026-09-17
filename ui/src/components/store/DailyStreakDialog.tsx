@@ -87,7 +87,7 @@ export function DailyStreakDialog(props: DailyStreakDialogProps) {
       <DialogHeader>
         <DialogTitle>Ofensiva diária</DialogTitle>
         <DialogDescription>
-          Resgate fichas sandbox todo dia. Cada dia seguido vale mais que o anterior, e o dia {status.cycle_length} paga
+          Resgate fichas todo dia. Cada dia seguido vale mais que o anterior, e o dia {status.cycle_length} paga
           o baú de {fullChips(grand?.amount ?? 0)} fichas.
         </DialogDescription>
       </DialogHeader>
@@ -110,7 +110,7 @@ export function DailyStreakDialog(props: DailyStreakDialogProps) {
       <p className="streak-rule">
         {status.protection_available
           ? 'Você tem uma proteção guardada: se perder um dia, ela segura a ofensiva por você. Ela volta a cada 7 dias seguidos.'
-          : 'Complete 7 dias seguidos para ganhar uma proteção — ela segura sua ofensiva no dia em que você não conseguir jogar.'}
+          : 'Complete 7 dias seguidos para ganhar uma proteção que segura sua ofensiva no dia em que você não conseguir jogar.'}
       </p>
 
       <ol className="streak-trail" aria-label={`Trilha de ${status.cycle_length} dias`}>

@@ -52,7 +52,7 @@ describe('WinnerCards', () => {
     vi.setSystemTime(new Date(1_000_000));
     render(<WinnerCards snapshot={snapshot({pending_winner_cards: request()})} viewer="viewer" bigBlind={50}/>);
     expect(screen.getByText('Aguardando resposta…')).toBeInTheDocument();
-    expect(screen.getByText(/suas 50 fichas voltam/)).toBeInTheDocument();
+    expect(screen.getByText(/a cobrança de 50 fichas volta para você/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

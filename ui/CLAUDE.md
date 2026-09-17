@@ -53,13 +53,28 @@ off by default — do not build UI that assumes real money is on.
   as the one place the framing lives. `lobbyCodec.test.ts` walks `RealtimeBridge`'s static import
   graph and fails if `poker.ts` reappears in it. See
   `docs/2026-09-04-lobby-codec-and-reconnect-reconcile.md` and #228.
-- **One chip formatter, and abbreviation is opt-in.** `lib/chips.ts` owns
-  `chipsExact` (always `toLocaleString('pt-BR')`) and `chipsShort` (≤4 visible
-  characters: `1,2K`, `600K`, `1,5M`); `lib/chipFormat.ts`'s `useChipFormat()`
-  picks between them from `ChipFormatContext`, which defaults to **exact** and is
-  provided as `room.currency_mode !== 'real'` by the table page. Never abbreviate
-  a real-money figure, and never abbreviate without putting the exact number in
-  the accessible name. New chip readouts go through the hook, not through a bare
+- **One money formatter, one chip formatter, and both abbreviation and `R$` are
+  opt-in.** `lib/chips.ts` owns all three: `chipsExact` (always
+  `toLocaleString('pt-BR')`), `chipsShort` (≤4 visible characters: `1,2K`,
+  `600K`, `1,5M`) and `moneyExact` (**integer centavos** → exact `R$`, never
+  abbreviated). Every real-money figure in `src/` comes from `moneyExact`;
+  nothing else may call `style: 'currency'` or hand-write an `R$` prefix — `Intl`
+  separates with U+00A0, and a template string typed with a space bar produces a
+  string no `getByText` will match. Real money crosses the wire in centavos
+  (`price_cents`, `game_balance`, `entry_fee_cents`, and a real room's blinds,
+  buy-in window and seat stacks), so `moneyExact` divides; chips do not.
+  `lib/chipFormat.ts` picks per surface from `ChipFormatContext`
+  (`'exact' | 'chips' | 'money'`), provided as `room.currency_mode === 'real' ?
+  'money' : 'chips'` by the table page: `useChipFormat()` is what the surface
+  paints, `useChipExact()` is what its accessible name carries (never
+  abbreviated), and `useChipUnit()` is the unit noun that follows it (`' fichas'`
+  for chips, empty for money, which is already prefixed). The default is
+  **`'exact'`**, because both abbreviation and the `R$` prefix are opt-in: `Seat`,
+  `Board` and `TableStage` are deliberately wide and `HandReplayer`
+  (`/hands/replay`, `/share`) mounts no provider, so the surface that never
+  declared itself gets full precision and no currency mark. Never abbreviate a
+  real-money figure, and never abbreviate without putting the exact number in the
+  accessible name. New readouts go through the hooks, not through a bare
   `toLocaleString`. See `docs/2026-09-08-table-polish-bet-presets.md`.
 - **The bet-preset row is derived, never re-derived.** `stageBetPresets`
   (`lib/betShortcuts.ts`) is the only place the raise row is built, from the
@@ -379,7 +394,7 @@ off by default — do not build UI that assumes real money is on.
 
 **Route groups** (parenthesised folders — no effect on the URL):
 `src/app/(marketing)/{page,poker-rules,guide,guide/*}` are the static, indexable,
-logged-out-friendly pages; `src/app/(app)/{lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,store,share,callback}`
+logged-out-friendly pages; `src/app/(app)/{lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,player-profile,store,share,callback}`
 is everything that needs the authenticated/live shell. `(marketing)/layout.tsx`
 mounts only `MarketingQueryProvider`; `(app)/layout.tsx` mounts `QueryProvider`
 (keep-alive + `NetworkProvider` + `RealtimeBridge`). `robots.ts`, `sitemap.ts`,
@@ -392,8 +407,29 @@ root `layout.tsx`. See `docs/2026-09-02-marketing-app-route-split.md`.
 · `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
 modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `src/test/setup.ts`.
 
-Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDialog.tsx`, not
-`app/profile/` — that route is the public read-only showcase of another player.
+**Profile editing has two surfaces and one implementation.** The full sheet is the
+`/player-profile` route (`app/(app)/player-profile/`): `IdentitySection` (name, photo),
+`ShowcaseSection` (privacy, featured achievements, section order) and `TableSection` (deck, wallet
+mode), plus the balances block on the page itself. `components/lobby/ProfileMenu.tsx` is the header
+shortcut and a **subset** of it: the three edits that fit in 360px (display name inline, photo,
+deck) plus the identity readout, balances, links and logout. Two entry points is the intent — the
+menu is in `AppPageChrome`, reachable from every authenticated page, and a name or deck change
+should not cost a navigation.
+What may never be duplicated is the write. `lib/hooks/useProfileEdits.ts` owns every mutation
+(`useProfileNameSave`, `useAvatarUpload`, `useAvatarRemove`, `useTablePreferenceSave`) and
+`components/profile/` owns the shared controls (`ProfilePhotoEditor`, `ProfilePhotoRemoveButton`,
+`DeckPicker`); both surfaces render those. Each mutation replaces `PLAYER_ME_KEY`
+(`['player','me']`) with the server's answer and neither surface mirrors the profile locally, so a
+save on one repaints the other. A new profile field editable from both goes into those modules, not
+into a second copy — that is how the `formatBRL` divergence started.
+**The picker is lazy in the menu on purpose.** `ProfileMenu` reaches `DeckPicker` through
+`next/dynamic` and mounts it only after the first open, so neither the `Select`/variant-catalogue
+chunk nor the `['wallet','cosmetic-catalog','deck']` read is on any authenticated route's critical
+path (#232). Importing it statically there measured ~57 kB of first-load JS on every route in
+`AppPageChrome`. `/player-profile` imports it directly — it is the picker's own route.
+`app/(app)/profile/` is the **public** showcase: any player's, including the viewer's own (with an
+owner strip, and `?preview=1` for the visitor's view). See
+`docs/2026-09-17-player-profile-route.md`.
 
 ## Auth flow
 

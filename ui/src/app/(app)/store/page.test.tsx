@@ -125,7 +125,7 @@ describe('store page', () => {
     // Receipts for reactions and cosmetics live in their own top-level
     // department, not nested inside the section that shipped first.
     const activityDepartment = screen.getByRole('heading', {name: 'Compras e estornos'}).closest('section');
-    const chipDepartment = screen.getByRole('heading', {name: 'Fichas sandbox'}).closest('section');
+    const chipDepartment = screen.getByRole('heading', {name: 'Fichas'}).closest('section');
     expect(activityDepartment).toHaveAttribute('id', 'activity');
     expect(within(activityDepartment!).getByRole('heading', {name: 'Reações'})).toBeInTheDocument();
     expect(within(activityDepartment!).getByRole('heading', {name: 'Baralhos e feltros'})).toBeInTheDocument();
@@ -268,14 +268,14 @@ describe('store page', () => {
     expect(within(screen.getByRole('dialog')).getByText(/1.000 fichas$/)).toBeInTheDocument();
     expect(screen.getByText('11.345 fichas')).toBeInTheDocument();
     expect(screen.getByText(/fichas já foram usadas em uma mesa/)).toBeInTheDocument();
-    expect(screen.getByText(/Não movimenta saldo de dinheiro real/)).toBeInTheDocument();
+    expect(screen.getByText(/Não movimenta dinheiro real/)).toBeInTheDocument();
     expect(mocks.refundPurchase).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', {name: /Solicitar estorno de R/}));
     await waitFor(() => expect(mocks.refundPurchase).toHaveBeenCalledWith('sbxp-1'));
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet']});
     expect(await screen.findByRole('heading', {name: 'Compra estornada'})).toBeInTheDocument();
-    expect(screen.getByText(/1.000 fichas sandbox removidas/)).toBeInTheDocument();
+    expect(screen.getByText(/1.000 fichas removidas/)).toBeInTheDocument();
   });
 
   test('keeps the dialog actionable when the server rejects refund eligibility', async () => {

@@ -254,7 +254,7 @@ function ActionRows({actions, resolveName}: {
           </>}
           {a.amount > 0 && <b>{a.amount.toLocaleString('pt-BR')}</b>}
         </span>
-        <span className="action-row-when">{a.timestamp ? formatTime(a.timestamp) : '—'}</span>
+        <span className="action-row-when">{a.timestamp ? formatTime(a.timestamp) : '-'}</span>
       </li>;
     })}
   </ol>;

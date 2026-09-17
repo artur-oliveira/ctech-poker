@@ -234,7 +234,7 @@ describe('ActionBar raise controls', () => {
   test('explains an all-in-only raise band when the legal band is narrower than one step', () => {
     renderActionBar({minRaise: 19_990, maxRaise: 20_000, raiseStep: 25, effectiveStack: 20_000});
     expect(document.getElementById('action-context')).toHaveTextContent(
-      'Aumento mínimo é 19.990 — só resta ir all in.');
+      'Aumento mínimo é 19.990, só resta ir all in.');
   });
 
   test('does not explain the raise band when a normal raise range is available', () => {
@@ -499,10 +499,10 @@ function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof Act
 }
 
 describe('ActionBar typed raise amount', () => {
-  // The table wraps the bar in a sandbox ChipFormatContext; without one the
-  // bar is in real-money mode, which has different input rules.
+  // The table wraps the bar in a play-money ChipFormatContext; without one the
+  // bar formats exactly and accepts fractional input, which the chip rules forbid.
   const renderSandbox = (overrides: Partial<React.ComponentProps<typeof ActionBar>> = {}) =>
-    render(<ChipFormatContext value={true}><ActionBar {...renderActionBarProps(overrides)}/></ChipFormatContext>);
+    render(<ChipFormatContext value={'chips'}><ActionBar {...renderActionBarProps(overrides)}/></ChipFormatContext>);
   // Desktop and the compact sheet each render one; CSS shows one at a time and
   // they share the same amount, so the tests drive the first.
   const field = () => screen.getAllByRole('textbox')[0] as HTMLInputElement;
@@ -536,7 +536,7 @@ describe('ActionBar typed raise amount', () => {
     ['a minus sign', '-', '150', 'Apenas números.'],
     ['a plus sign', '+', '150', 'Apenas números.'],
     ['a space', ' ', '150', 'Apenas números.'],
-    ['a decimal separator in sandbox chips', ',', '150', 'Fichas sandbox não têm centavos.'],
+    ['a decimal separator in sandbox chips', ',', '150', 'As fichas não têm centavos.'],
     ['a digit after a leading zero', '05', '0', 'Sem zero à esquerda.']
   ])('refuses %s and says why', async (_label, keys, expected, message) => {
     renderSandbox();
@@ -636,7 +636,7 @@ describe('ActionBar typed raise amount', () => {
 
   function renderActionBarWithSpy() {
     const onActAction = vi.fn(() => true);
-    render(<ChipFormatContext value={true}>
+    render(<ChipFormatContext value={'chips'}>
       <ActionBar {...renderActionBarProps({onActAction})}/>
     </ChipFormatContext>);
     return {onActAction};

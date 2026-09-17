@@ -202,7 +202,7 @@ describe('ReactionPurchaseDialog', () => {
   test('blocks the fichas option when the sandbox balance is short', () => {
     render(<ReactionPurchaseDialog entry={entry} sandboxBalance={10} onCloseAction={vi.fn()}/>, {wrapper});
     expect(screen.getByRole('button', {name: /5.000 fichas/})).toBeDisabled();
-    expect(screen.getByText('Saldo sandbox insuficiente')).toBeInTheDocument();
+    expect(screen.getByText('Saldo insuficiente')).toBeInTheDocument();
   });
 
   test('starts a Pix purchase and shows the QR code with the cosmetic-only note', async () => {
@@ -318,7 +318,7 @@ describe('ReactionRefundDialog', () => {
   test('refunds a fichas purchase back to the sandbox balance', () => {
     render(<ReactionRefundDialog purchase={purchase({method: 'fichas'})} onCloseAction={vi.fn()}
       onConfirmAction={vi.fn()}/>);
-    expect(screen.getByText('Saldo de fichas sandbox')).toBeInTheDocument();
+    expect(screen.getByText('Saldo de fichas')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /Estornar 5\.000 fichas/})).toBeInTheDocument();
   });
 

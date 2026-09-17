@@ -18,6 +18,7 @@ import HandsReplayLayout, {metadata as handsReplayMetadata} from './(app)/hands/
 import LeaderboardLayout, {metadata as leaderboardMetadata} from './(app)/leaderboard/layout';
 import LobbyLayout, {metadata as lobbyMetadata} from './(app)/lobby/layout';
 import PokerRulesLayout, {metadata as pokerRulesMetadata} from './(marketing)/poker-rules/layout';
+import PlayerProfileLayout, {metadata as playerProfileMetadata} from './(app)/player-profile/layout';
 import ProfileLayout, {metadata as profileMetadata} from './(app)/profile/layout';
 import ShareLayout, {metadata as shareMetadata} from './(app)/share/layout';
 import TableLayout, {metadata as tableMetadata} from './(app)/table/layout';
@@ -45,6 +46,7 @@ const layouts = [
   {path: '/hands/replay', Layout: HandsReplayLayout, metadata: handsReplayMetadata, indexable: false},
   {path: '/leaderboard', Layout: LeaderboardLayout, metadata: leaderboardMetadata, indexable: false},
   {path: '/lobby', Layout: LobbyLayout, metadata: lobbyMetadata, indexable: false},
+  {path: '/player-profile', Layout: PlayerProfileLayout, metadata: playerProfileMetadata, indexable: false},
   {path: '/poker-rules', Layout: PokerRulesLayout, metadata: pokerRulesMetadata, indexable: true},
   {path: '/profile', Layout: ProfileLayout, metadata: profileMetadata, indexable: true},
   {path: '/share', Layout: ShareLayout, metadata: shareMetadata, indexable: false},

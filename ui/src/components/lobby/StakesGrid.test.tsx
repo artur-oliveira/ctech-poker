@@ -148,11 +148,11 @@ describe('lobby stakes integration', () => {
     // The pre-selected stake is the one the aggregate reports tables for.
     expect(screen.getByRole('radio', {name: '25 / 50'})).toBeChecked();
     expect(screen.getAllByRole('button')).toHaveLength(3);
-    expect(screen.getAllByText('Entrada sandbox: 2.000–5.000 fichas (40–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada: 2.000 a 5.000 fichas (40-100 BB)')).toHaveLength(3);
 
     await userEvent.click(screen.getByRole('radio', {name: '100 / 200'}));
     expect(screen.getAllByRole('button')).toHaveLength(3);
-    expect(screen.getAllByText('Entrada sandbox: 8.000–20.000 fichas (40–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada: 8.000 a 20.000 fichas (40-100 BB)')).toHaveLength(3);
     expect(screen.getAllByText('Criar mesa')).toHaveLength(3);
   });
 });

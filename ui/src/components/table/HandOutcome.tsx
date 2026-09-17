@@ -7,8 +7,7 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import {ChipStack} from '@/components/table/ChipStack';
 import {PerimeterTimer} from '@/components/table/PerimeterTimer';
 import {useCountUp} from '@/lib/hooks/useCountUp';
-import {useChipFormat} from '@/lib/chipFormat';
-import {chipsExact} from '@/lib/chips';
+import {useChipExact, useChipFormat, useChipUnit} from '@/lib/chipFormat';
 
 export type HandOutcomeState = {
   key: number; kind: 'win' | 'lose' | 'tie' | 'mixed' | 'fold'; handCategory?: string; opponentCategory?: string;
@@ -142,6 +141,8 @@ function OutcomeSettlement({pots = [], runItTwice = false}: {
   runItTwice?: boolean;
 }) {
   const chips = useChipFormat();
+  const exact = useChipExact();
+  const unit = useChipUnit();
   if (!runItTwice && pots.length < 2) return null;
   return <section className="hand-outcome-settlement" aria-label="Distribuição dos potes">
     <header>
@@ -154,18 +155,18 @@ function OutcomeSettlement({pots = [], runItTwice = false}: {
         const label = index === 0 ? 'Pote principal' : `Pote lateral ${index}`;
         const winner = pot.refund ? 'Devolução' : pot.wonByViewer ? 'Você' :
           pot.winnerNames.length ? pot.winnerNames.join(' e ') : 'Sem vencedor';
-        const payout = pot.split ? `${winner} · ${chips(pot.payoutAmount)} fichas distribuídas${
+        const payout = pot.split ? `${winner} · ${chips(pot.payoutAmount)}${unit} distribuídas${
           pot.viewerPayout != null ? ` · sua parte +${chips(pot.viewerPayout)}` : ''}` :
           `${winner}${pot.payoutAmount > 0 ? ` +${chips(pot.payoutAmount)}` : ''}`;
-        const payoutName = pot.split ? `${winner} · ${chipsExact(pot.payoutAmount)} fichas distribuídas${
-          pot.viewerPayout != null ? ` · sua parte +${chipsExact(pot.viewerPayout)}` : ''}` :
-          `${winner}${pot.payoutAmount > 0 ? ` +${chipsExact(pot.payoutAmount)}` : ''}`;
+        const payoutName = pot.split ? `${winner} · ${exact(pot.payoutAmount)}${unit} distribuídas${
+          pot.viewerPayout != null ? ` · sua parte +${exact(pot.viewerPayout)}` : ''}` :
+          `${winner}${pot.payoutAmount > 0 ? ` +${exact(pot.payoutAmount)}` : ''}`;
         return <li key={`${index}-${pot.amount}-${pot.runout ?? 0}`}
                    className={pot.wonByViewer ? 'viewer-won' : pot.viewerEligible ? 'viewer-lost' : 'viewer-out'}>
           <span><b>{label}{pot.runout ? ` · Board ${pot.runout}` : ''}</b>
             {!pot.viewerEligible && !pot.refund && <small>Você não disputou este pote</small>}</span>
           <span className="hand-outcome-pot-amount"
-                aria-label={`${chipsExact(pot.amount)} fichas`}>{chips(pot.amount)}</span>
+                aria-label={`${exact(pot.amount)}${unit}`}>{chips(pot.amount)}</span>
           <strong aria-label={`${pot.split ? 'Dividido · ' : ''}${payoutName}`}>{pot.split ? 'Dividido · ' : ''}{payout}</strong>
         </li>;
       })}

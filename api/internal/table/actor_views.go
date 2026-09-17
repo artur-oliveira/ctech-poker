@@ -92,18 +92,21 @@ func (a *Actor) processInlinePreselections(ctx context.Context) {
 }
 
 // processPendingExitAutoFolds folds out, one at a time, whoever is
-// currently on the clock and has a pending exit request — the moment their
-// turn actually arrives, not when RequestExit was called (an uncontested
-// win owed to them before their turn comes back around must still pay
-// out — see Table.RequestExit's doc comment). Mirrors
+// currently on the clock and cannot be waited on: a pending exit request, or
+// a seat paused mid-hand (SittingOut while still dealt in). Either way the
+// fold happens the moment their turn actually arrives, not when
+// RequestExit/SitOutForActor was called (an uncontested win owed to them
+// before their turn comes back around must still pay out, and folding a
+// player who is not on the clock corrupts the action order — see
+// Table.RequestExit and Table.SitOutForActor). Mirrors
 // processInlinePreselections's loop shape exactly (same applyActAndCommit +
 // commitOutcomeLogEntries tail), and runs immediately before it from the
 // same broadcastAll call site so a pending exit always takes priority over
 // a stale preselection for the same turn.
 func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
-	for a.cached != nil && a.cached.Stage() != hand.Complete && a.cached.CurrentPlayerHasPendingExitForActor() {
+	for a.cached != nil && a.cached.Stage() != hand.Complete && a.cached.CurrentPlayerShouldAutoFoldForActor() {
 		current := a.cached.CurrentPlayerIDForActor()
-		autoActionID := fmt.Sprintf("auto-exit-fold-%s-%d", current, a.version)
+		autoActionID := fmt.Sprintf("auto-fold-%s-%d", current, a.version)
 		applied, err := a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: current, ActionID: autoActionID, Action: betting.ActionFold,
 		})
@@ -119,7 +122,28 @@ func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
 	}
 }
 
-func (a *Actor) broadcastAll() {
+// broadcastAll runs this command's sweeps and timers and then publishes one
+// snapshot per seat. Only the instance that actually ran the command calls
+// it — see syncWithoutPublish.
+func (a *Actor) broadcastAll() { a.sync(true) }
+
+// syncWithoutPublish is broadcastAll minus the publish: the pending-exit and
+// preselection sweeps, the timer re-arming and the post-hand hooks all still
+// run, but nothing goes on the wire.
+//
+// ws.RedisRegistry.Broadcast (api-commons/ws) PUBLISHes to a Valkey channel
+// that EVERY instance is subscribed to, and each delivers to its own local
+// connections. Delivery is therefore fleet-wide from a single publish: the
+// instance that committed already reached every player, wherever they are
+// connected. A sibling republishing the same snapshot_version sent the client
+// a duplicate frame decorated with that sibling's own broadcast-time overlays
+// — its 30s-paced streak map and its own Monte-Carlo equity sample — and the
+// UI has no way to order two frames sharing a version, so the badge and the
+// win-% visibly flipped between them.
+// See docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md.
+func (a *Actor) syncWithoutPublish() { a.sync(false) }
+
+func (a *Actor) sync(publish bool) {
 	if a.broadcast == nil || a.cached == nil {
 		return
 	}
@@ -144,6 +168,23 @@ func (a *Actor) broadcastAll() {
 	a.armNextHandTimer(stage == hand.Complete)
 	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
 	a.lastBroadcastStage = stage
+	if publish {
+		a.publishSnapshots()
+	}
+	// The post-hand hooks are what compute this hand's streak badges
+	// (tablemanager's onHandComplete wrapper calls SetStreaksForActor), and
+	// they necessarily run after the publish above. Publishing a second time
+	// when they actually ran is what puts the winner's new badge on screen at
+	// the end of the hand instead of one commit late.
+	if a.notifyHandComplete() && publish {
+		a.publishSnapshots()
+	}
+}
+
+// publishSnapshots builds and sends one viewer-scoped snapshot per seat.
+func (a *Actor) publishSnapshots() {
+	stage := a.cached.Stage()
+	current := a.cached.CurrentPlayerIDForActor()
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	// Chat and reactions are identical for every viewer, so build them once
 	// per broadcast instead of once per seat (#37). Both slices are only ever
@@ -183,7 +224,6 @@ func (a *Actor) broadcastAll() {
 		}
 		a.broadcast(p.ID, snapshot)
 	}
-	a.notifyHandComplete()
 }
 
 // activityViews converts the table-wide activity (chat + unexpired
@@ -420,6 +460,13 @@ func (a *Actor) SetStreaksForActor(streaks map[string]int) {
 	if merged != nil {
 		a.streaks = merged
 	}
+	// Every other instance serving this table is still holding the previous
+	// hand's badges, and refreshStreaks alone would only heal them when the
+	// pacing window lapses — up to StreakRefreshInterval of a stale number on
+	// the wire. This is the one moment the value actually changed, so reuse
+	// the commit channel to tell them: handleExternalChange re-reads the badge
+	// whenever the reload lands on a completed hand.
+	a.notifyChange()
 }
 
 func equityStage(stage hand.Stage) bool {

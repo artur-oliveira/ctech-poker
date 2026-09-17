@@ -331,7 +331,7 @@ describe('table presentation', () => {
     expect(container.querySelector('.street-progress .is-current')).toBeInTheDocument();
     expect(container.querySelector('.street-progress-pips')?.textContent).toBe('');
     expect(container.querySelector('.street-progress-label')).toHaveTextContent('Pré-flop');
-    expect(container.querySelector('.street-progress')).toHaveAttribute('aria-label', 'Pré-flop — etapa 1 de 4');
+    expect(container.querySelector('.street-progress')).toHaveAttribute('aria-label', 'Pré-flop, etapa 1 de 4');
   });
 
   test('the felt names the current stage and, once armed, the next-hand countdown', () => {

@@ -347,6 +347,26 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   accumulated queue wait for tests and for anything that later wants to log them, plus one WARN per event.
   Per-dependency timeout attribution and true per-command queue sojourn time (the counter measures time blocked on a
   full mailbox, which is zero while the actor keeps up) are **not** implemented.
+- **An all-in runout's paced timer is the only scheduler that hand has — treat a fired one as spent.**
+  `armRunoutTimer`'s `(handID, stage, runoutPhase)` key means "a timer is PENDING for this point in the runout", so
+  `handleRunoutStep` clears it before anything that can fail. Read as "this point was armed once, ever", one failed
+  step froze the hand permanently: the commit's rejection left stage/phase unchanged, so every later arm — including
+  the self-healing `rearmTimersFromCache` one that fires on every reload from any instance — was suppressed as
+  already-armed, and a mid-runout hand generates nothing else to recover with (no `current_player_id`, so no turn
+  timer, no player action). Every error exit now goes through `retryRunoutStep` (bounded by `MaxRunoutRetries`,
+  mirroring `retryNextHand`/`MaxNextHandRetries`), and the version-conflict branch logs a `WARN` and re-arms off the
+  reloaded state instead of returning `nil` silently — `tablestore.resolveCommitErr` reports **every**
+  `TransactionCanceledException` as `ErrVersionConflict` (`dynamo.IsConditionFailed` does not inspect the
+  cancellation reason), so a plain `TransactionConflict` between this instance's two processes, both of which arm
+  their own runout timer off the same commit, read exactly like "a sibling already dealt this street" when nobody
+  did. Repeated rejections trip `tablestore`'s per-table breaker, whose `ErrCommitThrottled` is not a conflict and is
+  therefore bounded by the retry cap. **The classification itself was fixed upstream in `api-commons` v1.11.0**:
+  `dynamo.IsConditionFailed` now requires a `ConditionalCheckFailed` cancellation reason, and
+  `resolveCommitErr` names `dynamo.IsTransactionConflict`/`IsTransactionThrottled` explicitly as
+  `ErrUnavailable` (abort and resync) so that dependency is visible in the code, not just in the version pin.
+  Never widen `ErrVersionConflict` back to "any cancelled transaction": it is a verdict every handler
+  reconciles against.
+  See `docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md`.
 - **A timer-fired handler must force a fresh reload, not `ensureLoaded(ctx, false)`.** `handleTurnTimeout`,
   `handleNextHand` and `handleRunoutStep` are only ever reached from a `time.AfterFunc` armed by *this* actor
   instance — and `internal/tablelease` is latency-only, never an exclusive fleet lock (several instances run
@@ -396,7 +416,8 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   assertion `SetHandHookClaimer`'s wiring already uses — `cache.Backend` cannot express Publish/Subscribe);
   `tablemanager.Manager.ListenForExternalChanges` subscribes once per process and dispatches a new
   `table.ExternalChangeCmd` to whichever local `*Actor` is running that table, forcing an immediate
-  `ensureLoaded(ctx, true)` + `broadcastAll()`. Fire-and-forget throughout by design — DynamoDB's conditional
+  `ensureLoaded(ctx, true)` + `syncWithoutPublish()` (it was `broadcastAll()` until 2026-09-17 — see the
+  sibling-republish bullet below). Fire-and-forget throughout by design — DynamoDB's conditional
   commit is always the source of truth, so a dropped or delayed signal only costs the slower pre-existing reload
   path for whichever process missed it, never correctness. A table with no local Actor is silently ignored, and
   `GetOrCreateActor` must never be called from this path — that would spin up and immediately abandon an Actor
@@ -433,9 +454,28 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   after correctly showing a healthy one. Fixed identically: `turnDeadlineForPersist`'s fresh
   branch stashes into `pendingPersistedDeadline`/`pendingDeadlineFor`/`pendingDeadlineForStage`
   so `armTurnTimer` — in every process, once each reloads — reuses the exact same value instead of
-  computing its own. This does not stop multiple processes from each broadcasting the same
-  version; it makes sure they all agree on the number when they do.
+  computing its own. That fix made every process agree on the *number* when several broadcast one
+  version; the sibling-republish bullet below is what later stopped several from broadcasting it at all.
   `TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed` mirrors the next-hand test above.
+- **Only the instance that ran the command publishes — a sibling reloads and stays off the wire.**
+  `ws.RedisRegistry.Broadcast` (`api-commons/ws`) PUBLISHes to a Valkey channel every instance is
+  subscribed to and each delivers to its own local conns, so **one** publish is already fleet-wide.
+  `handleExternalChange` nevertheless called `broadcastAll()`, on a comment that claimed it reached
+  "whichever of this table's players are connected to THIS process" — it does not, and the result was
+  one frame per instance per commit for the same `(hand_id, snapshot_version)`. A 2026-09-15 capture
+  decoded 465 frames: ~3 copies of nearly every version, and the **only** fields that ever differed
+  between copies were `current_streak` (256 divergences) and `equity` (208) — the two decorations
+  `publishSnapshots` applies at broadcast time from per-instance caches, outside the versioned state.
+  The UI cannot order two frames sharing a version (`snapshot_version` is a *state* version — chat and
+  reactions rebroadcast on the same one — so it is not a dedup key), so both visibly flickered.
+  `broadcastAll`/`syncWithoutPublish` now split publish from the sweeps/timers/hooks, `equity.seedFor`
+  derives the Monte-Carlo seed from the spot so every process samples identically, and
+  `SetStreaksForActor` fires `notifyChange` so siblings re-read the badge on a reload that lands on
+  `Complete` (gated on `Complete` precisely so the 30s `StreakRefreshInterval` pacing #222 added is not
+  undone for mid-hand commits). `notifyHandComplete` returns whether it ran, so the owner publishes once
+  more after the hooks — that is what puts the winner's new badge on screen at the end of the hand
+  instead of one commit late. See
+  `docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md`.
 - **A shared `valkey.Client` head-of-line-blocks latency-critical PUBLISHes behind unrelated bulk
   traffic — give realtime signaling its own connection.** Fifth follow-up in the incident spec
   (2026-09-04): even with the two deadline bugs above fixed, the *first* broadcast carrying a
@@ -685,7 +725,19 @@ catalog.
   `SitOutForActor` unconditionally would force-fold an exiting BB/SB before their turn ever comes back — breaking an
   uncontested win they're still owed). Otherwise they're left untouched: `Actor.processPendingExitAutoFolds` folds them
   the instant their own turn actually arrives, and `Actor.removeEligiblePendingExits` sweeps and cashes out every
-  `PendingExit` player no longer `DealtIntoCurrentHandForActor`. Both are hooked into `broadcastAll` (the same
+  `PendingExit` player no longer `DealtIntoCurrentHandForActor`. **`SitOutForActor` itself obeys the same turn rule as
+  of 2026-09-17** — a `ready:false` toggle mid-hand went straight to `Round.Act(Fold)` for any `Active` seat, which
+  moved `Round.LastActorID` and so re-anchored `actionScanOrder` past seats that had not acted yet, and could fold a
+  player who had already closed the action out of a contested pot (it is what ended a real hand on a three-card
+  board). Off-turn it only marks the seat `SittingOut`; the same sweep takes the fold when the action arrives, which
+  is why its trigger is now `Table.CurrentPlayerShouldAutoFoldForActor` (pending exit **or** paused) rather than the
+  pending-exit-only predicate. Two invariants make that safe and are pinned by tests: a `Folded` seat is never
+  downgraded to `SittingOut` while `handInProgress()` (`runShowdown` reads `State == Folded` for
+  `sidepots.Contribution.Folded`, so the overwrite paid a folded player a side pot built from the chips they had
+  folded), and `stillInHand` counts `SittingOut` as in the hand for `countRemainingAndActable`/`activePlayers`/
+  `shouldRunItTwice` (every seat `StartHand` deals in starts `Active`, so a `SittingOut` entry in `handOrder` is by
+  construction a mid-hand pause — reading it as "out of the hand" deleted a live contestant and froze the runout).
+  See `docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md`. Both are hooked into `broadcastAll` (the same
   per-commit point `armTurnTimer`/inline preselections already use) — not gated behind
   `claimHandHooks`, since `RemovePlayerForActor`'s conditional commit already makes a duplicate sweep a safe no-op.
   `dealtIntoCurrentHand`/`handOrder` stays true through the entire post-hand

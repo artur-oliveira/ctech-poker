@@ -89,7 +89,7 @@ describe('shared app page chrome', () => {
       expect(within(tabBar).queryByRole('link', {name: /Guia/})).not.toBeInTheDocument();
       // Standing on a tucked route, the trigger names that route instead of
       // the generic "Mais" so the active location is still visible.
-      const more = within(tabBar).getByRole('button', {name: 'Ranking — abrir mais destinos'});
+      const more = within(tabBar).getByRole('button', {name: 'Ranking: abrir mais destinos'});
       expect(more).toHaveClass('is-active');
       expect(more).toHaveAttribute('aria-current', 'page');
       expect(within(more).getByText('Ranking')).toBeInTheDocument();

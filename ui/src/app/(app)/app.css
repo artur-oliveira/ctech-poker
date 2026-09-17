@@ -6942,3 +6942,394 @@ button.deck-grid-slot:hover {
         width: 100%
     }
 }
+
+/* ---------------------------------------------------------------------------
+   /player-profile — the player's own profile as a route.
+
+   Not a stack of panels: a settings sheet whose sections are separated by a
+   hairline and a wide gutter, with the section's name and explanation in the
+   left column and its controls in the right. Panels here would have meant
+   cards inside cards the moment the achievement carousel landed, and the
+   carousel's options are the only things on this page that should read as
+   cards.
+   --------------------------------------------------------------------------- */
+.player-profile-section {
+    display: grid;
+    grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
+    align-items: start;
+    gap: 20px 48px;
+    padding: 32px 0;
+    border-top: 1px solid var(--control-border)
+}
+.player-profile-section > * {
+    grid-column: 2;
+    min-width: 0
+}
+.player-profile-section-head {
+    grid-column: 1;
+    grid-row: 1
+}
+.player-profile-section-head h2 {
+    margin: 0;
+    font-size: var(--font-size-title);
+    line-height: 1.2
+}
+.player-profile-section-head p {
+    margin: 6px 0 0;
+    max-width: 40ch;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body);
+    line-height: 1.5
+}
+.player-profile-identity {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 24px
+}
+.player-profile-avatar {
+    position: relative;
+    width: 96px;
+    height: 96px
+}
+.player-profile-avatar > [data-slot='avatar'] {
+    border: 1px solid var(--white-18)
+}
+.player-profile-avatar .profile-avatar-camera.profile-avatar-camera {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px
+}
+.player-profile-avatar .profile-avatar-camera svg {
+    width: 16px;
+    height: 16px
+}
+.player-profile-name {
+    display: grid;
+    gap: 14px;
+    flex: 1 1 260px;
+    min-width: 0;
+    max-width: 420px
+}
+.player-profile-actions,
+.player-profile-showcase-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px
+}
+.player-profile-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    max-width: 480px
+}
+.player-profile-setting > span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px
+}
+.player-profile-setting small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
+}
+.player-profile-deck {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    align-items: end;
+    gap: 16px;
+    max-width: 480px
+}
+.player-profile-deck [data-slot='select-trigger'] {
+    width: 100%
+}
+.player-profile-balances {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    max-width: 420px
+}
+.player-profile-balances > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--white-13)
+}
+.player-profile-balances dt {
+    color: var(--text-secondary);
+    font-size: var(--font-size-body)
+}
+.player-profile-balances dd {
+    margin: 0;
+    color: var(--gold-pale);
+    font: 650 var(--font-size-body) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.player-profile-featured h3,
+.player-profile-order h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: var(--font-size-subtitle)
+}
+.player-profile-featured h3 > svg {
+    width: 17px;
+    height: 17px;
+    color: var(--gold)
+}
+.player-profile-featured-count {
+    margin-left: auto;
+    color: var(--gold);
+    font: 650 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.player-profile-featured > p,
+.player-profile-order > p:not([role]) {
+    margin: 6px 0 14px;
+    max-width: 60ch;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-compact);
+    line-height: 1.5
+}
+.player-profile-empty {
+    margin: 0;
+    padding: 20px;
+    border: 1px dashed var(--control-border);
+    border-radius: var(--rounded-panel);
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body);
+    line-height: 1.55
+}
+.player-profile-empty a {
+    color: var(--brand-bright-7);
+    text-decoration: underline;
+    text-underline-offset: 3px
+}
+.showcase-layout-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    max-width: 520px;
+    list-style: none
+}
+.showcase-layout-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 52px;
+    padding: 6px 8px 6px 14px;
+    border-radius: var(--rounded-control);
+    background: var(--white-08)
+}
+.player-profile-skeleton {
+    display: grid;
+    gap: 16px;
+    padding: 24px
+}
+@media (max-width: 900px) {
+.player-profile-section {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        padding: 24px 0
+    }
+.player-profile-section > *,
+    .player-profile-section-head {
+        grid-column: 1
+    }
+.player-profile-deck {
+        grid-template-columns: minmax(0, 1fr)
+    }
+}
+
+/* The featured-achievement carousel. One rail, one tab stop: the track is a
+   multi-select listbox, so Arrow/Home/End move between options and the scroll
+   buttons are a pointer convenience on top of that, never the only way across.
+   Highlighted options carry a badge as well as the gold edge — selection is
+   never colour alone. */
+.achievement-carousel {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px
+}
+.achievement-carousel-step.achievement-carousel-step {
+    color: var(--text-secondary)
+}
+.achievement-carousel-step:hover,
+.achievement-carousel-step:focus-visible {
+    color: var(--paper)
+}
+.achievement-carousel-track {
+    display: flex;
+    gap: 12px;
+    padding: 4px 2px 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: var(--white-22) transparent
+}
+.achievement-carousel-option {
+    display: flex;
+    flex: 0 0 186px;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-seat);
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition: border-color 180ms var(--ease-out-quart), background-color 180ms var(--ease-out-quart), transform 180ms var(--ease-out-quart)
+}
+.achievement-carousel-option:hover {
+    border-color: var(--white-22);
+    transform: translateY(-2px)
+}
+.achievement-carousel-option:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.achievement-carousel-option.is-featured {
+    border-color: var(--gold);
+    background: var(--surface-control)
+}
+.achievement-carousel-badge {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: 5px;
+    min-height: 22px;
+    padding: 2px 8px;
+    border-radius: var(--rounded-pill);
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-size: var(--font-size-tiny);
+    font-weight: 750;
+    /* Always laid out, so highlighting an achievement never resizes the rail. */
+    opacity: 0;
+    visibility: hidden
+}
+.achievement-carousel-option.is-featured .achievement-carousel-badge {
+    opacity: 1;
+    visibility: visible
+}
+.achievement-carousel-badge svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 3
+}
+.achievement-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0
+}
+.achievement-compact-art {
+    display: flex;
+    height: 40px
+}
+.achievement-compact-art .hole-card {
+    width: 28px;
+    height: 40px;
+    margin-right: -12px
+}
+.achievement-compact-name {
+    color: var(--paper);
+    font-size: var(--font-size-body);
+    font-weight: 650;
+    line-height: 1.3
+}
+.achievement-compact-readout {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px
+}
+.achievement-compact-value {
+    color: var(--text-muted-soft);
+    font: 650 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.achievement-compact-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--gold);
+    font: 650 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.achievement-compact-stars svg {
+    width: 13px;
+    height: 13px
+}
+.achievement-compact.is-complete .achievement-compact-name {
+    color: var(--gold-pale)
+}
+/* A coarse pointer swipes the rail directly, so the two step buttons are
+   only spending width the options need. Keyboard access is unaffected: the
+   listbox's own arrow keys are what move between options. */
+@media (hover: none) {
+.achievement-carousel-step.achievement-carousel-step {
+        display: none
+    }
+.achievement-carousel {
+        grid-template-columns: minmax(0, 1fr)
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+.achievement-carousel-option:hover {
+        transform: none
+    }
+}
+
+/* The owner standing on their own public profile. Outside preview it is the
+   one strip a visitor would never see; inside preview it is the only thing
+   left of the owner, and it says which mode the page is in. */
+.profile-owner-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--white-03)
+}
+.profile-owner-bar[data-preview] {
+    border-style: dashed;
+    border-color: var(--gold)
+}
+.profile-owner-bar p {
+    margin: 0;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body)
+}
+.profile-owner-bar[data-preview] p {
+    color: var(--gold-pale)
+}
+.profile-owner-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px
+}
+
+/* The popover keeps the name it no longer edits. */
+.profile-name-readout {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--paper);
+    font-size: var(--font-size-subtitle);
+    font-weight: 650;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}

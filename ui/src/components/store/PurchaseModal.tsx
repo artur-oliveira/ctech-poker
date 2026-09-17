@@ -80,7 +80,7 @@ export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateA
           : recoverableExpired ? 'Código Pix expirado'
             : purchase?.status && purchase.status !== 'pending' ? 'Compra encerrada' : 'Pague com Pix para concluir'}</DialogTitle>
         <DialogDescription>{purchase?.status === 'confirmed'
-          ? 'O pagamento foi confirmado e seu saldo sandbox está atualizado.'
+          ? 'O pagamento foi confirmado e seu saldo está atualizado.'
           : recoverableExpired ? 'Este código não pode mais ser usado. Gere um novo Pix para manter o mesmo pacote.'
             : purchase?.status && purchase.status !== 'pending'
             ? 'Este pagamento não pode mais ser concluído.'
@@ -91,15 +91,15 @@ export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateA
           <span className="store-purchase-success-icon"><Check aria-hidden="true"/></span>
           <strong>Pagamento confirmado</strong>
           <p>{purchase.total_credits
-            ? `${purchase.total_credits.toLocaleString('pt-BR')} fichas sandbox já estão no seu saldo.`
-            : 'Suas fichas sandbox já estão no saldo.'}</p>
+            ? `${purchase.total_credits.toLocaleString('pt-BR')} fichas já estão no seu saldo.`
+            : 'Suas fichas já estão no saldo.'}</p>
           <span className="store-purchase-chips" aria-hidden="true"><i/><i/><i/><i/><i/></span>
         </div>
         : purchase?.status && purchase.status !== 'pending' && !recoverableExpired
           ? <p className="buyin-error" role="alert">Esta compra não está mais disponível ({STATUS_LABEL[purchase.status] || 'status desconhecido'}).</p>
           : <PixPaymentView purchase={purchase!}
                             amountDetail={purchase?.total_credits
-                              ? `${purchase.total_credits.toLocaleString('pt-BR')} fichas sandbox` : undefined}/>}
+                              ? `${purchase.total_credits.toLocaleString('pt-BR')} fichas` : undefined}/>}
       {purchase?.status === 'pending' && pollFailed && <div className="store-poll-recovery" role="alert">
         <span>Não foi possível atualizar a confirmação. Seu pagamento não foi alterado.</span>
         <Button type="button" variant="ghost" disabled={pollChecking} onClick={() => void statusQuery.refetch()}>

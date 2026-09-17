@@ -44,7 +44,7 @@ export default function PokerRules() {
         <article id="stakes" className="rules-section">
           <h2>Stakes e Buy-in</h2>
           <p>O par de blinds de uma mesa (por exemplo, 25 / 50) define o seu stake e a faixa de compra de fichas (buy-in
-            mínimo e máximo), permitindo que você entre com um cacife adequado à sua banca sandbox.</p>
+            mínimo e máximo), permitindo que você entre com um cacife adequado à sua banca.</p>
         </article>
         
         <article id="acoes" className="rules-section">
@@ -74,9 +74,7 @@ export default function PokerRules() {
         
         <article id="rake" className="rules-section">
           <h2>Rake e Integridade Criptográfica</h2>
-          <p>Nas mesas sandbox, uma pequena comissão (rake) é aplicada proporcionalmente sobre o pote acumulado para
-            manter o equilíbrio econômico da partida. O valor retido é transparente e exibido ao lado do pote em tempo
-            real.</p>
+          <p>Uma pequena comissão (rake) é retirada do pote acumulado. O valor retido aparece ao lado do pote em tempo real.</p>
           <div className="rules-fairness-box">
             <ShieldCheck aria-hidden="true"/>
             <div>

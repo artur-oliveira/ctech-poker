@@ -155,7 +155,7 @@ function HandHistoryContent() {
   if (!tableId || !handId) return <RecoveryState
     nested
     title="Este link de mão está incompleto"
-    description="O endereço não diz qual mesa e qual mão abrir. Suas mãos continuam registradas — escolha uma na lista para ver o detalhe completo."
+    description="O endereço não diz qual mesa e qual mão abrir. Suas mãos continuam registradas. Escolha uma na lista para ver o detalhe."
     action={<Button render={<Link href="/hands"/>}><ListChecks/> Ver minhas mãos</Button>}/>;
 
   // Shaped like the loaded page (tool row, result header, seats, board, timeline)
@@ -228,7 +228,7 @@ function HandHistoryContent() {
             <Copy aria-hidden="true"/>{tableCopied && <span>Copiado</span>}
           </button>
         </span>
-        <span><Coins aria-hidden="true"/>{mode === 'real' ? 'Dinheiro real' : 'Sandbox'}</span>
+        <span><Coins aria-hidden="true"/>{mode === 'real' ? 'Dinheiro real' : 'Fichas'}</span>
       </div>
       <div className="hand-history-net">
         <small>Resultado líquido</small>

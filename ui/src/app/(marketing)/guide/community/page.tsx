@@ -17,7 +17,7 @@ export default function CommunityGuide() {
           <p>Com três jogadores ou mais, o topo vira pódio. A sua linha fica destacada quando você aparece na lista,
             e a lista rola por toda a classificação sem travar, por mais longa que ela fique.</p>
           <p>O cartão &quot;Sua posição no ranking&quot; sempre mostra a sua colocação real entre todos os jogadores
-            daquele modo — não apenas entre os que aparecem na página carregada. Se você ainda não jogou nenhuma mão
+            daquele modo, não apenas entre os que aparecem na página carregada. Se você ainda não jogou nenhuma mão
             nesse modo, ele mostra &quot;Ainda sem ranking&quot; em vez de uma posição.</p>
           <GuideLink href="/leaderboard">Abrir o ranking</GuideLink></>
       },
@@ -32,7 +32,7 @@ export default function CommunityGuide() {
             <li><span><b>Recentes:</b> quem sentou com você nos últimos 90 dias.</span></li>
             <li><span><b>Bloqueados:</b> a lista com o botão de desbloquear.</span></li>
             <li><span><b>Atividades:</b> solicitações e convites de mesa, com <b>Entrar</b> e <b>Recusar</b> na própria linha. É a única aba que zera o contador do menu.</span></li></GuideBullets>
-          <GuideCallout kind="safe" title="Presença sem exposição">Amigos veem apenas online, offline ou em uma mesa. Blinds, saldo e o código de uma sala privada nunca aparecem — e a sua mesa só fica acessível se você ligar isso na vitrine.</GuideCallout>
+          <GuideCallout kind="safe" title="Presença sem exposição">Amigos veem apenas online, offline ou em uma mesa. Blinds, saldo e o código de uma sala privada nunca aparecem, e a sua mesa só fica acessível se você ligar isso na vitrine.</GuideCallout>
           <GuideLink href="/people">Abrir Pessoas</GuideLink></>
       },
       {
@@ -46,17 +46,17 @@ export default function CommunityGuide() {
         id: 'seguranca', title: 'Silenciar, bloquear e denunciar', summary: 'Tudo aqui é do observador e nada altera o jogo.',
         body: <><GuideTerms><GuideTerm term="Silenciar">Esconde chat e reações daquele jogador para você, em qualquer dispositivo. Ele não é avisado.</GuideTerm>
           <GuideTerm term="Bloquear">Inclui silenciar, desfaz a amizade e impede novas solicitações e convites. Desbloquear não reativa o conteúdo: ele segue silenciado até você mudar.</GuideTerm>
-          <GuideTerm term="Denunciar">Escolha o motivo — assédio, discurso de ódio, spam, trapaça, nome ou avatar impróprio, ou outro — e descreva se quiser. A fila é revisada por pessoas e o denunciado não é avisado.</GuideTerm></GuideTerms>
+          <GuideTerm term="Denunciar">Escolha o motivo (assédio, discurso de ódio, spam, trapaça, nome ou avatar impróprio, ou outro) e descreva se quiser. A fila é revisada por pessoas e o denunciado não é avisado.</GuideTerm></GuideTerms>
           <p>As três ações estão no menu do assento na mesa e também na vitrine do jogador.</p>
           <GuideCallout kind="warning" title="Bloqueio não escolhe adversário">Um jogador bloqueado ainda pode cair na mesma mesa pública, e as apostas e ações dele continuam visíveis. Só o conteúdo social é suprimido.</GuideCallout></>
       },
       {
         id: 'sessao', title: 'Pausa consciente e controle da sessão', summary: 'Um lembrete neutro que nunca interrompe uma decisão.',
-        body: <><GuideSteps><li><span>Na mesa, abra Preferências e escolha 30, 60, 90 ou 120 minutos — ou desative.</span></li>
+        body: <><GuideSteps><li><span>Na mesa, abra Preferências e escolha 30, 60, 90 ou 120 minutos, ou desative.</span></li>
           <li><span>No fim do intervalo, o aviso espera você não estar na vez.</span></li>
           <li><span>Ele resume tempo na mesa, mãos concluídas, entrada acumulada, pilha atual e resultado.</span></li>
           <li><span>Continue jogando ou use os controles normais para sentar fora ou sair.</span></li></GuideSteps>
-          <GuideCallout kind="safe" title="Fichas são fictícias; o tempo não">Use o lembrete como ferramenta de ritmo. Ao sair da mesa, o resumo da sessão fecha a conta da sua passagem por ela.</GuideCallout></>
+          <GuideCallout kind="safe" title="O tempo de mesa é real">Use o lembrete como ferramenta de ritmo. Ao sair da mesa, o resumo da sessão fecha a conta da sua passagem por ela.</GuideCallout></>
       },
       {
         id: 'conexao', title: 'Reconexão, erros e proteção de ações', summary: 'A mesa não aceita decisões enquanto não tem estado confiável.',
@@ -66,7 +66,7 @@ export default function CommunityGuide() {
           <li><span><b>Avisos de erro:</b> um aviso de erro, ou qualquer aviso com botões (como <b>Entrar</b>/<b>Recusar</b> de um convite), permanece na tela até você fechá-lo. Só os avisos informativos simples somem sozinhos após alguns segundos.</span></li>
           <li><span><b>Removido da mesa:</b> por inatividade ou por tempo demais desconectado, com aviso e volta ao lobby; a pilha vai para a carteira.</span></li>
           <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido. Se o encerramento da sessão não redirecionar sozinho em alguns instantes, o app leva você direto para a tela de entrar.</span></li>
-          <li><span><b>Servidor fora do ar:</b> se as tentativas de verificação continuarem falhando, o aviso deixa de ser uma faixa fina e leva você para a tela de manutenção — sua ficha e seu histórico continuam seguros, e você volta de onde parou assim que o serviço responder de novo. Uma queda só da sua internet continua mostrando apenas a faixa fina.</span></li></GuideBullets></>
+          <li><span><b>Servidor fora do ar:</b> se as tentativas de verificação continuarem falhando, o aviso deixa de ser uma faixa fina e leva você para a tela de manutenção. Suas fichas e seu histórico continuam seguros, e você volta de onde parou assim que o serviço responder de novo. Uma queda só da sua internet continua mostrando apenas a faixa fina.</span></li></GuideBullets></>
       },
       {
         id: 'protecao', title: 'Inatividade e verificação rápida', summary: 'Proteções automáticas só aparecem com um motivo concreto.',

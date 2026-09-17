@@ -143,11 +143,17 @@ type Actor struct {
 	runoutTimerStage        hand.Stage
 	runoutTimerPhase        int
 	runoutStreetDelay       time.Duration
-	escalationInterval      time.Duration
-	escalationCfg           roomstore.BlindEscalation
-	afkSweepTimer           *time.Timer
-	afkSweepInterval        time.Duration
-	done                    chan struct{}
+	// runoutRetries drives handleRunoutStep's bounded re-arm after a
+	// transient (non-panic) load/commit failure — see retryRunoutStep. A
+	// mid-runout hand has no current_player_id, so nothing else on this
+	// instance would ever schedule the missing street; counted per stall and
+	// reset the moment a step reaches a verdict.
+	runoutRetries      int
+	escalationInterval time.Duration
+	escalationCfg      roomstore.BlindEscalation
+	afkSweepTimer      *time.Timer
+	afkSweepInterval   time.Duration
+	done               chan struct{}
 	// equityCache memoizes the per-viewer Monte-Carlo estimate for the hand
 	// in equityCacheHand. The estimate is a pure function of (hole cards,
 	// board, opponent count) — all of which are keyed below — while

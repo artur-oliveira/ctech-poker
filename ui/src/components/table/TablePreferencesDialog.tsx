@@ -166,14 +166,13 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
         </div>
         <div className="table-preference-toggle">
           <span><Lightbulb aria-hidden="true"/><span><Label id="equity-trainer-label">Treinador</Label>
-            <small>Explica sua mão após agir, só em mesas sandbox. Nunca aparece durante sua decisão nem em dinheiro real.</small></span></span>
+            <small>Explica sua mão depois que você age. Nunca aparece durante a sua decisão nem em dinheiro real.</small></span></span>
           <Switch aria-labelledby="equity-trainer-label" checked={preferences.equityTrainer}
                   onCheckedChange={checked => update({equityTrainer: checked})}/>
         </div>
         <div className="table-preference-toggle">
           <span><Keyboard aria-hidden="true"/><span><Label id="keyboard-shortcuts-label">Atalhos de teclado</Label>
-            <small>F, C, P e R agem na sua vez; X, C e A preparam a próxima jogada. Sem remapeamento — só
-              ligar ou desligar. Os botões continuam clicáveis de qualquer jeito.</small></span></span>
+            <small>F, C, P e R agem na sua vez; X, C e A preparam a próxima jogada. Os botões continuam clicáveis.</small></span></span>
           <Switch aria-labelledby="keyboard-shortcuts-label" checked={preferences.keyboardShortcuts}
                   onCheckedChange={checked => update({keyboardShortcuts: checked})}/>
         </div>

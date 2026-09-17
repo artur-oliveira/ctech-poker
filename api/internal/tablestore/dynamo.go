@@ -521,6 +521,21 @@ func (s *Store) MarkArchived(ctx context.Context, tableID string, expectedVersio
 }
 
 func (s *Store) resolveCommitErr(ctx context.Context, tableID, handID, actionID string, txErr error) error {
+	// A cancelled transaction that never evaluated this commit's own
+	// condition — another transaction held one of the items
+	// (TransactionConflict), or DynamoDB throttled it — is an outage, not a
+	// verdict. ErrVersionConflict means "the table already moved on, reload
+	// and reconcile", and every handler acts on that: table.Actor's runout
+	// step treated a conflicted commit as a street a sibling had already
+	// dealt and left the hand frozen mid-runout (see
+	// docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md). Both
+	// arrive here as ordinary errors only because api-commons v1.11.0
+	// tightened dynamo.IsConditionFailed to require a ConditionalCheckFailed
+	// cancellation reason; naming them keeps that dependency explicit rather
+	// than implicit in the version pin.
+	if dynamo.IsTransactionConflict(txErr) || dynamo.IsTransactionThrottled(txErr) {
+		return fmt.Errorf("%w: commit rejected before its condition was evaluated: %w", ErrUnavailable, txErr)
+	}
 	if !dynamo.IsConditionFailed(txErr) {
 		return fmt.Errorf("%w: commit: %w", ErrUnavailable, txErr)
 	}

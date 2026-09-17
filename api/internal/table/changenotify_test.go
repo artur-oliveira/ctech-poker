@@ -71,26 +71,44 @@ func TestCommitWithoutAChangeNotifierDoesNotPanic(t *testing.T) {
 	}
 }
 
-// TestHandleExternalChangeForcesReloadAndBroadcast reproduces the consumer
-// side of the signal: SetChangeNotifierForActor's sibling process, on
-// receiving Notify, dispatches ExternalChangeCmd so this instance reloads
-// (rearming every timer via rearmTimersFromCache) and re-broadcasts to
-// whichever of this table's players are connected to THIS process — even
-// though nothing local triggered it.
-func TestHandleExternalChangeForcesReloadAndBroadcast(t *testing.T) {
-	broadcastedFor := map[string]bool{}
-	a := New("table-1", nil, true, func(viewerID string, _ hand.Snapshot) {
-		broadcastedFor[viewerID] = true
-	})
+// ws.RedisRegistry.Broadcast PUBLISHes to Valkey and every instance delivers
+// to its own local conns, so the committing instance's publish already
+// reached every player wherever they are connected. A sibling republishing
+// the same version sent the client a second frame carrying that sibling's own
+// broadcast-time overlays (streak, equity), which the UI cannot order against
+// the first — the reported badge flicker. The reload and the sweeps still
+// have to run: that is what re-arms this instance's timers.
+// See docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md.
+func TestHandleExternalChangeReloadsWithoutRepublishing(t *testing.T) {
+	published := 0
+	a := New("table-1", nil, true, func(string, hand.Snapshot) { published++ })
+	t.Cleanup(func() { a.afkSweepTimer.Stop() })
 	a.cached = hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
 
 	if err := a.handleExternalChange(context.Background(), ExternalChangeCmd{}); err != nil {
 		t.Fatalf("handleExternalChange: %v", err)
 	}
 
+	if published != 0 {
+		t.Fatalf("a sibling published %d frames for a commit it did not run, want 0", published)
+	}
+}
+
+// The instance that actually committed is the one that publishes, and it
+// still publishes to every seat, not only to its own connections.
+func TestBroadcastAllPublishesToEverySeat(t *testing.T) {
+	publishedFor := map[string]bool{}
+	a := New("table-1", nil, true, func(viewerID string, _ hand.Snapshot) {
+		publishedFor[viewerID] = true
+	})
+	t.Cleanup(func() { a.afkSweepTimer.Stop() })
+	a.cached = hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
+
+	a.broadcastAll()
+
 	for _, id := range []string{"p1", "p2"} {
-		if !broadcastedFor[id] {
-			t.Fatalf("player %s was never broadcast to after an external change signal", id)
+		if !publishedFor[id] {
+			t.Fatalf("player %s was never published to by the committing instance", id)
 		}
 	}
 }

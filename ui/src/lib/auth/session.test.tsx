@@ -13,8 +13,10 @@ import {
   TOKEN_REFRESH_MARGIN_MS,
   tokenExpiryMs,
   useOptionalSession,
+  useOptimisticSession,
   useSessionKeepAlive
 } from './session';
+import {forgetSessionHint, hasSessionHint, rememberSessionHint} from './sessionHint';
 
 /** A token whose `exp` is `seconds` from now. Only the payload is real — the
  * client reads `exp` to schedule, never to authorize. */
@@ -297,5 +299,67 @@ describe('useOptionalSession', () => {
     mocks.query.mockReturnValue({data: undefined});
     rerender();
     expect(mocks.setPlayerId).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('session hint', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.token = null;
+    mocks.query.mockReturnValue({data: undefined});
+    forgetSessionHint();
+  });
+  
+  test('is recorded by a refresh that returns a session and erased by one that does not', async () => {
+    mocks.refresh.mockResolvedValue({accessToken: 'fresh', username: 'Ana'});
+    await getOrRefreshSession();
+    expect(hasSessionHint()).toBe(true);
+    
+    mocks.refresh.mockResolvedValue(null);
+    await getOrRefreshSession();
+    expect(hasSessionHint()).toBe(false);
+  });
+  
+  test('survives storage being unavailable instead of taking the page down', () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('private mode');
+    });
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('private mode');
+    });
+    
+    expect(() => rememberSessionHint()).not.toThrow();
+    expect(hasSessionHint()).toBe(false);
+    
+    getItem.mockRestore();
+    setItem.mockRestore();
+  });
+  
+  test('answers optimistically while the refresh is in flight, then with the truth', async () => {
+    rememberSessionHint();
+    let settle: (value: unknown) => void = () => undefined;
+    mocks.refresh.mockReturnValue(new Promise(resolve => {
+      settle = resolve;
+    }));
+    
+    const {result} = renderHook(() => useOptimisticSession());
+    // The refresh has not answered yet: the hint carries the label.
+    expect(result.current).toEqual({authed: true, checking: true});
+    
+    await act(async () => {
+      settle(null);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.checking).toBe(false));
+    // The confirmed answer overrides the hint, and the hint itself is gone.
+    expect(result.current.authed).toBe(false);
+    expect(hasSessionHint()).toBe(false);
+  });
+  
+  test('starts from the logged-out label when this browser has never had a session', async () => {
+    mocks.refresh.mockResolvedValue(null);
+    const {result} = renderHook(() => useOptimisticSession());
+    expect(result.current).toEqual({authed: false, checking: true});
+    await waitFor(() => expect(result.current.checking).toBe(false));
   });
 });

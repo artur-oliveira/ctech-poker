@@ -31,14 +31,14 @@ describe('lobby player components', () => {
   test('omits the currency-mode tabs from the HUD when real money is off', () => {
     mocks.query.mockReturnValue({isLoading: true});
     render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
-    expect(screen.queryByRole('group', {name: 'Modo das estatísticas'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', {name: 'Carteira'})).not.toBeInTheDocument();
   });
 
   test('shows the currency-mode tabs in the HUD when real money is on', () => {
     mocks.realMoney.enabled = true;
     mocks.query.mockReturnValue({isLoading: true});
     render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
-    expect(screen.getByRole('group', {name: 'Modo das estatísticas'})).toBeInTheDocument();
+    expect(screen.getByRole('group', {name: 'Carteira'})).toBeInTheDocument();
   });
   
   test('hides the active-table banner without an open session', () => {
@@ -56,7 +56,7 @@ describe('lobby player components', () => {
     });
     render(<ActiveTableBanner/>);
     expect(screen.getByRole('heading', {name: 'Sua mesa continua aberta'})).toBeInTheDocument();
-    expect(screen.getByText('Você ainda está sentado · entrada de 100 fichas sandbox')).toBeInTheDocument();
+    expect(screen.getByText('Você ainda está sentado · entrada de 100 fichas')).toBeInTheDocument();
     expect(screen.queryByText('MESA EM ANDAMENTO')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Retomar mesa'}));
     expect(mocks.push).toHaveBeenCalledWith('/table?id=table%20%2F%201');

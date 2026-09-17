@@ -58,7 +58,7 @@ const SPEEDS = [1, 2, 0.5] as const;
 // always asks the same question.
 const COACH_QUESTIONS = [
   'Pense nas pot odds: o valor que você pagaria compensa a chance de completar sua mão?',
-  'Qual é a sua posição na mesa nesta rodada — isso muda a sua decisão aqui?',
+  'Qual é a sua posição na mesa nesta rodada, e como ela muda a sua decisão?',
   'Que range de mãos o vilão provavelmente tem, dado o padrão de apostas até agora?',
   'O que a aposta do adversário sugere sobre a força da mão dele?',
   'Você jogaria diferente se o seu stack fosse bem menor?',

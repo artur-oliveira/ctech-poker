@@ -56,7 +56,7 @@ function PeopleContent() {
       <AppPageBody className="people-page">
         <AppPageHeader icon={Users} eyebrow="PESSOAS"
                        title="Seus amigos, solicitações e adversários recentes."
-                       description="A amizade é sempre mútua. A presença aparece só entre amigos, e sua mesa só fica visível se você ativar isso no perfil — mesas privadas nunca aparecem."/>
+                       description="A amizade é sempre mútua. A presença aparece só entre amigos, e sua mesa só fica visível se você ativar isso no perfil. Mesas privadas nunca aparecem."/>
         <FriendCodeLookup actions={actions}/>
         <FilterGroup label="Seções de pessoas" value={tab} options={TABS} onChangeAction={setTab}/>
         {tab === 'friends' && <PeopleList variant="friends" items={friends.items} isLoading={friends.isLoading}

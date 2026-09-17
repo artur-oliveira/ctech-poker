@@ -4,6 +4,7 @@ import Image from 'next/image';
 import {Check, Copy, ShieldCheck} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {formatDuration, useCountdownMs} from './useCountdown';
+import {moneyExact} from '@/lib/chips';
 
 interface PixPayable {
   pix_copia_e_cola?: string;
@@ -12,15 +13,12 @@ interface PixPayable {
   price_cents?: number;
 }
 
-function formatBRL(cents?: number) {
-  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-}
 
 // amountDetail says what the money buys (e.g. "5.500 fichas", "Baralho Dourado").
 // The amount itself is never optional: this is a real-money QR code, and a player
 // must never be asked to scan one without the charge stated on the same screen.
 export function PixPaymentView({purchase, amountDetail,
-                                paymentNote = 'As fichas são apenas do modo sandbox e não têm valor em dinheiro.'}: {
+                                paymentNote = 'As fichas servem para jogar e não têm valor em dinheiro.'}: {
   purchase: PixPayable;
   amountDetail?: string;
   paymentNote?: string;
@@ -46,7 +44,7 @@ export function PixPaymentView({purchase, amountDetail,
 
   return <>
     <p className="store-pix-amount">
-      <strong>{formatBRL(purchase.price_cents)}</strong>
+      <strong>{moneyExact(purchase.price_cents)}</strong>
       {amountDetail && <small>{amountDetail}</small>}
     </p>
     {purchase.qr_code_base64 && <div className="store-qr">

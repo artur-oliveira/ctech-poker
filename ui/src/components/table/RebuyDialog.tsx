@@ -135,7 +135,7 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
           ? `Compre mais ${unit} para continuar jogando nesta mesa.`
           : isReal
             ? 'Seu saldo disponível não cobre o buy-in mínimo desta mesa.'
-            : 'Seu saldo sandbox não cobre o buy-in mínimo desta mesa.'}</DialogDescription>
+            : 'Seu saldo de fichas não cobre o buy-in mínimo desta mesa.'}</DialogDescription>
       </DialogHeader>
       {isReal && !!room.entry_fee_cents &&
           <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
