@@ -27,8 +27,9 @@ export default function TableGuide() {
           bloqueados até o estado da mesa chegar completo. Quando um servidor entra em manutenção, o mesmo aviso
           informa que a mesa está migrando de servidor — a reconexão acontece sozinha e o jogo continua de onde
           parou.</GuideTerm>
-        <GuideTerm term="Maior pote de hoje">O maior pote já disputado nesta mesa hoje, com a mão vencedora quando
-          ela foi revelada. Atualiza a cada mão concluída.</GuideTerm>
+        <GuideTerm term="Maior pote de hoje">O maior pote já disputado nesta mesa hoje, sempre com o nome de quem
+          levou — inclusive quando todos correram e não houve showdown. A mão feita aparece junto quando o vencedor
+          mostrou as cartas. Atualiza a cada mão concluída.</GuideTerm>
         <GuideTerm term="Mais ações da mesa">Reúne Ranking de mãos, Últimos vencedores e Preferências, mais Treinador e
           Convidar quando a mesa oferece os dois. Em telas largas esses itens também aparecem soltos no
           cabeçalho.</GuideTerm>

@@ -9,29 +9,50 @@ import {invalidateAfterSettle} from '@/lib/settleRefetch';
 
 const CARD_CODE = /^[2-9TJQKA][CDHS]$/i;
 
-// KNOWN LIMITATION: this names whoever holds the single best raw hand among
-// `revealed`, not whoever actually won the largest share of `data.pot`. On a
-// multi-way all-in with a side pot, the best hand at the table is only ever
-// eligible for the pot layer it covers (see `contestedPots`/`playerPotBreakdown`
-// in lib/tableOutcome.ts, which HandOutcome and the live standings already get
-// right) — a short-stacked flush can win a small main pot while a worse hand
-// takes a much bigger side pot between the two deeper stacks. `TableHighlight`
-// (lib/api/highlights.ts) has no per-player payout on `revealed` to attribute
-// the caption correctly here; fixing it needs that field added on the
-// api/highlights.Store side first.
-export function highlightWinnerLabel(board?: string[], revealed?: Array<{name?: string; hole_cards: string[]}>) {
+// Names whoever the server says was PAID (`winners`, from hand.HandOutcome),
+// which is the only source that survives a hand nobody showed down — the
+// reported bug, where an all-in everybody folded to left this card with a pot
+// and no name. It also settles the attribution the old caption could only
+// guess at: with a side pot the best hand among `revealed` is not necessarily
+// who won the most, and `winners` carries the per-player payout to sort by.
+// `revealed` is now only consulted to decorate the caption with the made hand,
+// and as the whole answer for rows written before `winners` existed.
+function madeHandOf(board: string[] | undefined, hole: string[]) {
   if (board?.length !== 5 || new Set(board.map(card => card.toUpperCase())).size !== 5 ||
     board.some(card => !CARD_CODE.test(card))) return undefined;
-  const candidates = (revealed || []).filter(hand => hand.hole_cards.length === 2 &&
-    hand.hole_cards.every(card => CARD_CODE.test(card)) &&
-    new Set([...board, ...hand.hole_cards].map(card => card.toUpperCase())).size === 7);
-  if (candidates.length === 0) return undefined;
+  if (hole.length !== 2 || !hole.every(card => CARD_CODE.test(card)) ||
+    new Set([...board, ...hole].map(card => card.toUpperCase())).size !== 7) return undefined;
+  return HAND_CATEGORY_LABELS[bestHandCategory([...hole, ...board])];
+}
+
+// Pre-`winners` fallback: the best raw hand among those shown. Kept because a
+// highlight row is overwritten only by a bigger pot, so rows written before
+// this field shipped stay on display for the rest of the UTC day.
+function bestShownLabel(board?: string[], revealed?: Array<{name?: string; hole_cards: string[]}>) {
+  const candidates = (revealed || []).filter(hand => madeHandOf(board, hand.hole_cards));
+  if (candidates.length === 0 || !board) return undefined;
   const best = candidates.reduce((winner, hand) =>
     compareHands([...hand.hole_cards, ...board], [...winner.hole_cards, ...board]) > 0 ? hand : winner);
   const tied = candidates.filter(hand =>
     compareHands([...hand.hole_cards, ...board], [...best.hole_cards, ...board]) === 0);
   const names = tied.map(hand => hand.name || 'Jogador').join(' e ');
-  const category = HAND_CATEGORY_LABELS[bestHandCategory([...best.hole_cards, ...board])];
+  const category = madeHandOf(board, best.hole_cards);
+  return category ? `${names} — ${category}` : names;
+}
+
+export function highlightWinnerLabel(board?: string[],
+  revealed?: Array<{player_id: string; name?: string; hole_cards: string[]}>,
+  winners?: Array<{player_id: string; name?: string; payout: number}>) {
+  if (!winners?.length) return bestShownLabel(board, revealed);
+  const top = Math.max(...winners.map(winner => winner.payout));
+  const paid = winners.filter(winner => winner.payout === top);
+  const names = paid.map(winner => winner.name || 'Jogador').join(' e ');
+  // Only one winner can carry a made-hand caption without ambiguity, and only
+  // if they actually showed — a mucked winner has no cards to describe.
+  const shown = paid.length === 1
+    ? revealed?.find(hand => hand.player_id === paid[0].player_id)
+    : undefined;
+  const category = shown && madeHandOf(board, shown.hole_cards);
   return category ? `${names} — ${category}` : names;
 }
 
@@ -95,7 +116,7 @@ export function TodayHighlight({tableId, handId, handComplete, handPot}: {
   }, [expanded]);
 
   if (!data?.pot) return null;
-  const revealedText = highlightWinnerLabel(data.board, data.revealed);
+  const revealedText = highlightWinnerLabel(data.board, data.revealed, data.winners);
   return (
     <div className={`today-highlight-wrap ${expanded ? 'expanded' : ''}`} ref={wrapRef}>
       <button type="button" className="today-highlight" aria-expanded={expanded}
