@@ -143,6 +143,12 @@ type Actor struct {
 	runoutTimerStage        hand.Stage
 	runoutTimerPhase        int
 	runoutStreetDelay       time.Duration
+	// runoutRetries drives handleRunoutStep's bounded re-arm after a
+	// transient (non-panic) load/commit failure — see retryRunoutStep. A
+	// mid-runout hand has no current_player_id, so nothing else on this
+	// instance would ever schedule the missing street; counted per stall and
+	// reset the moment a step reaches a verdict.
+	runoutRetries int
 	escalationInterval      time.Duration
 	escalationCfg           roomstore.BlindEscalation
 	afkSweepTimer           *time.Timer

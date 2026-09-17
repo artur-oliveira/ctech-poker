@@ -355,6 +355,15 @@ func (a *Actor) armWinnerCardsTimer(req *hand.WinnerCardsRequest) {
 // matching armTurnTimer/armNextHandTimer's convention. stage is passed in by
 // broadcastAll (already knows the current stage) so this stays a plain
 // comparison, no extra engine call.
+//
+// The (handID, phase, stage) key means "a timer is PENDING for this point in
+// the runout", which is why handleRunoutStep clears it the moment one fires.
+// Read as "this point was armed once, ever", a single failed runout commit
+// froze the hand permanently: the commit's conflict left the state — and so
+// the key — unchanged, and every later arm, including the self-healing ones
+// rearmTimersFromCache makes on every reload from any instance, was
+// suppressed as already-armed. See
+// docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md.
 func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
 	if !awaiting {
 		if a.runoutTimer != nil {
@@ -386,7 +395,20 @@ func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
 // instead of showing the whole runout in a single broadcast. A stale fire
 // (the awaited state no longer holds, e.g. this table already finished the
 // runout through another path) is a silent no-op.
+//
+// Every exit from here must leave the table with either a street dealt or a
+// pending timer: this handler is the only scheduler the runout has, the same
+// rule handleNextHand/retryNextHand follow. A hand mid-runout has no
+// current_player_id, so the turn timer cannot cover for it either — the
+// 2026-09-17 incident sat 47s on the flop until a player leaving force-ended
+// the hand, board still three cards.
 func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
+	// The timer that dispatched this command has fired, so it is no longer
+	// pending: clear its key before anything that can fail, so every arm
+	// below — this handler's own broadcastAll, ensureLoaded's
+	// rearmTimersFromCache, or any later command on any instance — is free to
+	// arm a fresh timer for the same point in the runout and retry.
+	a.runoutTimerHandID = ""
 	// Force a fresh reload — same reasoning as handleTurnTimeout/handleNextHand:
 	// this fires runoutStreetDelay after a time.AfterFunc armed on a
 	// trustCache instance with no exclusive fleet lock, and each step's commit
@@ -394,9 +416,10 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 	// the final street resolves to Complete. A stale a.cached here silently
 	// produces the same divergent next_hand_unix_ms as the turn-timeout case.
 	if err := a.ensureLoaded(ctx, true); err != nil {
-		return err
+		return a.retryRunoutStep(err)
 	}
 	if !a.cached.IsAwaitingRunoutForActor() {
+		a.runoutRetries = 0
 		return nil
 	}
 	// Same guard as handleTurnTimeout/handleNextHand: a.mutate restores
@@ -408,16 +431,59 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 	})
 	if err != nil {
 		if errors.Is(err, tablestore.ErrVersionConflict) {
+			// Not necessarily "a sibling already dealt this street":
+			// tablestore maps every TransactionCanceledException to this
+			// error, transaction conflicts and throttling included (see
+			// dynamo.IsConditionFailed), so the street may simply not have
+			// been dealt by anyone. Reload and let broadcastAll below re-arm
+			// off the reloaded state — which deals it on the next tick if it
+			// is still owed, and stops the timer if a sibling really did win.
+			// A rejection that keeps repeating trips tablestore's per-table
+			// breaker, whose ErrCommitThrottled is not a conflict and so ends
+			// up bounded by retryRunoutStep below.
+			slog.WarnContext(ctx, "table runout step rejected; re-arming from reloaded state",
+				"table_id", a.id, "hand_id", a.handID, "err", err)
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-				return reloadErr
+				return a.retryRunoutStep(reloadErr)
 			}
 		} else {
-			return err
+			return a.retryRunoutStep(err)
 		}
 	}
+	a.runoutRetries = 0
 	if err := a.commitOutcomeLogEntries(ctx); err != nil {
 		return err
 	}
 	a.broadcastAll()
 	return nil
+}
+
+// retryRunoutStep re-arms the paced runout after handleRunoutStep failed for
+// an ordinary (non-panic) reason, and returns err unchanged so the caller
+// still reports the failure. Clearing runoutTimerHandID alone only unblocks a
+// LATER arm, and a hand mid-runout is exactly the state that generates no
+// later command of its own: nobody is on the clock, so there is no turn
+// timer, no player action, and nothing else to carry the re-arm — the hand
+// simply stops (the 2026-09-17 incident). Bounded by MaxRunoutRetries, after
+// which recovery degrades to rearmTimersFromCache on the next command this
+// table sees from any instance.
+func (a *Actor) retryRunoutStep(err error) error {
+	if a.runoutRetries >= MaxRunoutRetries {
+		slog.Error("table runout retries exhausted", "table_id", a.id, "hand_id", a.handID, "err", err)
+		a.runoutRetries = 0
+		return err
+	}
+	a.runoutRetries++
+	if a.runoutTimer != nil {
+		a.runoutTimer.Stop()
+	}
+	slog.Warn("table runout step failed; re-arming",
+		"table_id", a.id, "hand_id", a.handID, "attempt", a.runoutRetries, "err", err)
+	a.runoutTimer = time.AfterFunc(time.Duration(a.runoutRetries)*a.runoutStreetDelay, func() {
+		reply := make(chan error, 1)
+		if dispatchErr := a.Dispatch(runoutStepCmd{Reply: reply}); dispatchErr != nil {
+			slog.Warn("table runout retry dispatch failed", "table_id", a.id, "err", dispatchErr)
+		}
+	})
+	return err
 }

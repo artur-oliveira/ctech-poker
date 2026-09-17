@@ -1944,14 +1944,14 @@ func TestCancelExitErrorsWithNoPendingExit(t *testing.T) {
 	}
 }
 
-func TestCurrentPlayerHasPendingExitForActor(t *testing.T) {
+func TestCurrentPlayerShouldAutoFoldForActor(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
 	table := NewTable([]*Player{p1, p2}, 10, 20)
 	if err := table.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
 	}
-	if table.CurrentPlayerHasPendingExitForActor() {
+	if table.CurrentPlayerShouldAutoFoldForActor() {
 		t.Fatal("expected false before any exit is requested")
 	}
 	waiting := p1.ID
@@ -1961,13 +1961,13 @@ func TestCurrentPlayerHasPendingExitForActor(t *testing.T) {
 	if err := table.RequestExit(waiting); err != nil {
 		t.Fatalf("RequestExit: %v", err)
 	}
-	if table.CurrentPlayerHasPendingExitForActor() {
+	if table.CurrentPlayerShouldAutoFoldForActor() {
 		t.Fatal("expected false: the exiting player is not the one currently on the clock")
 	}
 	if err := table.Act(table.CurrentPlayerIDForActor(), betting.ActionCall, 20); err != nil {
 		t.Fatalf("Act(call): %v", err)
 	}
-	if !table.CurrentPlayerHasPendingExitForActor() {
+	if !table.CurrentPlayerShouldAutoFoldForActor() {
 		t.Fatal("expected true: it is now the exiting player's turn")
 	}
 }

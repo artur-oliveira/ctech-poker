@@ -371,7 +371,7 @@ func (t *Table) shouldRunItTwice() bool {
 	}
 	remaining := 0
 	for _, p := range t.handOrder {
-		if p.State != Active && p.State != AllIn {
+		if !stillInHand(p) {
 			continue
 		}
 		remaining++
@@ -485,13 +485,13 @@ func (t *Table) CurrentPlayerIDForActor() string {
 // SitOutForActor marks a player SittingOut — used by Phase 2's disconnect
 // grace-window handling once a disconnected player exceeds the grace period
 // or enough consecutive disconnected hands (OVERVIEW.md § 4), and by a
-// player's own voluntary "sit out" toggle. A player still Active in the
-// current hand is folded out of the live betting round first: a bare state
-// flip left betting.Round still waiting on their decision forever (the round
-// never completes, and CurrentPlayerIDForActor never changes, so the
-// universal turn timer's idempotent re-arm treats it as a no-op — the hand
-// wedges permanently). A player already AllIn has no decision left to make
-// and stays AllIn through showdown.
+// player's own voluntary "sit out" toggle. A player who is on the clock is
+// folded out of the live betting round first: a bare state flip left
+// betting.Round still waiting on their decision forever (the round never
+// completes, and CurrentPlayerIDForActor never changes, so the universal
+// turn timer's idempotent re-arm treats it as a no-op — the hand wedges
+// permanently). A player already AllIn has no decision left to make and
+// stays AllIn through showdown.
 //
 // Ready is cleared here rather than left to the caller: the fold path below
 // leaves State==Folded, and a Folded+Ready seat is eligibleForNextHand — so
@@ -506,26 +506,43 @@ func (t *Table) SitOutForActor(playerID string) {
 		return
 	}
 	p.Ready = false
-	// Once resolution is over, AllIn is only a residue of the finished hand,
-	// not a reason to keep the seat eligible for the next deal.
+	// Once resolution is over, AllIn/Folded are only residue of the finished
+	// hand, not a reason to keep the seat eligible for the next deal.
 	if t.stage == Complete || t.stage == WaitingForPlayers {
 		p.State = SittingOut
 		return
 	}
-	if p.State != Active {
-		if p.State != AllIn {
-			p.State = SittingOut
-		}
-		return
-	}
-	if idx, ok := t.roundIdx[playerID]; ok && t.round != nil {
-		if err := t.round.Act(idx, betting.ActionFold, 0); err == nil {
-			p.State = Folded
-			if t.round.IsComplete() {
-				t.advanceStage()
+	// Only a player actually on the clock may be folded out of the live round.
+	// betting.Round.Act has no turn-order check of its own, so folding any
+	// Active player both moved Round.LastActorID — corrupting
+	// actionScanOrder's anchor, which then skipped seats that had not acted
+	// yet — and could fold a player who had already closed the action,
+	// forfeiting a contested pot without the board ever being run out. Anyone
+	// else is marked SittingOut and folded by
+	// Actor.processPendingExitAutoFolds the moment their own turn arrives,
+	// exactly as RequestExit already does for a pending exit. The state check
+	// is on the clock rather than on Active because a seat paused earlier in
+	// the hand still owes this round a decision, and the action reaching it is
+	// precisely when that decision must be taken for them.
+	if t.currentPlayerToAct() == playerID && p.State != AllIn && p.State != Folded {
+		if idx, ok := t.roundIdx[playerID]; ok && t.round != nil {
+			if err := t.round.Act(idx, betting.ActionFold, 0); err == nil {
+				p.State = Folded
+				if t.round.IsComplete() {
+					t.advanceStage()
+				}
+				return
 			}
-			return
 		}
+	}
+	// Folded is a decision already made in THIS hand and must outlive a
+	// sit-out request: runShowdown reads State==Folded to decide whose chips
+	// are dead money (sidepots.Contribution.Folded). Overwriting it with
+	// SittingOut put a player who had already folded back into the showdown
+	// and paid them a side pot built from the very chips they folded — see
+	// docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md.
+	if p.State == AllIn || p.State == Folded {
+		return
 	}
 	p.State = SittingOut
 }
@@ -541,7 +558,7 @@ func (t *Table) SitOutForActor(playerID string) {
 // they are — Actor.processPendingExitAutoFolds (driven from broadcastAll,
 // the same per-commit reconciliation point armTurnTimer/preselections use)
 // folds them the instant their own turn actually arrives, via
-// CurrentPlayerHasPendingExitForActor below.
+// CurrentPlayerShouldAutoFoldForActor below.
 func (t *Table) RequestExit(playerID string) error {
 	p := t.playerByID(playerID)
 	if p == nil {
@@ -556,20 +573,53 @@ func (t *Table) RequestExit(playerID string) error {
 	if p.State == Active {
 		return nil
 	}
-	if p.State != AllIn {
-		p.State = SittingOut
+	// Same rule as SitOutForActor: a fold already made in the live hand
+	// outranks the pause. Downgrading it to SittingOut here is what put a
+	// folded player back into the showdown and paid them a side pot they had
+	// folded out of — docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md.
+	if p.State == AllIn || (p.State == Folded && t.handInProgress()) {
+		return nil
 	}
+	p.State = SittingOut
 	return nil
 }
 
-// CurrentPlayerHasPendingExitForActor reports whether the player currently
-// on the clock (if any) has a pending exit request. Actor's
-// processPendingExitAutoFolds uses this to fold them out the moment it
-// becomes their turn, rather than at RequestExit time — see RequestExit's
-// doc comment for why that distinction matters.
-func (t *Table) CurrentPlayerHasPendingExitForActor() bool {
+// handInProgress reports whether a hand is still being played out, i.e. its
+// per-player Folded/AllIn states are live inputs to the pot rather than
+// residue of a finished hand.
+func (t *Table) handInProgress() bool {
+	return t.stage != Complete && t.stage != WaitingForPlayers
+}
+
+// stillInHand reports whether a handOrder entry is still contesting the
+// current hand. SittingOut counts: every player StartHand deals in begins
+// Active, so a SittingOut entry in handOrder can only be a seat paused
+// mid-hand, and a pause is a statement about FUTURE hands — their chips are
+// already in this pot and they have not folded. Reading SittingOut as "out of
+// the hand" instead is what let a pause silently delete a live contestant
+// from countRemainingAndActable: pausing the player who had just called an
+// all-in dropped `remaining` to 1, IsAwaitingRunoutForActor went false, and
+// the turn and river were never dealt. The auto-fold sweep
+// (CurrentPlayerShouldAutoFoldForActor) is what actually takes a paused
+// seat's decision, once the action reaches them.
+func stillInHand(p *Player) bool {
+	return p.State == Active || p.State == AllIn || p.State == SittingOut
+}
+
+// CurrentPlayerShouldAutoFoldForActor reports whether the player currently on
+// the clock (if any) must be folded out by the system rather than waited on:
+// they asked to exit, or they are paused (SittingOut) while still dealt into
+// this hand. Actor's processPendingExitAutoFolds uses this to fold them the
+// moment it becomes their turn, rather than at RequestExit/SitOutForActor
+// time — see RequestExit's doc comment for why that distinction matters.
+//
+// The SittingOut half is what keeps a mid-hand pause from stalling the table:
+// SitOutForActor deliberately refuses to fold a player who is not on the
+// clock, so the round still owes them a decision until their turn comes
+// around and this sweep takes it for them.
+func (t *Table) CurrentPlayerShouldAutoFoldForActor() bool {
 	p := t.playerByID(t.currentPlayerToAct())
-	return p != nil && p.PendingExit
+	return p != nil && (p.PendingExit || p.State == SittingOut)
 }
 
 // CancelExit reverses a still-pending RequestExit — mirrors the Ready:true
@@ -1623,18 +1673,19 @@ func (t *Table) advanceStage() {
 }
 
 // countRemainingAndActable reports how many players are still in the hand
-// (Active or AllIn) and how many of those can still make a betting decision
-// (Active only) — shared by advanceStage and IsAwaitingRunoutForActor so both
-// agree on exactly the same definition of "nobody left to bet against".
+// (see stillInHand) and how many of those can still make a betting decision
+// (everyone not AllIn) — shared by advanceStage and IsAwaitingRunoutForActor
+// so both agree on exactly the same definition of "nobody left to bet
+// against".
 func (t *Table) countRemainingAndActable() (remaining, canStillAct int) {
 	// handOrder is immutable for the duration of a hand. t.players can also
 	// contain a mid-hand joiner or a sitting-out player who has requested a
 	// return and is already marked Active for the next deal; neither may
 	// influence this hand's showdown/runout decisions.
 	for _, p := range t.handOrder {
-		if p.State == Active || p.State == AllIn {
+		if stillInHand(p) {
 			remaining++
-			if p.State == Active {
+			if p.State != AllIn {
 				canStillAct++
 			}
 		}
@@ -1736,7 +1787,7 @@ func (t *Table) activePlayers() []*Player {
 	// empty forever.
 	out := make([]*Player, 0, len(t.handOrder))
 	for _, p := range t.handOrder {
-		if p.State == Active || p.State == AllIn {
+		if stillInHand(p) {
 			out = append(out, p)
 		}
 	}

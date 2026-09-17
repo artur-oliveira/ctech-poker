@@ -69,6 +69,14 @@ const RevealGrace = 2200 * time.Millisecond
 // more streets remain to be revealed after an all-in is accepted.
 const RunoutStreetDelay = 2600 * time.Millisecond
 
+// MaxRunoutRetries bounds handleRunoutStep's re-arm after a transient
+// load/commit failure (retryRunoutStep). Higher than MaxNextHandRetries: a
+// stalled runout leaves a hand unresolved with chips already committed and
+// nobody able to act, so it is worth more attempts than a post-hand
+// countdown before degrading to "the next command from any instance
+// re-derives the timer" (rearmTimersFromCache).
+const MaxRunoutRetries = 8
+
 // AFKSweepInterval is how often the actor checks every seated player's
 // LastActionAt for staleness, independent of whose turn it is — see
 // armAFKSweepTimer's doc comment.
