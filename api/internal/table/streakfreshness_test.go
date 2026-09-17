@@ -3,9 +3,6 @@ package table
 import (
 	"context"
 	"testing"
-
-	"gopkg.aoctech.app/poker/api/internal/engine/betting"
-	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
 // Only the instance that wins claimHandHooks publishes the new badges. Every
@@ -34,14 +31,11 @@ func TestPublishingStreaksNotifiesSiblingInstances(t *testing.T) {
 func TestExternalChangeOnACompletedHandRefreshesTheBadge(t *testing.T) {
 	fakeClock(t)
 	store := newFakeStreakStore()
-	actor, table := streakActor(t, store)
+	actor, _ := streakActor(t, store)
 	actor.refreshStreaks(context.Background()) // opens the pacing window
 	store.shared["p1"] = 3
 	store.loads = 0
-	if err := table.StartHand(); err != nil {
-		t.Fatalf("StartHand: %v", err)
-	}
-	foldToOnePlayer(t, table)
+	actor.cached = completedTable(t)
 
 	if err := actor.handleExternalChange(context.Background(), ExternalChangeCmd{}); err != nil {
 		t.Fatalf("handleExternalChange: %v", err)
@@ -75,26 +69,5 @@ func TestExternalChangeMidHandKeepsThePacingWindow(t *testing.T) {
 
 	if store.loads != 0 {
 		t.Fatalf("streak loads on mid-hand external changes = %d, want 0", store.loads)
-	}
-}
-
-// foldToOnePlayer drives the table to hand.Complete by folding everyone but
-// one player, which is the same path an all-in nobody calls takes.
-func foldToOnePlayer(t *testing.T, table *hand.Table) {
-	t.Helper()
-	for range 20 {
-		if table.Stage() == hand.Complete {
-			return
-		}
-		current := table.CurrentPlayerIDForActor()
-		if current == "" {
-			break
-		}
-		if err := table.Act(current, betting.ActionFold, 0); err != nil {
-			t.Fatalf("fold for %s: %v", current, err)
-		}
-	}
-	if table.Stage() != hand.Complete {
-		t.Fatalf("table never reached Complete, stuck at stage %v", table.Stage())
 	}
 }

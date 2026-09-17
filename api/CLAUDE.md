@@ -396,7 +396,8 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   assertion `SetHandHookClaimer`'s wiring already uses — `cache.Backend` cannot express Publish/Subscribe);
   `tablemanager.Manager.ListenForExternalChanges` subscribes once per process and dispatches a new
   `table.ExternalChangeCmd` to whichever local `*Actor` is running that table, forcing an immediate
-  `ensureLoaded(ctx, true)` + `broadcastAll()`. Fire-and-forget throughout by design — DynamoDB's conditional
+  `ensureLoaded(ctx, true)` + `syncWithoutPublish()` (it was `broadcastAll()` until 2026-09-17 — see the
+  sibling-republish bullet below). Fire-and-forget throughout by design — DynamoDB's conditional
   commit is always the source of truth, so a dropped or delayed signal only costs the slower pre-existing reload
   path for whichever process missed it, never correctness. A table with no local Actor is silently ignored, and
   `GetOrCreateActor` must never be called from this path — that would spin up and immediately abandon an Actor
@@ -433,9 +434,28 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   after correctly showing a healthy one. Fixed identically: `turnDeadlineForPersist`'s fresh
   branch stashes into `pendingPersistedDeadline`/`pendingDeadlineFor`/`pendingDeadlineForStage`
   so `armTurnTimer` — in every process, once each reloads — reuses the exact same value instead of
-  computing its own. This does not stop multiple processes from each broadcasting the same
-  version; it makes sure they all agree on the number when they do.
+  computing its own. That fix made every process agree on the *number* when several broadcast one
+  version; the sibling-republish bullet below is what later stopped several from broadcasting it at all.
   `TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed` mirrors the next-hand test above.
+- **Only the instance that ran the command publishes — a sibling reloads and stays off the wire.**
+  `ws.RedisRegistry.Broadcast` (`api-commons/ws`) PUBLISHes to a Valkey channel every instance is
+  subscribed to and each delivers to its own local conns, so **one** publish is already fleet-wide.
+  `handleExternalChange` nevertheless called `broadcastAll()`, on a comment that claimed it reached
+  "whichever of this table's players are connected to THIS process" — it does not, and the result was
+  one frame per instance per commit for the same `(hand_id, snapshot_version)`. A 2026-09-15 capture
+  decoded 465 frames: ~3 copies of nearly every version, and the **only** fields that ever differed
+  between copies were `current_streak` (256 divergences) and `equity` (208) — the two decorations
+  `publishSnapshots` applies at broadcast time from per-instance caches, outside the versioned state.
+  The UI cannot order two frames sharing a version (`snapshot_version` is a *state* version — chat and
+  reactions rebroadcast on the same one — so it is not a dedup key), so both visibly flickered.
+  `broadcastAll`/`syncWithoutPublish` now split publish from the sweeps/timers/hooks, `equity.seedFor`
+  derives the Monte-Carlo seed from the spot so every process samples identically, and
+  `SetStreaksForActor` fires `notifyChange` so siblings re-read the badge on a reload that lands on
+  `Complete` (gated on `Complete` precisely so the 30s `StreakRefreshInterval` pacing #222 added is not
+  undone for mid-hand commits). `notifyHandComplete` returns whether it ran, so the owner publishes once
+  more after the hooks — that is what puts the winner's new badge on screen at the end of the hand
+  instead of one commit late. See
+  `docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md`.
 - **A shared `valkey.Client` head-of-line-blocks latency-critical PUBLISHes behind unrelated bulk
   traffic — give realtime signaling its own connection.** Fifth follow-up in the incident spec
   (2026-09-04): even with the two deadline bugs above fixed, the *first* broadcast carrying a
