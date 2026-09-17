@@ -148,12 +148,12 @@ type Actor struct {
 	// mid-runout hand has no current_player_id, so nothing else on this
 	// instance would ever schedule the missing street; counted per stall and
 	// reset the moment a step reaches a verdict.
-	runoutRetries int
-	escalationInterval      time.Duration
-	escalationCfg           roomstore.BlindEscalation
-	afkSweepTimer           *time.Timer
-	afkSweepInterval        time.Duration
-	done                    chan struct{}
+	runoutRetries      int
+	escalationInterval time.Duration
+	escalationCfg      roomstore.BlindEscalation
+	afkSweepTimer      *time.Timer
+	afkSweepInterval   time.Duration
+	done               chan struct{}
 	// equityCache memoizes the per-viewer Monte-Carlo estimate for the hand
 	// in equityCacheHand. The estimate is a pure function of (hole cards,
 	// board, opponent count) — all of which are keyed below — while

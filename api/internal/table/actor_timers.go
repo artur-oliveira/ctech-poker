@@ -431,17 +431,17 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 	})
 	if err != nil {
 		if errors.Is(err, tablestore.ErrVersionConflict) {
-			// Not necessarily "a sibling already dealt this street":
-			// tablestore maps every TransactionCanceledException to this
-			// error, transaction conflicts and throttling included (see
-			// dynamo.IsConditionFailed), so the street may simply not have
-			// been dealt by anyone. Reload and let broadcastAll below re-arm
-			// off the reloaded state — which deals it on the next tick if it
-			// is still owed, and stops the timer if a sibling really did win.
-			// A rejection that keeps repeating trips tablestore's per-table
-			// breaker, whose ErrCommitThrottled is not a conflict and so ends
-			// up bounded by retryRunoutStep below.
-			slog.WarnContext(ctx, "table runout step rejected; re-arming from reloaded state",
+			// A sibling committed first. Reload and let broadcastAll below
+			// re-arm off the reloaded state, which deals the next street if
+			// one is still owed and stops the timer if that sibling finished
+			// the runout — never assume the street landed just because this
+			// attempt lost. That distinction is exactly what was missing in
+			// the 2026-09-17 freeze, where resolveCommitErr reported a plain
+			// transaction conflict (nothing written at all) as a lost race;
+			// it is a verdict again as of api-commons v1.11.0, and a commit
+			// rejected without evaluating its condition now arrives as
+			// ErrUnavailable and is bounded by retryRunoutStep below.
+			slog.WarnContext(ctx, "table runout step lost a version race; re-arming from reloaded state",
 				"table_id", a.id, "hand_id", a.handID, "err", err)
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 				return a.retryRunoutStep(reloadErr)
