@@ -80,6 +80,12 @@ whenever a players store is wired) are all **fixed**; older docs that still list
   ao all-in), instâncias irmãs deixam de republicar um snapshot cuja entrega já é fleet-wide, e a
   equity Monte-Carlo passa a ser semeada pela própria mão, de modo que dois frames com o mesmo
   `(hand_id, snapshot_version)` são idênticos venham de onde vierem.
+  `2026-09-17-frozen-table-runout-and-sitout-fold.md` (**implementado**): mesa travada no flop por 47s
+  durante um runout de all-in e um jogador que já havia foldado recebendo parte do pote. Três causas —
+  a chave de idempotência do timer de runout bloqueando o re-arm depois de um commit rejeitado, o
+  `SittingOut` sobrescrevendo o `Folded` no meio da mão, e o sit-out foldando quem não estava na vez —
+  mais a classificação de `TransactionConflict` como conflito de versão, que é correção no
+  `ctech-go-common`.
 - Top-level `OVERVIEW.md` (product/game rules), `ARCHITECTURE.md` (technical design), `PLAN.md` (build history),
   `README.md` (status). Untracked `future.md` / `future_analysis.md` are brainstorm/feasibility notes — much of their
   Fase 1–2 backlog has since shipped.

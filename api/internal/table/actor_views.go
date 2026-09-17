@@ -92,18 +92,21 @@ func (a *Actor) processInlinePreselections(ctx context.Context) {
 }
 
 // processPendingExitAutoFolds folds out, one at a time, whoever is
-// currently on the clock and has a pending exit request — the moment their
-// turn actually arrives, not when RequestExit was called (an uncontested
-// win owed to them before their turn comes back around must still pay
-// out — see Table.RequestExit's doc comment). Mirrors
+// currently on the clock and cannot be waited on: a pending exit request, or
+// a seat paused mid-hand (SittingOut while still dealt in). Either way the
+// fold happens the moment their turn actually arrives, not when
+// RequestExit/SitOutForActor was called (an uncontested win owed to them
+// before their turn comes back around must still pay out, and folding a
+// player who is not on the clock corrupts the action order — see
+// Table.RequestExit and Table.SitOutForActor). Mirrors
 // processInlinePreselections's loop shape exactly (same applyActAndCommit +
 // commitOutcomeLogEntries tail), and runs immediately before it from the
 // same broadcastAll call site so a pending exit always takes priority over
 // a stale preselection for the same turn.
 func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
-	for a.cached != nil && a.cached.Stage() != hand.Complete && a.cached.CurrentPlayerHasPendingExitForActor() {
+	for a.cached != nil && a.cached.Stage() != hand.Complete && a.cached.CurrentPlayerShouldAutoFoldForActor() {
 		current := a.cached.CurrentPlayerIDForActor()
-		autoActionID := fmt.Sprintf("auto-exit-fold-%s-%d", current, a.version)
+		autoActionID := fmt.Sprintf("auto-fold-%s-%d", current, a.version)
 		applied, err := a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: current, ActionID: autoActionID, Action: betting.ActionFold,
 		})
