@@ -95,7 +95,10 @@ relógio (é papel de `processPendingExitAutoFolds`); o caminho do toggle de rea
 4. **Família (ctech-go-common)**: separar `TransactionConflict`/throttling de
    `ConditionalCheckFailed` em `dynamo.IsConditionFailed`, para que conflito real de versão não se
    confunda com erro retryável. Todos os serviços que usam `resolveTxErr`/`IsConditionFailed`
-   (wallet, billing, account) têm a mesma exposição.
+   (wallet, billing, account) têm a mesma exposição. **Feito em `api-commons` v1.11.0**
+   (`IsConditionFailed` exige o motivo `ConditionalCheckFailed`; `IsTransactionConflict` e
+   `IsTransactionThrottled` nomeiam os motivos retryáveis); aqui o `resolveCommitErr` passou a
+   nomeá-los explicitamente como `ErrUnavailable`, e não mais como conflito de versão.
 5. **Regressões**: teste de engine reproduzindo a sequência (sit-out do SB fora da vez → exit →
    all-in → fold → call) e teste de integração com dois atores concorrendo no mesmo item,
    garantindo que o runout se completa mesmo quando o primeiro `runout_step` falha.

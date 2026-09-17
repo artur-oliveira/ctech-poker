@@ -358,9 +358,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   reloaded state instead of returning `nil` silently — `tablestore.resolveCommitErr` reports **every**
   `TransactionCanceledException` as `ErrVersionConflict` (`dynamo.IsConditionFailed` does not inspect the
   cancellation reason), so a plain `TransactionConflict` between this instance's two processes, both of which arm
-  their own runout timer off the same commit, reads exactly like "a sibling already dealt this street" when nobody
+  their own runout timer off the same commit, read exactly like "a sibling already dealt this street" when nobody
   did. Repeated rejections trip `tablestore`'s per-table breaker, whose `ErrCommitThrottled` is not a conflict and is
-  therefore bounded by the retry cap. Fixing the classification itself belongs in `ctech-go-common`, not here.
+  therefore bounded by the retry cap. **The classification itself was fixed upstream in `api-commons` v1.11.0**:
+  `dynamo.IsConditionFailed` now requires a `ConditionalCheckFailed` cancellation reason, and
+  `resolveCommitErr` names `dynamo.IsTransactionConflict`/`IsTransactionThrottled` explicitly as
+  `ErrUnavailable` (abort and resync) so that dependency is visible in the code, not just in the version pin.
+  Never widen `ErrVersionConflict` back to "any cancelled transaction": it is a verdict every handler
+  reconciles against.
   See `docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md`.
 - **A timer-fired handler must force a fresh reload, not `ensureLoaded(ctx, false)`.** `handleTurnTimeout`,
   `handleNextHand` and `handleRunoutStep` are only ever reached from a `time.AfterFunc` armed by *this* actor
