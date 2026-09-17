@@ -120,15 +120,16 @@ func (a *Actor) handleRequestHandoff(c RequestHandoffCmd) error {
 // handleExternalChange reacts to a ChangeNotifier signal (see
 // SetChangeNotifierForActor): a sibling process just committed for this
 // table, so this instance forces a fresh reload — reloading also re-arms
-// every timer via rearmTimersFromCache — and re-broadcasts to whichever of
-// this table's players are connected to THIS process. Always unconditional,
-// unlike handleReconnect above: this only ever fires when something
-// genuinely changed, never on routine local traffic.
+// every timer via rearmTimersFromCache — and re-runs the per-broadcast
+// sweeps. It deliberately does NOT publish: the committing instance's own
+// publish is already fleet-wide (see syncWithoutPublish). Always
+// unconditional, unlike handleReconnect above: this only ever fires when
+// something genuinely changed, never on routine local traffic.
 func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) error {
 	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
-	a.broadcastAll()
+	a.syncWithoutPublish()
 	return nil
 }
 

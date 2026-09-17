@@ -54,30 +54,37 @@ func (a *Actor) claimHandHooks() bool {
 // leaderboard's stats writers additionally claim
 // achievements.Service.ClaimHandCounters (issue #66) before touching a
 // counter, since a Valkey blip can still let two instances both reach here.
-func (a *Actor) notifyHandComplete() {
+// Returns true only when this call actually ran the hooks, so sync can
+// publish once more afterwards — the hooks are what produce this hand's
+// streak badges (see actor_views.go).
+func (a *Actor) notifyHandComplete() bool {
 	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.completedHandNotified == a.handID {
-		return
+		return false
 	}
-	if outcome := a.cached.LastOutcomeForActor(); outcome != nil {
-		// Mark before claiming: a lost claim means another instance owns this
-		// hand, and re-asking on every later broadcast of the same hand would
-		// be one wasted round trip per chat message.
-		a.completedHandNotified = a.handID
-		if !a.claimHandHooks() {
-			return
-		}
-		if a.onHandComplete != nil {
-			names := make(map[string]string)
-			for _, p := range a.cached.PlayersForActor() {
-				if p.Name != "" {
-					names[p.ID] = p.Name
-				}
-			}
-			hookOutcome := *outcome
-			hookOutcome.FairnessProofs = a.cached.FairnessProofsForActor()
-			a.onHandComplete(a.handID, hookOutcome, names)
+	outcome := a.cached.LastOutcomeForActor()
+	if outcome == nil {
+		return false
+	}
+	// Mark before claiming: a lost claim means another instance owns this
+	// hand, and re-asking on every later broadcast of the same hand would
+	// be one wasted round trip per chat message.
+	a.completedHandNotified = a.handID
+	if !a.claimHandHooks() {
+		return false
+	}
+	if a.onHandComplete == nil {
+		return false
+	}
+	names := make(map[string]string)
+	for _, p := range a.cached.PlayersForActor() {
+		if p.Name != "" {
+			names[p.ID] = p.Name
 		}
 	}
+	hookOutcome := *outcome
+	hookOutcome.FairnessProofs = a.cached.FairnessProofsForActor()
+	a.onHandComplete(a.handID, hookOutcome, names)
+	return true
 }
 
 // SetOnHandCompleteForActor installs the post-commit gamification hook.

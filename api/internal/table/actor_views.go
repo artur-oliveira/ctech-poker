@@ -119,7 +119,28 @@ func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
 	}
 }
 
-func (a *Actor) broadcastAll() {
+// broadcastAll runs this command's sweeps and timers and then publishes one
+// snapshot per seat. Only the instance that actually ran the command calls
+// it — see syncWithoutPublish.
+func (a *Actor) broadcastAll() { a.sync(true) }
+
+// syncWithoutPublish is broadcastAll minus the publish: the pending-exit and
+// preselection sweeps, the timer re-arming and the post-hand hooks all still
+// run, but nothing goes on the wire.
+//
+// ws.RedisRegistry.Broadcast (api-commons/ws) PUBLISHes to a Valkey channel
+// that EVERY instance is subscribed to, and each delivers to its own local
+// connections. Delivery is therefore fleet-wide from a single publish: the
+// instance that committed already reached every player, wherever they are
+// connected. A sibling republishing the same snapshot_version sent the client
+// a duplicate frame decorated with that sibling's own broadcast-time overlays
+// — its 30s-paced streak map and its own Monte-Carlo equity sample — and the
+// UI has no way to order two frames sharing a version, so the badge and the
+// win-% visibly flipped between them.
+// See docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md.
+func (a *Actor) syncWithoutPublish() { a.sync(false) }
+
+func (a *Actor) sync(publish bool) {
 	if a.broadcast == nil || a.cached == nil {
 		return
 	}
@@ -144,6 +165,23 @@ func (a *Actor) broadcastAll() {
 	a.armNextHandTimer(stage == hand.Complete)
 	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
 	a.lastBroadcastStage = stage
+	if publish {
+		a.publishSnapshots()
+	}
+	// The post-hand hooks are what compute this hand's streak badges
+	// (tablemanager's onHandComplete wrapper calls SetStreaksForActor), and
+	// they necessarily run after the publish above. Publishing a second time
+	// when they actually ran is what puts the winner's new badge on screen at
+	// the end of the hand instead of one commit late.
+	if a.notifyHandComplete() && publish {
+		a.publishSnapshots()
+	}
+}
+
+// publishSnapshots builds and sends one viewer-scoped snapshot per seat.
+func (a *Actor) publishSnapshots() {
+	stage := a.cached.Stage()
+	current := a.cached.CurrentPlayerIDForActor()
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	// Chat and reactions are identical for every viewer, so build them once
 	// per broadcast instead of once per seat (#37). Both slices are only ever
@@ -183,7 +221,6 @@ func (a *Actor) broadcastAll() {
 		}
 		a.broadcast(p.ID, snapshot)
 	}
-	a.notifyHandComplete()
 }
 
 // activityViews converts the table-wide activity (chat + unexpired
