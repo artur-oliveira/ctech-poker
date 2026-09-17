@@ -4,6 +4,7 @@ import {Suspense, useEffect, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {exchangeCode, lastReturnTo, OAuthExchangeError, startOAuthFlow} from '@/lib/auth/oauth';
 import {setAccessToken, setUsername} from '@/lib/api/client';
+import {rememberSessionHint} from '@/lib/auth/sessionHint';
 import {navigateToUnavailable} from '@/lib/network/liveness';
 import {reportClientError} from '@/lib/telemetry';
 import {Button} from '@/components/ui/button';
@@ -26,6 +27,9 @@ function Callback() {
 
   function attempt() {
     exchangeCode(codeRef.current, stateRef.current).then(x => {
+      // The one place a session is born from an interactive sign-in; the
+      // silent-refresh path records the same hint in `session.ts`.
+      rememberSessionHint();
       setAccessToken(x.accessToken);
       setUsername(x.username);
       r.replace(x.returnTo || '/lobby');

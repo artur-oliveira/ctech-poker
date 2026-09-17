@@ -29,7 +29,7 @@ describe('static learning pages', () => {
     expect(screen.getByRole('link', {name: /Tudo sobre a mesa/})).toHaveAttribute('href', '/guide/table');
     expect(screen.getByRole('link', {name: /Mãos, replay e integridade/})).toHaveAttribute('href', '/guide/hands');
     expect(screen.getByRole('link', {name: /Comunidade e jogo seguro/})).toHaveAttribute('href', '/guide/community');
-    expect(screen.getByText(/não podem ser sacadas/)).toBeInTheDocument();
+    expect(screen.getByRole('link', {name: /Loja/})).toHaveAttribute('href', '/guide/store');
     expect(screen.queryByRole('link', {name: 'Lobby'})).not.toBeInTheDocument();
     expect(document.querySelector('.page-heading-shell a')).not.toBeInTheDocument();
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();

@@ -307,7 +307,7 @@ describe('FriendCodeLookup', () => {
     Object.assign(navigator, {clipboard: {writeText: vi.fn().mockRejectedValue(new Error('denied'))}});
     api.getMe.mockResolvedValue({user_id: 'me'});
     renderWithClient(<FriendCodeLookup actions={actionState()}/>);
-    expect(await screen.findByText('—')).toBeInTheDocument();
+    expect(await screen.findByText('-')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Copiar meu código de amizade'})).toBeDisabled();
   });
 });
@@ -371,13 +371,13 @@ describe('PeopleNavBadge', () => {
     api.getSocialSummary.mockResolvedValue({unread_count: 12});
     const {container} = renderWithClient(<PeopleNavBadge/>);
     expect(await screen.findByText('9+')).toBeInTheDocument();
-    expect(within(container).getByText('— 12 novidades em Pessoas')).toBeInTheDocument();
+    expect(within(container).getByText(', 12 novidades em Pessoas')).toBeInTheDocument();
   });
 
   test('renders one singular novelty and nothing at zero', async () => {
     api.getSocialSummary.mockResolvedValue({unread_count: 1});
     const {container, rerender} = renderWithClient(<PeopleNavBadge/>);
-    expect(await within(container).findByText('— 1 novidade em Pessoas')).toBeInTheDocument();
+    expect(await within(container).findByText(', 1 novidade em Pessoas')).toBeInTheDocument();
 
     api.getSocialSummary.mockResolvedValue({unread_count: 0});
     rerender(<PeopleNavBadge/>);

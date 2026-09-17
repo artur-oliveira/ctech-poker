@@ -51,7 +51,7 @@ export function DailyRewardPanel() {
       void queryClient.invalidateQueries({queryKey: BALANCE_QUERY_KEY});
       if (amount > 0) {
         setWonAmount(amount);
-        pushNotification(`Você recebeu ${chips(amount)} fichas sandbox!`, 'info');
+        pushNotification(`Você recebeu ${chips(amount)} fichas!`, 'info');
       } else {
         pushNotification('Recompensa diária ainda não disponível.', 'info');
       }

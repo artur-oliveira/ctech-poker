@@ -8,12 +8,10 @@ import {
 } from '@/components/ui/dialog';
 import {ApiError} from '@/lib/api/client';
 import type {SandboxPurchase} from '@/lib/api/wallet';
+import {moneyExact} from '@/lib/chips';
 
 type RefundState = 'confirm' | 'pending' | 'success' | 'error';
 
-function formatBRL(cents?: number) {
-  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-}
 
 function refundError(error: unknown) {
   if (error instanceof ApiError && error.status === 409) {
@@ -58,17 +56,17 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, finalFocusRe
       <DialogHeader>
         <DialogTitle>{state === 'success' ? 'Compra estornada' : 'Solicitar estorno desta compra?'}</DialogTitle>
         <DialogDescription>{state === 'success'
-          ? `O estorno de ${formatBRL(purchase.price_cents)} foi confirmado e as fichas foram removidas.`
+          ? `O estorno de ${moneyExact(purchase.price_cents)} foi confirmado e as fichas foram removidas.`
           : 'Confira o valor e o efeito no seu saldo antes de confirmar.'}</DialogDescription>
       </DialogHeader>
 
       {state === 'success' ? <div className="store-refund-result" role="status" aria-live="polite">
         <span className="store-refund-result-icon"><Check aria-hidden="true"/></span>
-        <div><strong>{formatBRL(purchase.price_cents)} em estorno</strong>
-          <p>{credits.toLocaleString('pt-BR')} fichas sandbox removidas do saldo.</p></div>
+        <div><strong>{moneyExact(purchase.price_cents)} em estorno</strong>
+          <p>{credits.toLocaleString('pt-BR')} fichas removidas do saldo.</p></div>
       </div> : <>
         <dl className="store-refund-summary">
-          <div><dt>Valor pago via Pix</dt><dd>{formatBRL(purchase.price_cents)}</dd></div>
+          <div><dt>Valor pago via Pix</dt><dd>{moneyExact(purchase.price_cents)}</dd></div>
           <div><dt>Fichas desta compra</dt><dd>{credits.toLocaleString('pt-BR')} fichas</dd></div>
           <div><dt>Saldo após o estorno</dt><dd>{projectedBalance === null
             ? 'Atualizado após confirmar'
@@ -78,10 +76,10 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, finalFocusRe
         <div className="store-refund-eligibility">
           <Coins aria-hidden="true"/>
           <div><strong>Disponível somente antes de usar as fichas</strong>
-            <p>Ao confirmar, o servidor verifica se houve algum débito sandbox depois deste crédito. Se as fichas já foram usadas em uma mesa, o estorno será recusado e seu saldo permanecerá igual.</p></div>
+            <p>Se as fichas já foram usadas em uma mesa, o estorno é recusado e seu saldo não muda.</p></div>
         </div>
         <p className="store-refund-boundary"><CircleAlert aria-hidden="true"/>
-          Esta ação trata apenas desta compra de fichas sandbox. Não movimenta saldo de dinheiro real e não transforma fichas em dinheiro.</p>
+          Esta ação trata apenas desta compra de fichas. Não movimenta dinheiro real e não transforma fichas em dinheiro.</p>
         {state === 'error' && <p className="store-refund-error" role="alert">{message}</p>}
       </>}
 
@@ -91,7 +89,7 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, finalFocusRe
           : <><Button type="button" variant="ghost" disabled={pending} onClick={onCloseAction}>Manter compra</Button>
             <Button type="button" variant="destructive" disabled={pending} onClick={() => void confirm()}>
               {pending ? <LoaderCircle className="store-refund-spinner" aria-hidden="true"/> : <RotateCcw aria-hidden="true"/>}
-              {pending ? 'Verificando elegibilidade…' : `Solicitar estorno de ${formatBRL(purchase.price_cents)}`}
+              {pending ? 'Verificando elegibilidade…' : `Solicitar estorno de ${moneyExact(purchase.price_cents)}`}
             </Button></>}
       </DialogFooter>
     </DialogContent>

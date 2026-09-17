@@ -435,7 +435,7 @@ describe('Seat', () => {
 
 describe('Seat chip amounts and the touch tap target', () => {
   test('sandbox abbreviates every visible chip amount and keeps the exact figure in the accessible name', () => {
-    const {container} = render(<ChipFormatContext.Provider value={true}>
+    const {container} = render(<ChipFormatContext.Provider value={'chips'}>
       <Seat seat={seat({stack: 1_250_000, contributed: 600_000})} isViewer={false} isTurn={false} index={0}
             isWinner winAmount={1_500_000} refundAmount={2500}/>
     </ChipFormatContext.Provider>);

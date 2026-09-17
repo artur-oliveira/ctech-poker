@@ -5,12 +5,13 @@
 // refresh, same call TermsGate makes) so a returning player sees their own
 // progress without a hard gate blocking a first-time or logged-out visitor.
 
-import {useEffect, useState} from "react";
+import {useEffect, useState, useSyncExternalStore} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from "@/lib/api/client";
 import {MOCK_PLAYER_ID, USE_MOCK} from "@/lib/mockConfig";
 import {doRefresh, endSession, startOAuthFlow} from "@/lib/auth/oauth";
 import {getMe} from "@/lib/api/player";
+import {forgetSessionHint, hasSessionHint, rememberSessionHint, subscribeSessionHint} from "@/lib/auth/sessionHint";
 
 /** Fallback cadence, used only when the token carries no readable `exp` (the
  *  mock token, or an opaque one). Access tokens live 15 minutes. */
@@ -79,6 +80,7 @@ let endingExpiredSession = false;
 const expiredListeners = new Set<() => void>();
 
 function clearSession() {
+  forgetSessionHint();
   setAccessToken(null);
   setUsername(null);
   setPlayerId(null);
@@ -128,6 +130,7 @@ export function getOrRefreshSession(): Promise<SessionResult> {
     refreshPromise = doRefresh()
       .then(result => {
         if (result) {
+          rememberSessionHint();
           setAccessToken(result.accessToken);
           setUsername(result.username);
         } else {
@@ -248,4 +251,31 @@ export function useOptionalSession() {
   }, [me.data?.user_id]);
   
   return {authed: Boolean(token), checking};
+}
+
+/**
+ * `useOptionalSession` with an optimistic answer for the window where the
+ * silent refresh is still in flight.
+ *
+ * Public surfaces (the landing page) must render a call to action before the
+ * refresh resolves, and `checking` alone leaves them guessing. The local
+ * session hint answers "has this browser had a session?" instantly, so a
+ * returning player sees the signed-in label in the first painted frame
+ * instead of watching it swap in afterwards. No hint means the logged-out
+ * label, which is also what a first-time visitor gets.
+ *
+ * `authed` here is good enough to pick a *label* and a destination and nothing
+ * more: the hint is client-writable and can be stale, so it never guards a
+ * route or a request. Once `checking` is false the value is the real one, and
+ * the caller re-renders with it.
+ *
+ * `useSyncExternalStore` rather than an effect: it reads the browser value
+ * before the first paint (and hydrates against `false`, the prerendered
+ * markup's state) instead of one render too late, and its subscription picks
+ * up a sign-out that happened in another tab.
+ */
+export function useOptimisticSession() {
+  const {authed, checking} = useOptionalSession();
+  const hint = useSyncExternalStore(subscribeSessionHint, hasSessionHint, () => false);
+  return {authed: checking ? hint : authed, checking};
 }

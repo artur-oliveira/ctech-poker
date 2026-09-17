@@ -7,15 +7,13 @@ import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPur
 import {PurchaseActivityList, type ActivityRow} from '@/components/store/PurchaseActivityList';
 import {currentReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
+import {moneyExact} from '@/lib/chips';
 
 const STATUS_LABEL: Record<string, string> = {
   processing: 'Processando', pending: 'Aguardando Pix', confirmed: 'Liberada', refunding: 'Estornando',
   refunded: 'Estornada', expired: 'Expirada', failed: 'Falhou'
 };
 
-function formatBRL(cents?: number) {
-  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-}
 
 function formatDate(value?: string) {
   if (!value) return '';
@@ -60,7 +58,7 @@ export function ReactionStoreSection({catalog, purchases, isLoading, isError, on
         return <li key={entry.id} className={`reaction-store-item${owned ? ' owned' : ''}`}>
           <span className="reaction-store-glyph"><EmojiGlyph glyph={definition.glyph}/></span>
           <span className="reaction-store-copy"><strong>{definition.label}</strong>
-            <small>{formatBRL(entry.price_cents)} <span aria-hidden="true">·</span> {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small></span>
+            <small>{moneyExact(entry.price_cents)} <span aria-hidden="true">·</span> {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small></span>
           {owned ? <span className="reaction-store-owned"><Sparkles aria-hidden="true"/> Sua</span>
             : active || refunding ? <span className="reaction-store-state">{STATUS_LABEL[purchase.status]}</span>
               : <span className="reaction-store-lock"><LockKeyhole aria-hidden="true"/> Não liberada</span>}

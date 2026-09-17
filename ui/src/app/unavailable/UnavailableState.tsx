@@ -76,7 +76,7 @@ export function UnavailableState() {
 
   const detail = checking ? 'Verificando se o serviço já voltou…'
     : failedAt !== null
-      ? `Ainda fora do ar — última verificação às ${new Date(failedAt).toLocaleTimeString('pt-BR')}${
+      ? `Ainda fora do ar. Última verificação às ${new Date(failedAt).toLocaleTimeString('pt-BR')}${
         retryInSeconds !== null ? ` · nova tentativa automática em ${retryInSeconds}s` : ''}`
       : 'Você pode verificar novamente sem recarregar a partida às cegas.';
 

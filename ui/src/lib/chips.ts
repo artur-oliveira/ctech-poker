@@ -42,3 +42,29 @@ export function chipsShort(amount: number): string {
   }
   return chipsExact(amount);
 }
+
+// --- Real-money amount formatting -------------------------------------------
+// The other half of the same job, and the only one allowed to print money.
+// "Fichas" and "Dinheiro real" stopped being self-explanatory labels when the
+// sandbox wording left the product, so the `R$ ` prefix is now the *only*
+// thing that tells a player which wallet a number came from. That makes it a
+// correctness rule, not a style one: every real-money figure in the app comes
+// from here, and nothing else in `src/` may call `style: 'currency'`.
+
+/** Real money, exact, always prefixed. Takes **integer centavos** — the unit
+ * every real-money number crosses the wire in (`price_cents`, `game_balance`,
+ * `entry_fee_cents`, and a real room's blinds, buy-in window and seat stacks,
+ * which `walletclient` hands to ctech-wallet unconverted).
+ *
+ * Never abbreviated, for the same reason `chipsShort` exists and this has no
+ * counterpart: rounding a balance to "R$ 1,2K" is not a display choice, it is
+ * a wrong number.
+ *
+ * Note the separator: `Intl` emits U+00A0 (no-break space) between `R$` and
+ * the digits, not a plain space. Hand-written template strings used to emit a
+ * plain one, which is invisible on screen and fatal to a `getByText` or a
+ * snapshot — which is most of why this function exists. Match on the digits,
+ * or on ` `, never on `'R$ '` typed with a space bar. */
+export function moneyExact(cents?: number | null): string {
+  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+}

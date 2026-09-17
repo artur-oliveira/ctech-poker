@@ -22,7 +22,7 @@ describe('lobby page', () => {
     render(<Lobby/>);
     const heading = screen.getByRole('heading', {name: 'Escolha os blinds e o tamanho da mesa.'});
     expect(heading).toBeInTheDocument();
-    expect(screen.getByText('Buscamos uma mesa pública com vaga para sua escolha; se não houver, criamos uma nova. Tudo com fichas sandbox.')).toBeInTheDocument();
+    expect(screen.getByText('Buscamos uma mesa pública para que você possa jogar; se não houver, criamos uma nova.')).toBeInTheDocument();
     const activeTable = screen.getByText('active-table');
     const onboarding = screen.getByText('onboarding');
     expect(heading.compareDocumentPosition(activeTable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

@@ -428,6 +428,48 @@ player who receives it. Spectacle may decorate that relationship; it never becom
 - **Sizing:** width is capped near 448px by default; height never exceeds the viewport minus 32px. Content scrolls internally with overscroll containment.
 - **Behavior:** focus is trapped, close is labeled, Escape works unless a pending mutation makes dismissal unsafe, and narrow-screen actions stack.
 
+### Settings sheets
+
+A screen whose job is "change my own things" is a **sheet, not a stack of panels**. `/player-profile`
+is the reference: sections separated by a one-pixel rule and 32px of air, the section's name and its
+one-line explanation in a 250px left column, its controls in the right, and both columns collapsing
+to one below 900px. No card wraps a section, because the moment a section holds cards of its own
+(the achievement rail) a panel around it would be a card inside a card.
+
+- **One save per resource, not per field.** Name, photo, deck and mode each write on the spot
+  (they are one field and one request). The showcase is one resource — visibility, highlights and
+  section order go out in a single `POST`, behind a single "Salvar vitrine" — so the player never has
+  to discover which of three buttons saves which half of the same page.
+- **No editor appears twice.** The profile popover is a shortcut: identity readout, balances,
+  destinations, logout. Every field it used to edit lives on the route now. Two editors for one
+  field is a defect, not a convenience.
+
+### The featured-achievement carousel
+
+Highlighting achievements is a rail of compact cards, not a checklist. Each option carries the
+catalogue's own vocabulary — the illustrative playing cards, the name, the current value, and the
+filled/total stars — derived through `achievementSummaryView`, so the compact card can never drift
+from `AchievementCard`.
+
+- **Order is meaning:** what the player highlighted leads, in their own order; everything else
+  follows by stars, then raw progress. Highlighting moves that card to the front of the rail, where
+  the public showcase reads it from.
+- **One tab stop, not sixty.** The track is a multi-select `listbox` with a roving tabindex:
+  Arrow/Home/End move between options, Enter and Space toggle. The two scroll buttons are a pointer
+  convenience and disappear on coarse pointers, which swipe instead.
+- **Selection is never colour alone.** A highlighted option carries a gold edge *and* an "Em
+  destaque" badge, and the badge is always laid out (hidden, not removed) so toggling one never
+  resizes the rail.
+
+### Owner strips
+
+A player standing on their own public profile gets one strip above the showcase, and nothing else
+differs: it says the page is theirs and offers the editor plus "Ver como visitante". Preview
+(`?preview=1`) swaps that strip for a dashed gold one and drops every owner affordance, so what is
+left below is exactly what a visitor loads. A private showcase 404s for its owner too, and only ever
+for that reason, so the owner reads "Vitrine privada" with the way to publish it, never the
+visitor's "este perfil não existe".
+
 ### The Living Table
 
 The signature composition places a walnut oval or portrait ring around radial green felt, cards at center, seats around the perimeter, and decisions in a bottom dock. Cards deal from a consistent source, chips move along comprehensible paths, current turn combines gold outline, timing, and copy, and the local viewer remains easy to identify without competing with errors. Reconnection, waiting, all-in, folded, winner, audit, and API-unavailable states are explicit; a frozen-looking table is a defect.

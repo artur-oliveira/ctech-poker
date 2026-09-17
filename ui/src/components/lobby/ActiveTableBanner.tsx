@@ -18,7 +18,7 @@ export function ActiveTableBanner() {
     <div className="active-table-strip-copy">
       <h2 id="active-table-title">Sua mesa continua aberta</h2>
       <p>
-        Você ainda está sentado · entrada de {open.buyin_amount.toLocaleString('pt-BR')} fichas sandbox
+        Você ainda está sentado · entrada de {open.buyin_amount.toLocaleString('pt-BR')} fichas
       </p>
     </div>
     <Button size="sm" onClick={() => router.push(`/table?id=${encodeURIComponent(open.table_id)}`)}>

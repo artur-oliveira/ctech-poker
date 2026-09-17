@@ -1026,8 +1026,7 @@
 .showcase-privacy-row small {
     display: block
 }
-.showcase-privacy-row small,
-.showcase-achievements > p {
+.showcase-privacy-row small {
     margin-top: 3px;
     color: var(--muted-rose);
     font-size: 11px
@@ -1049,81 +1048,6 @@
 }
 .showcase-privacy-group > .showcase-privacy-row > span {
     max-width: 44ch
-}
-.showcase-achievements {
-    display: grid;
-    margin-top: 16px;
-    border: 0
-}
-.showcase-achievements legend {
-    width: 100%;
-    font-weight: 700
-}
-.showcase-achievements legend span {
-    float: right;
-    color: var(--gold);
-    font-variant-numeric: tabular-nums
-}
-.showcase-achievements > p {
-    margin-bottom: 10px
-}
-.showcase-achievements label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 48px;
-    padding: 8px 2px;
-    border-bottom: 1px solid var(--white-08);
-    cursor: pointer
-}
-.showcase-achievements label span span,
-.showcase-achievements label small {
-    display: block
-}
-.showcase-achievements label small {
-    color: var(--muted-rose);
-    font-size: 10px
-}
-.showcase-share-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 16px
-}
-.showcase-layout-editor {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--white-13)
-}
-.showcase-layout-editor summary {
-    cursor: pointer;
-    font-weight: 700
-}
-.showcase-layout-editor[open] summary {
-    margin-bottom: 10px
-}
-.showcase-layout-editor > p:not([role]) {
-    margin: 3px 0 10px;
-    color: var(--muted-rose);
-    font-size: 11px
-}
-.showcase-layout-editor ol {
-    display: grid;
-    gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none
-}
-.showcase-layout-editor li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-height: 44px;
-    padding: 6px 10px;
-    border-radius: var(--rounded-control);
-    background: var(--surface-control)
 }
 .showcase-layout-controls {
     display: flex;
@@ -7746,24 +7670,9 @@ html:has(.has-tab-bar) {
     border-radius: 50%;
     padding: 0
 }
-.profile-avatar-camera svg,
-.profile-avatar-remove svg {
+.profile-avatar-camera svg {
     width: 14px;
     height: 14px
-}
-.profile-avatar-remove.profile-avatar-remove {
-    align-self: start;
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
-    min-height: 34px;
-    margin: -4px -6px 0 0;
-    padding: 0;
-    color: var(--text-secondary)
-}
-.profile-avatar-remove:hover,
-.profile-avatar-remove:focus-visible {
-    color: var(--brand-bright-7)
 }
 .profile-menu-identity-copy {
     display: flex;
@@ -7775,60 +7684,6 @@ html:has(.has-tab-bar) {
 .profile-menu-identity-copy > small {
     color: var(--text-secondary);
     font-size: var(--font-size-compact)
-}
-.profile-menu .profile-name-display {
-    display: flex;
-    min-height: 30px;
-    align-items: center;
-    gap: 7px;
-    padding: 0;
-    background: transparent;
-    color: var(--paper);
-    font-size: var(--font-size-subtitle);
-    line-height: 1.15
-}
-.profile-menu .profile-name-display span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap
-}
-.profile-menu .profile-name-display svg {
-    width: 15px;
-    height: 15px;
-    flex: none;
-    color: var(--text-secondary);
-    opacity: 0;
-    transform: translateX(-3px);
-    transition: opacity 180ms var(--ease-out-quart), transform 180ms var(--ease-out-quart), color 180ms var(--ease-out-quart)
-}
-.profile-menu .profile-name-display:hover,
-.profile-menu .profile-name-display:focus-visible {
-    background: transparent
-}
-.profile-menu .profile-name-display:hover svg,
-.profile-menu .profile-name-display:focus-visible svg {
-    color: var(--brand-bright-7);
-    opacity: 1;
-    transform: translateX(0)
-}
-.profile-name-edit {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 34px 34px;
-    gap: 4px;
-    width: 100%
-}
-.profile-name-edit input {
-    min-width: 0;
-    height: 34px;
-    padding-inline: 9px
-}
-.profile-name-edit button {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
-    min-height: 34px;
-    padding: 0
 }
 .profile-visibility {
     display: inline-flex;
@@ -7843,62 +7698,24 @@ html:has(.has-tab-bar) {
     border-radius: 50%;
     background: var(--success)
 }
-.profile-menu-section {
-    padding: 16px 18px 18px;
-    border-top: 1px solid var(--control-border)
-}
-.profile-menu-section-heading > div,
 .profile-wallet-heading {
     display: flex;
     align-items: center;
     gap: 9px
 }
-.profile-menu-section-heading > div > svg,
 .profile-wallet-heading > svg {
     width: 17px;
     height: 17px;
     flex: none;
     color: var(--gold)
 }
-.profile-menu-section-heading span {
-    display: flex;
-    flex-direction: column;
-    gap: 2px
-}
-.profile-menu-section-heading b,
 .profile-wallet-heading b {
     color: var(--paper);
     font-size: var(--font-size-body)
 }
-.profile-menu-section-heading small,
-.profile-menu-setting small {
-    color: var(--text-secondary);
-    font-size: var(--font-size-compact);
-    line-height: 1.4
-}
-.profile-menu-setting {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    margin-top: 15px
-}
-.profile-menu-setting > span {
-    display: flex;
-    flex-direction: column;
-    gap: 3px
-}
-.profile-menu-setting label,
 .profile-deck-label label {
     color: var(--paper);
     font-size: var(--font-size-body)
-}
-.profile-deck-setting {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 150px;
-    align-items: end;
-    gap: 12px;
-    margin-top: 14px
 }
 .profile-deck-label {
     display: flex;
@@ -7927,9 +7744,6 @@ html:has(.has-tab-bar) {
 .profile-deck-preview img:nth-child(2) { --card-index: 1 }
 .profile-deck-preview img:nth-child(3) { --card-index: 2 }
 .profile-deck-preview img:nth-child(4) { --card-index: 3 }
-.profile-deck-setting [data-slot='select-trigger'] {
-    width: 100%
-}
 .profile-deck-options.profile-deck-options {
     width: min(230px, calc(100vw - 24px));
     min-width: 0
@@ -8008,7 +7822,7 @@ html:has(.has-tab-bar) {
     flex-direction: column;
     padding: 8px
 }
-.profile-menu-links > button {
+.profile-menu-links > :is(button, a) {
     justify-content: flex-start;
     width: 100%;
     height: auto;
@@ -8016,23 +7830,23 @@ html:has(.has-tab-bar) {
     padding: 9px 10px;
     text-align: left
 }
-.profile-menu-links > button > svg:first-child {
+.profile-menu-links > :is(button, a) > svg:first-child {
     width: 19px;
     height: 19px;
     color: var(--brand-bright-7)
 }
-.profile-menu-links > button > svg:last-child {
+.profile-menu-links > :is(button, a) > svg:last-child {
     width: 16px;
     height: 16px;
     margin-left: auto;
     color: var(--text-secondary);
     transition: transform 180ms var(--ease-out-quart)
 }
-.profile-menu-links > button:hover > svg:last-child,
-.profile-menu-links > button:focus-visible > svg:last-child {
+.profile-menu-links > :is(button, a):hover > svg:last-child,
+.profile-menu-links > :is(button, a):focus-visible > svg:last-child {
     transform: translateX(3px)
 }
-.profile-menu-links > button > span {
+.profile-menu-links > :is(button, a) > span {
     display: flex;
     min-width: 0;
     flex-direction: column;
@@ -8061,7 +7875,6 @@ html:has(.has-tab-bar) {
         width: calc(100vw - 16px)
     }
 .profile-menu-identity,
-    .profile-menu-section,
     .profile-wallet {
         padding-inline: 14px
     }

@@ -13,6 +13,7 @@ import {isNotFound} from '@/lib/api/client';
 import {pushNotification} from '@/lib/notify';
 import {type LobbyBucket, ROOM_BUCKETS_QUERY_KEY, tableBucketHref} from '@/lib/lobbyBuckets';
 import {buyInRange} from '@/lib/pokerRules';
+import {chipsExact, moneyExact} from '@/lib/chips';
 
 const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.';
 const TABLE_FULL_TYPE = '/problems/table-full';
@@ -48,8 +49,7 @@ export function midBuyIn(min: number, max: number, bigBlind: number) {
 }
 
 export function formatBuyIn(amount: number, isReal: boolean) {
-  return isReal ? (amount / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) :
-    amount.toLocaleString('pt-BR');
+  return isReal ? moneyExact(amount) : chipsExact(amount);
 }
 
 // A bucket entry has no room yet — join-or-create picks one on confirm — so
@@ -129,7 +129,7 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
   const step = room.big_blind > 0 ? room.big_blind : 1;
   const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
   const isReal = room.currency_mode === 'real';
-  const unit = isReal ? 'reais' : 'fichas';
+  const unit = isReal ? '' : 'fichas';
   const fmt = (n: number) => formatBuyIn(n, isReal);
 
   async function confirm() {
@@ -181,7 +181,7 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
   return (
     <main className="game-loading buyin">
       <h1 className="sr-only">Mesa de poker</h1>
-      <small>BLINDS {room.small_blind} / {room.big_blind} · {room.currency_mode === 'real' ? 'DINHEIRO REAL' : 'SANDBOX'}</small>
+      <small>BLINDS {fmt(room.small_blind)} / {fmt(room.big_blind)} · {room.currency_mode === 'real' ? 'DINHEIRO REAL' : 'FICHAS'}</small>
       <h2>Sente-se à mesa</h2>
       <p>Escolha {isReal ? 'quanto dinheiro' : 'quantas fichas'} levar. Nada é debitado antes de você confirmar.</p>
       {isReal && !!room.entry_fee_cents &&
@@ -191,8 +191,8 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
         <label htmlFor={sliderId}>Buy-in</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}
                disabled={joining} onChange={event => setAmount(Number(event.target.value))}
-               aria-valuetext={`${fmt(value)} ${unit}`}/>
-        <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
+               aria-valuetext={`${fmt(value)}${unit && ` ${unit}`}`}/>
+        <output htmlFor={sliderId}>{fmt(value)}{unit && <> <span>{unit}</span></>}</output>
         <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(room.buy_in_max)}</small>
       </div>
       {!isReal &&

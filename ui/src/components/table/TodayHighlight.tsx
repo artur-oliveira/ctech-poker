@@ -37,7 +37,7 @@ function bestShownLabel(board?: string[], revealed?: Array<{name?: string; hole_
     compareHands([...hand.hole_cards, ...board], [...best.hole_cards, ...board]) === 0);
   const names = tied.map(hand => hand.name || 'Jogador').join(' e ');
   const category = madeHandOf(board, best.hole_cards);
-  return category ? `${names} — ${category}` : names;
+  return category ? `${names} · ${category}` : names;
 }
 
 export function highlightWinnerLabel(board?: string[],
@@ -53,7 +53,7 @@ export function highlightWinnerLabel(board?: string[],
     ? revealed?.find(hand => hand.player_id === paid[0].player_id)
     : undefined;
   const category = shown && madeHandOf(board, shown.hole_cards);
-  return category ? `${names} — ${category}` : names;
+  return category ? `${names} · ${category}` : names;
 }
 
 // System-detected "biggest pot of the day" for this table — no player action

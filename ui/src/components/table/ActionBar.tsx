@@ -11,8 +11,7 @@ import type {ActionError} from '@/lib/hooks/useTableRealtime';
 import {betShortcutAmount, clampSnapRaise, FAST_STEP_STRIDE, stageBetPresets} from '@/lib/betShortcuts';
 import {betCommitNote, checkBetInput} from '@/lib/betInput';
 import type {BetPresetMode} from '@/lib/api/player';
-import {useChipFormat, useSandboxChips} from '@/lib/chipFormat';
-import {chipsExact} from '@/lib/chips';
+import {useChipExact, useChipFormat, useChipUnit, useSandboxChips} from '@/lib/chipFormat';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
@@ -134,6 +133,8 @@ function BetAmountField({id, amount, minAmount, maxAmount, raiseStep, isAllIn, w
 }) {
   const progress = maxAmount > 0 ? Math.min(1, amount / maxAmount) : 0;
   const chips = useChipFormat();
+  const exact = useChipExact();
+  const unit = useChipUnit();
   const sandbox = useSandboxChips();
   // null means "not being edited": the field then shows the same abbreviated
   // figure every other chip readout on the table shows. The moment it is
@@ -172,7 +173,7 @@ function BetAmountField({id, amount, minAmount, maxAmount, raiseStep, isAllIn, w
       <small>{isAllIn ? 'All In' : 'Total'}</small>
       <input id={id} className="bet-amount-input" type="text" disabled={disabled}
              inputMode={sandbox ? 'numeric' : 'decimal'} autoComplete="off" enterKeyHint="done"
-             aria-label={`Valor total do aumento, em fichas. Máximo ${chipsExact(maxAmount)}`}
+             aria-label={`Valor total do aumento${unit ? ', em fichas' : ''}. Máximo ${exact(maxAmount)}`}
              aria-describedby="action-context"
              value={draft ?? chips(amount)}
              onFocus={event => {
@@ -291,6 +292,7 @@ function PreselectionControls({
   }, [selection, selectionAmount, isTurn, connected, pending, available, callAmount, maxRaise, onAct]);
 
   const chips = useChipFormat();
+  const exact = useChipExact();
   const hasFixedCall = supportsCallPreselection && prospectiveCallAmount > 0;
   // Shared by both the button's onClick and the keyboard shortcuts below, so
   // there is exactly one place that decides what selecting/deselecting a
@@ -352,7 +354,7 @@ function PreselectionControls({
     {option('fold', <>Fold</>, 'Fold', 'Desistir quando chegar sua vez', 'F')}
     {supportsCallPreselection && hasFixedCall && option('call',
       <>Call <i className="preselect-amount">{chips(prospectiveCallAmount)}</i></>,
-      `Call ${chipsExact(prospectiveCallAmount)}`,
+      `Call ${exact(prospectiveCallAmount)}`,
       'Pagar somente este valor; cancela se a aposta aumentar', 'C', prospectiveCallAmount)}
     {supportsCallPreselection && option('call_any', <><span className="preselect-wide">Call Any</span>
       <span className="preselect-tight">Any</span></>, 'Call Any',
@@ -385,6 +387,8 @@ function RaiseControl({
   const isAllIn = safeAmount >= maxRaise;
   const wasClamped = amount !== safeAmount;
   const chips = useChipFormat();
+  const exact = useChipExact();
+  const unit = useChipUnit();
   // Already snapped and clamped by `stageBetPresets`, so a pick can never be
   // the silent clamp the old server-preset row had to signal.
   const quickPresets = stageBetPresets({
@@ -475,7 +479,7 @@ function RaiseControl({
       <span className="sr-only">Valor total do aumento. Setas esquerda e direita ajustam; segure para acelerar</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
         {quickPresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
-                                            aria-label={`${preset.label}: aumentar para ${chipsExact(preset.value)}`}
+                                            aria-label={`${preset.label}: aumentar para ${exact(preset.value)}`}
                                             onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
       </div>
       <Input id="raise-amount" className="bet-range" aria-describedby="action-context" type="range"
@@ -483,7 +487,7 @@ function RaiseControl({
              min={minRaise} max={maxRaise} step={raiseStep} value={safeAmount}
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}
-             aria-valuetext={`Total ${chipsExact(safeAmount)} fichas${isAllIn ? ', All In' : ''}`}/>
+             aria-valuetext={`Total ${exact(safeAmount)}${unit}${isAllIn ? ', All In' : ''}`}/>
       <BetAmountField id="raise-amount-typed" className="bet-output bet-output-desktop" amount={safeAmount}
                       minAmount={minRaise} maxAmount={maxRaise} raiseStep={raiseStep} disabled={inactive}
                       isAllIn={isAllIn} wasClamped={wasClamped} onAmountAction={setAmount}/>
@@ -502,7 +506,7 @@ function RaiseControl({
         // "para" makes explicit this is a raise-to-total, not an amount added on top
         // of the current bet (unlike Pagar's amount above, which is additive). Same
         // Verb + Amount shape as Pagar otherwise read as the same kind of number.
-        <span aria-label={expanded ? `${isAllIn ? 'All In' : 'Aumentar para'} ${chipsExact(safeAmount)}` : undefined}>{expanded ? (isAllIn ? `All In ${chips(safeAmount)}` : `Aumentar para ${chips(safeAmount)}`) : (isAllIn ? 'All In' : 'Aumentar')}
+        <span aria-label={expanded ? `${isAllIn ? 'All In' : 'Aumentar para'} ${exact(safeAmount)}` : undefined}>{expanded ? (isAllIn ? `All In ${chips(safeAmount)}` : `Aumentar para ${chips(safeAmount)}`) : (isAllIn ? 'All In' : 'Aumentar')}
           {shortcutsEnabled && <kbd aria-hidden="true">R</kbd>}</span>}
     </Button>
     {expanded && <Button type="button" variant="ghost" className="raise-cancel"
@@ -545,6 +549,8 @@ export function ActionBar({
                             bigBlind
                           }: Props) {
   const chips = useChipFormat();
+  const exact = useChipExact();
+  const unit = useChipUnit();
   // One short buzz when the turn opens, for the player who has looked away.
   useTurnHaptic(isTurn);
   const [raiseSizing, setRaiseSizing] = useState(false);
@@ -569,10 +575,10 @@ export function ActionBar({
   // for a raise that is not also a shove.
   const raiseBandCollapsed = available.raise && maxRaise - minRaise < raiseStep;
   const turnContext = effectiveStack > 0 ?
-    `Sua vez de agir. Stack efetivo: ${chipsExact(effectiveStack)} fichas.` : 'Sua vez de agir.';
+    `Sua vez de agir. Stack efetivo: ${exact(effectiveStack)}${unit}.` : 'Sua vez de agir.';
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] :
     executingPreparedAction ? 'Executando sua ação preparada…' : !isTurn ? 'Aguarde sua vez.' :
-      raiseBandCollapsed ? `${turnContext} Aumento mínimo é ${chipsExact(minRaise)} — só resta ir all in.` :
+      raiseBandCollapsed ? `${turnContext} Aumento mínimo é ${exact(minRaise)}, só resta ir all in.` :
         turnContext;
   const label = (action: PokerAction, idle: string, key?: string) => {
     if (pending === action) {
@@ -633,7 +639,7 @@ export function ActionBar({
             <Button type="button" variant="outline" disabled={unavailable || !available.call}
                     aria-describedby="action-context" aria-keyshortcuts={shortcutsEnabled ? 'p' : undefined}
                     onClick={() => onActAction('call')}
-                    aria-label={callAmount > 0 ? `Pagar ${chipsExact(callAmount)}` : undefined}
+                    aria-label={callAmount > 0 ? `Pagar ${exact(callAmount)}` : undefined}
                     className="call">{label('call', callAmount > 0 ? `Pagar ${chips(callAmount)}` : 'Pagar', 'P')}</Button>
         </div>}
     {!noLegalActions && !executingPreparedAction &&

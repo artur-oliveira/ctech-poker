@@ -222,7 +222,7 @@ export default function Store() {
           icon={ShoppingBag}
           eyebrow="REAÇÕES E FICHAS"
           title="Loja"
-          description="Personalize suas jogadas com reações permanentes ou prepare seu saldo sandbox para a próxima mesa."
+          description="Reações permanentes, baralhos, feltros e fichas para a próxima mesa."
         />
 
         <nav className="store-directory" aria-label="Seções da loja">
@@ -246,7 +246,7 @@ export default function Store() {
           </a>
           <a href="#chips">
             <span className="store-directory-icon"><Coins aria-hidden="true"/></span>
-            <span><b>Fichas sandbox</b><small>{sandboxBalance === undefined ? 'Carregando saldo…'
+            <span><b>Fichas</b><small>{sandboxBalance === undefined ? 'Carregando saldo…'
               : `${sandboxBalance.toLocaleString('pt-BR')} disponíveis`}</small></span>
             <ChevronRight aria-hidden="true"/>
           </a>
@@ -354,17 +354,16 @@ export default function Store() {
                    aria-labelledby="sandbox-chips-title">
             <div className="store-section-heading">
               <Coins aria-hidden="true"/>
-              <div><h2 id="sandbox-chips-title">Fichas sandbox</h2>
+              <div><h2 id="sandbox-chips-title">Fichas</h2>
                 <p>Resgate sua recompensa ou adicione saldo para buy-ins. Fichas não têm saque nem conversão em
                   dinheiro.</p></div>
             </div>
 
-            <div className="store-wallet" role="group" aria-label="Seu saldo sandbox">
+            <div className="store-wallet" role="group" aria-label="Seu saldo de fichas">
               <span className="store-wallet-icon"><Coins aria-hidden="true"/></span>
               <span className="store-wallet-copy"><small>Seu saldo agora</small>
-                <strong>{sandboxBalance === undefined ? '—' : `${sandboxBalance.toLocaleString('pt-BR')} fichas`}</strong>
+                <strong>{sandboxBalance === undefined ? '…' : `${sandboxBalance.toLocaleString('pt-BR')} fichas`}</strong>
               </span>
-              <span className="store-wallet-note">Saldo exclusivo do modo sandbox.</span>
             </div>
 
             <section className="store-department-reward" aria-labelledby="daily-reward-title"><DailyRewardPanel/></section>
@@ -394,7 +393,7 @@ export default function Store() {
             <div className="store-section-heading">
               <Clock3 aria-hidden="true"/>
               <div><h2 id="activity-title">Compras e estornos</h2>
-                <p>Recibos de tudo que você liberou. As compras de fichas ficam na seção Fichas sandbox, junto do
+                <p>Recibos de tudo que você liberou. As compras de fichas ficam na seção Fichas, junto do
                   botão de estorno.</p></div>
             </div>
             <div className="store-activity-groups">

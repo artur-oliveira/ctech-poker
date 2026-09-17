@@ -61,6 +61,26 @@ describe('guide topic pages', () => {
     expect(document.querySelector('.guide-topic-footer')!.querySelectorAll('a')).toHaveLength(1);
   });
 
+  test('the profile topic documents the profile route, not the popover editor it replaced', () => {
+    render(<ProfileGuide/>);
+    expect(screen.getByRole('link', {name: /Abrir meu perfil/})).toHaveAttribute('href', '/player-profile');
+    for (const label of ['Editar perfil', 'Salvar nome', 'Salvar vitrine', 'Ver como visitante', 'Copiar link']) {
+      expect(document.body.textContent).toContain(label);
+    }
+    // The dialog and its entry point are gone from the product; the guide may
+    // not keep sending players to them.
+    for (const gone of ['Vitrine do perfil', 'Editar minha vitrine', 'Personalizar ordem e seções']) {
+      expect(document.body.textContent).not.toContain(gone);
+    }
+  });
+
+  test.each(topics)('$href keeps the shipped copy rules', ({Page}) => {
+    render(<Page/>);
+    const text = document.body.textContent!;
+    expect(text).not.toMatch(/sandbox/i);
+    expect(text).not.toMatch(/[—–]/);
+  });
+
   test('renders illustrations with descriptive alt text', () => {
     render(<TableGuide/>);
     for (const image of screen.getAllByRole('img')) {

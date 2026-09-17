@@ -71,6 +71,11 @@ const EXAMPLES: Record<string, string[]> = {
   giant_slayer: ['2H', '7D'],
   showdown_warrior: ['JH', 'TD'],
   all_in: ['AS', 'KS'],
+  // The two wallet-scoped totals are the only counters whose metric is chips
+  // rather than events, so their art is a stack of matching cards: four of a
+  // kind reads as an accumulated pile, not as a single hand.
+  sandbox_chips_earned: ['TC', 'TD', 'TH', 'TS'],
+  real_money_earned: ['AC', 'AD', 'AH', 'AS'],
   won_with_pocket_pair: ['9H', '9S'],
   won_full_table: ['AC', 'KC'],
   won_heads_up: ['AD', 'TD'],

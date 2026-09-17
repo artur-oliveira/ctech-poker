@@ -30,9 +30,9 @@ export default function Lobby() {
   return <TermsGate>
     <AppPage authed current="lobby" rewardReady={rewardReady}>
       <AppPageBody className="lobby">
-        <AppPageHeader icon={LayoutGrid} eyebrow="LOBBY SANDBOX"
+        <AppPageHeader icon={LayoutGrid} eyebrow="LOBBY"
           title="Escolha os blinds e o tamanho da mesa."
-          description="Buscamos uma mesa pública com vaga para sua escolha; se não houver, criamos uma nova. Tudo com fichas sandbox."
+          description="Buscamos uma mesa pública para que você possa jogar; se não houver, criamos uma nova."
           actions={<><PeopleDrawer/><CreateRoomDialogTrigger/></>}/>
         <ActiveTableBanner/>
         <OnboardingIntro/>

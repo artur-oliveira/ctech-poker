@@ -22,7 +22,7 @@ function detail(milestone: ProfileMilestone): string {
   const value = milestone.value.toLocaleString('pt-BR');
   if (milestone.category === 'tenure') return `${value} dias de conta`;
   if (milestone.category === 'volume') return `${value} mãos jogadas`;
-  return `#${value} no ranking sandbox`;
+  return `#${value} no ranking de fichas`;
 }
 
 /** Formats an RFC3339 timestamp as "março de 2025". Returns '' for anything

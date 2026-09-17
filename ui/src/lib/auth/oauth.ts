@@ -1,5 +1,6 @@
 import {decodeIdToken as sdkDecodeIdToken, OAuthClient} from '@aoctech/auth-client';
 import {OAUTH_SCOPE} from './scopes';
+import {forgetSessionHint} from './sessionHint';
 
 const client = new OAuthClient({
   baseUrl: process.env.NEXT_PUBLIC_CTECH_URL || '',
@@ -142,6 +143,10 @@ export function endSession(returnTo = '/') {
 // Logout sequence per @aoctech/auth-client's README: revoke the refresh
 // token, then redirect through the IdP's RP-initiated end-session endpoint.
 export async function logout(returnTo = '/') {
+  // Drop the local "this browser has had a session" hint first: the redirect
+  // below may never come back to this page, and a stale hint would greet the
+  // player on the landing page with a signed-in call to action.
+  forgetSessionHint();
   const {promise} = withTokenDeadline(client.revoke());
   await promise.catch(() => undefined);
   endSession(returnTo);

@@ -25,20 +25,20 @@ export default function AchievementsGuide() {
           <GuideCallout kind="info" title="A mão precisa terminar">O progresso vem do registro confirmado da mão. Sair no meio ou abrir uma simulação não conta.</GuideCallout></>
       },
       {
-        id: 'filtros', title: 'Filtrar e separar carteiras', summary: 'Sandbox e dinheiro real acumulam progresso independente.',
-        body: <><p>Escolha a carteira nas abas e depois filtre por <b>Todas</b>, <b>Desbloqueadas</b>, <b>Em progresso</b> ou <b>Completas</b> — cada filtro traz a contagem junto. Metas ligadas a um único modo, como fichas sandbox ganhas, só aparecem nele.</p>
+        id: 'filtros', title: 'Filtrar e separar carteiras', summary: 'Fichas e dinheiro real acumulam progresso independente.',
+        body: <><p>Escolha a carteira nas abas e depois filtre por <b>Todas</b>, <b>Desbloqueadas</b>, <b>Em progresso</b> ou <b>Completas</b>, e cada filtro traz a contagem junto. Metas ligadas a uma carteira só aparecem nela.</p>
           <p>Tendo desbloqueios com data, uma segunda linha alterna a ordem entre <b>Ordem do catálogo</b> e <b>Mais recentes</b>. A ordenação reorganiza o mesmo conjunto: ela não esconde conquistas, e desbloqueios antigos sem data registrada ficam depois dos datados.</p>
-          <p>Acima do catálogo, o trilho <b>Recém-desbloqueadas</b> traz os últimos cinco desbloqueios com estrelas e há quanto tempo aconteceram. Quando você desbloqueia algo na mesa e abre esta página em seguida, o item que acabou de entrar aparece destacado com uma mensagem de parabéns — uma vez só. Com movimento reduzido ligado, o destaque continua visível, sem pulsar.</p>
-          <GuideCallout kind="warning" title="Carteira real pode estar indisponível">Ver a aba não significa que o dinheiro real esteja liberado. O ambiente padrão é sandbox e a ativação depende do serviço.</GuideCallout></>
+          <p>Acima do catálogo, o trilho <b>Recém-desbloqueadas</b> traz os últimos cinco desbloqueios com estrelas e há quanto tempo aconteceram. Quando você desbloqueia algo na mesa e abre esta página em seguida, o item que acabou de entrar aparece destacado com uma mensagem de parabéns, uma vez só. Com movimento reduzido ligado, o destaque continua visível, sem pulsar.</p>
+          <GuideCallout kind="warning" title="Carteira real pode estar indisponível">Ver a aba não significa que o dinheiro real esteja liberado: a ativação depende do serviço.</GuideCallout></>
       },
       {
         id: 'secretas', title: 'Conquistas secretas e avisos', summary: 'Metas secretas entram no catálogo depois do primeiro marco.',
-        body: <><p>Algumas situações raras não são antecipadas. Ao alcançar o primeiro nível, a conquista passa a aparecer no catálogo e um aviso de desbloqueio surge onde você estiver — inclusive na mesa, sem cobrir o resultado da mão.</p>
+        body: <><p>Algumas situações raras não são antecipadas. Ao alcançar o primeiro nível, a conquista passa a aparecer no catálogo e um aviso de desbloqueio surge onde você estiver, inclusive na mesa, sem cobrir o resultado da mão.</p>
           <p>O aviso conta o evento; a página de Conquistas continua sendo a fonte do progresso total e do próximo requisito.</p></>
       },
       {
         id: 'vitrine', title: 'Destacar conquistas no perfil', summary: 'Até três conquistas com progresso compõem sua vitrine pública.',
-        body: <><p>No menu do perfil, abra <b>Vitrine do perfil</b>, escolha até três conquistas já iniciadas, defina se a vitrine é pública e salve. Só o que você marca aparece para os outros.</p>
+        body: <><p>Em <b>Seu perfil</b>, na seção <b>Sua vitrine</b>, a fila de cartas traz as conquistas em que você já pontuou. Toque em até três para destacá-las, ligue <b>Vitrine pública</b> e toque em <b>Salvar vitrine</b>. Só o que você marca aparece para os outros.</p>
           <GuideLink href="/achievements">Abrir minhas conquistas</GuideLink></>
       }
     ]}/>;
