@@ -120,6 +120,8 @@ new PokerApiStack(app, id('API'), {
   roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
   playerProfilesTableArn: dynamoStack.tables.get('poker_player_profiles')!.tableArn,
   playerNotesTableArn: dynamoStack.tables.get('poker_player_notes')!.tableArn,
+  chatPrefsTableArn: dynamoStack.tables.get('poker_chat_prefs')!.tableArn,
+  botcheckContestsTableArn: dynamoStack.tables.get('poker_botcheck_contests')!.tableArn,
   handMetaTableArn: dynamoStack.tables.get('poker_hand_meta')!.tableArn,
   handSharesTableArn: dynamoStack.tables.get('poker_hand_shares')!.tableArn,
   pokerStatsTableArn: dynamoStack.tables.get('poker_player_poker_stats')!.tableArn,

@@ -40,6 +40,7 @@ export type TableName =
   'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
   'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
+  'poker_chat_prefs' | 'poker_botcheck_contests' |
   'poker_table_entitlements' | 'poker_table_highlights' |
   'poker_hand_reveals' | 'poker_hand_reveal_payments' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
@@ -221,6 +222,13 @@ export class DynamoDBStack extends cdk.Stack {
     // sk is the opponent. Nothing reads this table while constructing public
     // table snapshots.
     table('poker_player_notes', true);
+    // poker_chat_prefs (#327): pk = player_id only — one item per player with
+    // their personal extra chat-filter words (capped at 50 words). Read by
+    // exact key (and cached in Valkey), so no sk, GSI or TTL.
+    table('poker_chat_prefs', false);
+    // poker_botcheck_contests (#322): pk = player_id, sk = contest_id (uuid) —
+    // append-only audit trail of "I was not a bot" claims; list = one Query on pk.
+    table('poker_botcheck_contests', true);
     // poker_hand_meta (#349/#347): the one "player metadata about a hand"
     // record the two issues were told to share instead of shipping two
     // divergent designs — a short note per street, a "mark for review" flag

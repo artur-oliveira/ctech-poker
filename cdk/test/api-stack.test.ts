@@ -35,6 +35,8 @@ function synthStack(overrides: Partial<{environment: Environment; cloudwatchAlar
     roomsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_rooms',
     playerProfilesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_profiles',
     playerNotesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_notes',
+    chatPrefsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_chat_prefs',
+    botcheckContestsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_botcheck_contests',
     handMetaTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_hand_meta',
     handSharesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_hand_shares',
     pokerStatsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_poker_stats',
@@ -113,6 +115,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
   expect(rendered).toContain('dev_poker_recent_players');
   expect(rendered).toContain('dev_poker_social_events');
   expect(rendered).toContain('dev_poker_player_reports');
+  expect(rendered).toContain('dev_poker_chat_prefs');
+  expect(rendered).toContain('dev_poker_botcheck_contests');
   expect(rendered).toContain('dynamodb:BatchGetItem');
   expect(rendered).toContain('/ctech/dev/poker/social-graph-enabled');
   expect(rendered).toContain('SOCIAL_GRAPH_ENABLED');

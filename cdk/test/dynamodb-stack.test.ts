@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 30);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 32);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -110,6 +110,23 @@ test('creates private player notes with a viewer/opponent composite key', () => 
       Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
       Match.objectLike({AttributeName: 'sk', KeyType: 'RANGE'}),
     ]),
+  });
+});
+
+test('creates poker_chat_prefs (pk only) and poker_botcheck_contests (pk+sk) tables (#327, #322)', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestChatPrefsContestsStack', {environment: 'dev', cloudwatchAlarmsEnabled: true});
+  const template = Template.fromStack(stack);
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_chat_prefs',
+    KeySchema: [{AttributeName: 'pk', KeyType: 'HASH'}],
+  });
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_botcheck_contests',
+    KeySchema: [
+      {AttributeName: 'pk', KeyType: 'HASH'},
+      {AttributeName: 'sk', KeyType: 'RANGE'},
+    ],
   });
 });
 
@@ -389,5 +406,5 @@ test('creates no alarms and no SNS topic reference when cloudwatchAlarmsEnabled 
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::SNS::Topic', 0);
   // Tables themselves are unaffected by the flag.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 30);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 32);
 });
