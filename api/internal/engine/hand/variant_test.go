@@ -1,6 +1,7 @@
 package hand
 
 import (
+	"fmt"
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -128,6 +129,104 @@ func TestStandardTableRanksFullHouseAboveFlushAtShowdown(t *testing.T) {
 	winners, _, _ := table.evaluateLayer(fullPotLayer(p1.ID, p2.ID), table.board)
 	if len(winners) != 1 || winners[0] != p2.ID {
 		t.Fatalf("expected p2's full house to win over p1's flush on a Standard table, winners=%v", winners)
+	}
+}
+
+// #296: a full 9-handed short-deck table (9x2 hole cards + 3 burns + 5 board
+// = 26 of the 36-card deck) must play a complete hand — through the same
+// StartHand/Act pipeline as the 2-player test above — without exhausting the
+// reduced deck, and every dealt card (board + every hand's hole cards) must
+// have rank >= Six.
+func TestShortDeckNineHandedTablePlaysAFullHandWithoutExhaustingTheDeck(t *testing.T) {
+	players := make([]*Player, 9)
+	for i := range players {
+		players[i] = &Player{ID: fmt.Sprintf("p%d", i+1), Stack: 1000, Ready: true}
+	}
+	table := NewTableWithVariant(players, 10, 20, deck.ShortDeck)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	if table.nextCard > 36 {
+		t.Fatalf("nine-handed short-deck hand consumed %d deck positions, want <= 36", table.nextCard)
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil {
+		t.Fatal("expected a hand outcome from a completed 9-handed ShortDeck hand")
+	}
+	for _, code := range outcome.Board {
+		if r := rankFromCode(t, code); r < deck.Six {
+			t.Fatalf("board card %q has a rank below Six, impossible in short-deck", code)
+		}
+	}
+	if len(outcome.PlayerHands) == 0 {
+		t.Fatal("expected at least one participant's hole cards in the outcome")
+	}
+	for id, info := range outcome.PlayerHands {
+		for _, code := range info.HoleCards {
+			if r := rankFromCode(t, code); r < deck.Six {
+				t.Fatalf("player %s hole card %q has a rank below Six, impossible in short-deck", id, code)
+			}
+		}
+	}
+}
+
+// #296: a 9-way all-in run-it-twice short-deck hand (9x2 hole cards + 1 burn +
+// 5 board + 1 burn + 5 boardTwo = 34 of 36 cards, manually verified against
+// the standard-deck TestRunItTwiceNineWayPreflopFitsInTheCommittedDeck's
+// shape) still fits the reduced deck and every dealt card obeys the
+// short-deck rank floor. RunItTwiceEnabled is a per-room setting, so this is
+// tested separately from the plain 9-handed case above.
+func TestShortDeckNineWayRunItTwiceFitsInTheReducedDeck(t *testing.T) {
+	players := make([]*Player, 9)
+	for i := range players {
+		players[i] = &Player{ID: fmt.Sprintf("p%d", i+1), Stack: 1000, Ready: true, RunItTwice: true}
+	}
+	table := NewTableWithVariant(players, 10, 20, deck.ShortDeck)
+	table.ConfigureRunItTwice(true)
+	table.dealerSeat, table.dealerDrawn = 0, true
+	if err := table.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	if table.shortShuffle == nil || table.shuffle != nil {
+		t.Fatal("expected only the short-deck shuffle to be populated")
+	}
+	for _, player := range table.handOrder {
+		player.State = AllIn
+		table.wasEverAllIn[player.ID] = true
+	}
+	table.round = nil
+	table.advanceStage()
+	for table.IsAwaitingRunoutForActor() {
+		table.AdvanceRunoutStreetForActor()
+	}
+	if table.nextCard != 34 || table.nextCard > len(table.shortShuffle.Cards) {
+		t.Fatalf("nine-way short-deck double runout consumed %d deck positions, want 34 of %d",
+			table.nextCard, len(table.shortShuffle.Cards))
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil {
+		t.Fatal("expected a hand outcome from the completed run-it-twice hand")
+	}
+	for _, code := range outcome.Board {
+		if r := rankFromCode(t, code); r < deck.Six {
+			t.Fatalf("board card %q has a rank below Six, impossible in short-deck", code)
+		}
+	}
+	for _, code := range outcome.BoardTwo {
+		if r := rankFromCode(t, code); r < deck.Six {
+			t.Fatalf("boardTwo card %q has a rank below Six, impossible in short-deck", code)
+		}
+	}
+	for _, c := range table.shortShuffle.Cards {
+		if c.Rank < deck.Six {
+			t.Fatalf("short deck must never contain rank %v (below Six)", c.Rank)
+		}
 	}
 }
 
