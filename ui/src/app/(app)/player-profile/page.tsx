@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronRight, ShoppingBag, UserRound} from 'lucide-react';
+import {BellRing, ChevronRight, ShoppingBag, UserRound} from 'lucide-react';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
@@ -13,13 +13,21 @@ import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
 import {IdentitySection} from './IdentitySection';
 import {ShowcaseSection} from './ShowcaseSection';
 import {TableSection} from './TableSection';
+import {WalletAlertsSection} from './WalletAlertsSection';
 
 function BalancesSection({me}: {me: PlayerProfile}) {
+  // #304: notification-only — GET /players/me already evaluated the
+  // player's own configured threshold against this same balance, so this is
+  // just rendering what arrived, never a second read or a business rule.
+  const lowBalanceAlert = (me.wallet_alerts ?? []).some(alert => alert.kind === 'low_sandbox_balance');
   return <section className="player-profile-section" aria-labelledby="player-profile-balances-title">
     <header className="player-profile-section-head">
       <h2 id="player-profile-balances-title">Seus saldos</h2>
       <p>O que você tem para colocar na mesa.</p>
     </header>
+    {lowBalanceAlert && <p className="player-profile-wallet-alert-banner" role="status">
+      <BellRing aria-hidden="true"/> Seu saldo de fichas está abaixo do limite que você configurou.
+    </p>}
     <dl className="player-profile-balances">
       <div><dt>Fichas</dt><dd>{chipsExact(me.sandbox_balance ?? 0)}</dd></div>
       {REAL_MONEY_UI_ENABLED && <div><dt>Dinheiro real</dt><dd>{moneyExact(me.game_balance)}</dd></div>}
@@ -63,6 +71,7 @@ export default function PlayerProfilePage() {
               me={me}/>
             <TableSection me={me}/>
             <BalancesSection me={me}/>
+            <WalletAlertsSection/>
           </>
           : <LoadingRegion label={isLoading ? 'Carregando seu perfil…' : 'Preparando seu perfil…'}
                            className="skeleton-panel player-profile-skeleton">

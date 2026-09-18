@@ -1,18 +1,23 @@
 'use client';
-import {ArrowRight, Sparkles} from 'lucide-react';
+import {ArrowRight, Gift, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
-import type {SandboxSKU} from '@/lib/api/wallet';
+import {WELCOME_PACK_SKU, type SandboxSKU} from '@/lib/api/wallet';
 import {moneyExact} from '@/lib/chips';
 
 
-export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction, pendingSku}: {
+export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction, pendingSku, welcomePackClaimed}: {
   skus: SandboxSKU[];
   isLoading: boolean;
   isError: boolean;
   onRetryAction: () => void;
   onSelectAction: (sku: SandboxSKU, trigger: HTMLButtonElement) => void;
   pendingSku: string | null;
+  // Best-effort: derived from the purchase history already loaded for this
+  // page (#348 has no dedicated eligibility field). A false negative here
+  // just shows the card as available; the purchase itself is the real guard
+  // and rejects with a clear message if it was already claimed.
+  welcomePackClaimed?: boolean;
 }) {
   if (isLoading) {
     return <SkeletonList label="Carregando pacotes de créditos…" count={4} height={140} className="store-sku-grid"/>;
@@ -40,9 +45,13 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
         const totalLabel = sku.total_credits.toLocaleString('pt-BR');
         const baseLabel = sku.base_credits.toLocaleString('pt-BR');
         const bonusLabel = bonusCredits.toLocaleString('pt-BR');
-        return <button key={sku.id} type="button" className="store-sku-card"
-                       aria-label={`Escolher ${totalLabel} fichas: ${baseLabel} base${bonusCredits > 0 ? ` mais ${bonusLabel} de bônus` : ', sem bônus'}, por ${moneyExact(sku.price_cents)}`}
-                       disabled={pendingSku !== null} onClick={event => onSelectAction(sku, event.currentTarget)}>
+        const isWelcomePack = sku.id === WELCOME_PACK_SKU;
+        const claimed = isWelcomePack && welcomePackClaimed;
+        return <button key={sku.id} type="button"
+                       className={`store-sku-card${isWelcomePack ? ' store-sku-card-welcome' : ''}`}
+                       aria-label={`${claimed ? 'Já resgatado: ' : 'Escolher '}${isWelcomePack ? 'pacote de boas-vindas, ' : ''}${totalLabel} fichas: ${baseLabel} base${bonusCredits > 0 ? ` mais ${bonusLabel} de bônus` : ', sem bônus'}, por ${moneyExact(sku.price_cents)}`}
+                       disabled={pendingSku !== null || claimed} onClick={event => onSelectAction(sku, event.currentTarget)}>
+          {isWelcomePack && <span className="store-sku-badge"><Gift aria-hidden="true"/> Pacote de boas-vindas</span>}
           <span className="store-sku-credits">{totalLabel} <small>fichas no total</small></span>
           <span className="store-sku-composition">
             <span>{baseLabel} base</span>
@@ -52,8 +61,8 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
               : <small>sem bônus</small>}
           </span>
           <span className="store-sku-price">
-            <span>{pendingSku === sku.id ? 'Preparando Pix…' : moneyExact(sku.price_cents)}</span>
-            <ArrowRight aria-hidden="true"/>
+            <span>{claimed ? 'Já resgatado' : pendingSku === sku.id ? 'Preparando Pix…' : moneyExact(sku.price_cents)}</span>
+            {!claimed && <ArrowRight aria-hidden="true"/>}
           </span>
         </button>;
       })}

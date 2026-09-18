@@ -71,6 +71,16 @@ export interface PlayerProfile {
   bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
   playstyle?: PlaystyleBadge[];
+  // Populated only when the player has a wallet-alert threshold configured
+  // (#304) AND the current balance crosses it — absent or empty otherwise.
+  // Notification-only: never used here to gate a purchase or any other
+  // action, same rule the backend enforces.
+  wallet_alerts?: WalletAlert[];
+}
+
+export type WalletAlertKind = 'low_sandbox_balance' | 'purchase_limit_exceeded';
+export interface WalletAlert {
+  kind: WalletAlertKind;
 }
 
 // Canonical source of truth for a player's wallet balances. Both the sandbox

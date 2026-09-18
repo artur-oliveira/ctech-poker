@@ -18,7 +18,8 @@ export default function ProfileGuide() {
           <GuideBullets><li><span><b>Identidade:</b> nome de exibição e foto.</span></li>
             <li><span><b>Sua vitrine:</b> privacidade, conquistas em destaque e ordem das seções.</span></li>
             <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo.</span></li>
-            <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li></GuideBullets>
+            <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li>
+            <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li></GuideBullets>
           <p>Nome, foto e baralho aparecem nos dois lugares de propósito: é o mesmo controle, salvando no mesmo lugar. Alterou num, o outro já mostra o valor novo.</p></>
       },
       {
@@ -54,6 +55,13 @@ export default function ProfileGuide() {
           <p>Quem abre a sua vitrine vê nome, foto, seus marcos, os rótulos de estilo autorizados e as seções visíveis na ordem que você escolheu: conquistas em destaque, a sua melhor vitória recente e, se estiver logado, o &quot;Cara a Cara&quot;, ou seja, quantas mãos vocês jogaram juntos, quantas cada um venceu, quantas empataram e o saldo de fichas do confronto.</p>
           <p>Abrindo o seu próprio link, uma faixa avisa que a vitrine é sua e oferece a edição. Com a vitrine privada, você lê o motivo e o caminho para publicá-la; um visitante lê que ela está privada, nunca que o perfil não existe.</p>
           <GuideLink href="/player-profile">Abrir meu perfil</GuideLink></>
+      },
+      {
+        id: 'alertas', title: 'Configurar alertas de carteira', summary: 'Um aviso no perfil, nunca um bloqueio de compra.',
+        body: <><p>Em <b>Alertas de carteira</b>, dois limites são opcionais e independentes. Deixe qualquer um em 0 para desligá-lo; <b>Remover alertas</b> aparece assim que algum estiver configurado.</p>
+          <GuideTerms><GuideTerm term="Avisar quando o saldo de fichas cair abaixo de">Um aviso aparece em <b>Seus saldos</b> sempre que o seu saldo atual estiver abaixo do valor configurado.</GuideTerm>
+            <GuideTerm term="Avisar quando uma compra passar de (R$)">O limite de gasto por compra de fichas, em reais.</GuideTerm></GuideTerms>
+          <GuideCallout kind="safe" title="Nunca bloqueia nada">O alerta é só um aviso. Ele não impede uma compra nem muda taxa ou bônus de nenhum pacote.</GuideCallout></>
       },
       {
         id: 'hud', title: 'Ler “Seu jogo”', summary: 'Tendências pré-flop calculadas a partir das suas mãos concluídas.',

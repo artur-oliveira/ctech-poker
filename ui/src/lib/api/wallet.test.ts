@@ -2,9 +2,21 @@ import {describe, expect, test, vi} from 'vitest';
 
 const get = vi.fn();
 const post = vi.fn();
-vi.mock('./client', () => ({apiClient: {get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a)}}));
+vi.mock('./client', async importOriginal => ({
+  ...await importOriginal<typeof import('./client')>(),
+  apiClient: {get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a)},
+}));
 
-import {createPurchase, getPurchase, listPurchases, listSkus, refundPurchase} from './wallet';
+import {ApiError} from './client';
+import {
+  createPurchase,
+  getPurchase,
+  listPurchases,
+  listSkus,
+  promoRedeemErrorMessage,
+  refundPurchase,
+  welcomePackErrorMessage,
+} from './wallet';
 
 describe('wallet api', () => {
   const page = <T, >(data: T[], overrides: Record<string, unknown> = {}) => ({
@@ -54,5 +66,47 @@ describe('wallet api', () => {
       expect.objectContaining({idem_key: expect.any(String)}),
       {silentError: true},
     );
+  });
+
+  test('createPurchase POSTs a promo_code, when given, alongside sku', async () => {
+    post.mockResolvedValueOnce({data: {purchase_id: 'sbxp-2', status: 'pending'}});
+    await createPurchase('', 'BEMVINDO10');
+    expect(post).toHaveBeenCalledWith(
+      '/v1.0/wallet/sandbox-purchase/',
+      expect.objectContaining({sku: '', promo_code: 'BEMVINDO10', idem_key: expect.any(String)}),
+      {silentError: true},
+    );
+  });
+
+  test('createPurchase omits promo_code entirely when none is given', async () => {
+    post.mockResolvedValueOnce({data: {purchase_id: 'sbxp-3', status: 'pending'}});
+    await createPurchase('pack_100');
+    expect(post).toHaveBeenCalledWith(
+      '/v1.0/wallet/sandbox-purchase/',
+      expect.objectContaining({sku: 'pack_100', promo_code: undefined}),
+      {silentError: true},
+    );
+  });
+});
+
+describe('promoRedeemErrorMessage', () => {
+  test('maps each backend promocode error to pt-BR copy', () => {
+    expect(promoRedeemErrorMessage(new ApiError('x', 400, {detail: 'promocode: already redeemed by this player'})))
+      .toBe('Este código já foi usado na sua conta.');
+    expect(promoRedeemErrorMessage(new ApiError('x', 400, {detail: 'promocode: expired'})))
+      .toBe('Este código promocional expirou.');
+    expect(promoRedeemErrorMessage(new ApiError('x', 400, {detail: 'promocode: redemption limit reached'})))
+      .toBe('Este código atingiu o limite de resgates.');
+    expect(promoRedeemErrorMessage(new ApiError('x', 400, {detail: 'promocode: not found'})))
+      .toBe('Código promocional inválido.');
+    expect(promoRedeemErrorMessage(new Error('network down'))).toBe('Não foi possível aplicar o código agora. Tente novamente.');
+  });
+});
+
+describe('welcomePackErrorMessage', () => {
+  test('names the welcome pack specifically for an already-redeemed claim', () => {
+    expect(welcomePackErrorMessage(new ApiError('x', 400, {detail: 'promocode: already redeemed by this player'})))
+      .toBe('Você já resgatou o pacote de boas-vindas antes.');
+    expect(welcomePackErrorMessage(new Error('boom'))).toBe('Não foi possível iniciar o pacote de boas-vindas agora. Tente novamente.');
   });
 });

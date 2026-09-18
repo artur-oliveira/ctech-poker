@@ -224,6 +224,50 @@ describe('store page', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet']});
   });
 
+  test('badges the welcome pack and disables it once already claimed', () => {
+    mocks.queryState['wallet.skus'] = queryState([
+      ...skus,
+      {id: 'welcome_pack', price_cents: 1, base_credits: 500, bonus_percent: 0, total_credits: 500},
+    ]);
+    mocks.queryState['wallet.sandbox-purchases'] = pageState([
+      ...purchases,
+      {purchase_id: 'sbxp-welcome', sku: 'welcome_pack', status: 'confirmed', total_credits: 500, price_cents: 1, created_at: '2026-07-30T09:00:00Z'},
+    ]);
+    render(<Store/>);
+
+    const welcomeButton = screen.getByRole('button', {name: /Já resgatado: pacote de boas-vindas/});
+    expect(welcomeButton).toBeDisabled();
+    expect(within(welcomeButton).getByText('Pacote de boas-vindas')).toBeInTheDocument();
+    expect(within(welcomeButton).getByText('Já resgatado')).toBeInTheDocument();
+  });
+
+  test('redeeming a promo code opens the purchase modal for the code\'s own package', async () => {
+    mocks.createPurchase.mockResolvedValue({
+      purchase_id: 'sbxp-promo', sku: 'pack_500', status: 'pending', promo_code: 'BEMVINDO10',
+      pix_copia_e_cola: 'promo-code', expires_at: new Date(Date.now() + 600_000).toISOString(),
+    });
+    render(<Store/>);
+
+    fireEvent.change(screen.getByRole('textbox', {name: /Código promocional/}), {target: {value: 'bemvindo10'}});
+    fireEvent.click(screen.getByRole('button', {name: /Aplicar código/}));
+
+    await waitFor(() => expect(mocks.createPurchase).toHaveBeenCalledWith('', 'BEMVINDO10'));
+    expect(await screen.findByText('Pague com Pix para concluir')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('promo-code')).toBeInTheDocument();
+  });
+
+  test('shows an inline error when a promo code was already used', async () => {
+    const {ApiError} = await import('@/lib/api/client');
+    mocks.createPurchase.mockRejectedValue(new ApiError('bad request', 400, {detail: 'promocode: already redeemed by this player'}));
+    render(<Store/>);
+
+    fireEvent.change(screen.getByRole('textbox', {name: /Código promocional/}), {target: {value: 'USADO'}});
+    fireEvent.click(screen.getByRole('button', {name: /Aplicar código/}));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Este código já foi usado na sua conta.');
+    expect(screen.queryByText('Pague com Pix para concluir')).not.toBeInTheDocument();
+  });
+
   test('regenerates an expired Pix for the same package and restores package focus on close', async () => {
     mocks.createPurchase
       .mockResolvedValueOnce({
