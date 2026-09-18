@@ -120,8 +120,11 @@ Not part of the original brief; delivered after Phase 5 in response to live play
 - Spectator mode.
 - Run-it-twice.
 - Multi-table grid.
-- Native mobile apps.
 - Player avatars — see `docs/specs/2026-07-28-player-avatars-and-next-features.md`.
+
+Native mobile apps are now in development in `mobile/` (Flutter, Android/iOS).
+See [mobile parity](mobile/docs/parity.md) for implemented flows and remaining
+integration/device validation.
 
 Rabbit hunting was on this list and shipped in Phase 6.
 
