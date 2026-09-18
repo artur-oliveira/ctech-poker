@@ -160,7 +160,7 @@ type Actor struct {
 	// broadcastAll re-runs for every chat message, reconnect signal and act,
 	// so without this a single street paid for equityIterations samples per
 	// active seat over and over. Dropped whenever the hand changes.
-	equityCache       map[string]float64
+	equityCache       map[actorEquityKey]float64
 	equityCacheHand   string
 	equityEnabled     atomic.Bool
 	runItTwiceEnabled atomic.Bool

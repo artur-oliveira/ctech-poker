@@ -39,12 +39,12 @@ func TestEstimateKnownEquities(t *testing.T) {
 		want      float64
 	}{
 		{"AA vs one random hand", [2]deck.Card{card(deck.Ace, deck.Clubs), card(deck.Ace, deck.Diamonds)}, 1, .852},
-		{"72 offsuit vs one random hand", [2]deck.Card{card(deck.Seven, deck.Clubs), card(deck.Two, deck.Diamonds)}, 1, .354},
+		{"72 offsuit vs one random hand", [2]deck.Card{card(deck.Seven, deck.Clubs), card(deck.Two, deck.Diamonds)}, 1, .346},
 		{"AA vs eight random hands", [2]deck.Card{card(deck.Ace, deck.Clubs), card(deck.Ace, deck.Diamonds)}, 8, .345},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Estimate(tc.hole, nil, nil, tc.opponents, iterations)
+			got, err := sampledEstimateForTest(tc.hole, nil, nil, tc.opponents, iterations)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,10 +68,11 @@ func TestEstimateRejectsInvalidInputs(t *testing.T) {
 func TestEstimateWithStatsReportsCacheMissThenHit(t *testing.T) {
 	globalEquityCache = newLRUCache(2 * cacheEntryBaseBytes)
 	hole := [2]deck.Card{{Rank: deck.Queen, Suit: deck.Hearts}, {Rank: deck.Jack, Suit: deck.Hearts}}
-	if _, stats, err := EstimateWithStats(hole, nil, nil, 2, 25); err != nil || stats.CacheHit {
+	board := []deck.Card{{Rank: deck.Two, Suit: deck.Clubs}, {Rank: deck.Five, Suit: deck.Diamonds}, {Rank: deck.Nine, Suit: deck.Spades}}
+	if _, stats, err := EstimateWithStats(hole, board, nil, 2, 25); err != nil || stats.CacheHit {
 		t.Fatalf("first estimate must miss cache: stats=%+v err=%v", stats, err)
 	}
-	if _, stats, err := EstimateWithStats(hole, nil, nil, 2, 25); err != nil || !stats.CacheHit {
+	if _, stats, err := EstimateWithStats(hole, board, nil, 2, 25); err != nil || !stats.CacheHit {
 		t.Fatalf("second estimate must hit cache: stats=%+v err=%v", stats, err)
 	}
 }
@@ -98,7 +99,7 @@ func TestCacheIsByteBoundedAndEvictsOneTable(t *testing.T) {
 	}
 }
 
-// BenchmarkEstimateProduction exercises a cached full-table estimate. The
+// BenchmarkEstimateProduction exercises the preflop lookup. The
 // actor requests 200 iterations and attaches the result to each snapshot.
 func BenchmarkEstimateProduction(b *testing.B) {
 	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Clubs}, {Rank: deck.King, Suit: deck.Clubs}}

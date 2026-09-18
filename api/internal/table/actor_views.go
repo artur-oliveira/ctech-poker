@@ -475,10 +475,20 @@ func equityStage(stage hand.Stage) bool {
 
 // equityIterations is the Monte-Carlo sample count behind the seat's win-%
 // hint. It runs on the actor goroutine, so it is deliberately small: enough
-// for a stable one-decimal display, cheap enough not to stall the table.
+// for a rough hint, cheap enough not to stall the table. At 50% equity the
+// approximate 95% sampling margin is ±6.9 percentage points. Heads-up river
+// equity is enumerated exactly instead; supported preflop spots use the
+// offline four-million-sample table.
 const equityIterations = 200
 
-// equityFor returns the cached win-probability estimate for one seat,
+type actorEquityKey struct {
+	hole      [2]deck.Card
+	board     [5]deck.Card
+	boardLen  int
+	opponents int
+}
+
+// equityFor returns the cached expected pot-share estimate for one seat,
 // computing it only on a miss. The estimate depends solely on (hole, board,
 // opponent count), so the key below is exact — a fold changes the opponent
 // count and a new street changes the board, both producing a fresh entry.
@@ -486,10 +496,14 @@ const equityIterations = 200
 // reconnect signal) re-ran the simulation for every active seat (#37).
 func (a *Actor) equityFor(hole [2]deck.Card, board []deck.Card, opponents int) (float64, bool) {
 	if a.equityCacheHand != a.handID || a.equityCache == nil {
-		a.equityCache = make(map[string]float64)
+		a.equityCache = make(map[actorEquityKey]float64)
 		a.equityCacheHand = a.handID
 	}
-	key := fmt.Sprintf("%v|%v|%d", hole, board, opponents)
+	if len(board) > 5 {
+		return 0, false
+	}
+	key := actorEquityKey{hole: hole, boardLen: len(board), opponents: opponents}
+	copy(key.board[:], board)
 	if estimate, hit := a.equityCache[key]; hit {
 		return estimate, true
 	}
