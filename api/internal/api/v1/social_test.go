@@ -373,6 +373,10 @@ func (s *fakeMultiProfileStore) SetReactionWheel(context.Context, string, []stri
 func (s *fakeMultiProfileStore) SetStatsGoals(context.Context, string, map[string]float64) error {
 	return nil
 }
+func (s *fakeMultiProfileStore) SetEquippedFrame(context.Context, string, string) error { return nil }
+func (s *fakeMultiProfileStore) SetEquippedBadges(context.Context, string, []string) error {
+	return nil
+}
 
 // fakeInboxEventStore is a minimal in-memory social.EventStore — only List
 // needs to behave like the real DynamoDB GSI query (newest first) for the

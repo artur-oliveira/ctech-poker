@@ -26,6 +26,13 @@ var ErrInvalidFavoriteReactions = errors.New("player: invalid favorite reactions
 var ErrInvalidReactionWheel = errors.New("player: invalid reaction wheel")
 var ErrReactionNotOwned = errors.New("player: reaction is premium and not owned")
 var ErrInvalidStatsGoals = errors.New("player: invalid stats goals")
+var ErrInvalidFrame = errors.New("player: frame_id must be a known frame")
+var ErrInvalidBadges = errors.New("player: badge_ids must contain up to three unique known badges")
+
+// maxEquippedBadges bounds the equipped-badges slice — a UI-driven ceiling
+// (three at once around the avatar reads; a dozen wouldn't), same rationale
+// as maxReactionWheelSize.
+const maxEquippedBadges = 3
 
 // maxReactionWheelSize bounds the quick-react wheel (#338) the same way
 // SetShowcase bounds featured achievements — a UI-driven ceiling, not a
@@ -55,6 +62,8 @@ type profileStore interface {
 	SetFavoriteReactions(context.Context, string, []string) error
 	SetReactionWheel(context.Context, string, []string) error
 	SetStatsGoals(context.Context, string, map[string]float64) error
+	SetEquippedFrame(context.Context, string, string) error
+	SetEquippedBadges(context.Context, string, []string) error
 }
 
 // reactionOwnershipChecker is the narrow slice of *reactionpurchase.Service
@@ -446,6 +455,53 @@ func (s *Service) SetStatsGoals(ctx context.Context, userID string, goals map[st
 		}
 	}
 	if err := s.store.SetStatsGoals(ctx, userID, goals); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetEquippedFrame persists the player's equipped seasonal avatar frame
+// (#292). An empty frameID unequips (always allowed, mirrors clearing
+// StatsGoals with an empty map); a non-empty one must be a known frame id
+// and, since every frame catalog entry is premium, must already be owned —
+// same requireCosmetic path SetDeckVariant/SetTableTheme already use.
+func (s *Service) SetEquippedFrame(ctx context.Context, userID, frameID string) (*PlayerProfile, error) {
+	frameID = strings.TrimSpace(frameID)
+	if frameID != "" {
+		if !cosmetics.IsKnown(cosmetics.KindFrame, frameID) {
+			return nil, ErrInvalidFrame
+		}
+		if err := s.requireCosmetic(ctx, userID, cosmetics.KindFrame, frameID); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.store.SetEquippedFrame(ctx, userID, frameID); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetEquippedBadges persists the player's equipped seasonal badges (#292),
+// mirroring SetEquippedFrame's validate-then-persist shape per id and
+// SetFavoriteReactions' count/uniqueness bound.
+func (s *Service) SetEquippedBadges(ctx context.Context, userID string, badgeIDs []string) (*PlayerProfile, error) {
+	if len(badgeIDs) > maxEquippedBadges {
+		return nil, ErrInvalidBadges
+	}
+	seen := make(map[string]bool, len(badgeIDs))
+	normalized := make([]string, 0, len(badgeIDs))
+	for _, id := range badgeIDs {
+		id = strings.TrimSpace(id)
+		if id == "" || !cosmetics.IsKnown(cosmetics.KindBadge, id) || seen[id] {
+			return nil, ErrInvalidBadges
+		}
+		seen[id] = true
+		if err := s.requireCosmetic(ctx, userID, cosmetics.KindBadge, id); err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, id)
+	}
+	if err := s.store.SetEquippedBadges(ctx, userID, normalized); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

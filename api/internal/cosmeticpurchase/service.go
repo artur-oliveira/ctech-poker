@@ -576,6 +576,36 @@ func (s *Service) IsOwned(ctx context.Context, playerID string, kind cosmetics.K
 	return e.active(), nil
 }
 
+// Grant creates an active entitlement without any wallet purchase — the
+// ownership mechanism issue #292 (seasonal avatar frames/badges, unlocked by
+// a season/achievement milestone rather than bought) reuses instead of
+// standing up a second inventory table. reason is a free-form audit trail
+// (e.g. "season:2026-q3-top10"), stored in the same PurchaseID column a real
+// purchase would use. A repeat grant of an already-active entitlement is a
+// no-op, not an error, so a retried or duplicated milestone trigger can never
+// double-write or fail loudly for something already true.
+func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) error {
+	if !cosmetics.IsKnown(kind, itemID) {
+		return ErrUnknownItem
+	}
+	now := s.now().UTC().Format(time.RFC3339Nano)
+	err := s.entitlements.Put(ctx, Entitlement{
+		PlayerID: playerID, Kind: string(kind), ItemID: itemID,
+		PurchaseMethod: methodGrant, PurchaseID: reason, Status: statusActive, CreatedAt: now,
+	})
+	if err != nil {
+		if dynamo.IsConditionFailed(err) {
+			existing, getErr := s.entitlements.Get(ctx, playerID, kind, itemID)
+			if getErr == nil && existing.active() {
+				return nil
+			}
+		}
+		return fmt.Errorf("cosmeticpurchase: grant entitlement: %w", err)
+	}
+	s.invalidate(ctx, playerID, kind, itemID)
+	return nil
+}
+
 // Refresh is the polling safety net. PIX purchases are always re-verified with
 // wallet; an interrupted fichas debit resumes from its persisted processing
 // record using the original idempotency key.

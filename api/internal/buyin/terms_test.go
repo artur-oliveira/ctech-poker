@@ -63,6 +63,10 @@ func (unacceptedProfiles) SetReactionWheel(context.Context, string, []string) er
 func (unacceptedProfiles) SetStatsGoals(context.Context, string, map[string]float64) error {
 	return nil
 }
+func (unacceptedProfiles) SetEquippedFrame(context.Context, string, string) error { return nil }
+func (unacceptedProfiles) SetEquippedBadges(context.Context, string, []string) error {
+	return nil
+}
 
 func TestBuyInRequiresPokerTermsBeforeWalletDebit(t *testing.T) {
 	wallet := &gateWallet{}

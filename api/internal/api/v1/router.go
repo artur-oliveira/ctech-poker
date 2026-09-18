@@ -12,6 +12,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmeticloadout"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -27,8 +28,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
-	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
@@ -77,6 +78,7 @@ func Register(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 	pending *reconcile.PendingStore,
+	cosmeticLoadoutSvc *cosmeticloadout.Service,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
@@ -148,6 +150,10 @@ func Register(
 	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)
 	RegisterCosmeticPurchase(router, auth, cosmeticPurchaseSvc, purchaseLimiter)
+	// nil in the narrower test-only wiring (app.registerRoutes).
+	if cosmeticLoadoutSvc != nil {
+		RegisterCosmeticLoadouts(router, auth, cosmeticLoadoutSvc)
+	}
 	RegisterSocial(router, auth, socialSvc, players, cfg, SocialLimiters{
 		MutationPlayer:  socialMutationPlayerLimiter,
 		MutationIP:      socialMutationIPLimiter,

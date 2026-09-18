@@ -84,14 +84,24 @@ type PlayerProfile struct {
 	ReactionWheel []string `dynamodbav:"reaction_wheel,omitempty" json:"reaction_wheel,omitempty"`
 	// StatsGoals holds the player's personal targets for pokerstats metrics
 	// (#331), keyed by metric ("vpip_rate", "pfr_rate", "three_bet_rate").
-	StatsGoals        map[string]float64 `dynamodbav:"stats_goals,omitempty" json:"stats_goals,omitempty"`
-	PokerTermsVersion string             `dynamodbav:"poker_terms_version,omitempty" json:"-"`
-	TermsAcceptedAt   string             `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
-	AvatarKey         string             `dynamodbav:"avatar_key,omitempty" json:"-"`
-	AvatarVersion     int                `dynamodbav:"avatar_version,omitempty" json:"-"`
-	AvatarBlocked     bool               `dynamodbav:"avatar_blocked,omitempty" json:"-"`
-	CreatedAt         string             `dynamodbav:"created_at" json:"-"`
-	UpdatedAt         string             `dynamodbav:"updated_at" json:"-"`
+	StatsGoals map[string]float64 `dynamodbav:"stats_goals,omitempty" json:"stats_goals,omitempty"`
+	// EquippedFrameID/EquippedBadgeIDs back issue #292 (seasonal avatar
+	// frames/badges): the player's currently-equipped decoration around their
+	// avatar, resolved client-side from these ids (never server-rendered —
+	// same "composition happens in the client" decision the issue made for
+	// deck/felt cosmetics). Empty means "no frame equipped" / "no badges
+	// equipped", not an error. Ownership of a non-empty value is
+	// cosmeticpurchase.Service.IsOwned, reused rather than reimplemented; see
+	// Service.SetEquippedFrame/SetEquippedBadges.
+	EquippedFrameID   string   `dynamodbav:"equipped_frame_id,omitempty" json:"equipped_frame_id,omitempty"`
+	EquippedBadgeIDs  []string `dynamodbav:"equipped_badge_ids,omitempty" json:"equipped_badge_ids,omitempty"`
+	PokerTermsVersion string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`
+	TermsAcceptedAt   string   `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
+	AvatarKey         string   `dynamodbav:"avatar_key,omitempty" json:"-"`
+	AvatarVersion     int      `dynamodbav:"avatar_version,omitempty" json:"-"`
+	AvatarBlocked     bool     `dynamodbav:"avatar_blocked,omitempty" json:"-"`
+	CreatedAt         string   `dynamodbav:"created_at" json:"-"`
+	UpdatedAt         string   `dynamodbav:"updated_at" json:"-"`
 }
 
 func (p *PlayerProfile) TermsAccepted() bool {

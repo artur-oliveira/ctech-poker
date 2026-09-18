@@ -39,7 +39,7 @@ export type TableName =
   'poker_player_notes' | 'poker_hand_meta' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_player_matchups' |
   'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
-  'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
+  'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' | 'poker_cosmetic_loadouts' |
   'poker_table_entitlements' | 'poker_table_highlights' |
   'poker_hand_reveals' | 'poker_hand_reveal_payments' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
@@ -315,6 +315,10 @@ export class DynamoDBStack extends cdk.Stack {
     // reads it by exact key — see
     // docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
     table('poker_cosmetic_entitlements', true);
+    // poker_cosmetic_loadouts (#313): pk = player_id, sk = loadout_id — named,
+    // saved deck+felt combinations. The API caps a player at 5 rows, so no
+    // GSI, no TTL and no pagination are needed (list = one Query on pk).
+    table('poker_cosmetic_loadouts', true);
     // poker_cosmetic_purchases: pk = player_id, sk = purchase_id — permanent
     // purchase history, mirrors poker_reaction_purchases. Pix confirmation is
     // webhook-driven (no local pending sweep) and fichas purchases are
