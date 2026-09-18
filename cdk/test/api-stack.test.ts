@@ -59,6 +59,7 @@ function synthStack(overrides: Partial<{environment: Environment; cloudwatchAlar
     reactionPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_purchases',
     cosmeticEntitlementsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_cosmetic_entitlements',
     cosmeticPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_cosmetic_purchases',
+    cosmeticLoadoutsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_cosmetic_loadouts',
     tableEntitlementsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_entitlements',
     socialEdgesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_social_edges',
     recentPlayersTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_recent_players',

@@ -40,6 +40,9 @@ const (
 
 	methodPIX    = "pix"
 	methodFichas = "fichas"
+	// methodGrant marks an entitlement created by Service.Grant (#292) —
+	// directly activated, never through a wallet purchase.
+	methodGrant = "grant"
 )
 
 // entitlementSK builds the composite sort key for an entitlement row. Deck

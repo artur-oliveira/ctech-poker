@@ -138,6 +138,7 @@ new PokerApiStack(app, id('API'), {
   reactionPurchasesTableArn: dynamoStack.tables.get('poker_reaction_purchases')!.tableArn,
   cosmeticEntitlementsTableArn: dynamoStack.tables.get('poker_cosmetic_entitlements')!.tableArn,
   cosmeticPurchasesTableArn: dynamoStack.tables.get('poker_cosmetic_purchases')!.tableArn,
+  cosmeticLoadoutsTableArn: dynamoStack.tables.get('poker_cosmetic_loadouts')!.tableArn,
   tableEntitlementsTableArn: dynamoStack.tables.get('poker_table_entitlements')!.tableArn,
   walletUrlParam: pokerParameters.walletInternalUrl,
   pokerClientIdParam: pokerParameters.clientId,

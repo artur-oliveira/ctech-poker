@@ -12,6 +12,17 @@ type Kind string
 const (
 	KindDeck Kind = "deck"
 	KindFelt Kind = "felt"
+	// KindFrame and KindBadge back issue #292 (seasonal avatar frames and
+	// badges). They are premium-only entries: unlike deck/felt, they are
+	// never sold through cosmeticpurchase's wallet flow (no SKU/PriceFichas,
+	// and cosmeticpurchase's :kind route param only ever accepts deck/felt —
+	// see internal/api/v1/cosmeticpurchase.go's validCosmeticKind), so
+	// ownership is granted directly via cosmeticpurchase.Service.Grant on a
+	// season/achievement milestone instead of a purchase. That trigger itself
+	// (which milestone unlocks which frame/badge) is still an open product
+	// decision per #292 — this catalog only fixes which ids exist.
+	KindFrame Kind = "frame"
+	KindBadge Kind = "badge"
 )
 
 // CatalogEntry mirrors reactions.ReactionCatalogEntry's shape. PriceFichas is
@@ -42,6 +53,14 @@ var catalog = []CatalogEntry{
 	{Kind: KindFelt, ID: "midnight", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_midnight"},
 	{Kind: KindFelt, ID: "burgundy", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_burgundy"},
 	{Kind: KindFelt, ID: "ocean", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_ocean"},
+
+	// Frames/badges are always Premium (so ownership is never universal —
+	// see the KindFrame/KindBadge doc comment above) but carry no SKU/price:
+	// they are granted, not sold.
+	{Kind: KindFrame, ID: "season-2026-q3", Premium: true},
+	{Kind: KindFrame, ID: "champion-gold", Premium: true},
+	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true},
+	{Kind: KindBadge, ID: "season-2026-q3-champion", Premium: true},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
