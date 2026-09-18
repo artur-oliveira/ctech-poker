@@ -21,6 +21,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
+	"gopkg.aoctech.app/poker/api/internal/walletalert"
 )
 
 // Name and WalletMode are pointers so an absent key means "don't touch this
@@ -83,6 +84,10 @@ type playerHandlers struct {
 	// ranking profile milestones (#330). nil in tests and in the narrower
 	// wiring; the showcase then simply carries no ranking mark.
 	ranks leaderboardRanker
+	// walletAlerts backs GET/PUT/DELETE /players/me/wallet-alerts and the
+	// balance-alert annotation on the profile response (#304). nil wherever
+	// the narrower test wiring doesn't provide one — every use guards on it.
+	walletAlerts *walletalert.Service
 }
 
 // leaderboardRanker is the one method the showcase needs from
@@ -100,6 +105,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	var identity *tableIdentityPusher
 	var settlements settlementReader
 	var ranks leaderboardRanker
+	var walletAlerts *walletalert.Service
 	for _, extra := range extras {
 		switch value := extra.(type) {
 		case *reports.Service:
@@ -117,9 +123,11 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 		// swallow any future extra that happens to carry a matching method.
 		case settlementReader:
 			settlements = value
+		case *walletalert.Service:
+			walletAlerts = value
 		}
 	}
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity, settlements: settlements, ranks: ranks}
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity, settlements: settlements, ranks: ranks, walletAlerts: walletAlerts}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
@@ -135,6 +143,9 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	g.Get("/me/hand/:id", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
 	g.Get("/me/achievements/summary", h.achievementsSummary)
+	g.Get("/me/wallet-alerts", h.walletAlertsGet)
+	g.Put("/me/wallet-alerts", h.walletAlertsPut)
+	g.Delete("/me/wallet-alerts", h.walletAlertsDelete)
 	g.Get("/me/reports", h.myReports)
 	g.Get("/me/settlements", h.mySettlements)
 }
@@ -670,6 +681,18 @@ func (h *playerHandlers) responseWithBalance(c fiber.Ctx, profile *player.Player
 	if balances, err := h.players.Balances(c.Context(), profile.UserID); err == nil {
 		resp["game_balance"] = balances.GameBalance
 		resp["sandbox_balance"] = balances.SandboxBalance
+		// #304: evaluated against the Balances response already fetched
+		// above — no second ctech-wallet M2M call, just one extra local
+		// DynamoDB read for the player's own thresholds (nil if never
+		// configured, in which case Evaluate always reports no alert).
+		if h.walletAlerts != nil {
+			prefs, prefsErr := h.walletAlerts.Get(c.Context(), profile.UserID)
+			if prefsErr != nil {
+				slog.Warn("player: wallet alert prefs lookup failed", "user_id", profile.UserID, "err", prefsErr)
+			} else {
+				resp["wallet_alerts"] = walletalert.Evaluate(prefs, *balances)
+			}
+		}
 	} else {
 		slog.Warn("player: balance lookup failed", "user_id", profile.UserID, "err", err)
 	}

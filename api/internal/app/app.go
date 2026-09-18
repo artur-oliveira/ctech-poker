@@ -50,6 +50,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/promocode"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
@@ -66,6 +67,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablenotify"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/tablestreak"
+	"gopkg.aoctech.app/poker/api/internal/walletalert"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
@@ -107,7 +109,10 @@ var Module = fx.Options(
 		newRouletteStore,
 		newRouletteService,
 		newSandboxPurchaseStore,
+		newPromoCodeStore,
 		newSandboxPurchaseService,
+		newWalletAlertStore,
+		newWalletAlertService,
 		newReactionEntitlementStore,
 		newReactionPurchaseStore,
 		newReactionPurchaseService,
@@ -396,8 +401,17 @@ func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *
 func newSandboxPurchaseStore(db *dynamodb.Client, cfg *config.Config) *sandboxpurchase.Store {
 	return sandboxpurchase.NewStore(db, cfg.Env)
 }
-func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store) *sandboxpurchase.Service {
-	return sandboxpurchase.NewService(wallet, store)
+func newPromoCodeStore(db *dynamodb.Client, cfg *config.Config) *promocode.Store {
+	return promocode.NewStore(db, cfg.Env)
+}
+func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store, promo *promocode.Store) *sandboxpurchase.Service {
+	return sandboxpurchase.NewService(wallet, store).WithPromo(promo)
+}
+func newWalletAlertStore(db *dynamodb.Client, cfg *config.Config) *walletalert.Store {
+	return walletalert.NewStore(db, cfg.Env)
+}
+func newWalletAlertService(store *walletalert.Store) *walletalert.Service {
+	return walletalert.NewService(store)
 }
 func newReactionEntitlementStore(db *dynamodb.Client, cfg *config.Config) *reactionpurchase.EntitlementStore {
 	return reactionpurchase.NewEntitlementStore(db, cfg.Env)
@@ -955,8 +969,9 @@ func registerRoutesWithSocialRuntime(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 	pending *reconcile.PendingStore,
+	walletAlertSvc *walletalert.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -972,7 +987,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil)
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so
