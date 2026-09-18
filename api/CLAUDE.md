@@ -135,6 +135,16 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   `table.ErrActorStopped`) into `unavailable`, everything else into `invalid_action`. Reporting an outage as
   `invalid_action` blames the player for it and makes the client end the command instead of resyncing and resubmitting.
   `ErrVersionConflict` stays `invalid_action` — it *is* a verdict.
+- **The leaderboard is scoped by period as well as by mode.** `leaderboard.Board{Mode, Metric, Period}` names one
+  ranking; `period=month` is the current calendar month in BRT (`internal/leaderboard/period.go`, same wall clock as
+  `dailyreward`'s cooldown key) and `period=all` is the lifetime board. A scoped board is a **separate row** —
+  `sk = "stats#<mode>#<YYYY-MM>"` with GSI partition `<mode>#<YYYY-MM>` — reusing the same three GSIs, so no index or
+  table was added and each closed month stays queryable forever. The lifetime row's keys are byte-identical to what
+  they were before periods existed (no backfill). The cost is the one thing to keep in mind: every hand now writes
+  **two** boards per participant, which is why `TestRecordHandWriteBudget` counts per board and
+  `TestHandPipelineDynamoBudget`'s per-seat terms went up by one. `period` defaults to `all` at the HTTP boundary so
+  the CLI and mobile keep the board they always had; the web client asks for `month` explicitly. See
+  `docs/plans/2026-09-17-monthly-leaderboard.md`.
 - **`tablelease` is latency-only**, not correctness. Never add lease-based correctness logic.
 - **Every `a.cached`/`a.handID`/`a.activity`-mutating handler routes its mutation-and-commit body through
   `Actor.mutate(fn func() error) error`** (`internal/table/actor.go`) — never a hand-rolled snapshot/restore. `mutate`

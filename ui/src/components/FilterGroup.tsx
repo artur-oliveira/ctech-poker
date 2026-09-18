@@ -1,5 +1,7 @@
 'use client';
 
+import {useId} from 'react';
+
 export type FilterOption<T extends string> = {
   value: T;
   label: string;
@@ -7,14 +9,26 @@ export type FilterOption<T extends string> = {
   title?: string;
 };
 
-export function FilterGroup<T extends string>({label, value, options, onChangeAction, className}: {
+export function FilterGroup<T extends string>({label, value, options, onChangeAction, className, showLabel}: {
   label: string;
   value: T;
   options: readonly FilterOption<T>[];
   onChangeAction: (value: T) => void;
   className?: string;
+  /** Renders `label` inline ahead of the chips instead of only naming the
+   * group for assistive tech. Use it where several groups sit side by side and
+   * the chips alone no longer say which axis they belong to; a lone group on a
+   * page reads fine without it. The group is then named by that same visible
+   * text, so nobody hears the label twice. */
+  showLabel?: boolean;
 }) {
-  return <div className={`filter-tabs${className ? ` ${className}` : ''}`} role="group" aria-label={label}>
+  const labelId = useId();
+  return <div
+    className={`filter-tabs${className ? ` ${className}` : ''}`}
+    role="group"
+    {...(showLabel ? {'aria-labelledby': labelId} : {'aria-label': label})}
+  >
+    {showLabel && <span className="filter-tabs-label" id={labelId}>{label}</span>}
     {options.map(option => <button
       key={option.value}
       type="button"

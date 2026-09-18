@@ -1146,11 +1146,33 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const social = mockSocialRequest(method, path, body, config);
     if (social) return social;
   }
-  if (method === 'GET' && path === '/v1.0/leaderboard') return ok(page([
-    {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},
-    {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
-    {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
-  ]), config);
+  if (method === 'GET' && path === '/v1.0/leaderboard') {
+    // The mock board honours period and metric the way the server does, so the
+    // ranking page's filters are exercisable offline: a month holds a fraction
+    // of a lifetime's hands, and rows arrive already ordered by the metric
+    // asked for (the client only re-sorts within the page it received).
+    const lifetime = [
+      {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},
+      {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
+      {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
+    ];
+    const rows = config.params?.period === 'month'
+      ? lifetime.map(entry => ({
+        ...entry,
+        hands_played: Math.round(entry.hands_played / 3),
+        hands_won: Math.round(entry.hands_won / 3),
+      })).map(entry => ({...entry, win_rate: entry.hands_played ? entry.hands_won / entry.hands_played : 0}))
+      : lifetime;
+    const metric = config.params?.metric || 'hands_won';
+    const score = (entry: typeof lifetime[number]) =>
+      metric === 'hands_played' ? entry.hands_played : metric === 'win_rate' ? entry.win_rate : entry.hands_won;
+    // The win_rate board has a minimum-hands floor server-side
+    // (leaderboard.MinHandsForWinRateRank), and inside a single month nobody
+    // here has crossed it — which is exactly the empty state the ranking page
+    // needs to be able to show offline.
+    const ranked = metric === 'win_rate' ? rows.filter(entry => entry.hands_played >= 100) : rows;
+    return ok(page([...ranked].sort((a, b) => score(b) - score(a))), config);
+  }
   if (method === 'GET' && path === '/v1.0/achievements') return ok(achievementCatalog, config);
   if (method === 'GET' && path === '/v1.0/players/me/achievements') return ok(page(mockAchievementProgress), config);
   if (method === 'GET' && path === '/v1.0/players/me/achievements/summary') {

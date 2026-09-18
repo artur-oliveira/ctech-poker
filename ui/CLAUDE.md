@@ -313,6 +313,13 @@ off by default — do not build UI that assumes real money is on.
   genuinely needs a catch-up read on focus opts in explicitly (as `usePurchaseStatus` does) or gets
   a row in the table — never by flipping the global back. See
   `docs/2026-09-04-query-freshness-presets.md` and #233.
+- **A leaderboard board is (mode, period, metric), and all three are in the query key.** `/leaderboard` defaults to
+  `period=month` — a lifetime ranking a new player can never reach is a scoreboard, not a competition — with "Geral"
+  one chip away, and exposes the three metrics the server can order by (`hands_won`, `hands_played`, `win_rate`).
+  `leaderboardKey`/`myRankKey` (`lib/api/gamification.ts`) are the one spelling of those keys; caching two boards under
+  one key would show September's ranking under October's chip. `/hands` keeps the lifetime standing, which is what the
+  defaults resolve to. The row leads with the metric the board is sorted by — a list ordered by one number while
+  emphasizing another reads as unsorted.
 - **Leaderboard request budget (issue #202).** Opening `/leaderboard` costs **two** GETs — the board page and, for a
   signed-in viewer, `/leaderboard/me` — and both use `LEADERBOARD_STALE_MS` (`lib/api/gamification.ts`), pinned to the
   server's 5-minute rank-mirror TTL. Under the global 30s `staleTime` + `refetchOnWindowFocus` they were re-fetching

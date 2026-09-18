@@ -5244,6 +5244,33 @@ button.deck-grid-slot:hover {
     justify-content: center;
     gap: 12px;
 }
+/* Three filter groups (carteira, período, métrica) read as one control bar,
+   not three stacked toolbars: each group keeps the 8px rhythm its own pills
+   use, and 24px between groups is what separates them — proximity, not rules
+   or boxes. They wrap into as many lines as the viewport needs, in order, so
+   a phone gets the same reading sequence without a horizontal scroller. */
+.ranking-filters {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 24px;
+    margin-bottom: 32px;
+}
+.ranking-filters .filter-tabs {
+    margin: 0;
+    align-items: center;
+}
+/* The axis name sits inline with its own chips, so seven chips across three
+   axes stop reading as one undifferentiated row. Secondary ink, not muted:
+   this is the word that makes the chips next to it meaningful. */
+.filter-tabs-label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
 .viewer-ranking-card {
     display: flex;
     align-items: center;
@@ -5279,7 +5306,8 @@ button.deck-grid-slot:hover {
 }
 .viewer-ranking-stats {
     display: flex;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 6px 16px;
     font-size: var(--font-size-body);
 }
 .viewer-ranking-stats span b {

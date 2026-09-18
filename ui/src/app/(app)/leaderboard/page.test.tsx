@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   boardQuery: {} as Record<string, unknown>,
   rankQuery: {} as Record<string, unknown>,
   refetch: vi.fn(),
+  keys: [] as unknown[][],
 }));
 
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => mocks.session}));
@@ -19,9 +20,16 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
   playerName: (id: string, viewer: string, name?: string) => name || (id === viewer ? 'Você' : id),
 }));
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: ({queryKey}: {queryKey: unknown[]}) =>
-    queryKey[1] === 'me' ? mocks.rankQuery : mocks.boardQuery,
+  useQuery: ({queryKey}: {queryKey: unknown[]}) => {
+    mocks.keys.push(queryKey);
+    return queryKey[1] === 'me' ? mocks.rankQuery : mocks.boardQuery;
+  },
 }));
+
+/** The board key the page asked for on its last render: [_, mode, period, metric]. */
+const boardKeys = () => mocks.keys.filter(key => key[0] === 'leaderboard');
+const lastBoardKey = () => boardKeys().filter(key => key[1] !== 'me').at(-1);
+const lastRankKey = () => boardKeys().filter(key => key[1] === 'me').at(-1);
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 
 const entries: Entry[] = [
@@ -42,6 +50,7 @@ function rankState(data?: MyRank, overrides: Record<string, unknown> = {}) {
 describe('community leaderboard page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.keys = [];
     mocks.session = {authed: true, checking: false};
     mocks.viewer = 'viewer-id';
     mocks.boardQuery = boardState(entries);
@@ -95,7 +104,50 @@ describe('community leaderboard page', () => {
 
     mocks.boardQuery = boardState([]);
     view.rerender(<Ranking/>);
-    expect(screen.getByText(/Nenhum jogador pontuou ainda/)).toBeInTheDocument();
+    // The default board is this month's, so an empty one is a month that has
+    // not started yet — not an empty game.
+    expect(screen.getByText(/Nenhuma mão contabilizada em/)).toBeInTheDocument();
+  });
+
+  test('defaults to this month and switches to the lifetime board', () => {
+    render(<Ranking/>);
+
+    expect(lastBoardKey()).toEqual(['leaderboard', 'sandbox', 'month', 'hands_won']);
+    expect(lastRankKey()).toEqual(['leaderboard', 'me', 'sandbox', 'month', 'hands_won']);
+    expect(screen.getByRole('button', {name: 'Este mês'})).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', {name: 'Geral'}));
+
+    expect(lastBoardKey()).toEqual(['leaderboard', 'sandbox', 'all', 'hands_won']);
+    expect(lastRankKey()).toEqual(['leaderboard', 'me', 'sandbox', 'all', 'hands_won']);
+  });
+
+  test('reorders by the chosen metric and leads each row with it', () => {
+    render(<Ranking/>);
+    // Ordered by wins: the win count leads, the rate supports it.
+    expect(screen.getByLabelText('Pódio do ranking')).toHaveTextContent('40 vitórias');
+
+    fireEvent.click(screen.getByRole('button', {name: 'Mãos jogadas'}));
+
+    expect(lastBoardKey()).toEqual(['leaderboard', 'sandbox', 'month', 'hands_played']);
+    expect(screen.getByLabelText('Pódio do ranking')).toHaveTextContent('100 mãos');
+
+    fireEvent.click(screen.getByRole('button', {name: 'Aproveitamento'}));
+
+    expect(lastBoardKey()).toEqual(['leaderboard', 'sandbox', 'month', 'win_rate']);
+    expect(screen.getByLabelText('Pódio do ranking')).toHaveTextContent('40.0% de aproveitamento');
+  });
+
+  test('explains the win-rate floor instead of a bare empty board', () => {
+    mocks.boardQuery = boardState([]);
+    mocks.rankQuery = rankState({ranked: false, entry: {...entries[1], hands_played: 12}});
+    render(<Ranking/>);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Aproveitamento'}));
+
+    expect(screen.getByText(/Ninguém completou 100 mãos/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('começa em 100 mãos');
+    expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('você tem 12');
   });
 
   test('window-virtualizes a long board instead of rendering every row', () => {

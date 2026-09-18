@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -57,18 +58,22 @@ func participantIDs(n int) []string {
 	return ids
 }
 
-// TestRecordHandWriteBudget fixes the ceiling issue #217 asks for: one write
-// per participant while the row is below the win_rate floor, and at most two
-// once it is on the win_rate board (the second materializes the ratio the GSI
-// sorts by, which DynamoDB cannot compute inside the counter update itself).
+// TestRecordHandWriteBudget fixes the ceiling issue #217 asks for, now per
+// board: one write per participant per board while the row is below the
+// win_rate floor, and at most two once it is on the win_rate board (the second
+// materializes the ratio the GSI sorts by, which DynamoDB cannot compute
+// inside the counter update itself). Since the monthly board landed, every
+// hand writes two boards — the lifetime row and the current month's — so the
+// per-seat budget is twice the per-board one and nothing more.
 func TestRecordHandWriteBudget(t *testing.T) {
+	const boardsPerHand = 2 // lifetime + current month
 	for _, tc := range []struct {
-		name          string
-		handsPlayed   int
-		writesPerSeat int
+		name           string
+		handsPlayed    int
+		writesPerBoard int
 	}{
-		{"sub-floor rows cost one write per seat", 5, 1},
-		{"ranked rows cost two writes per seat", MinHandsForWinRateRank + 50, 2},
+		{"sub-floor rows cost one write per seat per board", 5, 1},
+		{"ranked rows cost two writes per seat per board", MinHandsForWinRateRank + 50, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, seats := range []int{2, 6, 9} {
@@ -79,7 +84,7 @@ func TestRecordHandWriteBudget(t *testing.T) {
 				if err := svc.RecordHand(context.Background(), "sandbox", outcome, nil); err != nil {
 					t.Fatalf("%d seats: %v", seats, err)
 				}
-				if want := seats * tc.writesPerSeat; stub.calls["UpdateItem"] != want {
+				if want := seats * tc.writesPerBoard * boardsPerHand; stub.calls["UpdateItem"] != want {
 					t.Errorf("%d seats: expected %d UpdateItem calls, got %d", seats, want, stub.calls["UpdateItem"])
 				}
 				if stub.calls["GetItem"] != 0 {
@@ -94,7 +99,7 @@ func TestRecordHandWriteBudget(t *testing.T) {
 // cost one AtomicIncrement each plus an upsert, a GetItem and a rank-key write.
 func TestIncrementAchievementPointsWriteBudget(t *testing.T) {
 	store, stub := countingStore(5)
-	if err := store.IncrementAchievementPoints(context.Background(), "p0", "sandbox", 3); err != nil {
+	if err := store.IncrementAchievementPoints(context.Background(), "p0", "sandbox", MonthKey(time.Now()), 3); err != nil {
 		t.Fatal(err)
 	}
 	if stub.calls["UpdateItem"] != 1 || stub.calls["GetItem"] != 0 {

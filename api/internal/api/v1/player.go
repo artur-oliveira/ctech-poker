@@ -89,7 +89,7 @@ type playerHandlers struct {
 // leaderboard.Service: an exact rank, answered from the Valkey rank mirror
 // (#202) or the existing gsi_hands_won COUNT — no new index.
 type leaderboardRanker interface {
-	MyRank(ctx context.Context, mode, metric, playerID string) (*leaderboard.RankInfo, error)
+	MyRank(ctx context.Context, board leaderboard.Board, playerID string) (*leaderboard.RankInfo, error)
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
@@ -649,7 +649,10 @@ func (h *playerHandlers) profileMilestones(c fiber.Ctx, profile *player.PlayerPr
 		in.CreatedAt = createdAt
 	}
 	if h.ranks != nil {
-		rank, err := h.ranks.MyRank(c.Context(), roomstore.CurrencyModeSandbox, "hands_won", profile.UserID)
+		// The showcase badge is the lifetime standing, not this month's — it
+		// sits next to lifetime achievement counts.
+		board := leaderboard.Board{Mode: roomstore.CurrencyModeSandbox, Metric: "hands_won", Period: leaderboard.PeriodAll}
+		rank, err := h.ranks.MyRank(c.Context(), board, profile.UserID)
 		if err != nil {
 			slog.Warn("player: showcase rank lookup failed", "user_id", profile.UserID, "err", err)
 		} else if rank != nil {

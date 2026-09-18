@@ -4,9 +4,10 @@ import type {WalletMode} from '@/lib/api/player';
 import {FilterGroup} from '@/components/FilterGroup';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
-export function CurrencyModeTabs({mode, onChangeAction}: {
+export function CurrencyModeTabs({mode, onChangeAction, showLabel}: {
   mode: WalletMode;
   onChangeAction: (mode: WalletMode) => void;
+  showLabel?: boolean;
 }) {
   const modes = [
     {value: 'sandbox', label: 'Fichas'},
@@ -18,5 +19,5 @@ export function CurrencyModeTabs({mode, onChangeAction}: {
     }
   ] as const;
 
-  return <FilterGroup label="Carteira" value={mode} options={modes} onChangeAction={onChangeAction}/>;
+  return <FilterGroup label="Carteira" value={mode} options={modes} onChangeAction={onChangeAction} showLabel={showLabel}/>;
 }

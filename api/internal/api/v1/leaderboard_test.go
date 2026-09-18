@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
@@ -16,11 +18,25 @@ import (
 // unexported statsStore interface — mirrors leaderboard/service_test.go's
 // memStats fake, kept local since that type isn't exported across packages.
 type fakeLeaderboardStore struct {
-	entries map[string]*leaderboard.Entry // key: mode + "#" + playerID
+	entries map[string]*leaderboard.Entry // key: board + "#" + playerID
 }
 
-func (f *fakeLeaderboardStore) IncrementStats(_ context.Context, id, _, mode string, played, won int) error {
-	key := mode + "#" + id
+// board is the partition one ranking lives in: the mode alone for the lifetime
+// board, mode + period bucket for a scoped one (leaderboard/period.go).
+func board(mode, periodKey string) string {
+	if periodKey == "" {
+		return mode
+	}
+	return mode + "#" + periodKey
+}
+
+func inBoard(key, board string) bool {
+	rest, ok := strings.CutPrefix(key, board+"#")
+	return ok && !strings.Contains(rest, "#")
+}
+
+func (f *fakeLeaderboardStore) IncrementStats(_ context.Context, id, _, mode, periodKey string, played, won int) error {
+	key := board(mode, periodKey) + "#" + id
 	e := f.entries[key]
 	if e == nil {
 		e = &leaderboard.Entry{PlayerID: id}
@@ -31,8 +47,8 @@ func (f *fakeLeaderboardStore) IncrementStats(_ context.Context, id, _, mode str
 	return nil
 }
 
-func (f *fakeLeaderboardStore) IncrementAchievementPoints(_ context.Context, id, mode string, points int) error {
-	key := mode + "#" + id
+func (f *fakeLeaderboardStore) IncrementAchievementPoints(_ context.Context, id, mode, periodKey string, points int) error {
+	key := board(mode, periodKey) + "#" + id
 	e := f.entries[key]
 	if e == nil {
 		e = &leaderboard.Entry{PlayerID: id}
@@ -42,25 +58,25 @@ func (f *fakeLeaderboardStore) IncrementAchievementPoints(_ context.Context, id,
 	return nil
 }
 
-func (f *fakeLeaderboardStore) Top(_ context.Context, mode, _ string, _ int, _ map[string]types.AttributeValue) ([]leaderboard.Entry, map[string]types.AttributeValue, error) {
+func (f *fakeLeaderboardStore) Top(_ context.Context, mode, periodKey, _ string, _ int, _ map[string]types.AttributeValue) ([]leaderboard.Entry, map[string]types.AttributeValue, error) {
 	out := []leaderboard.Entry{}
 	for key, e := range f.entries {
-		if len(key) > len(mode) && key[:len(mode)+1] == mode+"#" {
+		if inBoard(key, board(mode, periodKey)) {
 			out = append(out, *e)
 		}
 	}
 	return out, nil, nil
 }
 
-func (f *fakeLeaderboardStore) PlayerEntry(_ context.Context, id, mode string) (*leaderboard.Entry, error) {
-	e, ok := f.entries[mode+"#"+id]
+func (f *fakeLeaderboardStore) PlayerEntry(_ context.Context, id, mode, periodKey string) (*leaderboard.Entry, error) {
+	e, ok := f.entries[board(mode, periodKey)+"#"+id]
 	if !ok {
 		return nil, nil
 	}
 	return e, nil
 }
 
-func (f *fakeLeaderboardStore) RankOf(_ context.Context, mode, metric string, entry leaderboard.Entry) (int64, int64, error) {
+func (f *fakeLeaderboardStore) RankOf(_ context.Context, mode, periodKey, metric string, entry leaderboard.Entry) (int64, int64, error) {
 	score := func(e *leaderboard.Entry) float64 {
 		switch metric {
 		case "hands_played":
@@ -74,7 +90,7 @@ func (f *fakeLeaderboardStore) RankOf(_ context.Context, mode, metric string, en
 	mine := score(&entry)
 	var better, tied, total int64
 	for key, e := range f.entries {
-		if len(key) <= len(mode) || key[:len(mode)+1] != mode+"#" {
+		if !inBoard(key, board(mode, periodKey)) {
 			continue
 		}
 		total++
@@ -210,5 +226,60 @@ func TestLeaderboardResolvesRenamedPlayerName(t *testing.T) {
 	}
 	if me.Entry == nil || me.Entry.PlayerName != "Nome Novo" {
 		t.Fatalf("/leaderboard/me served a stale name: %+v", me.Entry)
+	}
+}
+
+// The board a request gets is the one it asked for: `period=month` reads the
+// current month's partition, no period at all still reads the lifetime board
+// (what every client sent before this parameter existed), and an unknown
+// period is refused rather than quietly answered with another board.
+func TestLeaderboardPeriodParam(t *testing.T) {
+	month := leaderboard.MonthKey(time.Now())
+	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{
+		"sandbox#veteran":                {PlayerID: "veteran", HandsPlayed: 900, HandsWon: 400},
+		"sandbox#" + month + "#newcomer": {PlayerID: "newcomer", HandsPlayed: 30, HandsWon: 9},
+	}}
+	svc := leaderboard.NewServiceWithStore(store)
+	app := fiber.New()
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("newcomer"), svc, nil, nil)
+
+	for _, tc := range []struct {
+		query string
+		want  string
+	}{
+		{"?mode=sandbox", "veteran"},
+		{"?mode=sandbox&period=all", "veteran"},
+		{"?mode=sandbox&period=month", "newcomer"},
+	} {
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard"+tc.query, nil))
+		if err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("%s: status = %d, err = %v", tc.query, resp.StatusCode, err)
+		}
+		var body struct {
+			Data []leaderboard.Entry `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("%s: %v", tc.query, err)
+		}
+		if len(body.Data) != 1 || body.Data[0].PlayerID != tc.want {
+			t.Fatalf("%s: expected only %q on this board, got %+v", tc.query, tc.want, body.Data)
+		}
+	}
+
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox&period=week", nil))
+	if err != nil || resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400 for an unsupported period, got %d, err %v", resp.StatusCode, err)
+	}
+
+	resp, err = app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&period=month", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("me: status = %d, err = %v", resp.StatusCode, err)
+	}
+	var me meResponse
+	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+		t.Fatal(err)
+	}
+	if !me.Ranked || me.Rank == nil || *me.Rank != 1 || me.Total == nil || *me.Total != 1 {
+		t.Fatalf("expected the newcomer ranked 1 of 1 on this month's board, got %+v", me)
 	}
 }

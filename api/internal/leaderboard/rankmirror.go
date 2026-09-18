@@ -62,7 +62,7 @@ type boardMember struct {
 	score    float64
 }
 
-func rankMirrorKey(mode, metric string) string { return rankMirrorPrefix + mode + ":" + metric }
+func rankMirrorKey(board, metric string) string { return rankMirrorPrefix + board + ":" + metric }
 
 // mirrorScore negates score so ascending sorted-set order is best-first.
 func mirrorScore(score float64) string { return strconv.FormatFloat(-score, 'g', -1, 64) }
@@ -148,24 +148,26 @@ func (m *rankMirror) publish(ctx context.Context, key string, members []boardMem
 	return nil
 }
 
-// loadBoardMembers pages metric's GSI once for mode, projecting only the
+// loadBoardMembers pages metric's GSI once for one board, projecting only the
 // player id and the ranked score. This is the single unbounded read the whole
 // design still contains — it is paid at most once per RankMirrorTTL per
-// (mode, metric) across the fleet, instead of three times per page view.
-func (s *Store) loadBoardMembers(ctx context.Context, mode, metric string) ([]boardMember, error) {
+// (board, metric) across the fleet, instead of three times per page view. A
+// monthly board is strictly smaller than the lifetime one it shares the index
+// with: it only holds players who played this month.
+func (s *Store) loadBoardMembers(ctx context.Context, board, metric string) ([]boardMember, error) {
 	index, pkField, sortField := gsiFor(metric)
 	var members []boardMember
 	var startKey map[string]types.AttributeValue
 	for page := 0; page < maxRankCountPages; page++ {
 		out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
 			IndexName:              aws.String(index),
-			KeyConditionExpression: aws.String("#gsipk = :mode"),
+			KeyConditionExpression: aws.String("#gsipk = :board"),
 			ProjectionExpression:   aws.String("#pk, #sort"),
 			ExpressionAttributeNames: map[string]string{
 				"#gsipk": pkField, "#pk": "pk", "#sort": sortField,
 			},
 			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":mode": &types.AttributeValueMemberS{Value: mode},
+				":board": &types.AttributeValueMemberS{Value: board},
 			},
 			ExclusiveStartKey: startKey,
 		})
