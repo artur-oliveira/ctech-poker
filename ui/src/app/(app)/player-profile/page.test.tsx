@@ -139,7 +139,7 @@ describe('/player-profile', () => {
 
     expect(screen.getByRole('heading', {level: 1, name: 'Seu perfil'})).toBeInTheDocument();
     expect(screen.getAllByRole('heading', {level: 2}).map(node => node.textContent))
-      .toEqual(['Identidade', 'Sua vitrine', 'Sua mesa', 'Seus saldos']);
+      .toEqual(['Identidade', 'Sua vitrine', 'Sua mesa', 'Filtro de chat', 'Seus saldos']);
     expect(screen.getByRole('textbox', {name: /Nome de exibição/})).toHaveValue('Ana Silva');
     expect(screen.getByRole('combobox', {name: 'Baralho'})).toBeInTheDocument();
     expect(screen.getByRole('definition')).toHaveTextContent('12.345');

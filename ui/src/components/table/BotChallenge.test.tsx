@@ -1,6 +1,13 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
-import {afterEach, describe, expect, test, vi} from 'vitest';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {BotChallenge} from './BotChallenge';
+import {expectNoAxeViolations} from '@/test/axe';
+
+const {fileBotCheckContest} = vi.hoisted(() => ({fileBotCheckContest: vi.fn()}));
+vi.mock('@/lib/api/botCheckContest', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/botCheckContest')>(), fileBotCheckContest,
+}));
 
 vi.mock('next/link', () => ({
   default: ({href, children}: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
@@ -21,6 +28,10 @@ type Options = {
 };
 
 const originalLocation = window.location;
+
+beforeEach(() => {
+  fileBotCheckContest.mockReset();
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -143,5 +154,66 @@ describe('BotChallenge', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Recarregar página'})).toBeInTheDocument();
     expect(screen.getByRole('link', {name: 'Voltar ao lobby'})).toBeInTheDocument();
+  });
+
+  describe('contest flow (#322)', () => {
+    function reachErrorState(onTokenAction = vi.fn(() => false)) {
+      const view = render(<BotChallenge required onTokenAction={onTokenAction} tableId="table-1"/>);
+      fireEvent.error(document.getElementById('cloudflare-turnstile-script')!);
+      return {onTokenAction, container: view.container};
+    }
+
+    test('offers a contesting path only once the player is actually blocked, never before', () => {
+      vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+      render(<BotChallenge required onTokenAction={() => true} tableId="table-1"/>);
+      expect(screen.queryByRole('button', {name: /Conte pra gente/})).toBeNull();
+    });
+
+    test('lets a blocked player file an auditable contest, distinct from retrying verification', async () => {
+      vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+      fileBotCheckContest.mockResolvedValue({contest_id: 'c-1', status: 'pending', created_at: 't'});
+      const user = userEvent.setup();
+      const {container} = reachErrorState();
+
+      await user.click(screen.getByRole('button', {name: /Conte pra gente/}));
+      await expectNoAxeViolations(container);
+      await user.type(screen.getByLabelText('O que aconteceu (opcional)'), 'joguei rápido de propósito');
+      await user.click(screen.getByRole('button', {name: 'Enviar contestação'}));
+
+      expect(await screen.findByRole('status')).toHaveTextContent('aguardando revisão');
+      expect(fileBotCheckContest).toHaveBeenCalledWith({tableId: 'table-1', reason: 'joguei rápido de propósito'});
+      // Filing the contest never re-runs or short-circuits Turnstile's own
+      // verification — it is a separate append-only trail (#322).
+      expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível validar');
+    });
+
+    test('reports a failed contest submission without losing the player\'s draft', async () => {
+      vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+      fileBotCheckContest.mockRejectedValue(new Error('network'));
+      const user = userEvent.setup();
+      reachErrorState();
+
+      await user.click(screen.getByRole('button', {name: /Conte pra gente/}));
+      await user.click(screen.getByRole('button', {name: 'Enviar contestação'}));
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('alert').some(node => node.textContent?.includes('Não foi possível enviar')))
+          .toBe(true);
+      });
+      // The form stays open and untouched by the failure — nothing was lost.
+      expect(screen.getByRole('button', {name: 'Enviar contestação'})).toBeInTheDocument();
+    });
+
+    test('cancel closes the form without ever filing a contest', async () => {
+      vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+      const user = userEvent.setup();
+      reachErrorState();
+
+      await user.click(screen.getByRole('button', {name: /Conte pra gente/}));
+      await user.click(screen.getByRole('button', {name: 'Cancelar'}));
+
+      expect(screen.getByRole('button', {name: /Conte pra gente/})).toBeInTheDocument();
+      expect(fileBotCheckContest).not.toHaveBeenCalled();
+    });
   });
 });

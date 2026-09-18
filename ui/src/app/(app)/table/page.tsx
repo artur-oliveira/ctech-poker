@@ -449,7 +449,7 @@ function TableContent() {
                       onFavoriteReactionsChangeAction={saveFavoriteReactions}
                       open={activeTablePanel === 'reactions'}
                       onOpenChangeAction={panelOpenChange('reactions')}/>
-      <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
+      <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge} tableId={id}/>
       <LastWinners items={tableHands} tableId={id} open={activeTablePanel === 'winners'}
                    onOpenChangeAction={panelOpenChange('winners')}/>
       {viewerSeat && room?.currency_mode === 'sandbox' && preferences.equityTrainer &&

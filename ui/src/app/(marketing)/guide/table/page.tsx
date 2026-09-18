@@ -246,7 +246,10 @@ export default function TableGuide() {
         <li><span><b>Silenciar efeitos:</b> esconde as animações recebidas. Não afeta a partida e ninguém é
           avisado.</span></li>
         <li><span><b>Chat:</b> mensagens para a mesa, que também aparecem como balão no assento de quem falou. Fica
-          indisponível durante uma reconexão.</span></li>
+          indisponível durante uma reconexão. Toda mesa já filtra um piso de palavras; em <GuideLink
+            href="/player-profile">Seu perfil</GuideLink> você pode adicionar suas próprias palavras a esse filtro,
+          sem remover nem enfraquecer o piso padrão, só somando mais palavras na sua própria visão do
+          chat.</span></li>
         <li><span><b>Nota privada:</b> pelo menu do assento, registre uma leitura sobre o adversário e marque com uma
           cor. Só você vê o texto e o ponto colorido.</span></li>
         <li><span><b>Últimos vencedores:</b> resumo das últimas mãos resolvidas nesta mesa.</span></li>
@@ -299,6 +302,22 @@ export default function TableGuide() {
           ganho e o resultado.</span></li>
         <li><span><b>Inatividade:</b> no último minuto antes da remoção, um aviso conta o tempo e oferece
           <b> Continuar na mesa</b>.</span></li>
+      </GuideBullets></>
+    },
+    {
+      id: 'verificacao-de-seguranca',
+      title: 'Verificação de segurança',
+      summary: 'Uma checagem rápida se a mesa detectar um padrão de jogadas automatizado.',
+      body: <><GuideBullets>
+        <li><span><b>Quando aparece:</b> se uma sequência de decisões chegar rápido e uniforme demais para ser
+          humana, um diálogo pede uma verificação rápida antes de deixar você continuar jogando. Ele não fecha
+          sozinho e sua vez de agir e seu Time Bank continuam visíveis ao fundo.</span></li>
+        <li><span><b>Se a verificação não passar:</b> recarregar a página tenta de novo. Se você tem certeza de
+          que não é um bot, <b>Acha que não é um bot? Conte pra gente</b> abre um formulário curto (motivo é
+          opcional) para contestar o bloqueio.</span></li>
+        <li><span><b>O que a contestação faz:</b> registra seu caso com status <b>aguardando revisão</b> para a
+          nossa equipe olhar depois. Ela é um caminho separado, só para casos que parecem falso positivo, e
+          não libera a mesa nem troca a verificação.</span></li>
       </GuideBullets></>
     }
   ]}/>;
