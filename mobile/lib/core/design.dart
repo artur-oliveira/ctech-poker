@@ -1,3 +1,4 @@
+import '../features/poker_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -97,11 +98,25 @@ abstract final class PokerTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
+      actionIconTheme: ActionIconThemeData(
+        backButtonIconBuilder: (_) => const PokerIcon(PokerIcons.arrowLeft),
+        closeButtonIconBuilder: (_) => const PokerIcon(PokerIcons.x),
+      ),
+      iconTheme: const IconThemeData(
+        size: 22,
+        color: PokerColors.secondaryText,
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: PokerColors.ink,
         foregroundColor: PokerColors.paper,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        titleTextStyle: TextStyle(
+          fontFamily: sans,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: PokerColors.paper,
+        ),
         systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -142,7 +157,7 @@ abstract final class PokerTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: PokerColors.seat,
-        indicatorColor: PokerColors.brand,
+        indicatorColor: PokerColors.wine,
         surfaceTintColor: Colors.transparent,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
@@ -155,7 +170,7 @@ abstract final class PokerTheme {
           TextStyle(
             fontFamily: sans,
             fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
             color: PokerColors.paper,
           ),
         ),

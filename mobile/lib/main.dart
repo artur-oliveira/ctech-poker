@@ -1,3 +1,4 @@
+import 'features/poker_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -102,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'CTech Poker\nTexas Hold’em com a sua comunidade, onde você estiver.',
+                  'CTech Poker\nTexas Hold’em com seus amigos, onde você estiver.',
                 ),
                 const SizedBox(height: 36),
                 if (widget.initialError != null)
@@ -117,8 +118,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           await safely(context, widget.session.login);
                           if (mounted) setState(() => busy = false);
                         },
-                  icon: Icon(busy ? Icons.hourglass_top : Icons.login),
-                  label: Text(busy ? 'Entrando…' : 'Entrar com CTech Accounts'),
+                  icon: PokerIcon(
+                    busy ? PokerIcons.hourglass : PokerIcons.logIn,
+                  ),
+                  label: Text(busy ? 'Entrando…' : 'Entrar com CTech Account'),
                 ),
                 const SizedBox(height: 20),
                 const Text(

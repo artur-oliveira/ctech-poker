@@ -39,9 +39,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
-              'Convide sua turma e escolha as regras da mesa. Fichas recreativas.',
-            ),
+            const Text('Escolha os blinds e as regras da sua mesa.'),
             const SizedBox(height: 20),
             for (final e in {
               'small_blind': 'Small blind',

@@ -1,3 +1,4 @@
+import 'package:ctech_poker/features/poker_icon.dart';
 import 'package:ctech_poker/core/design.dart';
 import 'support/brand_fonts.dart';
 import 'package:flutter/material.dart';
@@ -73,27 +74,20 @@ void main() {
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Flop'),
-              leading: const Icon(Icons.arrow_back),
+              leading: const PokerIcon(PokerIcons.arrowLeft),
               actions: const [
-                Icon(Icons.chat_bubble_outline),
+                PokerIcon(PokerIcons.messageCircle),
                 SizedBox(width: 20),
-                Icon(Icons.more_vert),
+                PokerIcon(PokerIcons.ellipsisVertical),
                 SizedBox(width: 12),
               ],
             ),
             body: SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: TableFelt(
-                      snapshot: live.snapshot!,
-                      heroId: 'me',
-                      now: 12000,
-                      onSeat: (_) {},
-                    ),
-                  ),
-                  ActionDock(realtime: live),
-                ],
+              child: TablePlayArea(
+                realtime: live,
+                heroId: 'me',
+                now: 12000,
+                onSeat: (_) {},
               ),
             ),
           ),

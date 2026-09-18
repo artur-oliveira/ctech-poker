@@ -1,3 +1,7 @@
+import 'package:intl/intl.dart';
+import '../core/design.dart';
+import '../core/game_mode.dart';
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import 'collections.dart';
@@ -5,8 +9,9 @@ import 'library.dart';
 import 'widgets.dart';
 
 class HandBrowser extends StatefulWidget {
-  const HandBrowser({super.key, required this.api});
+  const HandBrowser({super.key, required this.api, this.mode = GameMode.chips});
   final PokerApi api;
+  final GameMode mode;
   @override
   State<HandBrowser> createState() => _HandBrowserState();
 }
@@ -40,64 +45,70 @@ class _HandBrowserState extends State<HandBrowser> {
 
   @override
   Widget build(BuildContext context) => PagedList(
+    key: ValueKey(widget.mode),
     api: widget.api,
     path: '/v1.0/players/me/hands',
-    query: const {'mode': 'sandbox'},
+    query: {'mode': widget.mode.apiValue},
     filter: (hand) =>
         (outcome == 'all' || hand['outcome'] == outcome) &&
         (table.isEmpty || hand['table_id'] == table),
     header: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 8,
+        Row(
           children: [
-            OutlinedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => CollectionsScreen(api: widget.api),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        CollectionsScreen(api: widget.api, mode: widget.mode),
+                  ),
+                ),
+                icon: const PokerIcon(PokerIcons.folder),
+                label: const Text('Coleções'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final value = await input(
+                    context,
+                    'Filtrar pela mesa (vazio = todas)',
+                    initial: table,
+                  );
+                  if (value != null && mounted) setState(() => table = value);
+                },
+                icon: const PokerIcon(PokerIcons.listFilter),
+                label: Text(
+                  table.isEmpty ? 'Todas as mesas' : 'Mesa selecionada',
                 ),
               ),
-              icon: const Icon(Icons.folder_outlined),
-              label: const Text('Coleções e revisão'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final value = await input(
-                  context,
-                  'Filtrar pela mesa (vazio = todas)',
-                  initial: table,
-                );
-                if (value != null && mounted) setState(() => table = value);
-              },
-              icon: const Icon(Icons.filter_alt_outlined),
-              label: Text(
-                table.isEmpty ? 'Todas as mesas' : 'Mesa selecionada',
-              ),
             ),
           ],
         ),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final e in {
-              'all': 'Todas',
-              'won': 'Vitórias',
-              'lost': 'Derrotas',
-              'tied': 'Empates',
-            }.entries)
-              ChoiceChip(
-                label: Text(e.value),
-                selected: outcome == e.key,
-                onSelected: (_) => setState(() => outcome = e.key),
-              ),
-          ],
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'Filtros aplicados às páginas carregadas. Carregue mais para consultar mãos anteriores.',
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final e in {
+                'all': 'Todas',
+                'won': 'Vitórias',
+                'lost': 'Derrotas',
+                'tied': 'Empates',
+              }.entries)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6, top: 12, bottom: 8),
+                  child: ChoiceChip(
+                    label: Text(e.value),
+                    showCheckmark: false,
+                    selected: outcome == e.key,
+                    onSelected: (_) => setState(() => outcome = e.key),
+                  ),
+                ),
+            ],
           ),
         ),
         Wrap(
@@ -119,26 +130,35 @@ class _HandBrowserState extends State<HandBrowser> {
                         await save(next);
                       }),
               ),
-            ActionChip(
-              label: const Text('Salvar filtro'),
-              avatar: const Icon(Icons.bookmark_add_outlined),
-              onPressed: !filtersLoaded || saving
-                  ? null
-                  : () => safely(context, () async {
-                      final name = await input(context, 'Nome do filtro');
-                      if (name == null || name.isEmpty) return;
-                      await save([
-                        ...saved,
-                        {
-                          'name': name,
-                          'outcome': outcome,
-                          'table_id': table.isEmpty ? 'all' : table,
-                        },
-                      ]);
-                    }),
-            ),
+            if (outcome != 'all' || table.isNotEmpty)
+              ActionChip(
+                label: const Text('Salvar filtro'),
+                avatar: const PokerIcon(PokerIcons.bookmarkPlus),
+                onPressed: !filtersLoaded || saving
+                    ? null
+                    : () => safely(context, () async {
+                        final name = await input(context, 'Nome do filtro');
+                        if (name == null || name.isEmpty) return;
+                        await save([
+                          ...saved,
+                          {
+                            'name': name,
+                            'outcome': outcome,
+                            'table_id': table.isEmpty ? 'all' : table,
+                          },
+                        ]);
+                      }),
+              ),
           ],
         ),
+        if (outcome != 'all' || table.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Filtro nas mãos carregadas',
+              style: TextStyle(fontSize: 12, color: PokerColors.muted),
+            ),
+          ),
         if (savedError != null)
           TextButton(
             onPressed: loadFilters,
@@ -147,29 +167,38 @@ class _HandBrowserState extends State<HandBrowser> {
       ],
     ),
     item: (hand, _) => Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 10,
+        ),
+        leading: PlayingCards(
+          List<String>.from(hand['hole_cards'] ?? []),
+          compact: true,
+        ),
         title: Text(
-          '${{'won': 'Vitória', 'lost': 'Derrota', 'tied': 'Empate'}[hand['outcome']] ?? 'Mão'} · ${chips(hand['net_change'])} fichas',
+          '${{'won': 'Vitória', 'lost': 'Derrota', 'tied': 'Empate'}[hand['outcome']] ?? 'Mão'} · ${widget.mode.amount(hand['net_change'] as num? ?? 0)}${widget.mode == GameMode.chips ? ' fichas' : ''}',
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              DateTime.fromMillisecondsSinceEpoch(
-                hand['ended_at'] ?? 0,
-              ).toLocal().toString().substring(0, 16),
-            ),
-            PlayingCards(
-              List<String>.from(hand['hole_cards'] ?? []),
-              compact: true,
+              DateFormat('dd/MM/yyyy · HH:mm').format(
+                DateTime.fromMillisecondsSinceEpoch(
+                  hand['ended_at'] ?? 0,
+                ).toLocal(),
+              ),
+              style: const TextStyle(fontSize: 12, color: PokerColors.muted),
             ),
           ],
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: const PokerIcon(PokerIcons.chevronRight),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute<void>(
-            builder: (_) => HandScreen(api: widget.api, hand: hand),
+            builder: (_) =>
+                HandScreen(api: widget.api, hand: hand, mode: widget.mode),
           ),
         ),
       ),

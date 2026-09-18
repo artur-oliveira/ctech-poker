@@ -1,16 +1,24 @@
+import '../core/game_mode.dart';
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import 'social_details.dart';
 import 'widgets.dart';
 
 class RankingScreen extends StatelessWidget {
-  const RankingScreen({super.key, required this.api});
+  const RankingScreen({
+    super.key,
+    required this.api,
+    this.mode = GameMode.chips,
+  });
   final PokerApi api;
+  final GameMode mode;
   @override
   Widget build(BuildContext context) => PagedList(
+    key: ValueKey(mode),
     api: api,
     path: '/v1.0/leaderboard',
-    query: const {'mode': 'sandbox'},
+    query: {'mode': mode.apiValue},
     header: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -18,8 +26,8 @@ class RankingScreen extends StatelessWidget {
           'Ranking da comunidade',
           style: Theme.of(context).textTheme.headlineSmall,
         ),
-        const Text('Fichas recreativas · posição calculada pelo servidor'),
-        MyRankingCard(api: api),
+        Text(mode.label),
+        MyRankingCard(key: ValueKey(mode), api: api, mode: mode),
       ],
     ),
     indexedItem: (player, index, _) => Card(
@@ -30,7 +38,7 @@ class RankingScreen extends StatelessWidget {
           '${chips(player['hands_won'])} vitórias · ${chips(player['hands_played'])} mãos\n${((player['win_rate'] as num? ?? 0) * 100).toStringAsFixed(1)}% de aproveitamento',
         ),
         isThreeLine: true,
-        trailing: const Icon(Icons.chevron_right),
+        trailing: const PokerIcon(PokerIcons.chevronRight),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute<void>(
@@ -44,16 +52,23 @@ class RankingScreen extends StatelessWidget {
 }
 
 class MyRankingCard extends StatefulWidget {
-  const MyRankingCard({super.key, required this.api});
+  const MyRankingCard({
+    super.key,
+    required this.api,
+    this.mode = GameMode.chips,
+  });
   final PokerApi api;
+  final GameMode mode;
   @override
   State<MyRankingCard> createState() => _MyRankingCardState();
 }
 
 class _MyRankingCardState extends State<MyRankingCard> {
   late Future<Json> future = load();
-  Future<Json> load() =>
-      widget.api.get('/v1.0/leaderboard/me', query: {'mode': 'sandbox'});
+  Future<Json> load() => widget.api.get(
+    '/v1.0/leaderboard/me',
+    query: {'mode': widget.mode.apiValue},
+  );
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(

@@ -1,16 +1,24 @@
+import '../core/game_mode.dart';
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import 'library.dart';
 import 'widgets.dart';
 
 class CollectionsScreen extends StatelessWidget {
-  const CollectionsScreen({super.key, required this.api});
+  const CollectionsScreen({
+    super.key,
+    required this.api,
+    this.mode = GameMode.chips,
+  });
   final PokerApi api;
+  final GameMode mode;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Coleções e revisão')),
     body: SafeArea(
       child: AsyncPanel(
+        key: ValueKey(mode),
         load: () => api.get('/v1.0/players/me/hand-collections'),
         builder: (context, data, _) => ListView(
           padding: const EdgeInsets.all(16),
@@ -22,23 +30,24 @@ class CollectionsScreen extends StatelessWidget {
             for (final hand in rows(data))
               Card(
                 child: ListTile(
-                  leading: Icon(
+                  leading: PokerIcon(
                     hand['review_marked'] == true
-                        ? Icons.bookmark
-                        : Icons.folder_outlined,
+                        ? PokerIcons.bookmark
+                        : PokerIcons.folder,
                   ),
                   title: Text((hand['collections'] as List? ?? []).join(' · ')),
                   subtitle: Text(hand['hand_id']),
                   onTap: () => safely(context, () async {
                     final detail = await api.get(
                       '/v1.0/players/me/hand/${segment(hand['hand_id'])}',
-                      query: {'mode': 'sandbox'},
+                      query: {'mode': mode.apiValue},
                     );
                     if (context.mounted) {
                       Navigator.push(
                         context,
                         MaterialPageRoute<void>(
-                          builder: (_) => HandScreen(api: api, hand: detail),
+                          builder: (_) =>
+                              HandScreen(api: api, hand: detail, mode: mode),
                         ),
                       );
                     }

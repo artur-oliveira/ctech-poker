@@ -109,3 +109,27 @@ flutter test --no-pub test/brand_test.dart test/table_golden_test.dart
 Mudanças intencionais de aparência exigem inspeção das imagens antes de aceitar
 novos goldens. Veja a [conferência visual](docs/brand-review.md). Android/iOS ainda
 precisam de validação em aparelhos; testes de widget não validam o launcher do SO.
+
+## Prints para revisão
+
+Abra [a galeria de telas](docs/screenshots/index.html) no navegador. As imagens
+são numeradas, pesquisáveis e abrem em resolução completa; incluem as abas,
+continuações de rolagem, mesa vertical/horizontal e estados de compra.
+São widgets Flutter com fixtures locais, sem login ou transações de produção.
+
+Para regenerar:
+
+```sh
+flutter test --no-pub test/screens_review_test.dart --dart-define=EXPORT_SCREENSHOTS=true
+python3 tool/review-gallery.py
+```
+
+O mesmo teste roda sem exportar arquivos na suíte normal. Login no navegador,
+permissões do sistema, microfone e Turnstile ativo exigem validação em aparelho.
+As capturas não incluem barras do sistema nem teclado. A mesa usa snapshot fixo
+e o mesmo `TablePlayArea` da tela conectada; não comprova integração multiplayer.
+
+Revisão de 17/09: [antes e depois dos seis prints comentados](docs/screenshots/comparison.html).
+Ícones e cartas vêm do web; para sincronizar os assets, execute
+`node tool/sync-web-assets.mjs` com `ui/node_modules` instalado. Consulte
+[escopo da revisão](docs/web-parity-review.md).

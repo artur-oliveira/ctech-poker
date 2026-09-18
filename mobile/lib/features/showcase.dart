@@ -1,8 +1,10 @@
+import 'poker_icon.dart';
 import '../core/labels.dart';
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import 'widgets.dart';
 import 'reactions.dart';
+import 'social_details.dart';
 
 class ShowcaseEditor extends StatefulWidget {
   const ShowcaseEditor({super.key, required this.api});
@@ -39,11 +41,17 @@ class _ShowcaseEditorState extends State<ShowcaseEditor> {
               List<String>.from(profile['favorite_reactions'] ?? []),
             );
             final layout = profile['showcase_layout'] as Map?;
-            if (layout?['order'] is List &&
-                (layout!['order'] as List).length == 3) {
-              order = List<String>.from(layout['order']);
-            }
-            hidden.addAll(List<String>.from(layout?['hidden'] ?? []));
+            order = {
+              ...visibleShowcaseSections({'order': layout?['order']}),
+            }.toList();
+            hidden.addAll(
+              (layout?['hidden'] is List ? layout!['hidden'] as List : const [])
+                  .whereType<String>()
+                  .where(
+                    (section) =>
+                        section != 'achievements' && order.contains(section),
+                  ),
+            );
             presets = profile['bet_preset_mode'] ?? 'mixed';
             loaded = true;
           }
@@ -93,7 +101,7 @@ class _ShowcaseEditorState extends State<ShowcaseEditor> {
                             final value = order.removeAt(i);
                             order.insert(i - 1, value);
                           }),
-                    icon: const Icon(Icons.arrow_upward),
+                    icon: const PokerIcon(PokerIcons.arrowUp),
                   ),
                   trailing: order[i] == 'achievements'
                       ? null

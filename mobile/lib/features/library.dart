@@ -1,8 +1,10 @@
+import '../core/game_mode.dart';
+import 'achievements.dart';
+import 'poker_icon.dart';
 import '../core/replay.dart';
 import 'ranking.dart';
 import 'statistics.dart';
 import 'share_hand.dart';
-import '../core/labels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/api.dart';
@@ -14,8 +16,13 @@ import 'showcase.dart';
 import 'hand_browser.dart';
 
 class LibraryScreen extends StatelessWidget {
-  const LibraryScreen({super.key, required this.api});
+  const LibraryScreen({
+    super.key,
+    required this.api,
+    this.mode = GameMode.chips,
+  });
   final PokerApi api;
+  final GameMode mode;
   @override
   Widget build(BuildContext context) => DefaultTabController(
     length: 5,
@@ -24,7 +31,7 @@ class LibraryScreen extends StatelessWidget {
         const TabBar(
           isScrollable: true,
           tabs: [
-            Tab(text: 'Mãos'),
+            Tab(text: 'Histórico'),
             Tab(text: 'Estatísticas'),
             Tab(text: 'Conquistas'),
             Tab(text: 'Ranking'),
@@ -34,39 +41,10 @@ class LibraryScreen extends StatelessWidget {
         Expanded(
           child: TabBarView(
             children: [
-              HandBrowser(api: api),
-              StatisticsScreen(api: api),
-              AsyncPanel(
-                load: () => api.get(
-                  '/v1.0/players/me/achievements/summary',
-                  query: {'mode': 'sandbox'},
-                ),
-                builder: (context, summary, _) => ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Text(
-                      '${summary['totals']['stars']} estrelas conquistadas',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    for (final achievement in rows(summary, 'achievements'))
-                      Card(
-                        child: ListTile(
-                          leading: Icon(
-                            achievement['unlocked'] == true
-                                ? Icons.workspace_premium
-                                : Icons.lock_outline,
-                          ),
-                          title: Text(achievementLabel(achievement['key'])),
-                          subtitle: Text(
-                            '${achievement['progress']} / ${achievement['next_target'] ?? achievement['max_target']}',
-                          ),
-                          trailing: Text('★ ${achievement['stars']}'),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              RankingScreen(api: api),
+              HandBrowser(api: api, mode: mode),
+              StatisticsScreen(api: api, mode: mode),
+              AchievementsScreen(api: api, mode: mode),
+              RankingScreen(api: api, mode: mode),
               PagedList(
                 api: api,
                 path: '/v1.0/players/me/sessions',
@@ -93,9 +71,15 @@ class LibraryScreen extends StatelessWidget {
 }
 
 class HandScreen extends StatefulWidget {
-  const HandScreen({super.key, required this.api, required this.hand});
+  const HandScreen({
+    super.key,
+    required this.api,
+    required this.hand,
+    this.mode = GameMode.chips,
+  });
   final PokerApi api;
   final Json hand;
+  final GameMode mode;
   @override
   State<HandScreen> createState() => _HandScreenState();
 }
@@ -142,12 +126,12 @@ class _HandScreenState extends State<HandScreen> with WidgetsBindingObserver {
       actions: [
         IconButton(
           tooltip: 'Compartilhar mão',
-          icon: const Icon(Icons.share),
+          icon: const PokerIcon(PokerIcons.share2),
           onPressed: share,
         ),
         IconButton(
           tooltip: 'Anotar e organizar',
-          icon: const Icon(Icons.edit_note),
+          icon: const PokerIcon(PokerIcons.notebookPen),
           onPressed: notes,
         ),
       ],
@@ -199,15 +183,15 @@ class _HandScreenState extends State<HandScreen> with WidgetsBindingObserver {
                   IconButton(
                     tooltip: 'Primeira ação',
                     onPressed: index > 0 ? () => playback.seek(0) : null,
-                    icon: const Icon(Icons.first_page),
+                    icon: const PokerIcon(PokerIcons.skipBack),
                   ),
                   IconButton(
                     tooltip: playback.playing
                         ? 'Pausar replay'
                         : 'Reproduzir replay',
                     onPressed: actions.length > 1 ? playback.toggle : null,
-                    icon: Icon(
-                      playback.playing ? Icons.pause : Icons.play_arrow,
+                    icon: PokerIcon(
+                      playback.playing ? PokerIcons.pause : PokerIcons.play,
                     ),
                   ),
                   TextButton(
@@ -221,14 +205,14 @@ class _HandScreenState extends State<HandScreen> with WidgetsBindingObserver {
                     onPressed: index > 0
                         ? () => playback.seek(index - 1)
                         : null,
-                    icon: const Icon(Icons.skip_previous),
+                    icon: const PokerIcon(PokerIcons.stepBack),
                   ),
                   IconButton(
                     tooltip: 'Próxima ação',
                     onPressed: index < actions.length - 1
                         ? () => playback.seek(index + 1)
                         : null,
-                    icon: const Icon(Icons.skip_next),
+                    icon: const PokerIcon(PokerIcons.stepForward),
                   ),
                 ],
               ),
@@ -286,14 +270,14 @@ class _HandScreenState extends State<HandScreen> with WidgetsBindingObserver {
                       compact: true,
                     ),
                     trailing: opponent['won'] == true
-                        ? const Icon(Icons.emoji_events)
+                        ? const PokerIcon(PokerIcons.trophy)
                         : null,
                   ),
               ],
               const Divider(),
               FilledButton.tonalIcon(
                 onPressed: fairness,
-                icon: const Icon(Icons.verified_user_outlined),
+                icon: const PokerIcon(PokerIcons.shieldCheck),
                 label: const Text('Verificar embaralhamento neste aparelho'),
               ),
             ],
@@ -341,8 +325,11 @@ class _HandScreenState extends State<HandScreen> with WidgetsBindingObserver {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ShareHandScreen(api: widget.api, handId: widget.hand['hand_id']),
+        builder: (_) => ShareHandScreen(
+          api: widget.api,
+          handId: widget.hand['hand_id'],
+          mode: widget.mode,
+        ),
       ),
     );
   }
@@ -368,11 +355,11 @@ class ProfileScreen extends StatelessWidget {
                     height: 80,
                     fit: BoxFit.cover,
                     errorBuilder: (_, error, stack) =>
-                        const Icon(Icons.person, size: 80),
+                        const PokerIcon(PokerIcons.userRound, size: 80),
                   )
                 : const CircleAvatar(
                     radius: 40,
-                    child: Icon(Icons.person, size: 42),
+                    child: PokerIcon(PokerIcons.userRound, size: 42),
                   ),
           ),
         ),
@@ -385,7 +372,7 @@ class ProfileScreen extends StatelessWidget {
         ListTile(
           title: const Text('Meu código de amizade'),
           subtitle: Text(profile['friend_code'] ?? 'Indisponível'),
-          trailing: const Icon(Icons.copy),
+          trailing: const PokerIcon(PokerIcons.copy),
           onTap: () async {
             await Clipboard.setData(
               ClipboardData(text: profile['friend_code'] ?? ''),
@@ -395,7 +382,7 @@ class ProfileScreen extends StatelessWidget {
         ),
         ListTile(
           title: const Text('Apelido nas mesas'),
-          trailing: const Icon(Icons.edit),
+          trailing: const PokerIcon(PokerIcons.pencil),
           onTap: () => safely(context, () async {
             final name = await input(
               context,
@@ -422,7 +409,7 @@ class ProfileScreen extends StatelessWidget {
           ),
         ListTile(
           title: const Text('Links compartilhados'),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: const PokerIcon(PokerIcons.chevronRight),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute<void>(
@@ -464,7 +451,7 @@ class ProfileScreen extends StatelessWidget {
         ),
         ListTile(
           title: const Text('Foto de perfil'),
-          leading: const Icon(Icons.add_a_photo),
+          leading: const PokerIcon(PokerIcons.camera),
           onTap: () => safely(context, () async {
             await updateAvatar(api);
             reload();
@@ -494,7 +481,7 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: 24),
         OutlinedButton.icon(
           onPressed: () => safely(context, api.session.logout),
-          icon: const Icon(Icons.logout),
+          icon: const PokerIcon(PokerIcons.logOut),
           label: const Text('Sair da conta'),
         ),
       ],

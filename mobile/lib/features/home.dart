@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'poker_logo.dart';
 import '../core/design.dart';
 import 'pending_operations.dart';
@@ -72,14 +73,19 @@ class _PokerHomeState extends State<PokerHome> with WidgetsBindingObserver {
       StoreScreen(api: widget.api),
       ProfileScreen(api: widget.api),
     ];
-    const labels = ['Jogar', 'Minha jornada', 'Pessoas', 'Loja', 'Perfil'];
+    const labels = ['Lobby', 'Mãos', 'Pessoas', 'Loja', 'Perfil'];
     const icons = [
-      Icons.casino_outlined,
-      Icons.insights_outlined,
-      Icons.people_outline,
-      Icons.storefront_outlined,
-      Icons.person_outline,
+      PokerIcons.layoutGrid,
+      PokerIcons.history,
+      PokerIcons.users,
+      PokerIcons.shoppingBag,
+      PokerIcons.userRound,
     ];
+    final wide = MediaQuery.sizeOf(context).width >= 600;
+    final content = KeyedSubtree(
+      key: ValueKey('$selected-$revision'),
+      child: screens[selected],
+    );
     return Scaffold(
       appBar: AppBar(
         leading: const Center(child: PokerLogo(size: 32)),
@@ -87,7 +93,7 @@ class _PokerHomeState extends State<PokerHome> with WidgetsBindingObserver {
         actions: [
           IconButton(
             tooltip: 'Operações pendentes',
-            icon: const Icon(Icons.receipt_long_outlined),
+            icon: const PokerIcon(PokerIcons.receiptText),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute<void>(
@@ -97,7 +103,7 @@ class _PokerHomeState extends State<PokerHome> with WidgetsBindingObserver {
           ),
           IconButton(
             tooltip: 'Guia do Poker',
-            icon: const Icon(Icons.help_outline),
+            icon: const PokerIcon(PokerIcons.circleHelp),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute<void>(builder: (_) => const GuideScreen()),
@@ -106,19 +112,45 @@ class _PokerHomeState extends State<PokerHome> with WidgetsBindingObserver {
         ],
       ),
       body: SafeArea(
-        child: KeyedSubtree(
-          key: ValueKey('$selected-$revision'),
-          child: screens[selected],
-        ),
+        child: wide
+            ? Row(
+                children: [
+                  NavigationRail(
+                    scrollable: true,
+                    selectedIndex: selected,
+                    onDestinationSelected: (index) =>
+                        setState(() => selected = index),
+                    labelType: NavigationRailLabelType.all,
+                    backgroundColor: PokerColors.seat,
+                    indicatorColor: PokerColors.brand,
+                    destinations: [
+                      for (var i = 0; i < labels.length; i++)
+                        NavigationRailDestination(
+                          icon: PokerIcon(icons[i]),
+                          label: Text(labels[i]),
+                        ),
+                    ],
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: content),
+                ],
+              )
+            : content,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selected,
-        onDestinationSelected: (index) => setState(() => selected = index),
-        destinations: [
-          for (var i = 0; i < labels.length; i++)
-            NavigationDestination(icon: Icon(icons[i]), label: labels[i]),
-        ],
-      ),
+      bottomNavigationBar: wide
+          ? null
+          : NavigationBar(
+              selectedIndex: selected,
+              onDestinationSelected: (index) =>
+                  setState(() => selected = index),
+              destinations: [
+                for (var i = 0; i < labels.length; i++)
+                  NavigationDestination(
+                    icon: PokerIcon(icons[i]),
+                    label: labels[i],
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -166,22 +198,53 @@ class LobbyScreen extends StatelessWidget {
                           b['max_seats'] == seats,
                     )
                     .firstOrNull ??
-                {...stake, 'max_seats': seats, 'seats_available': 0},
+                {
+                  ...stake,
+                  'max_seats': seats,
+                  'seats_available': 0,
+                  'open_rooms': 0,
+                },
       ];
-      final name = profile['name'] ?? 'Jogador';
       final id = profile['user_id'] as String;
       return ListView(
         padding: const EdgeInsets.all(20),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          Text(
-            'Boa mesa, $name.',
-            style: Theme.of(context).textTheme.headlineMedium,
+          Row(
+            children: [
+              const PokerIcon(
+                PokerIcons.coins,
+                size: 18,
+                color: PokerColors.gold,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${chips(profile['sandbox_balance'])} fichas',
+                  style: const TextStyle(
+                    fontFamily: PokerTheme.mono,
+                    color: PokerColors.gold,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => DailyScreen(api: api),
+                  ),
+                ),
+                icon: const PokerIcon(PokerIcons.gift, size: 18),
+                label: const Text('Recompensa'),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Text(
-            '${chips(profile['sandbox_balance'])} fichas disponíveis',
-            style: Theme.of(context).textTheme.titleLarge,
+            'Escolha os blinds e o tamanho da mesa.',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 20),
           if (profile['poker_terms_accepted'] != true)
@@ -217,93 +280,63 @@ class LobbyScreen extends StatelessWidget {
           for (final session in sessions.where((s) => s['ended_at'] == 0))
             Card(
               child: ListTile(
-                leading: const Icon(Icons.play_circle_outline),
+                leading: const PokerIcon(PokerIcons.play),
                 title: const Text('Voltar à minha mesa'),
                 subtitle: Text(session['table_id'].toString()),
                 onTap: () => open(context, session['table_id'], id),
               ),
             ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => DailyScreen(api: api),
-                  ),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: profile['poker_terms_accepted'] != true
+                      ? null
+                      : () => create(context, id, reload),
+                  icon: const PokerIcon(PokerIcons.lock, size: 18),
+                  label: const Text('Mesa privada'),
                 ),
-                icon: const Icon(Icons.redeem),
-                label: const Text('Recompensa diária'),
               ),
-              OutlinedButton.icon(
-                onPressed: profile['poker_terms_accepted'] != true
-                    ? null
-                    : () => create(context, id, reload),
-                icon: const Icon(Icons.add),
-                label: const Text('Criar mesa privada'),
-              ),
-              OutlinedButton.icon(
-                onPressed: profile['poker_terms_accepted'] != true
-                    ? null
-                    : () => privateJoin(context, id),
-                icon: const Icon(Icons.key),
-                label: const Text('Entrar por convite'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: profile['poker_terms_accepted'] != true
+                      ? null
+                      : () => privateJoin(context, id),
+                  icon: const PokerIcon(PokerIcons.keyRound, size: 18),
+                  label: const Text('Convite'),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 24),
-          Text(
-            'Escolha o seu ritmo',
-            style: Theme.of(context).textTheme.titleLarge,
+          _LobbyPicker(
+            buckets: buckets,
+            enabled: profile['poker_terms_accepted'] == true,
+            onSelect: (bucket) => safely(context, () async {
+              final bb = (bucket['big_blind'] as num).toInt();
+              final room = await Navigator.push<Json>(
+                context,
+                MaterialPageRoute<Json>(
+                  builder: (_) => BuyInScreen(
+                    api: api,
+                    path: '/v1.0/rooms/join-or-create',
+                    minimum: bb * 40,
+                    maximum: bb * 100,
+                    body: {
+                      'small_blind': bucket['small_blind'],
+                      'big_blind': bb,
+                      'max_seats': bucket['max_seats'],
+                      'currency_mode': 'sandbox',
+                    },
+                  ),
+                ),
+              );
+              if (room != null && context.mounted) {
+                open(context, room['room_id'], id);
+              }
+            }),
           ),
-          const Text('Fichas recreativas · sem conversão em dinheiro'),
-          const SizedBox(height: 12),
-          if (buckets.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Nenhuma mesa disponível agora. Puxe para atualizar.',
-              ),
-            ),
-          for (final bucket in buckets)
-            Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(16),
-                leading: const CircleAvatar(child: Icon(Icons.style)),
-                title: Text(
-                  '${chips(bucket['small_blind'])} / ${chips(bucket['big_blind'])}',
-                ),
-                subtitle: Text(
-                  '${bucket['max_seats']} lugares · ${bucket['seats_available']} assentos livres',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                enabled: profile['poker_terms_accepted'] == true,
-                onTap: () => safely(context, () async {
-                  final bb = (bucket['big_blind'] as num).toInt();
-                  final room = await Navigator.push<Json>(
-                    context,
-                    MaterialPageRoute<Json>(
-                      builder: (_) => BuyInScreen(
-                        api: api,
-                        path: '/v1.0/rooms/join-or-create',
-                        minimum: bb * 40,
-                        maximum: bb * 100,
-                        body: {
-                          'small_blind': bucket['small_blind'],
-                          'big_blind': bb,
-                          'max_seats': bucket['max_seats'],
-                          'currency_mode': 'sandbox',
-                        },
-                      ),
-                    ),
-                  );
-                  if (room == null) return;
-                  if (context.mounted) open(context, room['room_id'], id);
-                }),
-              ),
-            ),
         ],
       );
     },
@@ -376,6 +409,137 @@ class LobbyScreen extends StatelessWidget {
   }
 }
 
+class _LobbyPicker extends StatefulWidget {
+  const _LobbyPicker({
+    required this.buckets,
+    required this.enabled,
+    required this.onSelect,
+  });
+  final List<Json> buckets;
+  final bool enabled;
+  final void Function(Json) onSelect;
+  @override
+  State<_LobbyPicker> createState() => _LobbyPickerState();
+}
+
+class _LobbyPickerState extends State<_LobbyPicker> {
+  String? selected;
+  @override
+  Widget build(BuildContext context) {
+    final stakes = {
+      for (final b in widget.buckets)
+        '${b['small_blind']}/${b['big_blind']}': b,
+    };
+    if (stakes.isEmpty) {
+      return const Text('Nenhum stake disponível no momento.');
+    }
+    final current = stakes.containsKey(selected)
+        ? selected!
+        : stakes.keys.first;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Escolha os blinds',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in stakes.entries)
+              ChoiceChip(
+                label: Text(
+                  '${chips(e.value['small_blind'])} / ${chips(e.value['big_blind'])}',
+                ),
+                selected: e.key == current,
+                showCheckmark: false,
+                onSelected: (_) => setState(() => selected = e.key),
+              ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text('Tamanho da mesa', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        for (final bucket in widget.buckets.where(
+          (b) => '${b['small_blind']}/${b['big_blind']}' == current,
+        ))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Material(
+              color: PokerColors.seat,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: PokerColors.border),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: widget.enabled ? () => widget.onSelect(bucket) : null,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              {
+                                    2: 'HEADS-UP',
+                                    6: '6-MAX',
+                                    9: 'FULL-RING',
+                                  }[bucket['max_seats']] ??
+                                  'Mesa',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleLarge?.copyWith(fontSize: 20),
+                            ),
+                          ),
+                          const PokerIcon(PokerIcons.arrowRight, size: 20),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const PokerIcon(PokerIcons.users, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Até ${bucket['max_seats']} jogadores · ${bucket['open_rooms'] ?? 0} mesas ativas',
+                              style: const TextStyle(
+                                color: PokerColors.secondaryText,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Entrada: ${chips((bucket['big_blind'] as num) * 40)} a ${chips((bucket['big_blind'] as num) * 100)} fichas',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: PokerColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        (bucket['open_rooms'] as num? ?? 0) > 0
+                            ? 'Entrar agora'
+                            : 'Criar mesa',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class DailyScreen extends StatelessWidget {
   const DailyScreen({super.key, required this.api});
   final PokerApi api;
@@ -388,7 +552,7 @@ class DailyScreen extends StatelessWidget {
         builder: (context, data, reload) => ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Icon(Icons.redeem, size: 76, color: PokerColors.gold),
+            const PokerIcon(PokerIcons.gift, size: 76, color: PokerColors.gold),
             const SizedBox(height: 24),
             Text(
               '${data['current_streak']} dias de sequência',
@@ -408,8 +572,10 @@ class DailyScreen extends StatelessWidget {
               children: rows(data, 'days')
                   .map(
                     (day) => Chip(
-                      avatar: Icon(
-                        day['claimed'] == true ? Icons.check : Icons.redeem,
+                      avatar: PokerIcon(
+                        day['claimed'] == true
+                            ? PokerIcons.check
+                            : PokerIcons.gift,
                         size: 18,
                       ),
                       label: Text(
@@ -458,15 +624,15 @@ class GuideScreen extends StatelessWidget {
           Text('Sua mesa, sempre à mão', style: TextStyle(fontSize: 28)),
           SizedBox(height: 16),
           Text(
-            'Em Jogar, escolha os blinds e confirme a quantidade de fichas. Uma sessão aberta aparece em Voltar à minha mesa.',
+            'No Lobby, escolha os blinds e confirme a quantidade de fichas. Uma sessão aberta aparece em Voltar à minha mesa.',
           ),
           SizedBox(height: 16),
           Text(
-            'Na mesa, suas cartas ficam junto às ações. Pagar, passar, desistir e aumentar só ficam disponíveis quando o servidor confirma sua vez. O valor de aumentar é o total da aposta nesta rodada.',
+            'Na mesa, suas cartas ficam junto às ações. Pagar, Check, Fold e Aumentar só ficam disponíveis quando o servidor confirma sua vez. O valor de aumentar é o total da aposta nesta rodada.',
           ),
           SizedBox(height: 16),
           Text(
-            'Aumentar aparece em vermelho; Pagar e Passar usam botões claros. O dourado destaca fichas, pote e a vez do jogador. Leia sempre o nome e o valor da ação antes de confirmar.',
+            'Aumentar aparece em vermelho; Pagar e Check usam botões claros. O dourado destaca fichas, pote e a vez do jogador. Leia sempre o nome e o valor da ação antes de confirmar.',
           ),
           SizedBox(height: 16),
           Text(
@@ -478,7 +644,7 @@ class GuideScreen extends StatelessWidget {
           ),
           SizedBox(height: 16),
           Text(
-            'Minha jornada reúne mãos, replay, estatísticas, conquistas e ranking. Cartas ocultas continuam ocultas. As provas de embaralhamento são verificadas neste aparelho.',
+            'Mãos reúne mãos, replay, estatísticas, conquistas e ranking. Cartas ocultas continuam ocultas. As provas de embaralhamento são verificadas neste aparelho.',
           ),
           SizedBox(height: 16),
           Text(

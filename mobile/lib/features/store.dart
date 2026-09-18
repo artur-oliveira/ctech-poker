@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -75,7 +76,7 @@ class StoreScreen extends StatelessWidget {
               ),
             ),
           ),
-          icon: const Icon(Icons.receipt_long),
+          icon: const PokerIcon(PokerIcons.receiptText),
           label: const Text('Histórico de compras'),
         ),
         if (rows(result).isEmpty)
@@ -90,8 +91,8 @@ class StoreScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    title == 'Fichas' ? Icons.paid_outlined : Icons.style,
+                  PokerIcon(
+                    title == 'Fichas' ? PokerIcons.coins : PokerIcons.layers,
                     size: 40,
                   ),
                   const SizedBox(height: 12),
@@ -288,10 +289,10 @@ class _PurchaseScreenState extends State<PurchaseScreen>
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Icon(
+          PokerIcon(
             purchase['status'] == 'confirmed'
-                ? Icons.check_circle
-                : Icons.receipt_long,
+                ? PokerIcons.circleCheck
+                : PokerIcons.receiptText,
             size: 72,
           ),
           const SizedBox(height: 20),
@@ -341,7 +342,7 @@ class _PurchaseScreenState extends State<PurchaseScreen>
                 );
                 if (context.mounted) toast(context, 'Código PIX copiado.');
               },
-              icon: const Icon(Icons.copy),
+              icon: const PokerIcon(PokerIcons.copy),
               label: const Text('Copiar código PIX'),
             ),
           if (error != null)

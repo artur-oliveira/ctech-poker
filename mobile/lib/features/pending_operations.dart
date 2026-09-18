@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import 'home.dart';
@@ -18,7 +19,7 @@ class PendingOperationsScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.all(24),
               children: const [
-                Icon(Icons.check_circle_outline, size: 64),
+                PokerIcon(PokerIcons.circleCheck, size: 64),
                 Text(
                   'Nenhuma operação aguardando conferência.',
                   textAlign: TextAlign.center,

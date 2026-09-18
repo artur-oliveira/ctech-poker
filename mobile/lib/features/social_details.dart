@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'report_player.dart';
 import '../core/labels.dart';
 import 'package:flutter/material.dart';
@@ -34,10 +35,8 @@ class SocialInbox extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ListTile(
-              leading: Icon(
-                event['unread'] == true
-                    ? Icons.mark_email_unread
-                    : Icons.drafts_outlined,
+              leading: PokerIcon(
+                event['unread'] == true ? PokerIcons.mail : PokerIcons.mailOpen,
               ),
               title: Text(event['actor_name'] ?? 'Jogador'),
               subtitle: Text(
@@ -133,7 +132,7 @@ class PublicProfile extends StatelessWidget {
                     ? NetworkImage(profile['avatar_url'])
                     : null,
                 child: profile['avatar_url'] == null
-                    ? const Icon(Icons.person, size: 40)
+                    ? const PokerIcon(PokerIcons.userRound, size: 40)
                     : null,
               ),
               Text(
@@ -163,7 +162,7 @@ class PublicProfile extends StatelessWidget {
                         'featured_achievements',
                       ))
                         ListTile(
-                          leading: const Icon(Icons.workspace_premium),
+                          leading: const PokerIcon(PokerIcons.award),
                           title: Text(achievementLabel(achievement['key'])),
                           trailing: Text(chips(achievement['count'])),
                         ),
@@ -202,11 +201,11 @@ class PublicProfile extends StatelessWidget {
                   );
                   if (context.mounted) toast(context, 'Pedido enviado.');
                 }),
-                icon: const Icon(Icons.person_add),
+                icon: const PokerIcon(PokerIcons.userRoundPlus),
                 label: const Text('Adicionar amigo'),
               ),
               TextButton.icon(
-                icon: const Icon(Icons.flag_outlined),
+                icon: const PokerIcon(PokerIcons.flag),
                 label: const Text('Denunciar perfil'),
                 onPressed: () => Navigator.push(
                   context,
@@ -221,7 +220,7 @@ class PublicProfile extends StatelessWidget {
               ),
               OutlinedButton.icon(
                 onPressed: () => invite(context),
-                icon: const Icon(Icons.casino),
+                icon: const PokerIcon(PokerIcons.layoutGrid),
                 label: const Text('Convidar para minha mesa'),
               ),
             ],

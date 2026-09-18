@@ -1,12 +1,20 @@
+import '../core/game_mode.dart';
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/api.dart';
 import 'widgets.dart';
 
 class ShareHandScreen extends StatefulWidget {
-  const ShareHandScreen({super.key, required this.api, required this.handId});
+  const ShareHandScreen({
+    super.key,
+    required this.api,
+    required this.handId,
+    this.mode = GameMode.chips,
+  });
   final PokerApi api;
   final String handId;
+  final GameMode mode;
   @override
   State<ShareHandScreen> createState() => _ShareHandScreenState();
 }
@@ -29,7 +37,7 @@ class _ShareHandScreenState extends State<ShareHandScreen> {
             'kind': kind,
             'include_hero_cards': includeCards,
             'expiry_days': days,
-            'mode': 'sandbox',
+            'mode': widget.mode.apiValue,
           });
       if (result['token'] is! String || (result['token'] as String).isEmpty) {
         throw StateError(
@@ -139,7 +147,7 @@ class _ShareHandScreenState extends State<ShareHandScreen> {
                   child: Text(busy ? 'Criando…' : 'Criar link público'),
                 ),
               ] else ...[
-                const Icon(Icons.check_circle_outline, size: 64),
+                const PokerIcon(PokerIcons.circleCheck, size: 64),
                 const Text('Link criado', textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 SelectableText(url),
@@ -148,7 +156,7 @@ class _ShareHandScreenState extends State<ShareHandScreen> {
                     await Clipboard.setData(ClipboardData(text: url));
                     if (context.mounted) toast(context, 'Link copiado.');
                   }),
-                  icon: const Icon(Icons.copy),
+                  icon: const PokerIcon(PokerIcons.copy),
                   label: const Text('Copiar link'),
                 ),
                 OutlinedButton(

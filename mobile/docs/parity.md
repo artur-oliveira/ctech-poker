@@ -147,3 +147,33 @@ Não confundir essa correção de identidade com homologação integral do aplic
 
 Build local adicional: `flutter build apk --debug --no-pub` aprovado; logo e fontes
 IBM Plex conferidas dentro de `build/app/outputs/flutter-apk/app-debug.apk`.
+
+## Revisão de telas — 2026-09-15
+
+Galeria offline em `docs/screenshots/index.html`, gerada com widgets reais,
+fontes locais e API demonstrativa isolada em `test/support/review_api.dart`.
+Cobre destinos principais, abas, telas secundárias, rolagem, estados de compra,
+mesa nas duas orientações, aumento e chat. Não executa compras ou login real.
+O manifesto relaciona cada captura à tela; não representa todos os estados
+possíveis do servidor nem interfaces externas de autenticação/permissões.
+
+A navegação usa rail a partir de 600 dp. O layout compacto da mesa mostra pote
+e cartas antes dos assentos; ações permanecem ao lado em landscape. O componente
+responsável pelo layout é compartilhado com a captura, evitando divergência entre
+fixture e app. Filtros sem resultados mostram orientação para alterar critérios
+ou carregar outras páginas. O editor de showcase normaliza ordem e visibilidade,
+ignorando seções desconhecidas/duplicadas e mantendo conquistas obrigatórias.
+
+Validação desta etapa: `flutter analyze --no-pub` sem problemas; 55 testes
+aprovados, incluindo navegação em 844×390, rail no tablet, filtro vazio e
+visibilidade do pote/ações em landscape. APK Android debug compilado. A referência
+visual do login foi atualizada para o texto atual “com seus amigos”, após inspeção.
+Permanecem pendentes testes autenticados, iOS e aparelhos físicos.
+
+## Consistência com o web — 2026-09-17
+
+A revisão dos prints levou à migração para Lucide e cartas SVG originais, novo
+lobby por blinds/formato, navegação “Mãos”, controles alinhados, estatísticas
+compactas, conquistas com cartas e mesa com assentos na borda. Veja
+[escopo e comparação](web-parity-review.md). Os modos recebem nomes do web;
+`GameMode` preserva escopo/formatação nas consultas, sem habilitar entrada real.

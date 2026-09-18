@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -85,7 +86,7 @@ class NativePreferences extends StatelessWidget {
                 }),
               ),
               SwitchListTile(
-                title: const Text('Treino de equidade no sandbox'),
+                title: const Text('Treino de equidade · Fichas'),
                 value: prefs.trainer,
                 onChanged: (value) => safely(context, () async {
                   prefs.trainer = value;
@@ -204,7 +205,7 @@ class _VoiceCommandSheetState extends State<VoiceCommandSheet> {
                       }
                     }
                   }),
-            icon: const Icon(Icons.mic),
+            icon: const PokerIcon(PokerIcons.mic),
             label: Text(listening ? 'Ouvindo…' : 'Ativar microfone'),
           ),
         ],
@@ -222,26 +223,28 @@ class BotChallengeScreen extends StatefulWidget {
 
 class _BotChallengeScreenState extends State<BotChallengeScreen> {
   static const siteKey = String.fromEnvironment('TURNSTILE_SITE_KEY');
-  late final controller = WebViewController()
-    ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    ..addJavaScriptChannel(
-      'PokerChallenge',
-      onMessageReceived: (message) {
-        if (message.message.isNotEmpty && message.message.length < 8192) {
-          widget.realtime.command(
-            ClientMessage(
-              type: 'bot_challenge',
-              turnstileToken: message.message,
-            ),
-          );
-          if (mounted) Navigator.pop(context);
-        }
-      },
-    )
-    ..loadHtmlString(
-      '''<!doctype html><html lang="pt-BR"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#112129;color:white;font:18px sans-serif;padding:20px"><p>Confirme que você é uma pessoa para continuar.</p><div id="challenge"></div><script>function ready(){turnstile.render('#challenge',{sitekey:${jsonEncode(siteKey)},callback:function(token){PokerChallenge.postMessage(token)}})}</script><script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ready&render=explicit" async defer></script></body></html>''',
-      baseUrl: 'https://poker.aoctech.app/',
-    );
+  late final controller = siteKey.isEmpty
+      ? null
+      : (WebViewController()
+          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..addJavaScriptChannel(
+            'PokerChallenge',
+            onMessageReceived: (message) {
+              if (message.message.isNotEmpty && message.message.length < 8192) {
+                widget.realtime.command(
+                  ClientMessage(
+                    type: 'bot_challenge',
+                    turnstileToken: message.message,
+                  ),
+                );
+                if (mounted) Navigator.pop(context);
+              }
+            },
+          )
+          ..loadHtmlString(
+            '''<!doctype html><html lang="pt-BR"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#112129;color:white;font:18px sans-serif;padding:20px"><p>Confirme que você é uma pessoa para continuar.</p><div id="challenge"></div><script>function ready(){turnstile.render('#challenge',{sitekey:${jsonEncode(siteKey)},callback:function(token){PokerChallenge.postMessage(token)}})}</script><script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ready&render=explicit" async defer></script></body></html>''',
+            baseUrl: 'https://poker.aoctech.app/',
+          ));
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Verificação de segurança')),
@@ -253,7 +256,7 @@ class _BotChallengeScreenState extends State<BotChallengeScreen> {
                 'A verificação de segurança não está configurada nesta versão do aplicativo.',
               ),
             )
-          : WebViewWidget(controller: controller),
+          : WebViewWidget(controller: controller!),
     ),
   );
 }

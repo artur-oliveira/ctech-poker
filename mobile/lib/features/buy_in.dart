@@ -110,7 +110,7 @@ class _BuyInScreenState extends State<BuyInScreen> {
                   : null,
             ),
             const Text(
-              'Ao confirmar, este valor será reservado do seu saldo. As fichas recreativas não são convertidas em dinheiro.',
+              'Ao confirmar, este valor será reservado do seu saldo. Fichas não têm saque nem conversão em dinheiro.',
             ),
             if (error != null)
               Padding(

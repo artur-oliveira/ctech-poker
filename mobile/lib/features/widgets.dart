@@ -1,4 +1,5 @@
-import '../core/design.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/api.dart';
@@ -112,13 +113,13 @@ class _AsyncPanelState extends State<AsyncPanel> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.cloud_off_outlined, size: 48),
+                const PokerIcon(PokerIcons.cloudOff, size: 48),
                 const SizedBox(height: 16),
                 Text(state.error.toString(), textAlign: TextAlign.center),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: reload,
-                  icon: const Icon(Icons.refresh),
+                  icon: const PokerIcon(PokerIcons.refreshCw),
                   label: const Text('Tentar novamente'),
                 ),
               ],
@@ -218,10 +219,17 @@ class _PagedListState extends State<PagedList> {
                   () => fetch(reset: true),
                 ) ??
                 widget.item!(items[index], () => fetch(reset: true)),
-        if (items.isEmpty && !busy && error == null)
-          const Padding(
-            padding: EdgeInsets.all(32),
-            child: Text('Nada por aqui ainda.', textAlign: TextAlign.center),
+        if (!items.any((item) => widget.filter?.call(item) ?? true) &&
+            !busy &&
+            error == null)
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Text(
+              items.isEmpty
+                  ? 'Nada por aqui ainda.'
+                  : 'Nenhum resultado nas páginas carregadas. Altere os filtros ou carregue mais.',
+              textAlign: TextAlign.center,
+            ),
           ),
         if (error != null)
           Padding(
@@ -241,129 +249,85 @@ class _PagedListState extends State<PagedList> {
 }
 
 class PlayingCards extends StatelessWidget {
-  const PlayingCards(this.cards, {super.key, this.compact = false});
+  const PlayingCards(
+    this.cards, {
+    super.key,
+    this.compact = false,
+    this.cardWidth,
+  });
   final List<String> cards;
   final bool compact;
+  final double? cardWidth;
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 4,
     runSpacing: 4,
     alignment: WrapAlignment.center,
-    children: cards.map((code) {
-      final hidden = code == 'back' || code.length != 2;
-      final suit = hidden
-          ? ''
-          : {'c': '♣', 'd': '♦', 'h': '♥', 's': '♠'}[code[1]] ?? '';
-      return Semantics(
-        label: hidden ? 'Carta oculta' : '${code[0]} $suit',
-        child: Container(
-          width: compact ? 32 : 44,
-          height: compact ? 43 : 60,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: hidden ? PokerColors.wine : PokerColors.paper,
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: PokerColors.muted),
-          ),
-          child: ExcludeSemantics(
-            child: hidden
-                ? CustomPaint(
-                    size: Size(compact ? 18 : 26, compact ? 28 : 40),
-                    painter: SuitPainter('back', Colors.white54),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        code[0] == 'T' ? '10' : code[0],
-                        textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: compact ? 16 : 22,
-                          color: PokerAppearance.suit(code[1]),
-                        ),
-                      ),
-                      CustomPaint(
-                        size: Size(compact ? 12 : 18, compact ? 12 : 18),
-                        painter: SuitPainter(
-                          code[1],
-                          PokerAppearance.suit(code[1]),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      );
-    }).toList(),
+    children: [
+      for (final card in cards)
+        PlayingCard(card, width: cardWidth ?? (compact ? 28 : 46)),
+    ],
   );
 }
 
-/// Native vector suits keep card identity independent of emoji/font fallback.
-class SuitPainter extends CustomPainter {
-  const SuitPainter(this.suit, this.color);
-  final String suit;
-  final Color color;
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.scale(size.width / 100, size.height / 100);
-    final paint = Paint()..color = color;
-    final path = Path();
-    switch (suit) {
-      case 'd':
-        path.moveTo(50, 0);
-        path.lineTo(95, 50);
-        path.lineTo(50, 100);
-        path.lineTo(5, 50);
-        path.close();
-      case 'h':
-        path.moveTo(50, 95);
-        path.cubicTo(-30, 35, 0, -20, 50, 22);
-        path.cubicTo(100, -20, 130, 35, 50, 95);
-        path.close();
-      case 's':
-        path.moveTo(50, 0);
-        path.cubicTo(-30, 60, 0, 100, 44, 66);
-        path.lineTo(32, 100);
-        path.lineTo(68, 100);
-        path.lineTo(56, 66);
-        path.cubicTo(100, 100, 130, 60, 50, 0);
-        path.close();
-      case 'c':
-        canvas.drawCircle(const Offset(50, 27), 26, paint);
-        canvas.drawCircle(const Offset(26, 59), 25, paint);
-        canvas.drawCircle(const Offset(74, 59), 25, paint);
-        path.moveTo(45, 50);
-        path.lineTo(32, 100);
-        path.lineTo(68, 100);
-        path.lineTo(55, 50);
-        path.close();
-      default:
-        paint.style = PaintingStyle.stroke;
-        paint.strokeWidth = 3;
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(0, 0, 100, 100),
-            const Radius.circular(10),
-          ),
-          paint,
-        );
-        for (var y = 15; y < 100; y += 25) {
-          for (var x = 15; x < 100; x += 25) {
-            path.moveTo(x.toDouble(), y - 8);
-            path.lineTo(x + 8, y.toDouble());
-            path.lineTo(x.toDouble(), y + 8);
-            path.lineTo(x - 8, y.toDouble());
-            path.close();
-          }
-        }
+class PlayingCard extends StatelessWidget {
+  const PlayingCard(this.code, {super.key, this.width = 46});
+  final String code;
+  final double width;
+  static String asset(String code, [String? variant]) {
+    final normalized = code.trim();
+    if (!RegExp(
+      r'^[2-9TJQKA][cdhs]$',
+      caseSensitive: false,
+    ).hasMatch(normalized)) {
+      return 'assets/cards/back.svg';
     }
-    canvas.drawPath(path, paint);
-    canvas.restore();
+    final rank = normalized[0].toUpperCase();
+    final suit = {
+      's': 'spade',
+      'h': 'heart',
+      'd': 'diamond',
+      'c': 'club',
+    }[normalized[1].toLowerCase()];
+    final name =
+        {'T': '10', 'J': 'jack', 'Q': 'queen', 'K': 'king', 'A': 'ace'}[rank] ??
+        rank;
+    final requested = variant ?? PokerAppearance.deck;
+    final deck = PokerAppearance.decks.containsKey(requested)
+        ? requested
+        : 'four-color';
+    return 'assets/cards/variants/$deck/$suit-$name.svg';
   }
 
   @override
-  bool shouldRepaint(SuitPainter oldDelegate) =>
-      oldDelegate.suit != suit || oldDelegate.color != color;
+  Widget build(BuildContext context) {
+    final path = asset(code);
+    final hidden = path == 'assets/cards/back.svg';
+    final rank = hidden ? '' : code.trim()[0].toUpperCase();
+    final suit = hidden
+        ? ''
+        : {'s': 'espadas', 'h': 'copas', 'd': 'ouros', 'c': 'paus'}[code
+              .trim()[1]
+              .toLowerCase()];
+    return Semantics(
+      label: hidden
+          ? 'Carta oculta'
+          : '${{'A': 'Ás', 'K': 'Rei', 'Q': 'Dama', 'J': 'Valete', 'T': '10'}[rank] ?? rank} de $suit',
+      image: true,
+      child: SizedBox(
+        width: width,
+        height: width * 512 / 370.76,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: SvgPicture.asset(
+            path,
+            width: width,
+            height: width * 512 / 370.76,
+            fit: BoxFit.cover,
+            excludeFromSemantics: true,
+          ),
+        ),
+      ),
+    );
+  }
 }

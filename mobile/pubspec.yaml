@@ -25,6 +25,7 @@ dependencies:
   flutter_tts: ^4.2.5
   speech_to_text: ^7.4.0
   shared_preferences: ^2.5.5
+  flutter_svg: ^2.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -34,6 +35,18 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/logo.png
+    - assets/icons/
+    - assets/cards/
+    - assets/cards/variants/alt/
+    - assets/cards/variants/bicycle/
+    - assets/cards/variants/casino/
+    - assets/cards/variants/colorblind/
+    - assets/cards/variants/four-color/
+    - assets/cards/variants/golden/
+    - assets/cards/variants/high-constrast/
+    - assets/cards/variants/pink/
+    - assets/cards/variants/two-color/
+    - assets/cards/variants/vintage/
     - assets/fonts/OFL.txt
   fonts:
     - family: IBM Plex Sans

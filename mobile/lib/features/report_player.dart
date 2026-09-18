@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -75,7 +76,7 @@ class _TableEventReportButtonState extends State<TableEventReportButton> {
     onPressed: busy || widget.handId.isEmpty || widget.actionId.isEmpty
         ? null
         : open,
-    icon: Icon(busy ? Icons.hourglass_top : Icons.flag_outlined),
+    icon: PokerIcon(busy ? PokerIcons.hourglass : PokerIcons.flag),
   );
 }
 
@@ -158,7 +159,7 @@ class _ReportPlayerScreenState extends State<ReportPlayerScreen> {
           padding: const EdgeInsets.all(24),
           children: [
             if (sent) ...[
-              const Icon(Icons.check_circle_outline, size: 64),
+              const PokerIcon(PokerIcons.circleCheck, size: 64),
               const Text('Denúncia registrada para revisão.'),
               FilledButton(
                 onPressed: () => Navigator.pop(context),

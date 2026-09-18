@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'poker_icon.dart';
 import 'poker_logo.dart';
 import '../core/design.dart';
 import 'report_player.dart';
@@ -218,7 +220,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
         actions: [
           IconButton(
             tooltip: 'Copiar convite',
-            icon: const Icon(Icons.ios_share),
+            icon: const PokerIcon(PokerIcons.share2),
             onPressed: () async {
               final uri = Uri.https('poker.aoctech.app', '/table', {
                 'id': widget.roomId,
@@ -230,7 +232,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
           ),
           IconButton(
             tooltip: 'Reações',
-            icon: const Icon(Icons.emoji_emotions_outlined),
+            icon: const PokerIcon(PokerIcons.smilePlus),
             onPressed: () => showModalBottomSheet<void>(
               context: context,
               isScrollControlled: true,
@@ -240,12 +242,12 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
           ),
           IconButton(
             tooltip: 'Chat da mesa',
-            icon: const Icon(Icons.chat_bubble_outline),
+            icon: const PokerIcon(PokerIcons.messageCircle),
             onPressed: chat,
           ),
           IconButton(
             tooltip: 'Opções da mesa',
-            icon: const Icon(Icons.more_vert),
+            icon: const PokerIcon(PokerIcons.ellipsisVertical),
             onPressed: options,
           ),
         ],
@@ -271,7 +273,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
                 color: PokerColors.control,
                 child: ListTile(
                   dense: true,
-                  leading: const Icon(Icons.sync),
+                  leading: const PokerIcon(PokerIcons.refreshCw),
                   title: Text(
                     realtime.handedOff
                         ? 'Sessão transferida para outro aparelho'
@@ -294,43 +296,13 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final landscape =
-                        constraints.maxWidth > 650 &&
-                        constraints.maxWidth > constraints.maxHeight;
-                    final board = TableFelt(
-                      snapshot: snapshot,
-                      heroId: widget.playerId,
-                      now: now,
-                      onSeat: seatMenu,
-                    );
-                    final actions = ActionDock(
-                      realtime: realtime,
-                      bigBlind: (room?['big_blind'] as num?)?.toInt() ?? 0,
-                    );
-                    return landscape
-                        ? Row(
-                            children: [
-                              Expanded(child: board),
-                              SizedBox(
-                                width: 300,
-                                child: SingleChildScrollView(child: actions),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            children: [
-                              Expanded(child: board),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxHeight: constraints.maxHeight * .45,
-                                ),
-                                child: SingleChildScrollView(child: actions),
-                              ),
-                            ],
-                          );
-                  },
+                child: TablePlayArea(
+                  snapshot: snapshot,
+                  realtime: realtime,
+                  heroId: widget.playerId,
+                  now: now,
+                  onSeat: seatMenu,
+                  bigBlind: (room?['big_blind'] as num?)?.toInt() ?? 0,
                 ),
               ),
             if (snapshot?.pendingWinnerCards.winnerId == widget.playerId)
@@ -374,7 +346,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               ),
               ListTile(
                 title: const Text('Comando de voz'),
-                leading: const Icon(Icons.mic),
+                leading: const PokerIcon(PokerIcons.mic),
                 onTap: () => showModalBottomSheet<void>(
                   context: context,
                   builder: (_) => VoiceCommandSheet(realtime: realtime),
@@ -398,7 +370,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
                         if (!context.mounted) return;
                         if (currentRoom['currency_mode'] != 'sandbox') {
                           throw StateError(
-                            'Recompra disponível apenas em fichas recreativas nesta versão.',
+                            'Recompra em dinheiro real ainda não disponível nesta versão.',
                           );
                         }
                         final result = await Navigator.push<Json>(
@@ -442,7 +414,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               }.entries)
                 ListTile(
                   title: Text(entry.value),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const PokerIcon(PokerIcons.chevronRight),
                   onTap: realtime.phase != ConnectionPhase.live
                       ? null
                       : () async {
@@ -462,7 +434,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
                                       true) {
                                 toast(
                                   context,
-                                  'Disponível em mãos sandbox encerradas sem showdown.',
+                                  'Disponível no modo Fichas, em mãos encerradas sem showdown.',
                                 );
                                 return;
                               }
@@ -505,7 +477,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
               ),
               ListTile(
                 title: const Text('Sair e devolver fichas ao saldo'),
-                leading: const Icon(Icons.logout),
+                leading: const PokerIcon(PokerIcons.logOut),
                 onTap: () => safely(context, () async {
                   if (!await confirm(
                     context,
@@ -625,7 +597,7 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
           if (seat.playerId != widget.playerId)
             ListTile(
               title: const Text('Denunciar comportamento'),
-              leading: const Icon(Icons.flag_outlined),
+              leading: const PokerIcon(PokerIcons.flag),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -662,13 +634,68 @@ class _TableScreenState extends State<TableScreen> with WidgetsBindingObserver {
 String stageLabel(String stage) =>
     {
       'preflop': 'Pré-flop',
+      'pre_flop': 'Pré-flop',
       'flop': 'Flop',
       'turn': 'Turn',
       'river': 'River',
       'showdown': 'Showdown',
       'waiting': 'Aguardando jogadores',
+      'waiting_for_players': 'Aguardando jogadores',
+      'complete': 'Mão encerrada',
     }[stage] ??
     'Mesa';
+
+/// Shared responsive layout for the connected table and visual review fixtures.
+class TablePlayArea extends StatelessWidget {
+  const TablePlayArea({
+    super.key,
+    required this.realtime,
+    required this.heroId,
+    required this.now,
+    required this.onSeat,
+    this.bigBlind = 0,
+    this.snapshot,
+  });
+  final PokerRealtime realtime;
+  final TableSnapshot? snapshot;
+  final String heroId;
+  final int now, bigBlind;
+  final void Function(Seat) onSeat;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final board = TableFelt(
+        snapshot: snapshot ?? realtime.snapshot!,
+        heroId: heroId,
+        now: now,
+        onSeat: onSeat,
+      );
+      final actions = ActionDock(realtime: realtime, bigBlind: bigBlind);
+      return constraints.maxWidth > 650 &&
+              constraints.maxWidth > constraints.maxHeight
+          ? Row(
+              children: [
+                Expanded(child: board),
+                SizedBox(
+                  width: 300,
+                  child: SingleChildScrollView(child: actions),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Expanded(child: board),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .45,
+                  ),
+                  child: SingleChildScrollView(child: actions),
+                ),
+              ],
+            );
+    },
+  );
+}
 
 class TableFelt extends StatelessWidget {
   const TableFelt({
@@ -687,115 +714,264 @@ class TableFelt extends StatelessWidget {
     builder: (context, constraints) {
       final largeText = MediaQuery.textScalerOf(context).scale(14) > 19;
       if (largeText ||
-          constraints.maxHeight < 430 ||
-          constraints.maxWidth < 350) {
+          constraints.maxHeight < 270 ||
+          constraints.maxWidth < 300) {
         return expandedLayout(context);
       }
       final seats = snapshot.seats;
       final heroIndex = seats.indexWhere((seat) => seat.playerId == heroId);
-      final ordered = heroIndex < 0
+      final opponents = heroIndex < 0
           ? seats.toList()
           : [...seats.skip(heroIndex + 1), ...seats.take(heroIndex)];
       final width = constraints.maxWidth;
       final height = constraints.maxHeight;
-      const slots = [
-        Offset(.03, .85),
-        Offset(.03, .56),
-        Offset(.03, .27),
-        Offset(.27, .01),
-        Offset(.73, .01),
-        Offset(.97, .27),
-        Offset(.97, .56),
-        Offset(.97, .85),
-      ];
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(100),
-          gradient: RadialGradient(colors: PokerAppearance.feltColors),
-          border: Border.all(color: PokerAppearance.railColor, width: 3),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: 90,
-              right: 90,
-              top: height * .32,
-              bottom: height * .12,
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    const PokerLogo(size: 26),
-                    const SizedBox(height: 16),
-                    Text(
-                      'POTE ${chips(snapshot.pots.fold<int>(0, (sum, pot) => sum + pot.amount.toInt()))}',
-                      style: TextStyle(
-                        color: PokerAppearance.feltValueColor,
-                        fontFamily: PokerTheme.mono,
-                        fontWeight: FontWeight.bold,
-                      ),
+      final landscape = width > height;
+      final seatWidth = width < 350 ? 76.0 : 88.0;
+      final seatHeight = 82.0;
+      final boardWidth = landscape
+          ? (width - seatWidth * 2 - 40).clamp(150.0, 230.0)
+          : width - seatWidth * 2 - 18;
+      final cardWidth = ((boardWidth - 16) / 5).clamp(24.0, 40.0);
+      final count = opponents.length + 1;
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            left: landscape ? 35 : 25,
+            right: landscape ? 35 : 25,
+            top: 34,
+            bottom: 30,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(landscape ? height : width),
+                color: PokerAppearance.railColor,
+                border: Border.all(
+                  color: Color.lerp(
+                    PokerAppearance.railColor,
+                    PokerColors.gold,
+                    .42,
+                  )!,
+                  width: 3,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(11),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(
+                      landscape ? height : width,
                     ),
-                    const SizedBox(height: 12),
-                    PlayingCards(snapshot.board, compact: true),
-                    if (snapshot.boardTwo.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: PlayingCards(snapshot.boardTwo, compact: true),
-                      ),
-                    if (snapshot.stage == 'complete')
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          snapshot.winners
-                              .map(
-                                (id) =>
-                                    seats
-                                        .where((s) => s.playerId == id)
-                                        .firstOrNull
-                                        ?.name ??
-                                    'Jogador',
-                              )
-                              .join(' e '),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    if (snapshot.nextHandUnixMs.toInt() > now)
-                      Text(
-                        'Próxima mão em ${((snapshot.nextHandUnixMs.toInt() - now) / 1000).ceil()}s',
-                        textAlign: TextAlign.center,
-                      ),
-                    if (snapshot.runoutCards.isNotEmpty)
-                      TextButton(
-                        onPressed: () => showModalBottomSheet<void>(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (_) => SafeArea(
-                            child: SizedBox(
-                              height: MediaQuery.sizeOf(context).height * .7,
-                              child: expandedLayout(context),
-                            ),
-                          ),
-                        ),
-                        child: const Text('Ver rabbit hunt'),
-                      ),
-                  ],
+                    gradient: RadialGradient(
+                      colors: PokerAppearance.feltColors,
+                      radius: .85,
+                    ),
+                    border: Border.all(color: PokerColors.feltDark, width: 2),
+                  ),
                 ),
               ),
             ),
-            for (var i = 0; i < ordered.length && i < 8; i++)
-              Positioned(
-                left: (slots[i].dx * (width - 106)).clamp(0, width - 106),
-                top: slots[i].dy * (height - 100),
-                width: 90,
-                child: CompactSeat(
-                  seat: ordered[i],
-                  snapshot: snapshot,
-                  now: now,
-                  onTap: () => onSeat(ordered[i]),
-                ),
+          ),
+          Align(
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: boardWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (height > 340) ...[
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        PokerLogo(size: 21),
+                        SizedBox(width: 8),
+                        Text(
+                          'CTECH',
+                          style: TextStyle(
+                            fontSize: 12,
+                            letterSpacing: 3,
+                            fontWeight: FontWeight.w700,
+                            color: PokerColors.feltText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Text(
+                    'POTE ${chips(snapshot.pots.fold<int>(0, (sum, pot) => sum + pot.amount.toInt()))}',
+                    style: TextStyle(
+                      color: PokerAppearance.feltValueColor,
+                      fontFamily: PokerTheme.mono,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (var i = 0; i < 5; i++)
+                        Padding(
+                          padding: EdgeInsets.only(right: i < 4 ? 4 : 0),
+                          child: i < snapshot.board.length
+                              ? PlayingCard(snapshot.board[i], width: cardWidth)
+                              : Container(
+                                  width: cardWidth,
+                                  height: cardWidth * 512 / 370.76,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(3),
+                                    border: Border.all(
+                                      color: const Color(0x40e3f1ea),
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      '·',
+                                      style: TextStyle(
+                                        color: Color(0x60e3f1ea),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                    ],
+                  ),
+                  if (snapshot.boardTwo.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: PlayingCards(
+                        snapshot.boardTwo,
+                        cardWidth: cardWidth,
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (var i = 0; i < 4; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 5),
+                          child: Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color:
+                                  i <=
+                                      [
+                                        'pre_flop',
+                                        'flop',
+                                        'turn',
+                                        'river',
+                                      ].indexOf(
+                                        snapshot.stage == 'preflop'
+                                            ? 'pre_flop'
+                                            : snapshot.stage,
+                                      )
+                                  ? PokerColors.gold
+                                  : const Color(0x66e3f1ea),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          {
+                                'pre_flop': 'Pré-flop',
+                                'preflop': 'Pré-flop',
+                                'flop': 'Flop',
+                                'turn': 'Turn',
+                                'river': 'River',
+                                'showdown': 'Showdown',
+                                'complete': 'Mão encerrada',
+                                'waiting_for_players': 'Aguardando jogadores',
+                              }[snapshot.stage] ??
+                              '',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: PokerColors.feltText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (snapshot.stage == 'complete' &&
+                      snapshot.winners.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        snapshot.winners
+                            .map(
+                              (id) =>
+                                  seats
+                                      .where((s) => s.playerId == id)
+                                      .firstOrNull
+                                      ?.name ??
+                                  'Jogador',
+                            )
+                            .join(' e '),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: PokerColors.gold),
+                      ),
+                    ),
+                  if (snapshot.nextHandUnixMs.toInt() > now)
+                    Text(
+                      'Próxima mão em ${((snapshot.nextHandUnixMs.toInt() - now) / 1000).ceil()}s',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  if (snapshot.runoutCards.isNotEmpty)
+                    TextButton(
+                      onPressed: () => showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => SafeArea(
+                          child: SizedBox(
+                            height: MediaQuery.sizeOf(context).height * .7,
+                            child: expandedLayout(context),
+                          ),
+                        ),
+                      ),
+                      child: const Text('Ver rabbit hunt'),
+                    ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+          for (var i = 0; i < opponents.length; i++)
+            Positioned(
+              left:
+                  6 +
+                  (width - seatWidth - 12) *
+                      (.5 +
+                          math.cos(
+                                math.pi / 2 + (i + 1) * math.pi * 2 / count,
+                              ) *
+                              .5),
+              top:
+                  8 +
+                  (height - seatHeight - 16) *
+                      (.5 +
+                          math.sin(
+                                math.pi / 2 + (i + 1) * math.pi * 2 / count,
+                              ) *
+                              .5),
+              width: seatWidth,
+              child: CompactSeat(
+                seat: opponents[i],
+                snapshot: snapshot,
+                now: now,
+                onTap: () => onSeat(opponents[i]),
+              ),
+            ),
+        ],
       );
     },
   );
@@ -815,25 +991,6 @@ class TableFelt extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: opponents
-                  .map(
-                    (seat) => SizedBox(
-                      width: 112,
-                      child: SeatTile(
-                        seat: seat,
-                        snapshot: snapshot,
-                        now: now,
-                        onTap: () => onSeat(seat),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 24),
             Text(
               'POTE ${chips(snapshot.pots.fold<int>(0, (sum, p) => sum + p.amount.toInt()))}',
               style: TextStyle(
@@ -885,6 +1042,25 @@ class TableFelt extends StatelessWidget {
               Text(
                 'Próxima mão em ${((snapshot.nextHandUnixMs.toInt() - now) / 1000).ceil()}s',
               ),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: opponents
+                  .map(
+                    (seat) => SizedBox(
+                      width: 112,
+                      child: SeatTile(
+                        seat: seat,
+                        snapshot: snapshot,
+                        now: now,
+                        onTap: () => onSeat(seat),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
             const SizedBox(height: 16),
           ],
         ),
@@ -915,53 +1091,88 @@ class CompactSeat extends StatelessWidget {
         : snapshot.smallBlindPlayerId == seat.playerId
         ? 'SB'
         : '';
+    final state = seat.state == 'folded'
+        ? 'Fold'
+        : seat.connectionState == 'disconnected'
+        ? 'Offline'
+        : seat.state == 'all_in'
+        ? 'All-in'
+        : '';
+    final name = seat.name.isEmpty ? 'Jogador' : seat.name;
     return Semantics(
       button: true,
-      label: '${seat.name}, ${chips(seat.stack.toInt())} fichas, ${seat.state}',
+      label:
+          '$name, ${chips(seat.stack.toInt())} fichas, $state${active ? ', sua vez' : ''}',
       child: InkWell(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(6),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
           decoration: BoxDecoration(
             color: PokerColors.seat,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: active ? PokerColors.gold : PokerColors.seatBorder,
-              width: 2,
+              width: active ? 2 : 1,
             ),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                seat.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Opacity(
+                      opacity: seat.state == 'folded' ? .45 : 1,
+                      child: PlayingCards(seat.holeCards, cardWidth: 17),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  _SeatAvatar(name: name, url: seat.avatarUrl, size: 22),
+                ],
               ),
+              const SizedBox(height: 4),
               Text(
-                '${chips(seat.stack.toInt())} $role',
+                name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '${chips(seat.stack.toInt())}${role.isEmpty ? '' : ' · $role'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
                   fontFamily: PokerTheme.mono,
                   color: PokerColors.gold,
                 ),
               ),
-              PlayingCards(seat.holeCards, compact: true),
               if (active)
                 Text(
                   '${((snapshot.actionDeadlineUnixMs.toInt() - now) / 1000).ceil().clamp(0, 999)}s',
-                  style: const TextStyle(fontSize: 11),
+                  style: const TextStyle(fontSize: 10, color: PokerColors.gold),
+                )
+              else if (state.isNotEmpty)
+                Text(
+                  state,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: PokerColors.muted,
+                  ),
                 ),
-              if (seat.state == 'folded')
-                const Text('Desistiu', style: TextStyle(fontSize: 10)),
+              if (seat.contributed > Int64.ZERO)
+                Text(
+                  chips(seat.contributed.toInt()),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: PokerColors.feltValue,
+                  ),
+                ),
               for (final reaction in snapshot.reactions.where(
                 (r) =>
                     (r.targetPlayerId.isEmpty
@@ -970,11 +1181,48 @@ class CompactSeat extends StatelessWidget {
                         seat.playerId &&
                     r.expiresAt.toInt() > now,
               ))
-                Text(reactionGlyphs[reaction.reactionId] ?? ''),
+                Text(
+                  reactionGlyphs[reaction.reactionId] ?? '',
+                  style: const TextStyle(fontSize: 14),
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SeatAvatar extends StatelessWidget {
+  const _SeatAvatar({required this.name, required this.url, this.size = 28});
+  final String name, url;
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      color: PokerColors.brand,
+      child: Text(
+        name.trim().isEmpty ? '?' : name.trim().characters.first.toUpperCase(),
+        style: TextStyle(
+          fontSize: size * .4,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+    );
+    return ClipOval(
+      child: url.isEmpty
+          ? fallback
+          : Image.network(
+              url,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            ),
     );
   }
 }
@@ -1086,12 +1334,12 @@ class ActionDock extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Você · ${chips(hero.stack.toInt())}',
+                        'Você  ·  ${chips(hero.stack.toInt())} fichas',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       if (hero.handCategory.isNotEmpty) Text(hero.handCategory),
                       Text(
-                        'Reserva ${(hero.timeBankMs.toInt() / 1000).floor()}s',
+                        'Reserva de tempo · ${(hero.timeBankMs.toInt() / 1000).floor()}s',
                       ),
                     ],
                   ),
@@ -1140,8 +1388,8 @@ class ActionDock extends StatelessWidget {
                         : null,
                     child: Text(
                       {
-                        'fold': 'Desistir',
-                        'check': 'Passar',
+                        'fold': 'Fold',
+                        'check': 'Check',
                         'call': 'Pagar ${chips(legal.callAmount.toInt())}',
                       }[action]!,
                     ),
@@ -1175,7 +1423,7 @@ class ActionDock extends StatelessWidget {
                 for (final e in {
                   '': 'Limpar pré-seleção',
                   'check_fold': 'Passar ou desistir',
-                  'fold': 'Desistir',
+                  'fold': 'Fold',
                   'call': 'Pagar valor atual',
                   'call_any': 'Pagar qualquer valor',
                   'all_in': 'All-in',
@@ -1415,7 +1663,7 @@ class _ChatPanelState extends State<ChatPanel> {
                             text.clear();
                           }
                         : null,
-                    icon: const Icon(Icons.send),
+                    icon: const PokerIcon(PokerIcons.send),
                   ),
                 ),
               ),

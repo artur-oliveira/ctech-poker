@@ -186,3 +186,22 @@ Web continua separada de fidelidade de logo/paleta/tipografia.
 - Não usar azul-petróleo ou dourado como identidade global alternativa.
 - Não alterar a fonte por uma escolha padrão de Material/iOS.
 - Não declarar paridade visual de todas as telas a partir de um golden da mesa.
+
+## Revisão de consistência com o web — 17/09/2026
+
+Esta revisão substitui as descrições anteriores de ícones Material e cartas
+pintadas no Flutter: os ícones explícitos agora são SVGs Lucide da mesma instalação
+do web, com 1,8 de traço e tamanho herdado do controle. Voltar/fechar também usam
+Lucide pelo tema. Cartas usam **os mesmos 520 SVGs e verso vermelho**, incluindo
+os dez baralhos; não há `SuitPainter` ou arte de carta independente.
+
+A navegação passa a Lobby / Mãos / Pessoas / Loja / Perfil, com rótulos de uma
+linha e seleção em vinho. Lobby usa os nomes e a escolha de blinds/tamanho do web.
+Estatísticas movem a explicação longa para informação sob demanda. Conquistas
+usam a arte do catálogo. Na mesa, os assentos ficam na borda, com avatar/iniciais,
+o board possui cinco posições e a rodada é marcada por pontos como no renderer
+web. Tamanhos insuficientes ou fonte ampliada continuam com alternativa rolável.
+
+A nomenclatura de modo é **Fichas / Dinheiro real**. Não usar “fichas recreativas”,
+“Escolha o seu ritmo” ou “Minha jornada”. A ativação financeira não é consequência
+da revisão visual. Detalhes e fontes em [docs/web-parity-review.md](docs/web-parity-review.md).

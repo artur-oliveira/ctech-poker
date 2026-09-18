@@ -1,3 +1,4 @@
+import 'poker_icon.dart';
 import 'report_player.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
@@ -58,7 +59,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
                 );
               }
             }),
-            icon: const Icon(Icons.person_add_alt),
+            icon: const PokerIcon(PokerIcons.userRoundPlus),
             label: const Text('Adicionar por código'),
           ),
         ),
@@ -91,7 +92,9 @@ class _PeopleScreenState extends State<PeopleScreen> {
                       : const {},
                   item: (player, reload) => Card(
                     child: ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      leading: const CircleAvatar(
+                        child: PokerIcon(PokerIcons.userRound),
+                      ),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute<void>(
