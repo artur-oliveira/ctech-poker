@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
@@ -27,16 +28,62 @@ type RankInfo struct {
 	Total int64 `json:"total"`
 }
 
-type statsStore interface {
-	IncrementStats(ctx context.Context, playerID, name, mode string, playedDelta, wonDelta int) error
-	IncrementAchievementPoints(context.Context, string, string, int) error
-	Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error)
-	PlayerEntry(ctx context.Context, playerID, mode string) (*Entry, error)
-	RankOf(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error)
+// Board names one ranking: a currency mode, the metric it is ordered by, and
+// the period it covers. It replaces the three positional strings these calls
+// used to take — all three are strings, and swapping two of them at a call
+// site would have silently served the wrong board.
+type Board struct {
+	Mode   string
+	Metric string
+	Period string
 }
-type Service struct{ store statsStore }
 
-func NewServiceWithStore(store statsStore) *Service { return &Service{store: store} }
+// resolve validates the metric and period and returns the stored period key
+// (see periodKey) the store scopes rows by.
+func (b Board) resolve(now time.Time) (metric, bucket string, err error) {
+	metric, err = normalizeMetric(b.Metric)
+	if err != nil {
+		return "", "", err
+	}
+	period, err := normalizePeriod(b.Period)
+	if err != nil {
+		return "", "", err
+	}
+	return metric, periodKey(period, now), nil
+}
+
+type statsStore interface {
+	IncrementStats(ctx context.Context, playerID, name, mode, periodKey string, playedDelta, wonDelta int) error
+	IncrementAchievementPoints(ctx context.Context, playerID, mode, periodKey string, points int) error
+	Top(ctx context.Context, mode, periodKey, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error)
+	PlayerEntry(ctx context.Context, playerID, mode, periodKey string) (*Entry, error)
+	RankOf(ctx context.Context, mode, periodKey, metric string, entry Entry) (rank int64, total int64, err error)
+}
+
+type Service struct {
+	store statsStore
+	// now is the clock the monthly bucket is derived from; a test pins it to
+	// drive a month rollover without waiting for one.
+	now func() time.Time
+}
+
+func NewServiceWithStore(store statsStore) *Service {
+	return &Service{store: store, now: time.Now}
+}
+
+// WithClock replaces the clock the monthly period key is derived from.
+func (s *Service) WithClock(now func() time.Time) *Service {
+	s.now = now
+	return s
+}
+
+// writeScopes are the period keys every per-hand counter is written to: the
+// lifetime board ("") plus the current month. Two writes per participant per
+// hand instead of one — the cost this module pays for a board that resets, and
+// the ceiling TestRecordHandWriteBudget pins (issue #204).
+func (s *Service) writeScopes() []string {
+	return []string{"", MonthKey(s.now())}
+}
 
 // RecordHand updates every participant's counters. names supplies the
 // already-known display name for each player_id (the table actor resolves it
@@ -57,8 +104,10 @@ func (s *Service) RecordHand(ctx context.Context, mode string, outcome hand.Hand
 		if winners[id] {
 			won = 1
 		}
-		if err := s.store.IncrementStats(ctx, id, names[id], mode, 1, won); err != nil {
-			return err
+		for _, scope := range s.writeScopes() {
+			if err := s.store.IncrementStats(ctx, id, names[id], mode, scope, 1, won); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -67,8 +116,10 @@ func (s *Service) RecordHand(ctx context.Context, mode string, outcome hand.Hand
 func (s *Service) RecordUnlocks(ctx context.Context, mode string, unlocks []achievements.TierUnlock) error {
 	for _, unlock := range unlocks {
 		if unlock.Stars > 0 {
-			if err := s.store.IncrementAchievementPoints(ctx, unlock.PlayerID, mode, unlock.Stars); err != nil {
-				return err
+			for _, scope := range s.writeScopes() {
+				if err := s.store.IncrementAchievementPoints(ctx, unlock.PlayerID, mode, scope, unlock.Stars); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -89,8 +140,8 @@ func normalizeMetric(metric string) (string, error) {
 	return metric, nil
 }
 
-func (s *Service) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
-	metric, err := normalizeMetric(metric)
+func (s *Service) Top(ctx context.Context, board Board, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+	metric, period, err := board.resolve(s.now())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -100,7 +151,7 @@ func (s *Service) Top(ctx context.Context, mode, metric string, limit int, start
 	if limit > 100 {
 		limit = 100
 	}
-	entries, lastKey, err := s.store.Top(ctx, mode, metric, limit, startKey)
+	entries, lastKey, err := s.store.Top(ctx, board.Mode, period, metric, limit, startKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -150,12 +201,12 @@ func (s *Service) Top(ctx context.Context, mode, metric string, limit int, start
 // (nil, nil) when playerID has no stats row for mode yet (never played a
 // hand there this mode) — the "unranked yet" case the caller should render
 // as such rather than as an error.
-func (s *Service) MyRank(ctx context.Context, mode, metric, playerID string) (*RankInfo, error) {
-	metric, err := normalizeMetric(metric)
+func (s *Service) MyRank(ctx context.Context, board Board, playerID string) (*RankInfo, error) {
+	metric, period, err := board.resolve(s.now())
 	if err != nil {
 		return nil, err
 	}
-	entry, err := s.store.PlayerEntry(ctx, playerID, mode)
+	entry, err := s.store.PlayerEntry(ctx, playerID, board.Mode, period)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +223,7 @@ func (s *Service) MyRank(ctx context.Context, mode, metric, playerID string) (*R
 	// GSI right now (entry.WinRate as decoded), not a value recomputed here
 	// — the two can differ for a moment during the two-write
 	// IncrementStats/syncWinRateRow sequence (see store.go).
-	rank, total, err := s.store.RankOf(ctx, mode, metric, *entry)
+	rank, total, err := s.store.RankOf(ctx, board.Mode, period, metric, *entry)
 	if err != nil {
 		return nil, err
 	}

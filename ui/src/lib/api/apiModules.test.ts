@@ -54,7 +54,19 @@ describe('API domain modules', () => {
     });
     // Issue #104: the daily-reward wrappers live in `dailyReward.ts` alone —
     // this module is leaderboard reads only.
-    expect(client.get).toHaveBeenCalledWith('/v1.0/leaderboard/me', {params: {mode: 'real'}});
+    // Both reads name their board explicitly. The lifetime default is what the
+    // server would assume anyway, but sending it keeps the request readable in
+    // a network log next to the monthly one the ranking page asks for.
+    expect(client.get).toHaveBeenCalledWith('/v1.0/leaderboard', {
+      params: {mode: 'real', cursor: 'rank-next', period: 'all', metric: 'hands_won'},
+    });
+    expect(client.get).toHaveBeenCalledWith('/v1.0/leaderboard/me', {
+      params: {mode: 'real', period: 'all', metric: 'hands_won'},
+    });
+    await expect(myRank('real', {period: 'month', metric: 'win_rate'})).resolves.toBeDefined();
+    expect(client.get).toHaveBeenLastCalledWith('/v1.0/leaderboard/me', {
+      params: {mode: 'real', period: 'month', metric: 'win_rate'},
+    });
   });
   
   test('encodes identifiers for player profile, hands and public shares', async () => {

@@ -2,6 +2,7 @@ package leaderboard
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -11,8 +12,18 @@ import (
 
 type memStats struct{ rows map[string]*Entry }
 
-func (m *memStats) IncrementStats(_ context.Context, id, name, mode string, p, w int) error {
-	key := mode + "#" + id
+// rows are keyed by board (mode, plus the period bucket when there is one)
+// then player id, so the lifetime and monthly copies of the same player are
+// distinct rows the way they are in DynamoDB.
+func rowKey(mode, periodKey, id string) string { return boardKey(mode, periodKey) + "#" + id }
+
+func inBoard(key, board string) bool {
+	rest, ok := strings.CutPrefix(key, board+"#")
+	return ok && !strings.Contains(rest, "#")
+}
+
+func (m *memStats) IncrementStats(_ context.Context, id, name, mode, periodKey string, p, w int) error {
+	key := rowKey(mode, periodKey, id)
 	if m.rows[key] == nil {
 		m.rows[key] = &Entry{PlayerID: id}
 	}
@@ -23,25 +34,25 @@ func (m *memStats) IncrementStats(_ context.Context, id, name, mode string, p, w
 	m.rows[key].HandsWon += w
 	return nil
 }
-func (m *memStats) IncrementAchievementPoints(_ context.Context, id, mode string, points int) error {
-	key := mode + "#" + id
+func (m *memStats) IncrementAchievementPoints(_ context.Context, id, mode, periodKey string, points int) error {
+	key := rowKey(mode, periodKey, id)
 	if m.rows[key] == nil {
 		m.rows[key] = &Entry{PlayerID: id}
 	}
 	m.rows[key].AchievementPoints += points
 	return nil
 }
-func (m *memStats) Top(_ context.Context, mode, _ string, _ int, _ map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+func (m *memStats) Top(_ context.Context, mode, periodKey, _ string, _ int, _ map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	out := []Entry{}
 	for key, e := range m.rows {
-		if len(key) > len(mode) && key[:len(mode)+1] == mode+"#" {
+		if inBoard(key, boardKey(mode, periodKey)) {
 			out = append(out, *e)
 		}
 	}
 	return out, nil, nil
 }
-func (m *memStats) PlayerEntry(_ context.Context, id, mode string) (*Entry, error) {
-	e, ok := m.rows[mode+"#"+id]
+func (m *memStats) PlayerEntry(_ context.Context, id, mode, periodKey string) (*Entry, error) {
+	e, ok := m.rows[rowKey(mode, periodKey, id)]
 	if !ok {
 		return nil, nil
 	}
@@ -51,7 +62,7 @@ func (m *memStats) PlayerEntry(_ context.Context, id, mode string) (*Entry, erro
 // RankOf mirrors Store.RankOf's semantics (better-than count, then
 // tied-before-by-player-id count, then +1) over the in-memory rows, so the
 // fake tests the same rank contract the real GSI-backed store implements.
-func (m *memStats) RankOf(_ context.Context, mode, metric string, entry Entry) (int64, int64, error) {
+func (m *memStats) RankOf(_ context.Context, mode, periodKey, metric string, entry Entry) (int64, int64, error) {
 	score := func(e *Entry) float64 {
 		switch metric {
 		case "hands_played":
@@ -65,7 +76,7 @@ func (m *memStats) RankOf(_ context.Context, mode, metric string, entry Entry) (
 	mine := score(&entry)
 	var better, tied, total int64
 	for key, e := range m.rows {
-		if len(key) <= len(mode) || key[:len(mode)+1] != mode+"#" {
+		if !inBoard(key, boardKey(mode, periodKey)) {
 			continue
 		}
 		total++
@@ -97,7 +108,7 @@ func TestRecordHandAndTop(t *testing.T) {
 	if m.rows["sandbox#p2"].PlayerName != "" {
 		t.Fatalf("expected p2's unknown name to stay blank rather than overwrite with empty, got %+v", m.rows["sandbox#p2"])
 	}
-	top, _, err := s.Top(context.Background(), "sandbox", "win_rate", 10, nil)
+	top, _, err := s.Top(context.Background(), Board{Mode: "sandbox", Metric: "win_rate"}, 10, nil)
 	if err != nil || top[0].PlayerID != "p1" {
 		t.Fatalf("top=%+v err=%v", top, err)
 	}
@@ -120,7 +131,7 @@ func TestMyRank(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	info, err := s.MyRank(context.Background(), "sandbox", "hands_won", "p1")
+	info, err := s.MyRank(context.Background(), Board{Mode: "sandbox", Metric: "hands_won"}, "p1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +139,7 @@ func TestMyRank(t *testing.T) {
 		t.Fatalf("expected p1 rank 1 of 3, got %+v", info)
 	}
 
-	info, err = s.MyRank(context.Background(), "sandbox", "hands_won", "p3")
+	info, err = s.MyRank(context.Background(), Board{Mode: "sandbox", Metric: "hands_won"}, "p3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +147,7 @@ func TestMyRank(t *testing.T) {
 		t.Fatalf("expected p3 rank 3 of 3, got %+v", info)
 	}
 
-	info, err = s.MyRank(context.Background(), "sandbox", "hands_won", "ghost")
+	info, err = s.MyRank(context.Background(), Board{Mode: "sandbox", Metric: "hands_won"}, "ghost")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +155,7 @@ func TestMyRank(t *testing.T) {
 		t.Fatalf("expected unranked (nil) for a player with no stats row, got %+v", info)
 	}
 
-	if _, err := s.MyRank(context.Background(), "sandbox", "not_a_metric", "p1"); err == nil {
+	if _, err := s.MyRank(context.Background(), Board{Mode: "sandbox", Metric: "not_a_metric"}, "p1"); err == nil {
 		t.Fatal("expected error for unsupported metric")
 	}
 }
@@ -158,7 +169,7 @@ func TestWinRateMinHandsFloor(t *testing.T) {
 	}}
 	s := NewServiceWithStore(m)
 
-	top, _, err := s.Top(context.Background(), "sandbox", "win_rate", 10, nil)
+	top, _, err := s.Top(context.Background(), Board{Mode: "sandbox", Metric: "win_rate"}, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +183,7 @@ func TestWinRateMinHandsFloor(t *testing.T) {
 	}
 
 	// Other metrics are unaffected — the low-hand player still ranks there.
-	byPlayed, _, err := s.Top(context.Background(), "sandbox", "hands_won", 10, nil)
+	byPlayed, _, err := s.Top(context.Background(), Board{Mode: "sandbox", Metric: "hands_won"}, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -32,6 +32,18 @@ type leaderboardHandlers struct {
 //
 // `GET /leaderboard/me` stays behind `auth`: it derives the player from the
 // JWT `sub`, so without a user token it has nobody to rank.
+// boardParam reads the board a request asks for. The period defaults to the
+// lifetime board, not the monthly one: the web client asks for `month`
+// explicitly (that is the ranking players see by default there), while the CLI
+// and any older client keep the board they have always been served.
+func boardParam(c fiber.Ctx) leaderboard.Board {
+	return leaderboard.Board{
+		Mode:   currencyModeParam(c),
+		Metric: c.Query("metric", "hands_won"),
+		Period: c.Query("period", leaderboard.PeriodAll),
+	}
+}
+
 func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service, readLimiter *RateLimiter) {
 	h := &leaderboardHandlers{svc: svc, players: players}
 	router.Get("/leaderboard", rateLimit(readLimiter, ipKey("leaderboard:top")), h.top)
@@ -68,7 +80,7 @@ func (h *leaderboardHandlers) resolveNames(ctx context.Context, entries []leader
 func (h *leaderboardHandlers) top(c fiber.Ctx) error {
 	limit := limitParam(c)
 	cursor := c.Query("cursor")
-	entries, lastKey, err := h.svc.Top(c.Context(), currencyModeParam(c), c.Query("metric", "hands_won"), limit, decodeCursor(cursor))
+	entries, lastKey, err := h.svc.Top(c.Context(), boardParam(c), limit, decodeCursor(cursor))
 	if err != nil {
 		return problem.BadRequest(err.Error()).Send(c)
 	}
@@ -90,7 +102,7 @@ type meResponse struct {
 
 func (h *leaderboardHandlers) me(c fiber.Ctx) error {
 	playerID := c.Locals(localsUserID).(string)
-	info, err := h.svc.MyRank(c.Context(), currencyModeParam(c), c.Query("metric", "hands_won"), playerID)
+	info, err := h.svc.MyRank(c.Context(), boardParam(c), playerID)
 	if err != nil {
 		return problem.BadRequest(err.Error()).Send(c)
 	}

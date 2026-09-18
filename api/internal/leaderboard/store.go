@@ -62,8 +62,9 @@ func (s *Store) WithRankMirror(client valkey.Client) *Store {
 // cheaper than eagerly cascading a rename everywhere the player_id appears.
 // Skipped entirely when name is unknown, so a caller that can't resolve it
 // never blanks out a name written by a previous hand.
-func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string, playedDelta, wonDelta int) error {
-	sk := statsSK + "#" + mode
+func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode, periodKey string, playedDelta, wonDelta int) error {
+	sk := statsSKFor(mode, periodKey)
+	board := boardKey(mode, periodKey)
 	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}}
 	// gsi_win_rate_pk is deliberately NOT set here: it is a sparse key managed
 	// by syncWinRateRow once the min-hands floor (issue #63) is known from the
@@ -73,7 +74,7 @@ func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string,
 	names := map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk"}
 	values := map[string]types.AttributeValue{
 		":played": &types.AttributeValueMemberN{Value: strconv.Itoa(playedDelta)}, ":won": &types.AttributeValueMemberN{Value: strconv.Itoa(wonDelta)},
-		":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: mode},
+		":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: board},
 	}
 	if name != "" {
 		updateExpr += ", #name = :name"
@@ -91,7 +92,7 @@ func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string,
 		return fmt.Errorf("leaderboard: increment stats: %w", err)
 	}
 	played, won := number(out.Attributes["hands_played"]), number(out.Attributes["hands_won"])
-	return s.syncWinRateRow(ctx, playerID, mode, played, won, isRanked(out.Attributes))
+	return s.syncWinRateRow(ctx, playerID, mode, periodKey, played, won, isRanked(out.Attributes))
 }
 
 // isRanked reports whether a stats row currently carries the sparse
@@ -118,8 +119,8 @@ func isRanked(attrs map[string]types.AttributeValue) bool {
 //
 // The condition pins the exact counter version observed, so a slower writer
 // can never overwrite a newer rate; on conflict it reloads and recomputes.
-func (s *Store) syncWinRateRow(ctx context.Context, playerID, mode string, played, won int64, ranked bool) error {
-	sk := statsSK + "#" + mode
+func (s *Store) syncWinRateRow(ctx context.Context, playerID, mode, periodKey string, played, won int64, ranked bool) error {
+	sk := statsSKFor(mode, periodKey)
 	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}}
 	for attempt := 0; attempt < 5; attempt++ {
 		eligible := played >= MinHandsForWinRateRank
@@ -143,7 +144,7 @@ func (s *Store) syncWinRateRow(ctx context.Context, playerID, mode string, playe
 			input.UpdateExpression = new("SET #rate = :rate, #ratepk = :mode")
 			input.ExpressionAttributeNames["#rate"] = "win_rate_score"
 			input.ExpressionAttributeValues[":rate"] = &types.AttributeValueMemberN{Value: strconv.FormatFloat(rate, 'f', 9, 64)}
-			input.ExpressionAttributeValues[":mode"] = &types.AttributeValueMemberS{Value: mode}
+			input.ExpressionAttributeValues[":mode"] = &types.AttributeValueMemberS{Value: boardKey(mode, periodKey)}
 		} else {
 			input.UpdateExpression = new("REMOVE #ratepk")
 		}
@@ -178,8 +179,8 @@ func number(value types.AttributeValue) int64 {
 // dense GSI keys the row needs to be rankable at all. It used to loop one
 // AtomicIncrement per star plus an upsert, a GetItem and a rank-key write
 // (issue #217).
-func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode string, points int) error {
-	sk := statsSK + "#" + mode
+func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode, periodKey string, points int) error {
+	sk := statsSKFor(mode, periodKey)
 	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 		Key:              map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}},
 		UpdateExpression: new("ADD #points :points SET #wonpk = :all, #playedpk = :all"),
@@ -188,7 +189,7 @@ func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode s
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":points": &types.AttributeValueMemberN{Value: strconv.Itoa(points)},
-			":all":    &types.AttributeValueMemberS{Value: mode},
+			":all":    &types.AttributeValueMemberS{Value: boardKey(mode, periodKey)},
 		},
 		ReturnValues: types.ReturnValueAllNew,
 	})
@@ -204,7 +205,7 @@ func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode s
 	if ranked == (played >= MinHandsForWinRateRank) {
 		return nil
 	}
-	return s.syncWinRateRow(ctx, playerID, mode, played, number(out.Attributes["hands_won"]), ranked)
+	return s.syncWinRateRow(ctx, playerID, mode, periodKey, played, number(out.Attributes["hands_won"]), ranked)
 }
 
 // gsiFor maps a rankable metric to its GSI name, partition-key attribute, and
@@ -220,10 +221,10 @@ func gsiFor(metric string) (index, pkField, sortField string) {
 	}
 }
 
-func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+func (s *Store) Top(ctx context.Context, mode, periodKey, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	index, key, _ := gsiFor(metric)
 	result, err := s.base.Query(ctx, dynamo.QueryOpts{
-		PK: mode, PKField: key, IndexName: index,
+		PK: boardKey(mode, periodKey), PKField: key, IndexName: index,
 		ScanIndexForward: false, Limit: limit, ExclusiveStartKey: startKey,
 	})
 	if err != nil {
@@ -243,8 +244,8 @@ func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKe
 // PlayerEntry loads a single player's stats row for mode, without going
 // through the GSI. Returns (nil, nil) when the player has no row yet (they
 // have never played a hand in this mode) — the caller's "unranked" case.
-func (s *Store) PlayerEntry(ctx context.Context, playerID, mode string) (*Entry, error) {
-	sk := statsSK + "#" + mode
+func (s *Store) PlayerEntry(ctx context.Context, playerID, mode, periodKey string) (*Entry, error) {
+	sk := statsSKFor(mode, periodKey)
 	item, err := s.base.GetItem(ctx, playerID, sk)
 	if err != nil {
 		return nil, fmt.Errorf("leaderboard: get player entry: %w", err)
@@ -275,25 +276,26 @@ func (s *Store) PlayerEntry(ctx context.Context, playerID, mode string) (*Entry,
 // for the total). It is correct but its total-count query is bounded only by
 // the mode's player base; see the maxRankCountPages comment. It stays as the
 // no-Valkey and mirror-degraded path.
-func (s *Store) RankOf(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error) {
+func (s *Store) RankOf(ctx context.Context, mode, periodKey, metric string, entry Entry) (rank int64, total int64, err error) {
+	board := boardKey(mode, periodKey)
 	if s.mirror != nil {
-		if rank, total, ok := s.rankFromMirror(ctx, mode, metric, entry); ok {
+		if rank, total, ok := s.rankFromMirror(ctx, board, metric, entry); ok {
 			return rank, total, nil
 		}
 	}
-	return s.rankByCount(ctx, mode, metric, entry)
+	return s.rankByCount(ctx, board, metric, entry)
 }
 
 // rankFromMirror answers from the sorted set, rebuilding it once if this
 // replica wins the claim. Any Valkey or DynamoDB trouble is logged and
 // reported as a miss so the caller degrades to COUNT rather than failing a
 // page view over a cache.
-func (s *Store) rankFromMirror(ctx context.Context, mode, metric string, entry Entry) (int64, int64, bool) {
-	key := rankMirrorKey(mode, metric)
+func (s *Store) rankFromMirror(ctx context.Context, board, metric string, entry Entry) (int64, int64, bool) {
+	key := rankMirrorKey(board, metric)
 	score := scoreFor(metric, entry)
 	rank, total, ok, err := s.mirror.rank(ctx, key, entry.PlayerID, score)
 	if err != nil {
-		slog.Warn("leaderboard rank mirror read failed", "err", err, "mode", mode, "metric", metric)
+		slog.Warn("leaderboard rank mirror read failed", "err", err, "board", board, "metric", metric)
 		return 0, 0, false
 	}
 	if ok {
@@ -301,15 +303,15 @@ func (s *Store) rankFromMirror(ctx context.Context, mode, metric string, entry E
 	}
 	claimed, err := s.mirror.claimRebuild(ctx, key)
 	if err != nil {
-		slog.Warn("leaderboard rank mirror claim failed", "err", err, "mode", mode, "metric", metric)
+		slog.Warn("leaderboard rank mirror claim failed", "err", err, "board", board, "metric", metric)
 		return 0, 0, false
 	}
 	if !claimed {
 		return 0, 0, false
 	}
-	members, err := s.loadBoardMembers(ctx, mode, metric)
+	members, err := s.loadBoardMembers(ctx, board, metric)
 	if err != nil {
-		slog.Warn("leaderboard rank mirror rebuild failed", "err", err, "mode", mode, "metric", metric)
+		slog.Warn("leaderboard rank mirror rebuild failed", "err", err, "board", board, "metric", metric)
 		// Still release the claim, otherwise nobody retries for its whole TTL.
 		if pubErr := s.mirror.publish(ctx, key, nil); pubErr != nil {
 			slog.Warn("leaderboard rank mirror release failed", "err", pubErr)
@@ -317,7 +319,7 @@ func (s *Store) rankFromMirror(ctx context.Context, mode, metric string, entry E
 		return 0, 0, false
 	}
 	if err := s.mirror.publish(ctx, key, members); err != nil {
-		slog.Warn("leaderboard rank mirror publish failed", "err", err, "mode", mode, "metric", metric)
+		slog.Warn("leaderboard rank mirror publish failed", "err", err, "board", board, "metric", metric)
 		return 0, 0, false
 	}
 	rank, total, ok, err = s.mirror.rank(ctx, key, entry.PlayerID, score)
@@ -327,12 +329,12 @@ func (s *Store) rankFromMirror(ctx context.Context, mode, metric string, entry E
 	return rank, total, true
 }
 
-func (s *Store) rankByCount(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error) {
+func (s *Store) rankByCount(ctx context.Context, board, metric string, entry Entry) (rank int64, total int64, err error) {
 	index, pkField, sortField := gsiFor(metric)
 	score := scoreFor(metric, entry)
 	scoreAV := &types.AttributeValueMemberN{Value: formatScore(score)}
 
-	better, err := s.countGSI(ctx, index, pkField, mode, countOpts{
+	better, err := s.countGSI(ctx, index, pkField, board, countOpts{
 		sortCond:   "#sort > :val",
 		sortNames:  map[string]string{"#sort": sortField},
 		sortValues: map[string]types.AttributeValue{":val": scoreAV},
@@ -340,7 +342,7 @@ func (s *Store) rankByCount(ctx context.Context, mode, metric string, entry Entr
 	if err != nil {
 		return 0, 0, fmt.Errorf("leaderboard: count better: %w", err)
 	}
-	tiedBefore, err := s.countGSI(ctx, index, pkField, mode, countOpts{
+	tiedBefore, err := s.countGSI(ctx, index, pkField, board, countOpts{
 		sortCond:   "#sort = :val",
 		sortNames:  map[string]string{"#sort": sortField},
 		sortValues: map[string]types.AttributeValue{":val": scoreAV},
@@ -352,7 +354,7 @@ func (s *Store) rankByCount(ctx context.Context, mode, metric string, entry Entr
 	if err != nil {
 		return 0, 0, fmt.Errorf("leaderboard: count tied: %w", err)
 	}
-	total, err = s.countGSI(ctx, index, pkField, mode, countOpts{})
+	total, err = s.countGSI(ctx, index, pkField, board, countOpts{})
 	if err != nil {
 		return 0, 0, fmt.Errorf("leaderboard: count total: %w", err)
 	}
@@ -399,9 +401,9 @@ type countOpts struct {
 // exhausted (or maxRankCountPages) and summing each page's Count — which
 // DynamoDB reports post-filter, so a FilterExpression in opts is reflected
 // correctly in the total.
-func (s *Store) countGSI(ctx context.Context, index, pkField, mode string, opts countOpts) (int64, error) {
+func (s *Store) countGSI(ctx context.Context, index, pkField, board string, opts countOpts) (int64, error) {
 	names := map[string]string{"#pk": pkField}
-	values := map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: mode}}
+	values := map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: board}}
 	cond := "#pk = :pk"
 	if opts.sortCond != "" {
 		cond += " AND " + opts.sortCond

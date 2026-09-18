@@ -183,14 +183,22 @@ func TestHandPipelineDynamoBudget(t *testing.T) {
 	//                quadratic term, and the reason a nine-handed hand costs
 	//                roughly four times a six-handed one.
 	//
-	// Measured today (see the t.Logf below): 15 calls / 15 written items at 2
-	// seats, 37 / 49 at 6, 64 / 85 at 9. The ceilings carry only enough
+	// The monthly leaderboard (2026-09) raised both per-seat terms by exactly
+	// one: every hand now counts on two boards — the lifetime row and the
+	// current month's — so leaderboard writes one extra item per participant.
+	// That is the whole cost of a ranking that resets, and it is deliberate;
+	// see docs/plans/2026-09-17-monthly-leaderboard.md. A seat on the win_rate
+	// board costs a second write per board, pinned separately by
+	// leaderboard.TestRecordHandWriteBudget.
+	//
+	// Measured today (see the t.Logf below): 17 calls / 17 written items at 2
+	// seats, 43 / 55 at 6, 73 / 94 at 9. The ceilings carry only enough
 	// headroom to not be brittle — a new per-seat call or write trips them.
 	const (
 		callsPerHand      = 12
-		callsPerSeat      = 2
+		callsPerSeat      = 3
 		writeItemsPerHand = 6
-		writeItemsPerSeat = 6
+		writeItemsPerSeat = 7
 	)
 	// Every store the pipeline is supposed to reach. A hook that stops writing
 	// makes the budget look better, so the budget alone is not enough.

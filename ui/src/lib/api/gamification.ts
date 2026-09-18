@@ -27,18 +27,46 @@ export interface Entry {
  */
 export const LEADERBOARD_STALE_MS = 5 * 60 * 1000;
 
-/** The one spelling of the viewer's-rank query key. `/hands` and
- * `/leaderboard` render the same `myRank(mode)` response; they used to cache
- * it under `['leaderboard','me',mode]` and `['leaderboard-me',mode]`, so
- * walking between the two pages refetched data already in the cache. */
-export const myRankKey = (mode: WalletMode) => ['leaderboard', 'me', mode] as const;
+/* The viewer's-rank key used to be spelled two ways (`['leaderboard','me',mode]`
+ * and `['leaderboard-me',mode]`), so walking between `/hands` and `/leaderboard`
+ * refetched data already in the cache. Both now go through myRankKey below;
+ * `/hands` shows the lifetime standing, which is what the defaults resolve to. */
+/** Which window a board covers. `month` is the current calendar month in BRT
+ * (the server derives the bucket, the client only names the period); `all` is
+ * the lifetime board this page served before monthly rankings existed. */
+export type LeaderboardPeriod = 'month' | 'all';
 
-export async function leaderboard(mode: WalletMode = 'sandbox', cursor?: string) {
-  return (await apiClient.get<Page<Entry>>('/v1.0/leaderboard', {params: {mode, cursor}})).data.data;
+/** The three metrics the board can be ordered by — each backed by its own GSI
+ * server-side, so this list cannot grow without a backend change. */
+export type LeaderboardMetric = 'hands_won' | 'hands_played' | 'win_rate';
+
+/** A player needs this many hands **within the period** before they appear on
+ * the win_rate board at all (`leaderboard.MinHandsForWinRateRank`). Mirrored
+ * here only to explain the absence to the player, never to filter rows — the
+ * server already leaves sub-floor rows off the board. */
+export const MIN_HANDS_FOR_WIN_RATE = 100;
+
+export interface BoardScope {
+  period?: LeaderboardPeriod;
+  metric?: LeaderboardMetric;
+}
+
+/** The one spelling of a board's query key. Period and metric are part of it:
+ * two boards of the same mode are different data, and caching them under one
+ * key would show September's ranking under October's tab. */
+export const leaderboardKey = (mode: WalletMode, {period = 'all', metric = 'hands_won'}: BoardScope = {}) =>
+  ['leaderboard', mode, period, metric] as const;
+
+export const myRankKey = (mode: WalletMode, {period = 'all', metric = 'hands_won'}: BoardScope = {}) =>
+  ['leaderboard', 'me', mode, period, metric] as const;
+
+export async function leaderboard(mode: WalletMode = 'sandbox', cursor?: string, scope: BoardScope = {}) {
+  const {period = 'all', metric = 'hands_won'} = scope;
+  return (await apiClient.get<Page<Entry>>('/v1.0/leaderboard', {params: {mode, cursor, period, metric}})).data.data;
 }
 
 /**
- * The viewer's exact global rank + total ranked player count for mode, from
+ * The viewer's exact rank + total ranked player count on one board, from
  * `GET /v1.0/leaderboard/me` — computed server-side against the full board,
  * not just whatever page `leaderboard()` happened to fetch. `ranked: false`
  * (with `rank`/`total`/`entry` absent) means the viewer has no stats row yet
@@ -51,6 +79,7 @@ export interface MyRank {
   entry?: Entry;
 }
 
-export async function myRank(mode: WalletMode = 'sandbox'): Promise<MyRank> {
-  return (await apiClient.get<MyRank>('/v1.0/leaderboard/me', {params: {mode}})).data;
+export async function myRank(mode: WalletMode = 'sandbox', scope: BoardScope = {}): Promise<MyRank> {
+  const {period = 'all', metric = 'hands_won'} = scope;
+  return (await apiClient.get<MyRank>('/v1.0/leaderboard/me', {params: {mode, period, metric}})).data;
 }

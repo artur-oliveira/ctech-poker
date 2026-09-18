@@ -770,7 +770,7 @@ type fakeRanker struct {
 	err  error
 }
 
-func (f fakeRanker) MyRank(context.Context, string, string, string) (*leaderboard.RankInfo, error) {
+func (f fakeRanker) MyRank(context.Context, leaderboard.Board, string) (*leaderboard.RankInfo, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
