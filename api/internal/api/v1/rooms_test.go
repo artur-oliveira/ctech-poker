@@ -3,6 +3,7 @@ package v1
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -304,5 +305,49 @@ func TestPrivateRoomAccessRequiresShareCode(t *testing.T) {
 	}
 	if !privateRoomAccessAllowed(room, "guest", "", true) {
 		t.Fatal("accepted social invite grant should allow access")
+	}
+}
+
+func postCreateRoom(t *testing.T, h *roomHandlers, body string) *http.Response {
+	t.Helper()
+	app := fiber.New()
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+// #296: rule variants are sandbox-only, enforced at the endpoint — not just
+// by hiding the picker in the UI.
+func TestCreateRoomRejectsVariantOnRealMoney(t *testing.T) {
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: true}}
+	resp := postCreateRoom(t, h, `{"visibility":"private","currency_mode":"real","variant":"short_deck","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("real-money room with a variant must be rejected, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateRoomRejectsUnknownVariant(t *testing.T) {
+	resp := postCreateRoom(t, &roomHandlers{}, `{"visibility":"private","variant":"omaha","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateRoomAcceptsShortDeckOnSandbox(t *testing.T) {
+	resp := postCreateRoom(t, &roomHandlers{}, `{"visibility":"private","variant":"short_deck","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+	var room roomstore.Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		t.Fatal(err)
+	}
+	if room.Variant != roomstore.VariantShortDeck {
+		t.Fatalf("variant=%q", room.Variant)
 	}
 }

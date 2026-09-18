@@ -2,10 +2,16 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gofiber/fiber/v3"
+
+	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 // sharedCounter stands in for the fleet's Redis: several RateLimiter values
@@ -217,5 +223,40 @@ func TestNilLimiterAllows(t *testing.T) {
 	var l *RateLimiter
 	if !l.AllowFailOpen(context.Background(), wsActionKey("p1")) {
 		t.Fatal("an unwired limiter must allow (dev/test path)")
+	}
+}
+
+// #319: a rate-limited request gets a problem+json body carrying
+// retry_after_seconds set to the limiter's own fixed window, not the old
+// ad-hoc {"error": "rate_limit_exceeded"} JSON with no recovery guidance.
+func TestRateLimitMiddlewareReturnsRetryAfterSecondsFromWindow(t *testing.T) {
+	app := fiber.New()
+	rl := NewRateLimiter(nil, 1, 30*time.Second)
+	app.Get("/x", rateLimit(rl, ipKey("x")), func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	if resp, err := app.Test(req); err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("first request: err=%v status=%v", err, resp)
+	}
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/x", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("status=%d, want 429", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Type"); got != problem.ContentType {
+		t.Fatalf("content-type=%q, want %q", got, problem.ContentType)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["next_action"] != "retry" {
+		t.Fatalf("next_action=%v, want retry", body["next_action"])
+	}
+	if body["retry_after_seconds"] != float64(30) {
+		t.Fatalf("retry_after_seconds=%v, want 30", body["retry_after_seconds"])
 	}
 }

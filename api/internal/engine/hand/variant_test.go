@@ -1,0 +1,175 @@
+package hand
+
+import (
+	"testing"
+
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
+	"gopkg.aoctech.app/poker/api/internal/engine/sidepots"
+)
+
+func fullPotLayer(playerIDs ...string) sidepots.PotLayer {
+	return sidepots.PotLayer{Amount: 100, Eligible: playerIDs}
+}
+
+// #296 acceptance criterion: a ShortDeck table plays a real hand end to end
+// through the exact same StartHand/Act pipeline standard tables use, and its
+// dealt cards come from the 36-card short deck (no rank Two-Five).
+func TestShortDeckTableDealsFromTheReducedDeck(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTableWithVariant([]*Player{p1, p2}, 10, 20, deck.ShortDeck)
+	if table.Variant() != deck.ShortDeck {
+		t.Fatalf("Variant()=%v, want ShortDeck", table.Variant())
+	}
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if table.shortShuffle == nil {
+		t.Fatal("expected shortShuffle to be populated for a ShortDeck table")
+	}
+	if table.shuffle != nil {
+		t.Fatal("a ShortDeck table must never populate the standard 52-card shuffle field")
+	}
+	for _, c := range table.shortShuffle.Cards {
+		if c.Rank < deck.Six {
+			t.Fatalf("short deck must never contain rank %v (below Six)", c.Rank)
+		}
+	}
+
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil {
+		t.Fatal("expected a hand outcome from a completed ShortDeck hand")
+	}
+	// Every dealt card in the outcome (board + hole cards) must come from the
+	// short deck's rank range.
+	for _, code := range outcome.Board {
+		if r := rankFromCode(t, code); r < deck.Six {
+			t.Fatalf("board card %q has a rank below Six, impossible in short-deck", code)
+		}
+	}
+	for id, info := range outcome.PlayerHands {
+		for _, code := range info.HoleCards {
+			if r := rankFromCode(t, code); r < deck.Six {
+				t.Fatalf("player %s hole card %q has a rank below Six, impossible in short-deck", id, code)
+			}
+		}
+	}
+}
+
+// #296 acceptance criterion: NewTable (used by every standard/real-money
+// path) is unaffected — it still defaults to deck.Standard and behaves
+// exactly as before variant existed.
+func TestNewTableDefaultsToStandardVariant(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if table.Variant() != deck.Standard {
+		t.Fatalf("NewTable's default Variant()=%v, want Standard", table.Variant())
+	}
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if table.shuffle == nil {
+		t.Fatal("a Standard table must populate the standard 52-card shuffle field")
+	}
+	if table.shortShuffle != nil {
+		t.Fatal("a Standard table must never populate shortShuffle")
+	}
+	if len(table.shuffle.Cards) != 52 {
+		t.Fatalf("standard shuffle has %d cards, want 52", len(table.shuffle.Cards))
+	}
+}
+
+// #296 acceptance criterion: short-deck hand-strength ordering (flush beats
+// full house) actually drives the winner at showdown, through the table's
+// own best7/categoryOf dispatch — not just the shortdeck package in
+// isolation.
+func TestShortDeckTableRanksFlushAboveFullHouseAtShowdown(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, State: Active}
+	p2 := &Player{ID: "p2", Stack: 1000, State: Active}
+	table := NewTableWithVariant([]*Player{p1, p2}, 10, 20, deck.ShortDeck)
+	table.handOrder = []*Player{p1, p2}
+
+	// p1: flush. p2: full house. Ranks are all Six+ (valid short-deck ranks).
+	p1.HoleCards = [2]deck.Card{{Rank: deck.Six, Suit: deck.Clubs}, {Rank: deck.Eight, Suit: deck.Clubs}}
+	p2.HoleCards = [2]deck.Card{{Rank: deck.King, Suit: deck.Diamonds}, {Rank: deck.King, Suit: deck.Hearts}}
+	table.board = []deck.Card{
+		{Rank: deck.Ten, Suit: deck.Clubs}, {Rank: deck.Queen, Suit: deck.Clubs}, {Rank: deck.Ace, Suit: deck.Clubs},
+		{Rank: deck.Queen, Suit: deck.Diamonds}, {Rank: deck.Queen, Suit: deck.Hearts},
+	}
+
+	winners, _, _ := table.evaluateLayer(fullPotLayer(p1.ID, p2.ID), table.board)
+	if len(winners) != 1 || winners[0] != p1.ID {
+		t.Fatalf("expected p1's flush to win over p2's full house in short-deck, winners=%v", winners)
+	}
+}
+
+// The same board/holes on a Standard table must flip: full house wins.
+func TestStandardTableRanksFullHouseAboveFlushAtShowdown(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, State: Active}
+	p2 := &Player{ID: "p2", Stack: 1000, State: Active}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.handOrder = []*Player{p1, p2}
+
+	p1.HoleCards = [2]deck.Card{{Rank: deck.Six, Suit: deck.Clubs}, {Rank: deck.Eight, Suit: deck.Clubs}}
+	p2.HoleCards = [2]deck.Card{{Rank: deck.King, Suit: deck.Diamonds}, {Rank: deck.King, Suit: deck.Hearts}}
+	table.board = []deck.Card{
+		{Rank: deck.Ten, Suit: deck.Clubs}, {Rank: deck.Queen, Suit: deck.Clubs}, {Rank: deck.Ace, Suit: deck.Clubs},
+		{Rank: deck.Queen, Suit: deck.Diamonds}, {Rank: deck.Queen, Suit: deck.Hearts},
+	}
+
+	winners, _, _ := table.evaluateLayer(fullPotLayer(p1.ID, p2.ID), table.board)
+	if len(winners) != 1 || winners[0] != p2.ID {
+		t.Fatalf("expected p2's full house to win over p1's flush on a Standard table, winners=%v", winners)
+	}
+}
+
+// A short-deck table reloaded from persisted State (a normal occurrence on any
+// cross-instance handoff) must keep dealing from the same 36-card shuffle.
+func TestShortDeckVariantSurvivesStateRoundTrip(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTableWithVariant([]*Player{p1, p2}, 10, 20, deck.ShortDeck)
+	if err := table.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	restored := NewTableFromState(table.ExportState())
+	if restored.Variant() != deck.ShortDeck || restored.shortShuffle == nil || restored.shuffle != nil {
+		t.Fatalf("variant=%v shortShuffle=%v shuffle=%v", restored.Variant(), restored.shortShuffle, restored.shuffle)
+	}
+	if got, want := restored.dealCard(), table.shortShuffle.Cards[table.nextCard]; got != want {
+		t.Fatalf("restored table dealt %v, want %v", got, want)
+	}
+}
+
+func rankFromCode(t *testing.T, code string) deck.Rank {
+	t.Helper()
+	if len(code) < 2 {
+		t.Fatalf("malformed card code %q", code)
+	}
+	switch code[0] {
+	case 'T':
+		return deck.Ten
+	case 'J':
+		return deck.Jack
+	case 'Q':
+		return deck.Queen
+	case 'K':
+		return deck.King
+	case 'A':
+		return deck.Ace
+	default:
+		r := deck.Rank(code[0] - '0')
+		if r < deck.Two || r > deck.Nine {
+			t.Fatalf("malformed card code %q", code)
+		}
+		return r
+	}
+}

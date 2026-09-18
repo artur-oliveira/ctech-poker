@@ -64,12 +64,17 @@ const (
 // Error is a passthrough of ctech-wallet's own RFC 9457 problem+json body —
 // poker's problem package uses the same shape, so a caller can turn this
 // straight into problem.New(err.Status, err.Type, err.Title, err.Detail)
-// instead of masking it as an internal server error.
+// instead of masking it as an internal server error. NextAction/
+// RetryAfterSeconds are the same extension members api-commons/problem
+// defines (#319) — populated only when ctech-wallet's own response already
+// carries them, and passed through verbatim by FromWalletError.
 type Error struct {
-	Status int    `json:"status"`
-	Type   string `json:"type"`
-	Title  string `json:"title"`
-	Detail string `json:"detail"`
+	Status            int    `json:"status"`
+	Type              string `json:"type"`
+	Title             string `json:"title"`
+	Detail            string `json:"detail"`
+	NextAction        string `json:"next_action,omitempty"`
+	RetryAfterSeconds int    `json:"retry_after_seconds,omitempty"`
 }
 
 func (e *Error) Error() string {

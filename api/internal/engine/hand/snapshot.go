@@ -303,14 +303,14 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				var full [7]deck.Card
 				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 				copy(full[2:], evaluationBoard)
-				score := handeval.Best7(full)
+				score := t.best7(full)
 				if t.stage == Complete && t.runItTwice && len(t.board) == 5 {
 					copy(full[2:], t.board)
-					if firstScore := handeval.Best7(full); firstScore > score {
+					if firstScore := t.best7(full); firstScore > score {
 						score = firstScore
 					}
 				}
-				sv.HandCategory = categoryNames[score.Category()]
+				sv.HandCategory = categoryNames[t.categoryOf(score)]
 				sv.HandScore = uint32(score)
 			case isBettingStage(t.stage) || (t.stage == Complete && len(evaluationBoard) == 5):
 				// Not everything is known here: an opponent who hasn't revealed
