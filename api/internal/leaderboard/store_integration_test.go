@@ -41,7 +41,7 @@ func TestWinRateUsesMaterializedGSI(t *testing.T) {
 	if err := svc.RecordHand(ctx, "sandbox", hand.HandOutcome{Winners: []string{"flash"}, Participants: []string{"flash", "grinder"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if top, _, err := svc.Top(ctx, "sandbox", "win_rate", 10, nil); err != nil || len(top) != 0 {
+	if top, _, err := svc.Top(ctx, Board{Mode: "sandbox", Metric: "win_rate"}, 10, nil); err != nil || len(top) != 0 {
 		t.Fatalf("sub-floor players must not appear on win_rate board: top=%+v err=%v", top, err)
 	}
 
@@ -51,7 +51,7 @@ func TestWinRateUsesMaterializedGSI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	top, _, err := svc.Top(ctx, "sandbox", "win_rate", 10, nil)
+	top, _, err := svc.Top(ctx, Board{Mode: "sandbox", Metric: "win_rate"}, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

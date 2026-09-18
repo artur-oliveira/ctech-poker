@@ -42,14 +42,14 @@ func TestRankMirrorMatchesCountPathForEveryPlayer(t *testing.T) {
 		ids = append(ids, id)
 		// Five distinct scores across 60 players: every score has ~12 rows
 		// tied on it, so almost every rank depends on the player_id tiebreak.
-		if err := counting.IncrementStats(ctx, id, "", "sandbox", 10, i%5); err != nil {
+		if err := counting.IncrementStats(ctx, id, "", "sandbox", "", 10, i%5); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	mirrored := NewStore(db, env).WithRankMirror(valkeyTestClient(t))
 	for _, id := range ids {
-		entry, err := counting.PlayerEntry(ctx, id, "sandbox")
+		entry, err := counting.PlayerEntry(ctx, id, "sandbox", "")
 		if err != nil || entry == nil {
 			t.Fatalf("player entry %s: %v", id, err)
 		}
