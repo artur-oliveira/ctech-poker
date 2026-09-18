@@ -109,15 +109,16 @@ func TestReleaseEvictsTablesGlobalEquityEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Clubs}, {Rank: deck.King, Suit: deck.Clubs}}
-	if _, _, err := equity.EstimateForTableWithStats("equity-table", hole, nil, nil, 1, 10); err != nil {
+	board := []deck.Card{{Rank: deck.Two, Suit: deck.Clubs}, {Rank: deck.Five, Suit: deck.Diamonds}, {Rank: deck.Nine, Suit: deck.Spades}}
+	if _, _, err := equity.EstimateForTableWithStats("equity-table", hole, board, nil, 1, 10); err != nil {
 		t.Fatal(err)
 	}
-	if _, stats, err := equity.EstimateForTableWithStats("equity-table", hole, nil, nil, 1, 10); err != nil || !stats.CacheHit {
+	if _, stats, err := equity.EstimateForTableWithStats("equity-table", hole, board, nil, 1, 10); err != nil || !stats.CacheHit {
 		t.Fatalf("expected cached table equity before release: stats=%+v err=%v", stats, err)
 	}
 
 	m.Release("equity-table")
-	if _, stats, err := equity.EstimateForTableWithStats("equity-table", hole, nil, nil, 1, 10); err != nil || stats.CacheHit {
+	if _, stats, err := equity.EstimateForTableWithStats("equity-table", hole, board, nil, 1, 10); err != nil || stats.CacheHit {
 		t.Fatalf("expected table equity miss after release: stats=%+v err=%v", stats, err)
 	}
 }

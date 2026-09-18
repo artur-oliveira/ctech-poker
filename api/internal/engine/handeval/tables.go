@@ -9,7 +9,7 @@ import (
 )
 
 // tablesBlob is produced by `go generate ./internal/engine/handeval/...`.
-// Embedding it keeps startup to a single ~120 KB decode instead of the
+// Embedding it keeps score loading to a single ~120 KB decode instead of the
 // multi-second enumeration that building these tables from scratch costs.
 //
 //go:embed tables.bin

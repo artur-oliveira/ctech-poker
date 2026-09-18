@@ -196,8 +196,8 @@ func BenchmarkBest7Reference(b *testing.B) {
 	_ = sink
 }
 
-// BenchmarkLoadTables measures the whole startup cost of the evaluator: the
-// one-time decode of the embedded blob that init performs.
+// BenchmarkLoadTables measures score-table decoding, excluding the separate
+// one-time construction of the additive rank-index tables.
 func BenchmarkLoadTables(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

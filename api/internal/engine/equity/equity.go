@@ -1,13 +1,17 @@
-// Package equity estimates poker equity against random opponent ranges.
+// Package equity computes expected pot shares against uniform random opponent
+// hands. Supported preflop spots use an offline lookup; heads-up river equity
+// is exact; other spots use deterministic Monte Carlo.
 package equity
 
 import (
 	"container/list"
 	"fmt"
-	"sort"
+	"math/bits"
+	"slices"
 	"sync"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
+	"gopkg.aoctech.app/poker/api/internal/engine/equity/preflop"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
 )
 
@@ -130,9 +134,7 @@ func makeCacheKey(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents,
 		k.board[i] = handeval.CardID(c)
 	}
 	// Sort board card IDs to normalize key
-	sort.Slice(k.board[:k.boardLen], func(i, j int) bool {
-		return k.board[i] < k.board[j]
-	})
+	slices.Sort(k.board[:k.boardLen])
 	k.opponents = uint8(numOpponents)
 	k.iterations = iterations
 	return k, true
@@ -173,8 +175,15 @@ func (r *rng64) intn(k uint32) uint32 {
 type EstimateStats struct {
 	CacheHit bool
 	Evicted  bool
+	// Precomputed identifies the immutable offline preflop table, not an LRU hit.
+	Precomputed bool
 }
 
+// Estimate returns expected pot share (wins plus fractional ties). iterations
+// must be positive. Heads-up rivers enumerate all opponent hands. Preflop
+// without dead cards against 1–8 opponents uses an offline estimate when its
+// sample count meets the requested budget. These paths do not depend on the
+// requested iteration count; other spots use that many Monte Carlo samples.
 func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (float64, error) {
 	value, _, err := EstimateWithStats(hole, board, deadCards, numOpponents, iterations)
 	return value, err
@@ -200,17 +209,18 @@ func seedFor(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iter
 	)
 	h := offset64
 	mix := func(v uint64) {
-		for i := 0; i < 8; i++ {
+		for i := range 8 {
 			h ^= (v >> (i * 8)) & 0xff
 			h *= prime64
 		}
 	}
 	mixSorted := func(cards []deck.Card) {
-		ids := make([]uint8, 0, len(cards))
+		var storage [52]uint8
+		ids := storage[:0]
 		for _, c := range cards {
 			ids = append(ids, handeval.CardID(c))
 		}
-		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		slices.Sort(ids)
 		for _, id := range ids {
 			mix(uint64(id))
 		}
@@ -237,6 +247,23 @@ func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCar
 		return 0, EstimateStats{}, fmt.Errorf("equity: board has %d cards, maximum is 5", len(board))
 	}
 
+	// Validate before compact encoding or cache lookup: invalid cards can alias valid IDs.
+	seen, err := knownCards(hole, board, deadCards)
+	if err != nil {
+		return 0, EstimateStats{}, err
+	}
+	poolLen := 52 - bits.OnesCount64(seen)
+	boardNeeded := 5 - len(board)
+	// Compare before multiplying to avoid overflow on an oversized opponent count.
+	if numOpponents > (poolLen-boardNeeded)/2 {
+		return 0, EstimateStats{}, fmt.Errorf("equity: not enough cards to sample %d opponents", numOpponents)
+	}
+	// The immutable table is shared across suits and tables, and needs no LRU
+	// entry. Larger requested sample budgets, dead cards, or extra opponents
+	// use the general estimator instead.
+	if len(board) == 0 && len(deadCards) == 0 && numOpponents <= preflop.MaxOpponents && iterations <= preflop.GeneratedSamples {
+		return preflop.Lookup(hole, numOpponents), EstimateStats{Precomputed: true}, nil
+	}
 	key, cacheable := makeCacheKey(hole, board, deadCards, numOpponents, iterations)
 	if cacheable {
 		key.tableID = tableID
@@ -244,19 +271,28 @@ func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCar
 			return val, EstimateStats{CacheHit: true}, nil
 		}
 	}
-
 	var pool [52]uint8
-	poolLen, err := buildPool(hole, board, deadCards, &pool)
-	if err != nil {
-		return 0, EstimateStats{}, err
+	next := 0
+	for id := uint8(0); id < 52; id++ {
+		if seen&(uint64(1)<<id) == 0 {
+			pool[next] = id
+			next++
+		}
 	}
+	value := estimateUncached(hole, board, pool[:poolLen], numOpponents, iterations, seedFor(hole, board, deadCards, numOpponents, iterations))
+	stats := EstimateStats{}
+	if cacheable {
+		stats.Evicted = globalEquityCache.Put(key, value)
+	}
+	return value, stats, nil
+}
 
+// estimateUncached requires validated inputs and a pool excluding all known
+// cards. Keeping the simulation separate permits independent statistical tests
+// even when the public entry point uses the preflop lookup.
+func estimateUncached(hole [2]deck.Card, board []deck.Card, pool []uint8, numOpponents, iterations int, seed uint64) float64 {
+	poolLen := len(pool)
 	boardNeeded := 5 - len(board)
-	need := boardNeeded + numOpponents*2
-	if need > poolLen {
-		return 0, EstimateStats{}, fmt.Errorf("equity: not enough cards to sample %d opponents", numOpponents)
-	}
-
 	hero1ID := handeval.CardID(hole[0])
 	hero2ID := handeval.CardID(hole[1])
 
@@ -265,7 +301,29 @@ func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCar
 		baseBoardState.AddCard(c)
 	}
 
-	rng := rng64{state: seedFor(hole, board, deadCards, numOpponents, iterations)}
+	// On the river neither the board nor the hero's score changes between samples.
+	var riverScore handeval.Score
+	if boardNeeded == 0 {
+		baseBoardState.Finalize()
+		riverScore = baseBoardState.Eval2IDs(hero1ID, hero2ID)
+		if numOpponents == 1 {
+			// At most C(45,2)=990 hands. Exact enumeration also handles known dead cards.
+			var twiceShares int
+			for i := 0; i < poolLen; i++ {
+				for j := i + 1; j < poolLen; j++ {
+					score := baseBoardState.Eval2IDs(pool[i], pool[j])
+					if riverScore > score {
+						twiceShares += 2
+					} else if riverScore == score {
+						twiceShares++
+					}
+				}
+			}
+			return float64(twiceShares) / float64(poolLen*(poolLen-1))
+		}
+	}
+
+	rng := rng64{state: seed}
 
 	var cards [52]uint8
 	copy(cards[:poolLen], pool[:poolLen])
@@ -273,23 +331,32 @@ func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCar
 	var shares float64
 
 	for range iterations {
-		for i := range need {
+		for i := range boardNeeded {
 			j := i + int(rng.intn(uint32(poolLen-i)))
 			cards[i], cards[j] = cards[j], cards[i]
 		}
 
 		boardState := baseBoardState
-		for i := range boardNeeded {
-			boardState.AddCardID(cards[i])
+		myScore := riverScore
+		if boardNeeded != 0 {
+			for i := range boardNeeded {
+				boardState.AddCardID(cards[i])
+			}
+			boardState.Finalize()
+			myScore = boardState.Eval2IDs(hero1ID, hero2ID)
 		}
-		boardState.Finalize()
-
-		myScore := boardState.Eval2IDs(hero1ID, hero2ID)
 		bestScore := myScore
 		tiedWinners := 1
 
 		for opponent := range numOpponents {
 			offset := boardNeeded + opponent*2
+			// Draw only the next opponent. Once hero loses, the remaining cards
+			// cannot change its zero share. Each new trial starts Fisher-Yates at
+			// index zero, so a partially shuffled pool remains a valid starting deck.
+			for i := offset; i < offset+2; i++ {
+				j := i + int(rng.intn(uint32(poolLen-i)))
+				cards[i], cards[j] = cards[j], cards[i]
+			}
 			score := boardState.Eval2IDs(cards[offset], cards[offset+1])
 			if score > myScore {
 				bestScore = score
@@ -309,19 +376,14 @@ func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCar
 		}
 	}
 
-	res := shares / float64(iterations)
-	stats := EstimateStats{}
-	if cacheable {
-		stats.Evicted = globalEquityCache.Put(key, res)
-	}
-	return res, stats, nil
+	return shares / float64(iterations)
 }
 
 // EvictTable releases all process-global equity results associated with a
 // table. tablemanager calls it whenever that table's actor is torn down.
 func EvictTable(tableID string) int { return globalEquityCache.EvictTable(tableID) }
 
-func buildPool(hole [2]deck.Card, board, dead []deck.Card, pool *[52]uint8) (int, error) {
+func knownCards(hole [2]deck.Card, board, dead []deck.Card) (uint64, error) {
 	var seen uint64
 	checkAndAdd := func(c deck.Card) error {
 		if c.Rank < deck.Two || c.Rank > deck.Ace || c.Suit < deck.Clubs || c.Suit > deck.Spades {
@@ -353,12 +415,5 @@ func buildPool(hole [2]deck.Card, board, dead []deck.Card, pool *[52]uint8) (int
 		}
 	}
 
-	poolLen := 0
-	for id := uint8(0); id < 52; id++ {
-		if (seen & (uint64(1) << id)) == 0 {
-			pool[poolLen] = id
-			poolLen++
-		}
-	}
-	return poolLen, nil
+	return seen, nil
 }

@@ -3,6 +3,7 @@ package table
 import (
 	"testing"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -75,4 +76,45 @@ func TestBroadcastHonorsDisabledEquity(t *testing.T) {
 	actor.cached = table
 	actor.SetEquityEnabledForActor(false)
 	actor.broadcastAll()
+}
+
+func TestEquityCacheKeysAndHandReset(t *testing.T) {
+	actor := New("equity-key-test", nil, true, nil)
+	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Clubs}, {Rank: deck.King, Suit: deck.Clubs}}
+	board := []deck.Card{{Rank: deck.Two, Suit: deck.Hearts}, {Rank: deck.Seven, Suit: deck.Clubs}, {Rank: deck.Jack, Suit: deck.Diamonds}}
+	actor.handID = "first"
+	if _, ok := actor.equityFor(hole, nil, 2); !ok {
+		t.Fatal("estimate failed")
+	}
+	if _, ok := actor.equityFor(hole, nil, 2); !ok || len(actor.equityCache) != 1 {
+		t.Fatal("repeated spot not cached")
+	}
+	actor.equityFor(hole, board, 2)
+	actor.equityFor(hole, board, 1)
+	if len(actor.equityCache) != 3 {
+		t.Fatal("board and opponent count must distinguish entries")
+	}
+	actor.handID = "second"
+	actor.equityFor(hole, nil, 2)
+	if len(actor.equityCache) != 1 {
+		t.Fatal("new hand retained old entries")
+	}
+	invalid := hole
+	invalid[0] = deck.Card{Rank: deck.King, Suit: deck.Suit(4)}
+	if _, ok := actor.equityFor(invalid, nil, 2); ok {
+		t.Fatal("invalid card reused valid cache entry")
+	}
+}
+
+func BenchmarkActorEquityCached(b *testing.B) {
+	actor := New("equity-bench", nil, true, nil)
+	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Clubs}, {Rank: deck.King, Suit: deck.Clubs}}
+	actor.equityFor(hole, nil, 8)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, ok := actor.equityFor(hole, nil, 8); !ok {
+			b.Fatal("estimate failed")
+		}
+	}
 }

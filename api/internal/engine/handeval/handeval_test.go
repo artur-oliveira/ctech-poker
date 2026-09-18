@@ -195,3 +195,16 @@ func TestBoardStateMatchesBest7(t *testing.T) {
 		}
 	}
 }
+
+func TestBest7RejectsEveryDuplicatePosition(t *testing.T) {
+	original := [7]deck.Card{c(deck.Ace, deck.Clubs), c(deck.King, deck.Clubs), c(deck.Queen, deck.Clubs), c(deck.Jack, deck.Clubs), c(deck.Ten, deck.Clubs), c(deck.Two, deck.Hearts), c(deck.Three, deck.Diamonds)}
+	for i := range original {
+		for j := i + 1; j < len(original); j++ {
+			cards := original
+			cards[j] = cards[i]
+			if got := Best7(cards); got != 0 {
+				t.Fatalf("duplicate at %d/%d scored %d", i, j, got)
+			}
+		}
+	}
+}
