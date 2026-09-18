@@ -250,6 +250,15 @@ type HandOutcome struct {
 	// to render pot sizes and the blind markers at the right scale.
 	SmallBlind int64
 	BigBlind   int64
+	// Variant is this hand's rule variant (deck.Variant.Label(): "" for
+	// standard, "short_deck") — captured here for the same reason as
+	// SmallBlind/BigBlind above: a table's variant is static for its whole
+	// lifetime, but the room record a much-later reader fetches may no
+	// longer exist (ephemeral public tables), or in principle could be
+	// reused. Every consumer that recomputes hand strength from raw cards
+	// (a hand-history client, a replayer) needs this to pick the correct
+	// ranking rules instead of assuming standard (#296).
+	Variant string
 	// ShowdownResults holds each non-folded participant's OWN best-hand
 	// category and result. Unlike PlayerHands/Revealed, this is never
 	// exposed to opponents — it only drives per-player achievements
@@ -2038,6 +2047,7 @@ func (t *Table) runShowdown() {
 		PotResults:         potResults,
 		SmallBlind:         t.smallBlind,
 		BigBlind:           t.bigBlind,
+		Variant:            t.variant.Label(),
 	}
 	if t.shuffle != nil {
 		outcome.ServerSeed = hex.EncodeToString(t.shuffle.ServerSeed[:])

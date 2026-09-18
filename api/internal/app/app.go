@@ -751,7 +751,7 @@ func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarUR
 	}
 	item := sessionlog.HandItem{
 		Outcome: result, NetChange: net,
-		SmallBlind: outcome.SmallBlind, BigBlind: outcome.BigBlind,
+		SmallBlind: outcome.SmallBlind, BigBlind: outcome.BigBlind, Variant: outcome.Variant,
 		Board: outcome.Board, BoardTwo: outcome.BoardTwo, HoleCards: holeCards, Opponents: opponents,
 		CommitHash:     outcome.CommitHash,
 		RootCommitHash: outcome.RootCommitHash,

@@ -39,8 +39,10 @@ export default function BasicsGuide() {
         body: <><GuideSteps><li><span>No lobby, escolha <b>Mesa privada</b>.</span></li>
           <li><span>Defina o modo, a stake e quantos lugares a mesa terá.</span></li>
           <li><span>Decida se a sala vai <b>permitir rodar duas vezes</b>. Isso libera o recurso; cada jogador ainda ativa por conta própria nas preferências.</span></li>
+          <li><span>Em mesas de fichas, você também pode ativar <b>Short-deck (6+)</b>: um baralho sem as cartas de 2 a 5, onde o flush vence o full house e A-6-7-8-9 é a sequência mais baixa.</span></li>
           <li><span>Crie a sala e compartilhe o link; o código de convite já vai dentro dele. Na mesa, <b>Convidar</b> também chama amigos direto da sua lista.</span></li></GuideSteps>
-          <GuideCallout kind="safe" title="O link é a chave">Qualquer pessoa com o link pode tentar entrar. Trate um convite privado como senha e não publique em lugar aberto.</GuideCallout></>
+          <GuideCallout kind="safe" title="O link é a chave">Qualquer pessoa com o link pode tentar entrar. Trate um convite privado como senha e não publique em lugar aberto.</GuideCallout>
+          <GuideCallout kind="warning" title="Short-deck só em fichas">A variante não está disponível em mesas de dinheiro real.</GuideCallout></>
       },
       {
         id: 'primeira-mao', title: 'Quando a mão começa', summary: 'A mesa espera jogadores suficientes e depois anuncia a próxima distribuição.',

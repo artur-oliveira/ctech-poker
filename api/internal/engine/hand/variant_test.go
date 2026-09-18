@@ -248,6 +248,45 @@ func TestShortDeckVariantSurvivesStateRoundTrip(t *testing.T) {
 	}
 }
 
+// #296: HandOutcome.Variant (surfaced to the frontend via sessionlog.HandItem
+// for hand history) must reflect the table's actual variant, so a client
+// re-deriving hand strength from a past hand's raw cards uses the right
+// ranking rules.
+func TestHandOutcomeCapturesVariant(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+
+	standard := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := standard.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	for standard.Stage() != Complete {
+		toAct := standard.playerToActForTest()
+		if err := standard.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = standard.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	if got := standard.LastOutcomeForActor().Variant; got != "" {
+		t.Fatalf("standard table outcome Variant = %q, want empty", got)
+	}
+
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	p4 := &Player{ID: "p4", Stack: 1000, Ready: true}
+	shortDeck := NewTableWithVariant([]*Player{p3, p4}, 10, 20, deck.ShortDeck)
+	if err := shortDeck.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	for shortDeck.Stage() != Complete {
+		toAct := shortDeck.playerToActForTest()
+		if err := shortDeck.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = shortDeck.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	if got := shortDeck.LastOutcomeForActor().Variant; got != "short_deck" {
+		t.Fatalf("short-deck table outcome Variant = %q, want short_deck", got)
+	}
+}
+
 func rankFromCode(t *testing.T, code string) deck.Rank {
 	t.Helper()
 	if len(code) < 2 {

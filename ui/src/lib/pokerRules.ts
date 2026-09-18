@@ -65,6 +65,32 @@ export const HAND_RANK_INDEX: Record<string, number> = Object.fromEntries(
   HAND_RANKINGS.map((entry, index) => [entry.key, index])
 );
 
+/** Which rule set to score a hand under (#296). Mirrors `deck.Variant` /
+ * `roomstore.Variant*` on the server — 'standard' (default) is ordinary
+ * Texas Hold'em; 'short_deck' is 6+ hold'em (ranks Two-Five never appear).
+ * Every scoring function below defaults to 'standard', so an existing call
+ * site that never passes a variant is byte-for-byte unaffected by this. */
+export type HandVariant = 'standard' | 'short_deck';
+
+// Short-deck strength order (weakest → strongest), mirroring
+// api/internal/engine/handeval/shortdeck's `strengthOrder` exactly: flush
+// beats full house (harder to make once Two-Five are gone), everything else
+// keeps its standard relative order.
+const SHORT_DECK_ORDER = [
+  'high_card', 'pair', 'two_pair', 'three_of_a_kind', 'straight',
+  'full_house', 'flush', 'four_of_a_kind', 'straight_flush', 'royal_flush'
+];
+
+const SHORT_DECK_RANK_INDEX: Record<string, number> = Object.fromEntries(
+  // Index by *reverse* rank (so index 0 is still "strongest", matching
+  // HAND_RANK_INDEX's convention that a lower number wins in compareScores).
+  SHORT_DECK_ORDER.map((key, index) => [key, SHORT_DECK_ORDER.length - 1 - index])
+);
+
+function rankIndexFor(variant: HandVariant): Record<string, number> {
+  return variant === 'short_deck' ? SHORT_DECK_RANK_INDEX : HAND_RANK_INDEX;
+}
+
 // How many of a resolved 5-card hand's cards actually make the combination,
 // vs. ride along as kickers, for emphasizing the cards that matter (e.g. a
 // pair's 2 cards) over the 3 that don't, instead of showing all 5 as equals.
@@ -97,7 +123,10 @@ type FiveCardScore = { category: string; tiebreak: number[] };
 // tiebreak vector compared lexicographically, highest first, the same
 // values a human would cite when explaining why one hand beats another
 // (quads' rank, then kicker; two pair's high pair, low pair, then kicker).
-function scoreFiveCards(cards: string[]): FiveCardScore {
+// `variant` only ever *adds* a recognized straight (short-deck's A-6-7-8-9)
+// or changes category *ranking* (in compareScores) — never changes which
+// category a set of cards is detected as under 'standard'.
+function scoreFiveCards(cards: string[], variant: HandVariant = 'standard'): FiveCardScore {
   const values = cards.map(rankValue).sort((a, b) => b - a);
   const isFlush = cards.every(c => c[1].toLowerCase() === cards[0][1].toLowerCase());
   const uniqueDesc = [...new Set(values)];
@@ -109,8 +138,17 @@ function scoreFiveCards(cards: string[]): FiveCardScore {
     }
   }
   // The wheel (A-2-3-4-5): the Ace plays low, so the straight's "high card"
-  // for comparison purposes is the 5, not the Ace.
-  if (!straightHigh && uniqueDesc.includes(14) && [5, 4, 3, 2].every(v => uniqueDesc.includes(v))) straightHigh = 5;
+  // for comparison purposes is the 5, not the Ace. Only reachable in
+  // 'standard' — a short-deck hand can never hold a Two through Five.
+  if (!straightHigh && variant === 'standard' &&
+    uniqueDesc.includes(14) && [5, 4, 3, 2].every(v => uniqueDesc.includes(v))) straightHigh = 5;
+  // Short-deck's own low straight, A-6-7-8-9 (mirrors
+  // handeval/shortdeck.straightHighCard exactly): with no Two-Five in the
+  // deck, this is short-deck's wheel-equivalent, scored as a Nine-high
+  // straight (the next straight up, 6-7-8-9-10, is a real Ten-high straight
+  // above it).
+  if (!straightHigh && variant === 'short_deck' &&
+    uniqueDesc.includes(14) && [9, 8, 7, 6].every(v => uniqueDesc.includes(v))) straightHigh = 9;
   const isStraight = straightHigh > 0;
   
   const counts = new Map<number, number>();
@@ -134,8 +172,9 @@ function scoreFiveCards(cards: string[]): FiveCardScore {
   return {category: 'high_card', tiebreak: values};
 }
 
-function compareScores(a: FiveCardScore, b: FiveCardScore): number {
-  const byCategory = HAND_RANK_INDEX[b.category] - HAND_RANK_INDEX[a.category];
+function compareScores(a: FiveCardScore, b: FiveCardScore, variant: HandVariant = 'standard'): number {
+  const rankIndex = rankIndexFor(variant);
+  const byCategory = rankIndex[b.category] - rankIndex[a.category];
   if (byCategory !== 0) return byCategory;
   for (let i = 0; i < Math.max(a.tiebreak.length, b.tiebreak.length); i++) {
     const diff = (a.tiebreak[i] || 0) - (b.tiebreak[i] || 0);
@@ -147,7 +186,7 @@ function compareScores(a: FiveCardScore, b: FiveCardScore): number {
 // Orders a resolved 5-card hand the way a player reads it: the cards making
 // the hand first (a pair's two, a trip's three, ...), highest group first,
 // then kickers descending, matching HAND_RANKINGS' own example arrays.
-function canonicalOrder(cards: string[]): string[] {
+function canonicalOrder(cards: string[], variant: HandVariant = 'standard'): string[] {
   const groups = new Map<number, string[]>();
   for (const card of cards) {
     const value = rankValue(card);
@@ -155,27 +194,28 @@ function canonicalOrder(cards: string[]): string[] {
     group.push(card);
     groups.set(value, group);
   }
-  // The wheel (A-2-3-4-5): the Ace plays low, so it reads last, not first.
-  // Sort by 1 instead of its usual 14 whenever these are exactly the wheel's
-  // five distinct values (only possible here when every group is a single
-  // card, i.e. this really is that straight and not some other combination
-  // that happens to include an Ace and a 5).
-  const isWheel = groups.size === 5 && [14, 5, 4, 3, 2].every(v => groups.has(v));
+  // The wheel (A-2-3-4-5, standard) or short-deck's A-6-7-8-9: the Ace plays
+  // low, so it reads last, not first. Only one of the two can ever match a
+  // given `cards` (they share no rank set), and the short-deck one is only
+  // even checked under that variant.
+  const isWheel = variant === 'standard' && groups.size === 5 && [14, 5, 4, 3, 2].every(v => groups.has(v));
+  const isShortDeckWheel = variant === 'short_deck' && groups.size === 5 && [14, 9, 8, 7, 6].every(v => groups.has(v));
+  const aceLow = isWheel || isShortDeckWheel;
   return [...groups.entries()]
-    .sort((a, b) => b[1].length - a[1].length || (isWheel ? valueForOrder(b[0]) - valueForOrder(a[0]) : b[0] - a[0]))
+    .sort((a, b) => b[1].length - a[1].length || (aceLow ? valueForOrder(b[0]) - valueForOrder(a[0]) : b[0] - a[0]))
     .flatMap(([, group]) => group);
-  
+
   function valueForOrder(value: number): number {
     return value === 14 ? 1 : value;
   }
 }
 
-function bestOf(cards: string[]): { cards: string[]; score: FiveCardScore } {
-  if (cards.length <= 5) return {cards, score: scoreFiveCards(cards)};
+function bestOf(cards: string[], variant: HandVariant = 'standard'): { cards: string[]; score: FiveCardScore } {
+  if (cards.length <= 5) return {cards, score: scoreFiveCards(cards, variant)};
   let best: { cards: string[]; score: FiveCardScore } | null = null;
   for (const combo of nChooseK(cards, 5)) {
-    const score = scoreFiveCards(combo);
-    if (!best || compareScores(score, best.score) > 0) best = {cards: combo, score};
+    const score = scoreFiveCards(combo, variant);
+    if (!best || compareScores(score, best.score, variant) > 0) best = {cards: combo, score};
   }
   return best!;
 }
@@ -184,35 +224,37 @@ function bestOf(cards: string[]): { cards: string[]; score: FiveCardScore } {
  * displaying the actual winning combination rather than just the category
  * name. The server only ever sends a category label (e.g. "two_pair") plus
  * raw hole cards, never the resolved 5-card hand itself, so this evaluates
- * every 5-card subset locally and keeps the strongest one. */
-export function bestFiveCardHand(cards: string[]): string[] {
-  if (cards.length <= 5) return canonicalOrder(cards);
-  return canonicalOrder(bestOf(cards).cards);
+ * every 5-card subset locally and keeps the strongest one. `variant`
+ * (#296) picks the ranking rules the table this hand was played at actually
+ * used — pass the table/hand's own variant, never assume 'standard'. */
+export function bestFiveCardHand(cards: string[], variant: HandVariant = 'standard'): string[] {
+  if (cards.length <= 5) return canonicalOrder(cards, variant);
+  return canonicalOrder(bestOf(cards, variant).cards, variant);
 }
 
 /** Same evaluation as bestFiveCardHand, but returns the HAND_RANKINGS
  * category key (e.g. "two_pair") instead of the card list, for labeling a
  * player's hand in a hand-history view, client-side, from raw cards only. */
-export function bestHandCategory(cards: string[]): string {
-  return bestOf(cards).score.category;
+export function bestHandCategory(cards: string[], variant: HandVariant = 'standard'): string {
+  return bestOf(cards, variant).score.category;
 }
 
 /** Compares two up-to-7-card hands (hole cards + board) and reports whether
  * the first beats the second: positive when it does, negative when it
  * loses, 0 on a true tie. Used to tell a folded player whether they'd
  * actually have won had they stayed in, not just that someone else did. */
-export function compareHands(cardsA: string[], cardsB: string[]): number {
-  return compareScores(bestOf(cardsA).score, bestOf(cardsB).score);
+export function compareHands(cardsA: string[], cardsB: string[], variant: HandVariant = 'standard'): number {
+  return compareScores(bestOf(cardsA, variant).score, bestOf(cardsB, variant).score, variant);
 }
 
 /** True only when two hands share the same made combination and the first
  * differing rank is outside that combination. Two different pairs/two-pair
  * values are not a kicker decision merely because their category label is
  * the same. */
-export function wasDecidedByKicker(cardsA: string[], cardsB: string[]): boolean {
+export function wasDecidedByKicker(cardsA: string[], cardsB: string[], variant: HandVariant = 'standard'): boolean {
   if (cardsA.length !== 5 || cardsB.length !== 5) return false;
-  const a = scoreFiveCards(cardsA);
-  const b = scoreFiveCards(cardsB);
+  const a = scoreFiveCards(cardsA, variant);
+  const b = scoreFiveCards(cardsB, variant);
   if (a.category !== b.category) return false;
   const firstDifference = a.tiebreak.findIndex((value, index) => value !== b.tiebreak[index]);
   if (firstDifference < 0) return false;

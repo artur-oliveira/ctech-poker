@@ -72,10 +72,29 @@ function messageForStatus(status?: number): string {
   return 'Algo deu errado. Tente novamente.';
 }
 
-// type ApiErrorBody = { detail?: string; title?: string }
+// #319: next_action/retry_after_seconds (RFC 9457 extension members) tell the
+// client HOW to recover — retry, wait a known window, sign in again, or give
+// up and contact support — instead of it pattern-matching `detail` text. Only
+// ever overrides the generic status message when the server actually said
+// something the plain status code doesn't already convey (a concrete wait
+// time, or that retrying is pointless). Every automatic-retry decision
+// (RETRYABLE_HTTP_STATUSES) already ran before this is ever shown — this is
+// only reached once those are exhausted, so it can't duplicate a retry.
+function messageForNextAction(nextAction?: string, retryAfterSeconds?: number): string | undefined {
+  if ((nextAction === 'retry' || nextAction === 'wait') && retryAfterSeconds) {
+    return `Muitas solicitações. Tente novamente em ${retryAfterSeconds}s.`;
+  }
+  if (nextAction === 'contact_support') {
+    return 'Não foi possível concluir. Se o problema persistir, contate o suporte.';
+  }
+  return undefined;
+}
 
 export function notifyApiError(error: unknown): void {
-  const normalized = error as { name?: string; status?: number; problem?: { detail?: string; title?: string } };
+  const normalized = error as {
+    name?: string; status?: number;
+    problem?: { detail?: string; title?: string; next_action?: string; retry_after_seconds?: number };
+  };
   if (normalized?.name === 'ApiError') {
     const original = (error as {
       original?: {
@@ -93,7 +112,8 @@ export function notifyApiError(error: unknown): void {
       return;
     }
     const safeDetail = normalized.problem?.detail?.trim();
-    pushNotification(safeDetail || messageForStatus(normalized.status));
+    const actionMessage = messageForNextAction(normalized.problem?.next_action, normalized.problem?.retry_after_seconds);
+    pushNotification(actionMessage || safeDetail || messageForStatus(normalized.status));
     return;
   }
   const axiosErr = error as { isAxiosError?: boolean; response?: { status?: number }; request?: unknown };

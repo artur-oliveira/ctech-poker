@@ -126,9 +126,35 @@ describe('notification store', () => {
     const {notifyApiError, subscribeNotifications} = await import('./notify');
     const listener = vi.fn();
     subscribeNotifications(listener);
-    
+
     notifyApiError(error);
-    
+
+    expect(listener.mock.lastCall?.[0][0]).toMatchObject({message: expected, variant: 'error'});
+  });
+
+  // #319: next_action/retry_after_seconds override the generic status/detail
+  // message only when they say something more actionable than either would.
+  test.each([
+    [{name: 'ApiError', status: 429, problem: {detail: 'too many requests, slow down', next_action: 'retry', retry_after_seconds: 30}},
+      'Muitas solicitações. Tente novamente em 30s.'],
+    [{name: 'ApiError', status: 429, problem: {detail: 'too many requests, slow down', next_action: 'wait', retry_after_seconds: 5}},
+      'Muitas solicitações. Tente novamente em 5s.'],
+    [{name: 'ApiError', status: 500, problem: {detail: 'internal error', next_action: 'contact_support'}},
+      'Não foi possível concluir. Se o problema persistir, contate o suporte.'],
+    // next_action present but with nothing new to say (retry with no window,
+    // or reauthenticate — the 401 status message already covers that) falls
+    // back to the server's own detail text.
+    [{name: 'ApiError', status: 429, problem: {detail: 'muitas tentativas', next_action: 'retry'}},
+      'muitas tentativas'],
+    [{name: 'ApiError', status: 401, problem: {detail: 'token expired', next_action: 'reauthenticate'}},
+      'token expired'],
+  ])('lets next_action drive the message when it adds real information', async (error, expected) => {
+    const {notifyApiError, subscribeNotifications} = await import('./notify');
+    const listener = vi.fn();
+    subscribeNotifications(listener);
+
+    notifyApiError(error);
+
     expect(listener.mock.lastCall?.[0][0]).toMatchObject({message: expected, variant: 'error'});
   });
 });

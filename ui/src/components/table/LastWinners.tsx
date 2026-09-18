@@ -37,8 +37,11 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
     });
     const board = item.board?.length === 5 ? item.board : undefined;
     const withHole = winners.find(w => w.hole?.length === 2);
-    const cards = withHole?.hole && board ? bestFiveCardHand([...withHole.hole, ...board]) : withHole?.hole;
-    const category = cards?.length === 5 ? bestHandCategory(cards) : undefined;
+    // #296: this specific hand's own variant, not the table's current one —
+    // see HandItem.variant's doc comment.
+    const variant = item.variant === 'short_deck' ? 'short_deck' : 'standard';
+    const cards = withHole?.hole && board ? bestFiveCardHand([...withHole.hole, ...board], variant) : withHole?.hole;
+    const category = cards?.length === 5 ? bestHandCategory(cards, variant) : undefined;
     return {
       key: item.hand_id,
       names: winners.map(w => w.name),

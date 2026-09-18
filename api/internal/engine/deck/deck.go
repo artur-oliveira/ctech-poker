@@ -81,6 +81,21 @@ const (
 	ShortDeck
 )
 
+// Label returns the wire/storage string for v — "" for Standard, "short_deck"
+// for ShortDeck — matching roomstore.VariantStandard/VariantShortDeck exactly
+// (duplicated as literals there rather than imported, since roomstore must
+// not depend on the engine and this package must not depend on roomstore).
+// Used to carry a hand's variant into persisted records (hand.HandOutcome,
+// sessionlog.HandItem) that outlive the room and must not be reinterpreted
+// against a room's current variant later (#296, mirrors why HandOutcome
+// captures its own SmallBlind/BigBlind instead of reading the room's).
+func (v Variant) Label() string {
+	if v == ShortDeck {
+		return "short_deck"
+	}
+	return ""
+}
+
 var standardDeck = orderedDeck()
 
 // shortDeckOrderedDeck returns the 36-card short-deck ordering: every rank
