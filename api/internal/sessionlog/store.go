@@ -97,6 +97,7 @@ type HandItem struct {
 	HandID       string `dynamodbav:"hand_id" json:"hand_id"`
 	Outcome      string `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
 	NetChange    int64  `dynamodbav:"net_change" json:"net_change"`
+	ContainsBot  bool   `dynamodbav:"contains_bot,omitempty" json:"contains_bot,omitempty"`
 	// EndedAt is an epoch-milliseconds timestamp (time.Now().UnixMilli(), set
 	// once in app.go's onHandComplete pipeline). Every endpoint that emits a
 	// hand — /players/me/hands, /players/me/hand/:id, and the public
@@ -111,8 +112,8 @@ type HandItem struct {
 	// scale (#75). Zero on hands recorded before this field existed; readers
 	// must treat 0 as "unknown" and hide the marker rather than assume a
 	// default.
-	SmallBlind int64             `dynamodbav:"small_blind,omitempty" json:"small_blind,omitempty"`
-	BigBlind   int64             `dynamodbav:"big_blind,omitempty" json:"big_blind,omitempty"`
+	SmallBlind int64 `dynamodbav:"small_blind,omitempty" json:"small_blind,omitempty"`
+	BigBlind   int64 `dynamodbav:"big_blind,omitempty" json:"big_blind,omitempty"`
 	// Variant is the rule variant this hand was played under (#296) —
 	// hand.HandOutcome.Variant verbatim ("" for standard, "short_deck").
 	// Same reasoning as SmallBlind/BigBlind: captured at hand-complete time
@@ -121,11 +122,11 @@ type HandItem struct {
 	// or since-deleted room says now. Empty on hands recorded before this
 	// field existed, which readers must treat as standard (the only variant
 	// that existed then).
-	Variant string `dynamodbav:"variant,omitempty" json:"variant,omitempty"`
-	Board      []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
-	BoardTwo   []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
-	HoleCards  []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
-	Opponents  []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
+	Variant   string            `dynamodbav:"variant,omitempty" json:"variant,omitempty"`
+	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo  []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
+	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof
 	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
 	// player independently verify the deck they were dealt (B32).

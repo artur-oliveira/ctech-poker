@@ -208,6 +208,7 @@ export interface HandItem {
   hand_id: string;
   outcome: HandOutcome;
   net_change: number;
+  contains_bot?: boolean;
   // Epoch milliseconds, never seconds, on every hand endpoint that emits
   // this field (list, by-id, and ProfileShowcase.best_hand) — see
   // handEndedAtMs below. Do not add a per-call-site unit heuristic; a

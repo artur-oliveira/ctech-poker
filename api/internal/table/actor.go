@@ -155,6 +155,12 @@ type Actor struct {
 	runoutTimerStage        hand.Stage
 	runoutTimerPhase        int
 	runoutStreetDelay       time.Duration
+	botFillTimer            *time.Timer
+	botFillArmedFor         int64
+	botActionTimer          *time.Timer
+	botActionArmedFor       string
+	botPostHandTimer        *time.Timer
+	botPostHandArmedFor     string
 	// runoutRetries drives handleRunoutStep's bounded re-arm after a
 	// transient (non-panic) load/commit failure — see retryRunoutStep. A
 	// mid-runout hand has no current_player_id, so nothing else on this
@@ -438,6 +444,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handlePeekCards(ctx, c)
 	case JoinCmd:
 		return a.handleJoin(ctx, c)
+	case EnableBotsCmd:
+		return a.handleEnableBots(ctx, c)
 	case LeaveCmd:
 		return a.handleLeave(ctx, c)
 	case PostBigBlindCmd:
@@ -456,6 +464,12 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleKickTimeout(ctx, c)
 	case afkSweepCmd:
 		return a.handleAFKSweep(ctx, c)
+	case fillBotsCmd:
+		return a.handleFillBots(ctx)
+	case botActCmd:
+		return a.handleBotAct(ctx, c)
+	case botPostHandCmd:
+		return a.handleBotPostHand(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:

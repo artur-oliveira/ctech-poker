@@ -129,7 +129,7 @@ function TableContent() {
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode,
     USE_MOCK ? {scenario, delay} : undefined, suppressed);
   useEffect(() => {
-    const ids = (rt.snapshot?.seats ?? []).map(seat => seat.player_id)
+    const ids = (rt.snapshot?.seats ?? []).filter(seat => !seat.is_bot).map(seat => seat.player_id)
       .filter(playerId => playerId && playerId !== viewer).sort();
     // Seat membership is only knowable from the authoritative snapshot; this
     // mirrors it into the query key instead of re-deriving it during render.
@@ -210,9 +210,10 @@ function TableContent() {
     }
   }, [queryClient]);
   if (bucket) return <>
-    <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
+    <BuyInPanel bucket={bucket} onSeatedAction={(roomId, matchKind) => {
       queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
-      router.replace(`/table?id=${encodeURIComponent(roomId)}`);
+      const match = matchKind === 'bot_pending' ? '&match=bot_pending' : '';
+      router.replace(`/table?id=${encodeURIComponent(roomId)}${match}`);
     }}/>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
@@ -374,6 +375,7 @@ function TableContent() {
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
                   maxSeats={layoutCapacity} seatLayoutKey={id}
+                  waitingForBots={params.get('match') === 'bot_pending' && s.stage === 'waiting_for_players'}
                   turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   nextHandDeadlineMs={!connectionMessage ? s.next_hand_unix_ms : undefined}

@@ -76,7 +76,7 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
   roomId?: string;
   bucket?: LobbyBucket;
   shareCode?: string;
-  onSeatedAction: (roomId: string) => void
+  onSeatedAction: (roomId: string, matchKind?: 'human' | 'waiting' | 'bot_pending' | 'reserved') => void
 }) {
   const sliderId = useId();
   const autoRebuyId = useId();
@@ -144,13 +144,14 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
         // table inside this bucket and seats the player, so losing the last
         // seat to a concurrent joiner resolves into another table here,
         // without a bounce back to the lobby.
-        const {room_id} = await joinOrCreateRoom({
+        const {room_id, match_kind} = await joinOrCreateRoom({
           small_blind: bucket.smallBlind, big_blind: bucket.bigBlind, max_seats: bucket.maxSeats,
           amount: value, auto_rebuy: autoRebuy || undefined, idem_key: idemKeyFor(value),
           ...(allowBots ? {allow_bots: true} : {}),
         });
         await queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
-        onSeatedAction(room_id);
+        if (match_kind) onSeatedAction(room_id, match_kind);
+        else onSeatedAction(room_id);
         return;
       }
       if (autoRebuy) {

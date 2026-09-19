@@ -57,6 +57,7 @@ const (
 type Player struct {
 	ID             string `dynamodbav:"id"`
 	IsBot          bool   `dynamodbav:"is_bot,omitempty"`
+	BotProfile     string `dynamodbav:"bot_profile,omitempty"`
 	Name           string `dynamodbav:"name,omitempty"`
 	AvatarURL      string `dynamodbav:"avatar_url,omitempty"`
 	PlaystyleBadge string `dynamodbav:"playstyle_badge,omitempty"`
@@ -151,9 +152,10 @@ type Table struct {
 	// currencyMode already follows. It picks the deck and hand evaluator
 	// StartHand/showdown use; nothing about the betting/side-pot/settlement
 	// state machine reads it.
-	variant  deck.Variant
-	round    *betting.Round
-	roundIdx map[string]int // playerID -> index into round.Players, for the active betting round
+	variant   deck.Variant
+	botPolicy BotPolicy
+	round     *betting.Round
+	roundIdx  map[string]int // playerID -> index into round.Players, for the active betting round
 
 	// roundBaseline records, for each player in the current round, the value
 	// round.Players[idx].Contributed held at the moment this round began
@@ -233,6 +235,7 @@ type HandOutcome struct {
 	// ComebackWinners which only counts those who also won.
 	AllInPlayers  []string
 	Participants  []string
+	ContainsBot   bool
 	Payouts       map[string]int64
 	Contributions map[string]int64
 	PotResults    []PotResult
@@ -2043,6 +2046,7 @@ func (t *Table) runShowdown() {
 		Winners:            dedupeIDs(winningIDs),
 		WonWithoutShowdown: wonWithoutShowdown,
 		Participants:       participantIDs(t.handOrder),
+		ContainsBot:        handOrderContainsBot(t.handOrder),
 		Payouts:            payouts,
 		Contributions:      contributionsByID,
 		PotResults:         potResults,
@@ -2124,6 +2128,15 @@ func (t *Table) runShowdown() {
 	t.lastOutcome = &outcome
 	t.stage = Complete
 	t.rotateDealer()
+}
+
+func handOrderContainsBot(players []*Player) bool {
+	for _, p := range players {
+		if p.IsBot {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *Table) evaluateLayer(layer sidepots.PotLayer, board []deck.Card) ([]string, []string, handeval.Score) {

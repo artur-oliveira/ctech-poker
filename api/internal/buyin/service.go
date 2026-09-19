@@ -623,12 +623,18 @@ func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, int64, in
 	}
 	select {
 	case snap := <-snapCh:
+		occupiedHumans := 0
 		for _, seat := range snap.Seats {
-			if seat.PlayerID == playerID {
-				return true, seat.Stack, len(snap.Seats), nil
+			if !seat.IsBot {
+				occupiedHumans++
 			}
 		}
-		return false, 0, len(snap.Seats), nil
+		for _, seat := range snap.Seats {
+			if seat.PlayerID == playerID {
+				return true, seat.Stack, occupiedHumans, nil
+			}
+		}
+		return false, 0, occupiedHumans, nil
 	default:
 		return false, 0, 0, nil
 	}

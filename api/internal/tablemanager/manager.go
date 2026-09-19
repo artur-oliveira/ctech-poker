@@ -188,6 +188,18 @@ func (m *Manager) SetOnHandUpdated(fn func(tableID, handID string, outcome hand.
 	m.onHandUpdated = fn
 }
 
+func outcomeContainsBot(outcome hand.HandOutcome) bool {
+	if outcome.ContainsBot {
+		return true
+	}
+	for _, id := range outcome.Participants {
+		if strings.HasPrefix(id, "bot:") {
+			return true
+		}
+	}
+	return false
+}
+
 // SetOnSeatsChanged installs the occupancy write-through hook, invoked with
 // (tableID, seatsTaken) after every table actor's committed join/leave, for
 // every actor this manager creates (including ones created before this call).
@@ -435,6 +447,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	actor.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
 		if m.onHandComplete != nil {
 			m.onHandComplete(tableID, handID, outcome, names)
+		}
+		if outcomeContainsBot(outcome) {
+			return
 		}
 		if m.autoRebuySweep != nil {
 			m.autoRebuySweep(tableID, handID, outcome)

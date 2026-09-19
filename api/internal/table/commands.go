@@ -262,6 +262,18 @@ type JoinCmd struct {
 
 func (c JoinCmd) reply() chan error { return c.Reply }
 
+// EnableBotsCmd records the creator's explicit sandbox opt-in. The persisted
+// activation timestamp lets a replacement actor resume the wait instead of
+// either filling immediately or forgetting the request.
+type EnableBotsCmd struct {
+	OwnerID  string
+	BuyIn    int64
+	MaxSeats int
+	Reply    chan error
+}
+
+func (c EnableBotsCmd) reply() chan error { return c.Reply }
+
 type LeaveCmd struct {
 	PlayerID         string
 	Stack            chan int64 // receives the player's final stack, only after the removal commits
@@ -368,3 +380,24 @@ func (c kickTimeoutCmd) reply() chan error { return c.Reply }
 type afkSweepCmd struct{ Reply chan error }
 
 func (c afkSweepCmd) reply() chan error { return c.Reply }
+
+type fillBotsCmd struct{ Reply chan error }
+
+func (c fillBotsCmd) reply() chan error { return c.Reply }
+
+type botActCmd struct {
+	PlayerID string
+	HandID   string
+	Version  int
+	Reply    chan error
+}
+
+func (c botActCmd) reply() chan error { return c.Reply }
+
+type botPostHandCmd struct {
+	HandID  string
+	Version int
+	Reply   chan error
+}
+
+func (c botPostHandCmd) reply() chan error { return c.Reply }

@@ -65,6 +65,20 @@ export default function TableGuide() {
           reações e últimos vencedores passam para os ícones do cabeçalho, como no celular em pé.</p></>
     },
     {
+      id: 'bots-sandbox',
+      title: 'Bots nas mesas sandbox',
+      summary: 'Uma opção por entrada evita que você fique sozinho sem esconder que o adversário é automatizado.',
+      body: <><p>Ao entrar por uma mesa pública sandbox de até <b>500 / 1.000</b>, você pode ativar
+        <b> Começar com bots após 15 s</b>. Enquanto a mesa aguarda, o centro do feltro mostra
+        <b> Preparando adversários…</b>. Cada assento automatizado tem o selo textual <b>BOT</b>.</p>
+        <GuideBullets>
+          <li><span>Heads-up recebe no máximo um bot; mesas de 6 e 9 lugares mantêm vagas livres para pessoas.</span></li>
+          <li><span>Quando outra pessoa chega, os bots terminam ou abandonam a mão atual e cedem os lugares antes da próxima.</span></li>
+          <li><span>As fichas ganhas ou perdidas valem na carteira sandbox e aparecem no seu histórico privado.</span></li>
+          <li><span>Mãos com bots não alteram ranking, conquistas, estatísticas públicas, confrontos ou jogadores recentes.</span></li>
+        </GuideBullets></>
+    },
+    {
       id: 'acoes',
       title: 'Ações na sua vez',
       summary: 'A barra habilita apenas o que é legal no estado atual.',

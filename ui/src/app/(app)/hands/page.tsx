@@ -107,6 +107,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
       {Boolean(hand.big_blind) && <span className="hand-row-blinds">
         {(hand.small_blind ?? 0).toLocaleString('pt-BR')}/{hand.big_blind!.toLocaleString('pt-BR')}
       </span>}
+      {hand.contains_bot && <span className="hand-row-blinds">BOT · fora do ranking</span>}
       {hand.server_seed
         ? <span className="hand-row-seed" title={hand.server_seed}><ShieldCheck aria-hidden="true"/> seed {truncateSeed(hand.server_seed)}</span>
         : <span className="hand-row-seed is-pending"><LockKeyhole aria-hidden="true"/> seed não revelada</span>}

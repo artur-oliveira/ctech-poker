@@ -185,7 +185,8 @@ describe('BuyInPanel', () => {
 
   test('requires per-entry bot consent and sends it only after opt-in', async () => {
     mocks.joinOrCreateRoom.mockResolvedValue({room_id: 'bot-room', created: true, match_kind: 'bot_pending'});
-    render(<BuyInPanel bucket={{smallBlind: 250, bigBlind: 500, maxSeats: 9}} onSeatedAction={vi.fn()}/>);
+    const seated = vi.fn();
+    render(<BuyInPanel bucket={{smallBlind: 250, bigBlind: 500, maxSeats: 9}} onSeatedAction={seated}/>);
 
     const botSwitch = screen.getByRole('switch', {name: 'Começar com bots após 15 s'});
     expect(botSwitch).not.toBeChecked();
@@ -197,6 +198,7 @@ describe('BuyInPanel', () => {
     await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
       allow_bots: true, max_seats: 9,
     })));
+    expect(seated).toHaveBeenCalledWith('bot-room', 'bot_pending');
   });
 
   test('retrying the same amount reuses the idempotency key, a new amount does not', async () => {

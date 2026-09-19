@@ -133,7 +133,10 @@ func (a *Actor) SetChatPrefsLookupForActor(fn func(ctx context.Context, playerID
 
 func (a *Actor) notifySeatsChanged() {
 	if a.onSeatsChanged != nil && a.cached != nil {
-		a.onSeatsChanged(len(a.cached.PlayersForActor()))
+		// The lobby's occupancy mirror controls whether a human may attempt to
+		// join. Bots are replaceable capacity and must never make a table look
+		// full to matchmaking, especially at heads-up tables.
+		a.onSeatsChanged(a.cached.HumanSeatCountForActor())
 	}
 }
 

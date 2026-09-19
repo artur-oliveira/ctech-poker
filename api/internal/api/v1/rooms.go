@@ -408,7 +408,23 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	if created {
 		matchKind = "waiting"
 		if req.AllowBots {
-			matchKind = "bot_pending"
+			room, roomErr := h.rooms.Get(c.Context(), roomID)
+			if roomErr != nil || room == nil {
+				observability.Warn(c.Context(), "bot table room lookup failed", roomErr, "room_id", roomID)
+			} else if actor, actorErr := h.manager.GetOrCreateActor(c.Context(), roomID, func() *hand.Table {
+				return table.SeedForRoom(room)
+			}); actorErr != nil || actor == nil {
+				observability.Warn(c.Context(), "bot table actor unavailable", actorErr, "room_id", roomID)
+			} else {
+				reply := make(chan error, 1)
+				if botErr := actor.Dispatch(table.EnableBotsCmd{
+					OwnerID: userID, BuyIn: req.Amount, MaxSeats: req.MaxSeats, Reply: reply,
+				}); botErr != nil {
+					observability.Warn(c.Context(), "bot table activation failed", botErr, "room_id", roomID)
+				} else {
+					matchKind = "bot_pending"
+				}
+			}
 		}
 	}
 	return c.JSON(JoinOrCreateRoomResponse{RoomID: roomID, Created: created, MatchKind: matchKind})

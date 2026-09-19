@@ -1,0 +1,327 @@
+package table
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"math/rand/v2"
+	"strings"
+	"time"
+
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/pokerbot"
+	"gopkg.aoctech.app/poker/api/internal/tablestore"
+)
+
+const botFillDelay = 15 * time.Second
+
+var botNames = []string{"Lia", "Caio", "Bia", "Nando", "Maya", "Theo", "Iris", "Davi"}
+
+type botRandom struct{}
+
+func (botRandom) Float64() float64 { return rand.Float64() }
+func (botRandom) IntN(n int) int   { return rand.IntN(n) }
+
+func (a *Actor) handleEnableBots(ctx context.Context, c EnableBotsCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	apply := func() error {
+		return a.mutate(func() error {
+			activateAt := timeNowFunc().Add(botFillDelay).UnixMilli()
+			if err := a.cached.ConfigureBotsForActor(c.OwnerID, c.BuyIn, c.MaxSeats, activateAt); err != nil {
+				return err
+			}
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.OwnerID, Action: "enable_bots"})
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
+	a.armBotFillTimer()
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) armBotFillTimer() {
+	if a.cached == nil {
+		return
+	}
+	policy := a.cached.BotPolicyForActor()
+	if !policy.Enabled || a.cached.BotSeatsNeededForActor() == 0 {
+		if a.botFillTimer != nil {
+			a.botFillTimer.Stop()
+		}
+		a.botFillArmedFor = 0
+		return
+	}
+	if a.botFillArmedFor == policy.ActivateAtUnixMs {
+		return
+	}
+	if a.botFillTimer != nil {
+		a.botFillTimer.Stop()
+	}
+	a.botFillArmedFor = policy.ActivateAtUnixMs
+	delay := time.Until(time.UnixMilli(policy.ActivateAtUnixMs))
+	if delay < 0 {
+		delay = 0
+	}
+	a.botFillTimer = time.AfterFunc(delay, func() {
+		reply := make(chan error, 1)
+		if err := a.Dispatch(fillBotsCmd{Reply: reply}); err != nil {
+			slog.Warn("table bot fill dispatch failed", "table_id", a.id, "err", err)
+		}
+	})
+}
+
+func (a *Actor) handleFillBots(ctx context.Context) error {
+	a.botFillArmedFor = 0
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	policy := a.cached.BotPolicyForActor()
+	if !policy.Enabled || policy.ActivateAtUnixMs > timeNowFunc().UnixMilli() || a.cached.BotSeatsNeededForActor() == 0 {
+		a.armBotFillTimer()
+		return nil
+	}
+	apply := func() error {
+		return a.mutate(func() error {
+			needed := a.cached.BotSeatsNeededForActor()
+			for i := 0; i < needed; i++ {
+				index := nextBotIndex(a.cached.PlayersForActor(), policy.OwnerID)
+				profile := pokerbot.Profiles[index%len(pokerbot.Profiles)]
+				if err := a.cached.AddBotForActor(
+					fmt.Sprintf("bot:%s:%d", policy.OwnerID, index),
+					botNames[index%len(botNames)], profile.ID,
+				); err != nil {
+					return err
+				}
+			}
+			a.tryStartHand(ctx)
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "fill_bots"})
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
+	a.notifySeatsChanged()
+	a.broadcastAll()
+	return nil
+}
+
+func nextBotIndex(players []*hand.Player, ownerID string) int {
+	for i := 0; ; i++ {
+		candidate := fmt.Sprintf("bot:%s:%d", ownerID, i)
+		found := false
+		for _, p := range players {
+			found = found || p.ID == candidate
+		}
+		if !found {
+			return i
+		}
+	}
+}
+
+func (a *Actor) armBotActionTimer() {
+	if a.cached == nil {
+		return
+	}
+	current := a.cached.CurrentPlayerIDForActor()
+	bot, ok := a.cached.BotForActor(current)
+	key := fmt.Sprintf("%s:%s:%d", a.handID, current, a.version)
+	if !ok || current == "" {
+		if a.botActionTimer != nil {
+			a.botActionTimer.Stop()
+		}
+		a.botActionArmedFor = ""
+		return
+	}
+	if a.botActionArmedFor == key {
+		return
+	}
+	if a.botActionTimer != nil {
+		a.botActionTimer.Stop()
+	}
+	remaining := a.turnDeadline.Sub(timeNowFunc())
+	if remaining <= 0 {
+		remaining = a.turnTimeout
+	}
+	delay := pokerbot.ThinkDelay(profileByID(bot.BotProfile), randomThinkKind(), remaining, botRandom{})
+	a.botActionArmedFor = key
+	handID := a.handID
+	version := a.version
+	a.botActionTimer = time.AfterFunc(delay, func() {
+		reply := make(chan error, 1)
+		if err := a.Dispatch(botActCmd{PlayerID: current, HandID: handID, Version: version, Reply: reply}); err != nil {
+			slog.Warn("table bot action dispatch failed", "table_id", a.id, "player_id", current, "err", err)
+		}
+	})
+}
+
+func randomThinkKind() pokerbot.ThinkKind {
+	x := rand.Float64()
+	switch {
+	case x < .12:
+		return pokerbot.ThinkRoutine
+	case x < .84:
+		return pokerbot.ThinkNormal
+	case x < .97:
+		return pokerbot.ThinkLarge
+	default:
+		return pokerbot.ThinkHesitation
+	}
+}
+
+func profileByID(id string) pokerbot.Profile {
+	for _, profile := range pokerbot.Profiles {
+		if profile.ID == id {
+			return profile
+		}
+	}
+	return pokerbot.Profiles[0]
+}
+
+func (a *Actor) handleBotAct(ctx context.Context, c botActCmd) error {
+	a.botActionArmedFor = ""
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	if a.handID != c.HandID || a.version != c.Version || a.cached.CurrentPlayerIDForActor() != c.PlayerID {
+		a.armBotActionTimer()
+		return nil
+	}
+	bot, ok := a.cached.BotForActor(c.PlayerID)
+	if !ok {
+		return nil
+	}
+	view := a.cached.ViewFor(c.PlayerID)
+	strength := .5
+	if hole, board, available := a.cached.HoleAndBoardForActor(c.PlayerID); available {
+		opponents := 0
+		for _, seat := range view.Seats {
+			if seat.PlayerID != c.PlayerID && (seat.State == "active" || seat.State == "all_in") {
+				opponents++
+			}
+		}
+		if opponents > 0 {
+			if estimate, estimated := a.equityFor(hole, board, opponents); estimated {
+				strength = estimate
+			}
+		}
+	}
+	var pot int64
+	for _, p := range view.Pots {
+		pot += p.Amount
+	}
+	decision, err := pokerbot.Decide(profileByID(bot.BotProfile), pokerbot.Context{
+		Legal: view.LegalActions, Strength: strength, Pot: pot, Stack: bot.Stack,
+	}, botRandom{})
+	if err != nil {
+		return err
+	}
+	action := betting.Action(strings.ToLower(decision.Action))
+	actionID := fmt.Sprintf("bot-act-%s-%s-%d", a.handID, c.PlayerID, a.version)
+	_, err = a.applyActAndCommit(ctx, ActCmd{PlayerID: c.PlayerID, ActionID: actionID, Action: action, Amount: decision.Amount})
+	if err != nil {
+		return err
+	}
+	if err := a.commitOutcomeLogEntries(ctx); err != nil {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) armBotPostHandTimer() {
+	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.botPostHandArmedFor == a.handID {
+		return
+	}
+	hasBot := false
+	for _, p := range a.cached.PlayersForActor() {
+		hasBot = hasBot || p.IsBot
+	}
+	if !hasBot {
+		return
+	}
+	a.botPostHandArmedFor = a.handID
+	handID, version := a.handID, a.version
+	delay := 800*time.Millisecond + time.Duration(rand.Float64()*1200)*time.Millisecond
+	a.botPostHandTimer = time.AfterFunc(delay, func() {
+		reply := make(chan error, 1)
+		if err := a.Dispatch(botPostHandCmd{HandID: handID, Version: version, Reply: reply}); err != nil {
+			slog.Warn("table bot post-hand dispatch failed", "table_id", a.id, "hand_id", handID, "err", err)
+		}
+	})
+}
+
+func (a *Actor) handleBotPostHand(ctx context.Context, c botPostHandCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	if a.handID != c.HandID || a.version != c.Version || a.cached.Stage() != hand.Complete {
+		return nil
+	}
+	outcome := a.cached.LastOutcomeForActor()
+	if outcome == nil {
+		return nil
+	}
+	winners := stringSet(outcome.Winners)
+	allIn := stringSet(outcome.AllInPlayers)
+	changed := false
+	err := a.mutate(func() error {
+		for _, bot := range a.cached.PlayersForActor() {
+			if !bot.IsBot || bot.PendingExit {
+				continue
+			}
+			profile := profileByID(bot.BotProfile)
+			switch pokerbot.RevealChoice(profile, botRandom{}) {
+			case pokerbot.RevealBoth:
+				if applied, revealErr := a.cached.RevealHoleCard(bot.ID, nil); revealErr == nil {
+					changed = changed || applied
+				}
+			case pokerbot.RevealOne:
+				index := int32(rand.IntN(2))
+				if applied, revealErr := a.cached.RevealHoleCard(bot.ID, &index); revealErr == nil {
+					changed = changed || applied
+				}
+			}
+			wonAllIn := winners[bot.ID] && allIn[bot.ID]
+			if pokerbot.ShouldCashOut(profile, pokerbot.ExitContext{
+				WonAllIn: wonAllIn, HitAndRun: profile.ID == "volatile",
+				StackTooShort: bot.Stack < max64(1, bot.BuyInAmount/4),
+			}, botRandom{}) {
+				if exitErr := a.cached.RequestExit(bot.ID); exitErr != nil {
+					return exitErr
+				}
+				changed = true
+			}
+		}
+		if !changed {
+			return nil
+		}
+		return a.commit(ctx, fmt.Sprintf("bot-post-%s", c.HandID), &tablestore.ActionLogEntry{Action: "bot_post_hand"})
+	})
+	if err != nil {
+		return err
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+func stringSet(ids []string) map[string]bool {
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
+}
+
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}

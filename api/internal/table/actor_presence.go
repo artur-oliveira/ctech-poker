@@ -371,14 +371,24 @@ func (a *Actor) removeIdlePlayersBetweenHands(ctx context.Context) {
 // protection handleLeave's ErrVersionConflict retry already relies on.
 func (a *Actor) removeEligiblePendingExits(ctx context.Context) {
 	var exiting []string
+	bots := make(map[string]bool)
 	for _, p := range a.cached.PlayersForActor() {
 		if p.PendingExit && !a.cached.DealtIntoCurrentHandForActor(p.ID) {
 			exiting = append(exiting, p.ID)
+			bots[p.ID] = p.IsBot
 		}
 	}
 	for _, id := range exiting {
 		stackCh := make(chan int64, 1)
 		holdIDCh := make(chan string, 1)
+		if bots[id] {
+			// Bot chips exist only inside this sandbox table. Removing them must
+			// never create a wallet credit or a pending cash-out row.
+			if err := a.handleLeave(ctx, LeaveCmd{PlayerID: id, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+				continue
+			}
+			continue
+		}
 		nonce := newSettlementNonce()
 		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "exit_requested", nonce, stackCh, holdIDCh)); err != nil {
 			continue

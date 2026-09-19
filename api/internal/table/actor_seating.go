@@ -134,18 +134,31 @@ func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
 func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	players := a.cached.PlayersForActor()
 	alreadySeated := false
+	humanSeats := 0
+	botSeats := 0
 	for _, player := range players {
 		if player.ID == c.PlayerID {
 			alreadySeated = true
-			break
+		}
+		if !player.IsBot {
+			humanSeats++
+		} else {
+			botSeats++
 		}
 	}
 	// A busted player still occupies their original seat. Capacity only
 	// rejects a genuinely new player; an existing player must reach the hand
 	// engine below, which restores a Stack<=0 seat and rejects a duplicate
 	// join when chips are still present.
-	if !alreadySeated && c.MaxSeats > 0 && len(players) >= c.MaxSeats {
-		return ErrNoSeatsAvailable
+	if !alreadySeated && c.MaxSeats > 0 {
+		full := len(players) >= c.MaxSeats
+		// Heads-up needs one temporary pending entrant so a human can replace
+		// the bot after the live hand. Larger formats keep spare seats by
+		// design, so they never exceed the configured table layout.
+		headsUpBotReplacement := c.MaxSeats == 2 && humanSeats == 1 && botSeats == 1
+		if humanSeats >= c.MaxSeats || (full && !headsUpBotReplacement) {
+			return ErrNoSeatsAvailable
+		}
 	}
 	// mutate is what guarantees a commit failure below (a transient store
 	// error, not just a version conflict retryOnConflict already reloads on)
@@ -155,6 +168,11 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	// commit persists the ghost seat for real the first time any other
 	// player's action commits — the 2026-09-01 incident.
 	return a.mutate(func() error {
+		if !alreadySeated {
+			if err := a.cached.RetireBotsForHumanArrival(); err != nil {
+				return err
+			}
+		}
 		p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli(), AutoRebuy: c.AutoRebuy, BuyInAmount: c.Stack}
 		stage := a.cached.Stage()
 		if stage != hand.WaitingForPlayers && stage != hand.Complete {
