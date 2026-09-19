@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 32);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 33);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -218,6 +218,19 @@ test('creates poker_reaction_entitlements and poker_reaction_purchases tables wi
   }
 });
 
+test('creates poker_cosmetic_loadouts with a player/loadout composite key and no GSI (#313)', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestCosmeticLoadoutsStack', {environment: 'dev', cloudwatchAlarmsEnabled: true});
+  const template = Template.fromStack(stack);
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_cosmetic_loadouts',
+    KeySchema: Match.arrayWith([
+      Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
+      Match.objectLike({AttributeName: 'sk', KeyType: 'RANGE'}),
+    ]),
+  });
+});
+
 test('creates poker_cosmetic_entitlements and poker_cosmetic_purchases tables with player/purchase composite keys', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestCosmeticPurchaseStack', {environment: 'dev', cloudwatchAlarmsEnabled: true});
@@ -406,5 +419,5 @@ test('creates no alarms and no SNS topic reference when cloudwatchAlarmsEnabled 
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::SNS::Topic', 0);
   // Tables themselves are unaffected by the flag.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 32);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 33);
 });

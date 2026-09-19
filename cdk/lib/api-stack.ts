@@ -77,6 +77,7 @@ interface ApiStackProps extends cdk.StackProps {
   reactionPurchasesTableArn: string;
   cosmeticEntitlementsTableArn: string;
   cosmeticPurchasesTableArn: string;
+  cosmeticLoadoutsTableArn: string;
   tableEntitlementsTableArn: string;
   socialEdgesTableArn: string;
   recentPlayersTableArn: string;
@@ -145,6 +146,7 @@ export class PokerApiStack extends cdk.Stack {
       reactionPurchasesTableArn,
       cosmeticPurchasesTableArn,
       cosmeticEntitlementsTableArn,
+      cosmeticLoadoutsTableArn,
       tableEntitlementsTableArn,
       socialEdgesTableArn,
       recentPlayersTableArn,
@@ -180,7 +182,7 @@ export class PokerApiStack extends cdk.Stack {
       playerHandsTableArn, handRevealsTableArn, playerMatchupsTableArn,
       playerNotesTableArn, chatPrefsTableArn, botcheckContestsTableArn, handMetaTableArn, handSharesTableArn, pokerStatsTableArn, highlightsTableArn, sandboxPurchasesTableArn,
       pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn, cosmeticEntitlementsTableArn,
-      cosmeticPurchasesTableArn, tableEntitlementsTableArn, socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
+      cosmeticPurchasesTableArn, cosmeticLoadoutsTableArn, tableEntitlementsTableArn, socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [

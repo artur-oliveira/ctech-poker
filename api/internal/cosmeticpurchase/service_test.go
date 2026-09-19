@@ -366,3 +366,46 @@ func TestCreateSandboxSameRequestReturnsConfirmedPurchaseWithoutSecondDebit(t *t
 		t.Fatalf("replay debited wallet %d times, want 1", wallet.debits)
 	}
 }
+
+// TestGrantActivatesOwnershipWithoutWallet is issue #292's ownership-reuse
+// acceptance: a seasonal frame/badge can be granted directly (no wallet call
+// at all) and IsOwned reflects it immediately, the same as a confirmed
+// purchase would.
+func TestGrantActivatesOwnershipWithoutWallet(t *testing.T) {
+	wallet := &fakeWallet{}
+	entitlements, store := newTestEntitlementStore(t), newTestStore(t)
+	svc := NewService(wallet, entitlements, store)
+	ctx := context.Background()
+
+	if err := svc.Grant(ctx, "player-1", cosmetics.KindFrame, "season-2026-q3", "season:2026-q3-top10"); err != nil {
+		t.Fatalf("Grant: %v", err)
+	}
+	owned, err := svc.IsOwned(ctx, "player-1", cosmetics.KindFrame, "season-2026-q3")
+	if err != nil || !owned {
+		t.Fatalf("IsOwned after Grant: owned=%v err=%v", owned, err)
+	}
+	if wallet.debits != 0 && wallet.credits != 0 {
+		t.Fatalf("Grant must never touch the wallet")
+	}
+}
+
+func TestGrantIsIdempotent(t *testing.T) {
+	entitlements, store := newTestEntitlementStore(t), newTestStore(t)
+	svc := NewService(&fakeWallet{}, entitlements, store)
+	ctx := context.Background()
+
+	if err := svc.Grant(ctx, "player-1", cosmetics.KindBadge, "season-2026-q3-champion", "season:2026-q3-champion"); err != nil {
+		t.Fatalf("first Grant: %v", err)
+	}
+	if err := svc.Grant(ctx, "player-1", cosmetics.KindBadge, "season-2026-q3-champion", "season:2026-q3-champion"); err != nil {
+		t.Fatalf("repeat Grant must be a no-op, got: %v", err)
+	}
+}
+
+func TestGrantUnknownItemRejected(t *testing.T) {
+	entitlements, store := newTestEntitlementStore(t), newTestStore(t)
+	svc := NewService(&fakeWallet{}, entitlements, store)
+	if err := svc.Grant(context.Background(), "player-1", cosmetics.KindBadge, "not-a-real-badge", "season:x"); !errors.Is(err, ErrUnknownItem) {
+		t.Fatalf("expected ErrUnknownItem, got %v", err)
+	}
+}

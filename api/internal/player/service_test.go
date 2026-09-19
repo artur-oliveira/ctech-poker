@@ -65,6 +65,14 @@ func (s *memoryStore) SetStatsGoals(_ context.Context, _ string, goals map[strin
 	s.profile.StatsGoals = goals
 	return nil
 }
+func (s *memoryStore) SetEquippedFrame(_ context.Context, _ string, frameID string) error {
+	s.profile.EquippedFrameID = frameID
+	return nil
+}
+func (s *memoryStore) SetEquippedBadges(_ context.Context, _ string, badgeIDs []string) error {
+	s.profile.EquippedBadgeIDs = badgeIDs
+	return nil
+}
 
 type fakeCosmeticsChecker struct{ owned bool }
 
@@ -443,5 +451,69 @@ func TestSetBetPresetMode(t *testing.T) {
 	store.profile.BetPresetMode = "gone"
 	if got := store.profile.EffectiveBetPresetMode(); got != BetPresetModeMixed {
 		t.Fatalf("EffectiveBetPresetMode on an unknown value = %q, want %q", got, BetPresetModeMixed)
+	}
+}
+
+// TestSetEquippedFrameValidatesCatalogAndOwnership is #292's core acceptance:
+// a premium frame the player doesn't own can never be equipped.
+func TestSetEquippedFrameValidatesCatalogAndOwnership(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: false})
+
+	if _, err := svc.SetEquippedFrame(context.Background(), "user-1", "not-a-real-frame"); !errors.Is(err, ErrInvalidFrame) {
+		t.Fatalf("expected ErrInvalidFrame, got %v", err)
+	}
+	if _, err := svc.SetEquippedFrame(context.Background(), "user-1", "season-2026-q3"); !errors.Is(err, ErrCosmeticNotOwned) {
+		t.Fatalf("expected ErrCosmeticNotOwned, got %v", err)
+	}
+
+	svc = NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: true})
+	profile, err := svc.SetEquippedFrame(context.Background(), "user-1", "season-2026-q3")
+	if err != nil {
+		t.Fatalf("SetEquippedFrame: %v", err)
+	}
+	if profile.EquippedFrameID != "season-2026-q3" {
+		t.Fatalf("unexpected equipped frame: %+v", profile)
+	}
+
+	// Unequipping (empty id) is always allowed, no ownership check needed.
+	svc = NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: false})
+	profile, err = svc.SetEquippedFrame(context.Background(), "user-1", "")
+	if err != nil || profile.EquippedFrameID != "" {
+		t.Fatalf("expected unequip to succeed, got profile=%+v err=%v", profile, err)
+	}
+}
+
+// TestSetEquippedBadgesValidatesCountUniquenessAndOwnership is #292's other
+// acceptance criterion: bounded count, no duplicates, each id owned.
+func TestSetEquippedBadgesValidatesCountUniquenessAndOwnership(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: true})
+
+	tooMany := make([]string, maxEquippedBadges+1)
+	for i := range tooMany {
+		tooMany[i] = "season-2026-q3-top10"
+	}
+	if _, err := svc.SetEquippedBadges(context.Background(), "user-1", tooMany); !errors.Is(err, ErrInvalidBadges) {
+		t.Fatalf("expected ErrInvalidBadges for too many badges, got %v", err)
+	}
+	if _, err := svc.SetEquippedBadges(context.Background(), "user-1", []string{"season-2026-q3-top10", "season-2026-q3-top10"}); !errors.Is(err, ErrInvalidBadges) {
+		t.Fatalf("expected ErrInvalidBadges for a duplicate id, got %v", err)
+	}
+	if _, err := svc.SetEquippedBadges(context.Background(), "user-1", []string{"not-a-real-badge"}); !errors.Is(err, ErrInvalidBadges) {
+		t.Fatalf("expected ErrInvalidBadges for an unknown id, got %v", err)
+	}
+
+	unowned := NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: false})
+	if _, err := unowned.SetEquippedBadges(context.Background(), "user-1", []string{"season-2026-q3-top10"}); !errors.Is(err, ErrCosmeticNotOwned) {
+		t.Fatalf("expected ErrCosmeticNotOwned, got %v", err)
+	}
+
+	profile, err := svc.SetEquippedBadges(context.Background(), "user-1", []string{"season-2026-q3-top10", "season-2026-q3-champion"})
+	if err != nil {
+		t.Fatalf("SetEquippedBadges: %v", err)
+	}
+	if len(profile.EquippedBadgeIDs) != 2 {
+		t.Fatalf("unexpected equipped badges: %+v", profile.EquippedBadgeIDs)
 	}
 }
