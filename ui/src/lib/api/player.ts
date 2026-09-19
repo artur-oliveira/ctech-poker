@@ -71,6 +71,11 @@ export interface PlayerProfile {
   bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
   playstyle?: PlaystyleBadge[];
+  // Seasonal avatar decorations (#292). Both are equip-only fields: which
+  // frames/badges exist and which this player owns comes from
+  // listOwnedAvatarCosmetics, never from the profile itself.
+  equipped_frame_id?: string;
+  equipped_badge_ids?: string[];
 }
 
 // Canonical source of truth for a player's wallet balances. Both the sandbox
@@ -101,6 +106,8 @@ export async function updateMe(input: {
   favorite_reactions?: string[];
   bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
+  equipped_frame_id?: string;
+  equipped_badge_ids?: string[];
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }

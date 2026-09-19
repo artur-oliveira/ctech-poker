@@ -1,7 +1,7 @@
 'use client';
 import {useCallback, useRef, useState} from 'react';
 import {useInfiniteQuery, useQuery, useQueryClient} from '@tanstack/react-query';
-import {ChevronRight, Clock3, Coins, Layers, Palette, ShoppingBag, Sparkles} from 'lucide-react';
+import {Bookmark, ChevronRight, Clock3, Coins, Layers, Palette, ShoppingBag, Sparkles} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
 import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
 import {SkuGrid} from '@/components/store/SkuGrid';
@@ -12,6 +12,7 @@ import {reactionActivityRows, ReactionStoreSection} from '@/components/reactions
 import {ReactionPurchaseDialog} from '@/components/reactions/ReactionPurchaseDialog';
 import {ReactionRefundDialog} from '@/components/reactions/ReactionRefundDialog';
 import {cosmeticActivityRows, DeckStoreSection, FeltStoreSection} from '@/components/store/CosmeticStoreSection';
+import {CosmeticLoadoutSection} from '@/components/store/CosmeticLoadoutSection';
 import {PurchaseActivityList} from '@/components/store/PurchaseActivityList';
 import {CosmeticPurchaseDialog} from '@/components/store/CosmeticPurchaseDialog';
 import {CosmeticRefundDialog} from '@/components/store/CosmeticRefundDialog';
@@ -114,6 +115,7 @@ export default function Store() {
   const [reactionsRef, reactionsSeen] = useInViewOnce();
   const [decksRef, decksSeen] = useInViewOnce();
   const [feltRef, feltSeen] = useInViewOnce();
+  const [loadoutsRef, loadoutsSeen] = useInViewOnce();
   const [chipsRef, chipsSeen] = useInViewOnce();
   const [activityRef, activitySeen] = useInViewOnce();
 
@@ -244,6 +246,11 @@ export default function Store() {
               : `${ownedFeltCount} de ${premiumFeltCount} liberados`}</small></span>
             <ChevronRight aria-hidden="true"/>
           </a>
+          <a href="#loadouts">
+            <span className="store-directory-icon"><Bookmark aria-hidden="true"/></span>
+            <span><b>Combos</b><small>Baralho + feltro salvos juntos</small></span>
+            <ChevronRight aria-hidden="true"/>
+          </a>
           <a href="#chips">
             <span className="store-directory-icon"><Coins aria-hidden="true"/></span>
             <span><b>Fichas</b><small>{sandboxBalance === undefined ? 'Carregando saldo…'
@@ -349,6 +356,9 @@ export default function Store() {
                               onRefundAction={(purchase, trigger) =>
                                 openFrom(trigger, () => setFeltRefundTarget(purchase))}/>
           </section>
+
+          <CosmeticLoadoutSection sectionRef={loadoutsRef} seen={loadoutsSeen}
+                                  deckVariant={player.data?.deck_variant} tableTheme={player.data?.table_theme}/>
 
           <section id="chips" ref={chipsRef} className="store-section store-department store-chips-department"
                    aria-labelledby="sandbox-chips-title">

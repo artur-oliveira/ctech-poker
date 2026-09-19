@@ -5721,6 +5721,107 @@ button.deck-grid-slot:hover {
     font-size: var(--font-size-compact);
     text-align: center
 }
+/* Saved cosmetic loadouts (#313). */
+.cosmetic-loadout-save-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control)
+}
+.cosmetic-loadout-save-preview {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 64px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat);
+    overflow: hidden;
+    flex-shrink: 0
+}
+.cosmetic-loadout-save-copy {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px
+}
+.cosmetic-loadout-save-copy strong {
+    color: var(--paper)
+}
+.cosmetic-loadout-save-copy small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
+}
+.cosmetic-loadout-limit-note {
+    margin: 0 0 12px;
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+.cosmetic-loadout-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+.cosmetic-loadout-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control)
+}
+.cosmetic-loadout-preview {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 58px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat);
+    overflow: hidden;
+    flex-shrink: 0
+}
+.cosmetic-loadout-copy {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px
+}
+.cosmetic-loadout-copy strong {
+    overflow: hidden;
+    color: var(--paper);
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+.cosmetic-loadout-copy small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
+}
+.cosmetic-loadout-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px
+}
+.cosmetic-loadout-name-field {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 4px
+}
+@media (max-width: 480px) {
+    .cosmetic-loadout-save-row {
+        flex-wrap: wrap
+    }
+    .cosmetic-loadout-save-row > button {
+        width: 100%
+    }
+}
 .store-activity-list li {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr) 92px;
@@ -7020,7 +7121,7 @@ button.deck-grid-slot:hover {
     width: 96px;
     height: 96px
 }
-.player-profile-avatar > [data-slot='avatar'] {
+.player-profile-avatar [data-slot='avatar'] {
     border: 1px solid var(--white-18)
 }
 .player-profile-avatar .profile-avatar-camera.profile-avatar-camera {
@@ -7032,6 +7133,44 @@ button.deck-grid-slot:hover {
 .player-profile-avatar .profile-avatar-camera svg {
     width: 16px;
     height: 16px
+}
+/* Seasonal avatar frame/badges (#292) — decorative composition, never
+   server-rendered. `player-avatar-decorated` only exists in the DOM when
+   badges are equipped (see PlayerAvatar); a frame alone stays on the plain
+   [data-slot='avatar'] element with no extra wrapper, so every caller that
+   never passes frameId/badgeIds (every seat, every other avatar in the app)
+   renders byte-identical to before this field existed. */
+[data-slot='avatar'][data-frame] {
+    outline: 3px solid var(--gold-pale);
+    outline-offset: 2px
+}
+[data-slot='avatar'][data-frame='champion-gold'] {
+    outline-color: var(--gold)
+}
+.player-avatar-decorated {
+    position: relative;
+    display: inline-flex
+}
+.player-avatar-badges {
+    position: absolute;
+    left: -4px;
+    bottom: -4px;
+    display: flex;
+    gap: 2px
+}
+.player-avatar-badge {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--ink);
+    border-radius: var(--rounded-pill);
+    background: var(--gold);
+    color: var(--gold-ink)
+}
+.player-avatar-badge svg {
+    width: 11px;
+    height: 11px
 }
 .player-profile-name {
     display: grid;
@@ -7136,6 +7275,76 @@ button.deck-grid-slot:hover {
     color: var(--brand-bright-7);
     text-decoration: underline;
     text-underline-offset: 3px
+}
+/* Seasonal avatar frame/badges picker (#292). */
+.avatar-decoration-preview {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 4px
+}
+.avatar-decoration-group {
+    margin: 16px 0 0;
+    padding: 0;
+    border: 0
+}
+.avatar-decoration-group legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 700
+}
+.avatar-decoration-badge-count {
+    color: var(--gold);
+    font: 650 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.avatar-decoration-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px
+}
+.avatar-decoration-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    color: var(--on-brand);
+    font: 600 var(--font-size-compact) inherit;
+    cursor: pointer
+}
+.avatar-decoration-option[aria-checked='true'] {
+    border-color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 18%, var(--surface-control))
+}
+.avatar-decoration-option svg {
+    width: 15px;
+    height: 15px
+}
+.avatar-decoration-badges-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+.avatar-decoration-badge-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--on-brand);
+    font-size: var(--font-size-body);
+    cursor: pointer
+}
+.avatar-decoration-badge-option svg {
+    width: 15px;
+    height: 15px;
+    color: var(--gold)
 }
 .showcase-layout-list {
     display: grid;
