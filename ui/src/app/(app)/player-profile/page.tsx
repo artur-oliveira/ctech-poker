@@ -10,6 +10,7 @@ import {chipsExact, moneyExact} from '@/lib/chips';
 import {getMe, type PlayerProfile} from '@/lib/api/player';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
+import {AvatarDecorationSection} from './AvatarDecorationSection';
 import {ChatFilterSection} from './ChatFilterSection';
 import {IdentitySection} from './IdentitySection';
 import {ShowcaseSection} from './ShowcaseSection';
@@ -67,6 +68,9 @@ export default function PlayerProfilePage() {
         {me
           ? <>
             <IdentitySection key={`identity:${me.name ?? ''}:${me.avatar_url ?? ''}`} me={me}/>
+            <AvatarDecorationSection
+              key={`avatar-decoration:${me.equipped_frame_id ?? ''}:${(me.equipped_badge_ids || []).join(',')}`}
+              me={me}/>
             <ShowcaseSection
               key={`showcase:${me.showcase_public}:${me.playstyle_public}:${me.table_public}:${(me.featured_achievements || []).join(',')}:${JSON.stringify(me.showcase_layout || {})}`}
               me={me}/>

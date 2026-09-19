@@ -8,12 +8,13 @@ export default function StoreGuide() {
     description="Reações premium, baralhos, feltros, recompensa diária, pacotes via Pix e o histórico de tudo o que você liberou."
     currentHref="/guide/store" next={{href: '/guide/profile', label: 'Configurar meu perfil'}} sections={[
       {
-        id: 'secoes', title: 'Os cinco departamentos', summary: 'O diretório no topo leva direto à seção certa.',
-        image: {src: '/guide/store-live.webp', alt: 'Loja com o diretório de reações, baralhos, feltro, fichas e compras'},
+        id: 'secoes', title: 'Os seis departamentos', summary: 'O diretório no topo leva direto à seção certa.',
+        image: {src: '/guide/store-live.webp', alt: 'Loja com o diretório de reações, baralhos, feltro, combos, fichas e compras'},
         body: <><p>Abra a <b>Loja</b> na navegação ou toque no saldo ao lado do avatar. Cada entrada do diretório mostra quantos itens você já liberou; a de fichas mostra o saldo atual.</p>
           <GuideBullets><li><span><b>Reações premium:</b> seis gestos além dos gratuitos.</span></li>
             <li><span><b>Baralhos:</b> variações de cor e desenho das cartas.</span></li>
             <li><span><b>Feltro:</b> os temas de mesa além do Clássico.</span></li>
+            <li><span><b>Combos:</b> baralho e feltro salvos juntos, com nome, para aplicar os dois de uma vez.</span></li>
             <li><span><b>Fichas:</b> saldo, recompensa diária e pacotes.</span></li>
             <li><span><b>Compras e estornos:</b> recibos de reações, baralhos e feltros. As compras de fichas ficam na própria seção de fichas.</span></li></GuideBullets>
           <GuideCallout kind="safe" title="Fichas não são dinheiro">O saldo de fichas serve para buy-ins, não pode ser sacado e não vira moeda real.</GuideCallout></>
@@ -27,6 +28,15 @@ export default function StoreGuide() {
           <li><span>Confirmado, o item já vale em qualquer mesa: a reação entra no painel, o baralho aparece em <b>Seu perfil</b>, na seção <b>Sua mesa</b>, e o feltro nas preferências da mesa.</span></li></GuideSteps>
           <p>Reações premium bloqueadas continuam visíveis na mesa com um cadeado; tocar nelas abre a compra sem tirar você da partida. Até três reações, premium ou não, podem virar atalho fixo ao lado do botão.</p>
           <GuideCallout kind="info" title="Estorno enquanto o item não foi usado">Um cosmético só pode ser estornado se nunca tiver sido selecionado. O servidor verifica isso antes de autorizar, e o item volta a ficar bloqueado.</GuideCallout></>
+      },
+      {
+        id: 'combos', title: 'Salvar e aplicar um combo', summary: 'Baralho e feltro salvos juntos, com um nome, para trocar os dois em um só toque.',
+        body: <><p>Na seção <b>Combos</b>, o card <b>Combinação atual</b> mostra o baralho e o feltro que você usa agora. Toque em <b>Salvar como combo</b>, dê um nome e ele entra na sua lista.</p>
+          <GuideSteps><li><span>Em cada combo salvo, toque em <b>Aplicar</b>. Um diálogo mostra o baralho e o feltro do combo antes de qualquer troca.</span></li>
+          <li><span>Confirme em <b>Aplicar combo</b>: os dois itens passam a valer na próxima mão, em qualquer mesa.</span></li>
+          <li><span><b>Excluir</b> remove o combo da lista; os itens salvos nele continuam seus.</span></li></GuideSteps>
+          <p>Até cinco combos por jogador. No limite, salve um novo só depois de excluir outro.</p>
+          <GuideCallout kind="info" title="Sempre reverifica a posse">Se um item premium do combo tiver sido estornado depois de salvo, aplicar o combo é recusado e nada muda. Nunca aplica um item que você não possui mais.</GuideCallout></>
       },
       {
         id: 'diaria', title: 'Resgatar a recompensa diária', summary: 'Um resgate por ciclo, direto no seu saldo.',

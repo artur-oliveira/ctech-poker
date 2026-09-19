@@ -28,7 +28,8 @@ export function IdentitySection({me}: {me: PlayerProfile}) {
       <p>Nome e foto aparecem na mesa, no ranking e na sua vitrine.</p>
     </header>
     <div className="player-profile-identity">
-      <ProfilePhotoEditor className="player-profile-avatar" name={me.name} avatarUrl={me.avatar_url} size={96}/>
+      <ProfilePhotoEditor className="player-profile-avatar" name={me.name} avatarUrl={me.avatar_url} size={96}
+                          frameId={me.equipped_frame_id} badgeIds={me.equipped_badge_ids}/>
       <form className="player-profile-name" onSubmit={event => {
         event.preventDefault();
         if (changed) save.saveName(name);

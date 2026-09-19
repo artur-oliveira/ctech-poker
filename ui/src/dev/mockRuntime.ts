@@ -10,6 +10,9 @@ import type {SandboxPurchase, SandboxSKU} from '@/lib/api/wallet';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS} from '@/lib/reactions';
 import type {PlayerNote} from '@/lib/api/playerNotes';
+import type {CosmeticLoadout} from '@/lib/api/cosmeticLoadouts';
+import type {TableThemeId} from '@/lib/tablePreferences';
+import {AVATAR_BADGES, AVATAR_FRAMES, type AvatarBadgeId, type AvatarFrameId} from '@/lib/avatarCosmetics';
 import type {
   ActionPreselection,
   HandHistoryAction,
@@ -263,6 +266,11 @@ const mockProfile = {
   friend_code: 'PKR-ANA1-2345-6789',
   wallet_mode: 'sandbox' as 'sandbox' | 'real',
   deck_variant: 'four-color' as DeckVariantId,
+  table_theme: 'classic' as TableThemeId,
+  // One of each owned, so the equip picker (#292) has something to show
+  // without a purchase flow standing behind it in mock-land.
+  equipped_frame_id: '' as string,
+  equipped_badge_ids: [] as string[],
   poker_terms_accepted: true,
   showcase_public: true,
   playstyle_public: true,
@@ -287,6 +295,16 @@ type MockSandboxPurchase = SandboxPurchase & {
 };
 
 const mockSandboxPurchases: MockSandboxPurchase[] = [];
+
+// #292: one frame and one badge already owned, so the equip UI has something
+// to pick from without wiring a purchase/grant flow into mock-land.
+const mockOwnedFrameIDs: AvatarFrameId[] = Object.keys(AVATAR_FRAMES).slice(0, 1) as AvatarFrameId[];
+const mockOwnedBadgeIDs: AvatarBadgeId[] = Object.keys(AVATAR_BADGES) as AvatarBadgeId[];
+
+// #313: saved cosmetic loadouts, capped the same as the server
+// (internal/cosmeticloadout.maxLoadoutsPerPlayer).
+const MOCK_MAX_LOADOUTS = 5;
+let mockCosmeticLoadouts: CosmeticLoadout[] = [];
 
 const mockReactionPrices: Record<string, { price_cents: number; price_fichas: number }> = {
   cold: {price_cents: 100, price_fichas: 100_000},
@@ -803,6 +821,23 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       if (!body.deck_variant.trim()) fail(400, 'deck_variant must not be empty', config);
       mockProfile.deck_variant = body.deck_variant;
     }
+    if (typeof body.table_theme === 'string') {
+      if (!body.table_theme.trim()) fail(400, 'table_theme must not be empty', config);
+      mockProfile.table_theme = body.table_theme;
+    }
+    if (typeof body.equipped_frame_id === 'string') {
+      if (body.equipped_frame_id && !(body.equipped_frame_id in AVATAR_FRAMES && mockOwnedFrameIDs.includes(body.equipped_frame_id))) {
+        fail(400, 'equipped_frame_id is not owned', config);
+      }
+      mockProfile.equipped_frame_id = body.equipped_frame_id;
+    }
+    if (Array.isArray(body.equipped_badge_ids)) {
+      if (body.equipped_badge_ids.length > 3 || new Set(body.equipped_badge_ids).size !== body.equipped_badge_ids.length ||
+        body.equipped_badge_ids.some((id: unknown) => typeof id !== 'string' || !mockOwnedBadgeIDs.includes(id as AvatarBadgeId))) {
+        fail(400, 'invalid equipped badges', config);
+      }
+      mockProfile.equipped_badge_ids = [...body.equipped_badge_ids];
+    }
     if (typeof body.showcase_public === 'boolean') mockProfile.showcase_public = body.showcase_public;
     if (typeof body.playstyle_public === 'boolean') mockProfile.playstyle_public = body.playstyle_public;
     if (typeof body.table_public === 'boolean') mockProfile.table_public = body.table_public;
@@ -1237,6 +1272,45 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   }
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok(page([]), config);
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-catalog')) return ok(page([]), config);
+
+  // #292: which frame/badge ids this player owns — the equip picker's only read.
+  const ownedCosmeticsMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/cosmetics\/(frame|badge)\/owned$/) : null;
+  if (ownedCosmeticsMatch) {
+    return ok(page(ownedCosmeticsMatch[1] === 'frame' ? mockOwnedFrameIDs : mockOwnedBadgeIDs), config);
+  }
+
+  // #313: saved cosmetic loadouts.
+  if (method === 'GET' && path === '/v1.0/players/me/cosmetic-loadouts') {
+    return ok(page(mockCosmeticLoadouts), config);
+  }
+  if (method === 'POST' && path === '/v1.0/players/me/cosmetic-loadouts') {
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const selections = body.selections && typeof body.selections === 'object' ? body.selections as Record<string, string> : {};
+    if (!name) fail(400, 'name must not be empty', config);
+    if (Object.keys(selections).length === 0) fail(400, 'selections must not be empty', config);
+    if (mockCosmeticLoadouts.length >= MOCK_MAX_LOADOUTS) fail(409, 'loadout limit reached', config);
+    const loadout: CosmeticLoadout = {
+      id: `mock-loadout-${crypto.randomUUID()}`, name, selections: {...selections},
+      created_at: new Date().toISOString()
+    };
+    mockCosmeticLoadouts = [loadout, ...mockCosmeticLoadouts];
+    return ok(loadout, config);
+  }
+  const loadoutApplyMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/cosmetic-loadouts\/([^/]+)\/apply$/) : null;
+  if (loadoutApplyMatch) {
+    const loadout = mockCosmeticLoadouts.find(item => item.id === decodeURIComponent(loadoutApplyMatch[1]));
+    if (!loadout) fail(404, 'loadout not found', config);
+    if (typeof loadout.selections.deck === 'string') mockProfile.deck_variant = loadout.selections.deck as DeckVariantId;
+    if (typeof loadout.selections.felt === 'string') mockProfile.table_theme = loadout.selections.felt as TableThemeId;
+    return ok(loadout, config);
+  }
+  const loadoutDeleteMatch = method === 'DELETE' ? path.match(/^\/v1\.0\/players\/me\/cosmetic-loadouts\/([^/]+)$/) : null;
+  if (loadoutDeleteMatch) {
+    const id = decodeURIComponent(loadoutDeleteMatch[1]);
+    if (!mockCosmeticLoadouts.some(item => item.id === id)) fail(404, 'loadout not found', config);
+    mockCosmeticLoadouts = mockCosmeticLoadouts.filter(item => item.id !== id);
+    return ok({}, config);
+  }
   const highlightMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/highlights\/today$/) : null;
   if (highlightMatch) {
     return ok({

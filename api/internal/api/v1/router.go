@@ -159,6 +159,7 @@ func Register(
 	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)
 	RegisterCosmeticPurchase(router, auth, cosmeticPurchaseSvc, purchaseLimiter)
+	RegisterAvatarCosmeticsOwnership(router, auth, cosmeticPurchaseSvc)
 	// nil in the narrower test-only wiring (app.registerRoutes).
 	if cosmeticLoadoutSvc != nil {
 		RegisterCosmeticLoadouts(router, auth, cosmeticLoadoutSvc)

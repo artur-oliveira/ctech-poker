@@ -576,6 +576,15 @@ func (s *Service) IsOwned(ctx context.Context, playerID string, kind cosmetics.K
 	return e.active(), nil
 }
 
+// OwnedIDs lists the item ids of kind this player owns, with no wallet call
+// at all — the read the frame/badge equip UI needs (#292): those kinds are
+// never sold through this service's wallet routes (validCosmeticKind only
+// ever accepts deck/felt), so ListCatalog's wallet-price merge does not apply
+// to them and would fail on their empty SKU.
+func (s *Service) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.Kind) (map[string]bool, error) {
+	return s.entitlements.OwnedIDs(ctx, playerID, kind)
+}
+
 // Grant creates an active entitlement without any wallet purchase — the
 // ownership mechanism issue #292 (seasonal avatar frames/badges, unlocked by
 // a season/achievement milestone rather than bought) reuses instead of
