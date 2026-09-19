@@ -111,6 +111,16 @@
         bottom: calc(var(--action-bar-stack) + env(safe-area-inset-bottom))
     }
 }
+
+.seat-bot-badge {
+  flex: none;
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--gold) 65%, transparent);
+  border-radius: 4px;
+  color: var(--gold);
+  font: 700 0.5625rem/1.2 var(--font-mono);
+  letter-spacing: .08em;
+}
 @media (prefers-reduced-motion: reduce) {
 .reconnect-notice > span {
         transform: none !important;

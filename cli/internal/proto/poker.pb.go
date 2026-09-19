@@ -115,7 +115,10 @@ type Seat struct {
 	// The player has asked to leave. They are paused (no future hands) and,
 	// once no longer dealt into the current hand, will be removed and cashed
 	// out automatically. Cancelable via cancel_exit until that removal commits.
-	PendingExit   *bool `protobuf:"varint,21,opt,name=pending_exit,json=pendingExit,proto3,oneof" json:"pending_exit,omitempty"`
+	PendingExit *bool `protobuf:"varint,21,opt,name=pending_exit,json=pendingExit,proto3,oneof" json:"pending_exit,omitempty"`
+	// Server-controlled seat. Always surfaced so clients identify automation
+	// without inferring it from a display name.
+	IsBot         bool `protobuf:"varint,22,opt,name=is_bot,json=isBot,proto3" json:"is_bot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -293,6 +296,13 @@ func (x *Seat) GetCurrentStreak() int32 {
 func (x *Seat) GetPendingExit() bool {
 	if x != nil && x.PendingExit != nil {
 		return *x.PendingExit
+	}
+	return false
+}
+
+func (x *Seat) GetIsBot() bool {
+	if x != nil {
+		return x.IsBot
 	}
 	return false
 }
@@ -1964,7 +1974,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xeb\x06\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x82\a\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1993,7 +2003,8 @@ const file_poker_proto_rawDesc = "" +
 	"\n" +
 	"auto_rebuy\x18\x13 \x01(\bH\aR\tautoRebuy\x88\x01\x01\x12%\n" +
 	"\x0ecurrent_streak\x18\x14 \x01(\x05R\rcurrentStreak\x12&\n" +
-	"\fpending_exit\x18\x15 \x01(\bH\bR\vpendingExit\x88\x01\x01B\t\n" +
+	"\fpending_exit\x18\x15 \x01(\bH\bR\vpendingExit\x88\x01\x01\x12\x15\n" +
+	"\x06is_bot\x18\x16 \x01(\bR\x05isBotB\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +

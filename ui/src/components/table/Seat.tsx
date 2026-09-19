@@ -398,7 +398,8 @@ function SeatImpl({
     <div className="seat-info">
       {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
       <b
-        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span
+        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b>
+      {seat.is_bot && <span className="seat-bot-badge" aria-label="Jogador automatizado">BOT</span>}<span
         aria-label={`${exact(displayStack)}${unit}`}>{chips(displayStack)}<i
         className="seat-stack-unit">{unit}</i></span>{showEquity && chance != null &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>

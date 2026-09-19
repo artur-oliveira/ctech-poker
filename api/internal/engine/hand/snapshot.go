@@ -126,6 +126,7 @@ type PotResultView struct {
 
 type SeatView struct {
 	PlayerID        string `json:"player_id"`
+	IsBot           bool   `json:"is_bot,omitempty"`
 	Name            string `json:"name,omitempty"`
 	AvatarURL       string `json:"avatar_url,omitempty"`
 	PlaystyleBadge  string `json:"playstyle_badge,omitempty"`
@@ -258,6 +259,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	for _, p := range t.players {
 		sv := SeatView{
 			PlayerID:         p.ID,
+			IsBot:            p.IsBot,
 			Name:             p.Name,
 			AvatarURL:        p.AvatarURL,
 			PlaystyleBadge:   p.PlaystyleBadge,

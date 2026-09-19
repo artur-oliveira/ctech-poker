@@ -56,6 +56,7 @@ const (
 
 type Player struct {
 	ID             string `dynamodbav:"id"`
+	IsBot          bool   `dynamodbav:"is_bot,omitempty"`
 	Name           string `dynamodbav:"name,omitempty"`
 	AvatarURL      string `dynamodbav:"avatar_url,omitempty"`
 	PlaystyleBadge string `dynamodbav:"playstyle_badge,omitempty"`
@@ -150,9 +151,9 @@ type Table struct {
 	// currencyMode already follows. It picks the deck and hand evaluator
 	// StartHand/showdown use; nothing about the betting/side-pot/settlement
 	// state machine reads it.
-	variant deck.Variant
-	round             *betting.Round
-	roundIdx          map[string]int // playerID -> index into round.Players, for the active betting round
+	variant  deck.Variant
+	round    *betting.Round
+	roundIdx map[string]int // playerID -> index into round.Players, for the active betting round
 
 	// roundBaseline records, for each player in the current round, the value
 	// round.Players[idx].Contributed held at the moment this round began

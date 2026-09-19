@@ -8,6 +8,7 @@ export type SeatIdentity = Pick<SeatView, 'player_id' | 'name'>;
 
 export interface SeatView {
   player_id: string;
+  is_bot?: boolean;
   name?: string;
   avatar_url?: string;
   playstyle_badge?: string;

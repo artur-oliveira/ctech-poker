@@ -341,6 +341,12 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	if req.CurrencyMode != roomstore.CurrencyModeSandbox && req.CurrencyMode != roomstore.CurrencyModeReal {
 		return problem.BadRequest("currency_mode must be sandbox or real").Send(c)
 	}
+	if req.AllowBots && req.CurrencyMode != roomstore.CurrencyModeSandbox {
+		return problem.BadRequest("bots are only available in sandbox mode").Send(c)
+	}
+	if req.AllowBots && req.BigBlind > 1000 {
+		return problem.BadRequest("bots are only available up to 500/1000 blinds").Send(c)
+	}
 	if req.CurrencyMode == roomstore.CurrencyModeReal && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
 		return problem.BadRequest("unsupported currency mode").Send(c)
 	}
@@ -371,7 +377,7 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 			observability.Warn(c.Context(), "join-or-create open session lookup failed", err, "player_id", userID)
 		} else if tableID != "" {
 			if room, err := h.rooms.Get(c.Context(), tableID); err == nil && room != nil && roomMatchesBucket(*room, req) {
-				return c.JSON(JoinOrCreateRoomResponse{RoomID: room.ID})
+				return c.JSON(JoinOrCreateRoomResponse{RoomID: room.ID, MatchKind: "human"})
 			}
 		}
 	}
@@ -398,7 +404,14 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 		}
 		return problem.Conflict(err.Error()).Send(c)
 	}
-	return c.JSON(JoinOrCreateRoomResponse{RoomID: roomID, Created: created})
+	matchKind := "human"
+	if created {
+		matchKind = "waiting"
+		if req.AllowBots {
+			matchKind = "bot_pending"
+		}
+	}
+	return c.JSON(JoinOrCreateRoomResponse{RoomID: roomID, Created: created, MatchKind: matchKind})
 }
 
 // roomMatchesBucket reports whether room is one this bucket spec would have

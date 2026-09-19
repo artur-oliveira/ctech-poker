@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {useId, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {ChevronLeft, RefreshCw} from 'lucide-react';
+import {Bot, ChevronLeft, RefreshCw} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import axios from 'axios';
 import {Button} from '@/components/ui/button';
@@ -80,10 +80,12 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
 }) {
   const sliderId = useId();
   const autoRebuyId = useId();
+  const allowBotsId = useId();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState<number | null>(null);
   const [autoRebuy, setAutoRebuy] = useState(false);
+  const [allowBots, setAllowBots] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
   // A bucket entry regenerates the key only when the player moves the slider:
@@ -145,6 +147,7 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
         const {room_id} = await joinOrCreateRoom({
           small_blind: bucket.smallBlind, big_blind: bucket.bigBlind, max_seats: bucket.maxSeats,
           amount: value, auto_rebuy: autoRebuy || undefined, idem_key: idemKeyFor(value),
+          ...(allowBots ? {allow_bots: true} : {}),
         });
         await queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
         onSeatedAction(room_id);
@@ -195,6 +198,16 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
         <output htmlFor={sliderId}>{fmt(value)}{unit && <> <span>{unit}</span></>}</output>
         <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(room.buy_in_max)}</small>
       </div>
+      {!isReal && bucket && <div className="buyin-control table-preference-toggle">
+        <span><Bot aria-hidden="true"/><span>
+          <Label id={`${allowBotsId}-label`} htmlFor={allowBotsId}>Começar com bots após 15 s</Label>
+          <small>{allowBots
+            ? `Até ${room.max_seats === 2 ? 1 : room.max_seats === 6 ? 3 : 5} bots podem completar a mesa. Suas fichas podem aumentar ou diminuir; essas mãos ficam fora do ranking.`
+            : 'Continuamos procurando pessoas. Você pode habilitar bots somente para esta entrada.'}</small>
+        </span></span>
+        <Switch id={allowBotsId} aria-labelledby={`${allowBotsId}-label`} checked={allowBots} disabled={joining}
+                onCheckedChange={setAllowBots}/>
+      </div>}
       {!isReal &&
           <div className="buyin-control table-preference-toggle">
               <span><RefreshCw aria-hidden="true"/><span>

@@ -39,12 +39,17 @@ type JoinOrCreateRoomRequest struct {
 	Amount         int64  `json:"amount"`
 	IdempotencyKey string `json:"idem_key,omitempty"`   // stable per click; a retry re-seats at the same table instead of a second one
 	AutoRebuy      bool   `json:"auto_rebuy,omitempty"` // only meaningful on a fresh join
+	// AllowBots is an explicit, per-entry sandbox consent. It is accepted now
+	// so old/new clients can roll independently; the matchmaker only acts on it
+	// once the bot seating coordinator is enabled.
+	AllowBots bool `json:"allow_bots,omitempty"`
 }
 
 // JoinOrCreateRoomResponse tells the client exactly which table to open.
 type JoinOrCreateRoomResponse struct {
-	RoomID  string `json:"room_id"`
-	Created bool   `json:"created"` // true when no open table in the bucket could seat the player
+	RoomID    string `json:"room_id"`
+	Created   bool   `json:"created"`              // true when no open table in the bucket could seat the player
+	MatchKind string `json:"match_kind,omitempty"` // human | waiting | bot_pending | reserved
 }
 
 // RoomBucket is one lobby tile's server-computed availability, aggregated

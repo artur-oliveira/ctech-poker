@@ -211,3 +211,15 @@ func TestJoinOrCreateRejectsUnsupportedSeatCount(t *testing.T) {
 		t.Fatalf("got %d", got)
 	}
 }
+
+func TestJoinOrCreateRejectsBotsOutsideSandbox(t *testing.T) {
+	if got := postJoinOrCreate(t, `{"small_blind":10,"big_blind":20,"max_seats":6,"amount":1000,"currency_mode":"real","allow_bots":true}`); got != fiber.StatusBadRequest {
+		t.Fatalf("got %d", got)
+	}
+}
+
+func TestJoinOrCreateRejectsBotsAboveSupportedStake(t *testing.T) {
+	if got := postJoinOrCreate(t, `{"small_blind":1000,"big_blind":2000,"max_seats":6,"amount":40000,"allow_bots":true}`); got != fiber.StatusBadRequest {
+		t.Fatalf("got %d", got)
+	}
+}

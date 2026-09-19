@@ -52,6 +52,9 @@ message Seat {
   // once no longer dealt into the current hand, will be removed and cashed
   // out automatically. Cancelable via cancel_exit until that removal commits.
   optional bool pending_exit = 21;
+  // Server-controlled seat. Always surfaced so clients identify automation
+  // without inferring it from a display name.
+  bool is_bot = 22;
 }
 
 message BlindEscalation {

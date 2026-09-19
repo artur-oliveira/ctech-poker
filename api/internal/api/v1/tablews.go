@@ -1044,6 +1044,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		}
 		protoSeats[i] = &pokerproto.Seat{
 			PlayerId:          s.PlayerID,
+			IsBot:             s.IsBot,
 			Name:              s.Name,
 			AvatarUrl:         avatarURL,
 			PlaystyleBadge:    playstyleBadge,

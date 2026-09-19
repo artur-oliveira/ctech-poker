@@ -74,6 +74,7 @@ export interface JoinOrCreateInput {
   amount: number;
   currency_mode?: 'sandbox' | 'real';
   auto_rebuy?: boolean;
+  allow_bots?: boolean;
   // Stable per click (a retry of the same click must re-seat at the same
   // table, not buy a second seat in a sibling one). The caller owns it, so a
   // retry can reuse the key it already sent.
@@ -85,7 +86,7 @@ export interface JoinOrCreateInput {
 // last-seat race falls through to another table without the client walking
 // candidates or re-reading the lobby (#205, backend #76).
 export async function joinOrCreateRoom(input: JoinOrCreateInput) {
-  return (await apiClient.post<{ room_id: string; created: boolean }>(
+  return (await apiClient.post<{ room_id: string; created: boolean; match_kind?: 'human' | 'waiting' | 'bot_pending' | 'reserved' }>(
     '/v1.0/rooms/join-or-create', input, {silentError: true},
   )).data;
 }
