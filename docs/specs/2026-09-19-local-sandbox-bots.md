@@ -45,6 +45,8 @@ Bots may use the existing standard and targeted catalog, including premium and p
 
 The post-hand trigger avoids distracting from a betting decision. Further triggers during a hand require their own public-event timing and visual validation.
 
+The generated poker and lobby bindings were regenerated with protoc 36.1 to match the pinned CI contract check. This changes generator headers only, not the wire schema.
+
 ## Remaining release work
 
 - Add replaceable-bot bucket fields described in #395.
