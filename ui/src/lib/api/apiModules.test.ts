@@ -4,6 +4,8 @@ import {leaderboard, myRank} from './gamification';
 import {createHandShare, getHandShare, revokeHandShare} from './handShares';
 import {acceptPokerTerms, getHand, getHands, getMe, getProfileShowcase, getSessions, updateMe,} from './player';
 import {getPlayerNotes, savePlayerNote} from './playerNotes';
+import {getChatPrefs, saveChatPrefs} from './chatPrefs';
+import {fileBotCheckContest, listBotCheckContests} from './botCheckContest';
 import {getTodayHighlight} from './highlights';
 import {getMyPokerStats} from './pokerStats';
 import {
@@ -18,6 +20,7 @@ import {
 const client = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
+  put: vi.fn(),
   delete: vi.fn(),
 }));
 vi.mock('./client', () => ({apiClient: client}));
@@ -27,6 +30,7 @@ describe('API domain modules', () => {
     vi.clearAllMocks();
     client.get.mockResolvedValue({data: {data: ['item'], stakes: ['stake'], value: true}});
     client.post.mockResolvedValue({data: {value: true}});
+    client.put.mockResolvedValue({data: {value: true}});
     client.delete.mockResolvedValue({data: undefined});
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('idem-key');
   });
@@ -198,6 +202,27 @@ describe('API domain modules', () => {
       '/v1.0/rooms/table%2F1/highlights/today',
       {silentError: true},
     );
+  });
+
+  test('covers personal chat filter prefs and bot-check contest endpoints (#322, #327)', async () => {
+    client.get
+      .mockResolvedValueOnce({data: {extra_words: ['chato']}})
+      .mockResolvedValueOnce({data: {data: [{contest_id: 'c-1', status: 'pending', created_at: 't'}]}});
+    client.put.mockResolvedValueOnce({data: {extra_words: ['chato', 'lento']}});
+    client.post.mockResolvedValueOnce({data: {contest_id: 'c-2', status: 'pending', created_at: 't2'}});
+
+    await expect(getChatPrefs()).resolves.toEqual({extra_words: ['chato']});
+    await expect(saveChatPrefs(['chato', 'lento'])).resolves.toEqual({extra_words: ['chato', 'lento']});
+    await expect(listBotCheckContests()).resolves.toEqual([{contest_id: 'c-1', status: 'pending', created_at: 't'}]);
+    await expect(fileBotCheckContest({tableId: 'table-1', reason: 'não era bot'}))
+      .resolves.toEqual({contest_id: 'c-2', status: 'pending', created_at: 't2'});
+
+    expect(client.get).toHaveBeenCalledWith('/v1.0/players/me/chat-prefs/', {silentError: true});
+    expect(client.put).toHaveBeenCalledWith('/v1.0/players/me/chat-prefs/', {extra_words: ['chato', 'lento']});
+    expect(client.get).toHaveBeenCalledWith('/v1.0/players/me/bot-challenge/contests/', {silentError: true});
+    expect(client.post).toHaveBeenCalledWith('/v1.0/players/me/bot-challenge/contests/', {
+      table_id: 'table-1', reason: 'não era bot',
+    });
   });
 
   test('maps premium reaction catalog, purchase, refresh and refund contracts', async () => {

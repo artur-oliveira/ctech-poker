@@ -64,6 +64,18 @@ type Actor struct {
 	// internal/tablestreak). nil in dev/tests without a cache, where the map
 	// above is the whole story.
 	streakStore StreakStore
+	// chatPrefsExtra holds each currently-seated player's personal
+	// chat-filter addition (#327, internal/chatprefs) — extra words masked
+	// only in the chat that player themselves sees, on top of the table-wide
+	// floor every stored message already carries. Same overlay idiom as
+	// streaks above: refreshed at a paced interval, never read per message.
+	chatPrefsExtra map[string][]string
+	// chatPrefsRefreshedAt paces the lookup that fills the map above — see
+	// ChatPrefsRefreshInterval.
+	chatPrefsRefreshedAt time.Time
+	// chatPrefsLookup answers one player's extra words. nil in dev/tests
+	// without one wired, where every viewer sees floor-only chat.
+	chatPrefsLookup func(ctx context.Context, playerID string) ([]string, error)
 	// activeConns tracks physical connection IDs, not just a count. Connect
 	// and Disconnect are therefore idempotent when a live WS is re-registered
 	// after actor replacement, and one tab closing cannot disconnect another.

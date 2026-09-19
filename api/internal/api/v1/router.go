@@ -10,7 +10,9 @@ import (
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
+	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
+	"gopkg.aoctech.app/poker/api/internal/chatprefs"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticloadout"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
@@ -78,6 +80,9 @@ func Register(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 	pending *reconcile.PendingStore,
+	chatPrefsStore *chatprefs.Store,
+	chatPrefsCache *chatprefs.ExtraWordsCache,
+	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
@@ -139,6 +144,8 @@ func Register(
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher, leaderboardSvc, pending)
 	RegisterReactionWheel(router, auth, players)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
+	RegisterChatPrefs(router, auth, chatPrefsStore, chatPrefsCache)
+	RegisterBotCheckContest(router, auth, botCheckContestStore)
 	RegisterHandMeta(router, auth, handMetaStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterHandReveal(router, auth, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)
