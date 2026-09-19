@@ -146,6 +146,14 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 			botSeats++
 		}
 	}
+	// Two authenticated status polls can confirm the same reservation at once
+	// after both buy-in prechecks observed an empty seat. Their wallet key is
+	// identical. Once one join commits, the other must report the same seat as
+	// success; returning an error would make buyin compensate the shared debit
+	// and leave the winner playing with a refunded stack.
+	if alreadySeated && c.ReservationID != "" {
+		return nil
+	}
 	if !alreadySeated && c.ReservationID == "" && (botSeats > 0 || a.cached.BotReservationForActor() != nil) {
 		return ErrBotReservationRequired
 	}

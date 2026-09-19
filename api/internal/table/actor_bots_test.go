@@ -99,4 +99,8 @@ func TestReservationRemovesWaitingBotAndBecomesReadyWithoutDebit(t *testing.T) {
 	if a.cached.BotReservationForActor() != nil {
 		t.Fatal("reservation must be consumed with the seat commit")
 	}
+	if err := a.applyJoinAndCommit(context.Background(), JoinCmd{PlayerID: "human-2", Stack: 4_000,
+		MaxSeats: 2, ReservationID: "r1"}); err != nil {
+		t.Fatalf("concurrent retry of committed reserved seat must be idempotent: %v", err)
+	}
 }
