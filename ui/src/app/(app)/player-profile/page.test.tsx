@@ -37,6 +37,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: ({queryKey, enabled}: {queryKey: unknown[]; enabled?: boolean}) => {
     if (enabled === false) return {data: undefined, isLoading: false};
     mocks.query(queryKey);
+    if (queryKey[1] === 'wallet-alerts') return {data: {min_sandbox_balance: 0, max_purchase_cents: 0}, isLoading: false};
     if (queryKey[0] === 'player') return {data: mocks.state.player, isLoading: !mocks.state.player};
     if (queryKey[0] === 'achievements') return {data: mocks.state.summary, isLoading: mocks.state.summaryLoading};
     if (queryKey[1] === 'cosmetic-catalog') return {data: mocks.state.catalog, isLoading: false};
@@ -139,7 +140,7 @@ describe('/player-profile', () => {
 
     expect(screen.getByRole('heading', {level: 1, name: 'Seu perfil'})).toBeInTheDocument();
     expect(screen.getAllByRole('heading', {level: 2}).map(node => node.textContent))
-      .toEqual(['Identidade', 'Sua vitrine', 'Sua mesa', 'Filtro de chat', 'Seus saldos']);
+      .toEqual(['Identidade', 'Sua vitrine', 'Sua mesa', 'Filtro de chat', 'Seus saldos', 'Alertas de carteira']);
     expect(screen.getByRole('textbox', {name: /Nome de exibição/})).toHaveValue('Ana Silva');
     expect(screen.getByRole('combobox', {name: 'Baralho'})).toBeInTheDocument();
     expect(screen.getByRole('definition')).toHaveTextContent('12.345');
@@ -364,9 +365,12 @@ describe('/player-profile', () => {
     mocks.state.player = {...player, wallet_mode: 'real'};
     render(<PlayerProfilePage/>);
     expect(screen.queryByText('Modo de jogo')).not.toBeInTheDocument();
-    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
-    expect(within(screen.getByRole('heading', {level: 2, name: 'Seus saldos'}).closest('section')!)
-      .getByText('12.345')).toBeInTheDocument();
+    // Scoped to the balances section: "Alertas de carteira" legitimately
+    // mentions R$ (a Pix chip purchase is real money regardless of whether
+    // the real-money *game* balance is on) — see WalletAlertsSection.
+    const balancesSection = screen.getByRole('heading', {level: 2, name: 'Seus saldos'}).closest('section')!;
+    expect(within(balancesSection).queryByText(/R\$/)).not.toBeInTheDocument();
+    expect(within(balancesSection).getByText('12.345')).toBeInTheDocument();
   });
 
   test('switches wallet mode when real money is on', async () => {

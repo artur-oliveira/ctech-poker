@@ -7,12 +7,57 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.aoctech.app/poker/api/internal/promocode"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
+
+// fakePromo is an in-memory stand-in for promocode.Store: a set of
+// already-claimed (playerID, key) pairs, exactly mirroring the real store's
+// conditional-put-blocks-duplicate semantics without touching DynamoDB.
+type fakePromo struct {
+	codes     map[string]promocode.Code // code -> catalog entry
+	claimed   map[string]bool           // playerID+"#"+key -> claimed
+	redeemErr error
+}
+
+func newFakePromo() *fakePromo {
+	return &fakePromo{codes: map[string]promocode.Code{}, claimed: map[string]bool{}}
+}
+
+func (f *fakePromo) Redeem(_ context.Context, playerID, code string) (*promocode.Code, error) {
+	if f.redeemErr != nil {
+		return nil, f.redeemErr
+	}
+	c, ok := f.codes[code]
+	if !ok {
+		return nil, promocode.ErrNotFound
+	}
+	k := playerID + "#" + code
+	if f.claimed[k] {
+		return nil, promocode.ErrAlreadyRedeemed
+	}
+	f.claimed[k] = true
+	return &c, nil
+}
+func (f *fakePromo) ReleaseRedemption(_ context.Context, playerID, code string) {
+	delete(f.claimed, playerID+"#"+code)
+}
+func (f *fakePromo) ClaimOnce(_ context.Context, playerID, sku string) error {
+	k := playerID + "#" + sku
+	if f.claimed[k] {
+		return promocode.ErrAlreadyRedeemed
+	}
+	f.claimed[k] = true
+	return nil
+}
+func (f *fakePromo) ReleaseClaim(_ context.Context, playerID, sku string) {
+	delete(f.claimed, playerID+"#"+sku)
+}
 
 type fakeWallet struct {
 	skus          []walletclient.SandboxSKU
 	purchase      *walletclient.SandboxPurchase
+	purchaseErr   error
 	getResult     *walletclient.SandboxPurchase
 	refundResult  *walletclient.SandboxPurchase
 	purchaseCalls int
@@ -25,6 +70,9 @@ func (f *fakeWallet) ListSandboxSKUs(context.Context) ([]walletclient.SandboxSKU
 func (f *fakeWallet) PurchaseSandbox(_ context.Context, _ string, _ string, idemKey string) (*walletclient.SandboxPurchase, error) {
 	f.purchaseCalls++
 	f.lastIdemKey = idemKey
+	if f.purchaseErr != nil {
+		return nil, f.purchaseErr
+	}
 	return f.purchase, nil
 }
 func (f *fakeWallet) GetSandboxPurchase(context.Context, string) (*walletclient.SandboxPurchase, error) {
@@ -83,7 +131,7 @@ func TestServiceCreatePersistsWithSKUBreakdown(t *testing.T) {
 	}
 	svc := NewService(wallet, newFakeStore())
 
-	rec, err := svc.Create(context.Background(), "player-1", "pack_100", "k1")
+	rec, err := svc.Create(context.Background(), "player-1", "pack_100", "", "k1")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -99,7 +147,7 @@ func TestServiceCreateRejectsUnknownSKU(t *testing.T) {
 	wallet := &fakeWallet{skus: []walletclient.SandboxSKU{{ID: "pack_100"}}}
 	svc := NewService(wallet, newFakeStore())
 
-	if _, err := svc.Create(context.Background(), "player-1", "not_a_real_sku", "k1"); err == nil {
+	if _, err := svc.Create(context.Background(), "player-1", "not_a_real_sku", "", "k1"); err == nil {
 		t.Fatal("expected an error for an unknown sku")
 	}
 	if wallet.purchaseCalls != 0 {
@@ -152,4 +200,102 @@ func TestServiceConfirmFromWebhookBroadcastsOnlyOnChange(t *testing.T) {
 		t.Fatal("expected replay to report no change")
 	}
 	_ = time.Now // keep time imported for readability of future assertions
+}
+
+func TestServiceCreateWithPromoCodeResolvesWalletSKUFromCode(t *testing.T) {
+	wallet := &fakeWallet{
+		skus:     []walletclient.SandboxSKU{{ID: "pack_promo", PriceCents: 50, BaseCredits: 1000, BonusPercent: 50}},
+		purchase: &walletclient.SandboxPurchase{PurchaseID: "sbxp-2", SKU: "pack_promo", CreditsGranted: 1500, Status: "pending"},
+	}
+	promo := newFakePromo()
+	promo.codes["WELCOME50"] = promocode.Code{Code: "WELCOME50", SKU: "pack_promo"}
+	svc := NewService(wallet, newFakeStore()).WithPromo(promo)
+
+	// The client's own sku is ignored/overridden by the promo's target SKU —
+	// it must never be able to combine a cheaper client-chosen sku with a
+	// promo's discount.
+	rec, err := svc.Create(context.Background(), "player-1", "irrelevant_sku", "WELCOME50", "k1")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if rec.PromoCode != "WELCOME50" || rec.SKU != "pack_promo" {
+		t.Fatalf("unexpected record: %+v", rec)
+	}
+}
+
+func TestServiceCreateRejectsDuplicatePromoRedemption(t *testing.T) {
+	wallet := &fakeWallet{
+		skus:     []walletclient.SandboxSKU{{ID: "pack_promo"}},
+		purchase: &walletclient.SandboxPurchase{PurchaseID: "sbxp-3", SKU: "pack_promo", Status: "pending"},
+	}
+	promo := newFakePromo()
+	promo.codes["ONECODE"] = promocode.Code{Code: "ONECODE", SKU: "pack_promo"}
+	svc := NewService(wallet, newFakeStore()).WithPromo(promo)
+
+	if _, err := svc.Create(context.Background(), "player-1", "", "ONECODE", "k1"); err != nil {
+		t.Fatalf("first redemption: %v", err)
+	}
+	// Same player, same code, a second time (a different purchase attempt,
+	// not a retry with the same idem key) — must be rejected.
+	if _, err := svc.Create(context.Background(), "player-1", "", "ONECODE", "k2"); !errors.Is(err, promocode.ErrAlreadyRedeemed) {
+		t.Fatalf("expected ErrAlreadyRedeemed, got %v", err)
+	}
+	if wallet.purchaseCalls != 1 {
+		t.Fatalf("expected wallet to be charged exactly once, got %d calls", wallet.purchaseCalls)
+	}
+}
+
+func TestServiceCreateRejectsExpiredPromoCode(t *testing.T) {
+	wallet := &fakeWallet{skus: []walletclient.SandboxSKU{{ID: "pack_promo"}}}
+	promo := newFakePromo()
+	promo.redeemErr = promocode.ErrExpired
+	svc := NewService(wallet, newFakeStore()).WithPromo(promo)
+
+	if _, err := svc.Create(context.Background(), "player-1", "", "EXPIRED", "k1"); !errors.Is(err, promocode.ErrExpired) {
+		t.Fatalf("expected ErrExpired, got %v", err)
+	}
+	if wallet.purchaseCalls != 0 {
+		t.Fatal("expected the wallet to never be charged for an expired code")
+	}
+}
+
+func TestServiceCreateWelcomePackOncePerPlayer(t *testing.T) {
+	wallet := &fakeWallet{
+		skus:     []walletclient.SandboxSKU{{ID: WelcomePackSKU, PriceCents: 1, BaseCredits: 500}},
+		purchase: &walletclient.SandboxPurchase{PurchaseID: "sbxp-4", SKU: WelcomePackSKU, Status: "pending"},
+	}
+	promo := newFakePromo()
+	svc := NewService(wallet, newFakeStore()).WithPromo(promo)
+
+	if _, err := svc.Create(context.Background(), "player-1", WelcomePackSKU, "", "k1"); err != nil {
+		t.Fatalf("first welcome pack purchase: %v", err)
+	}
+	if _, err := svc.Create(context.Background(), "player-1", WelcomePackSKU, "", "k2"); !errors.Is(err, promocode.ErrAlreadyRedeemed) {
+		t.Fatalf("expected a second welcome-pack purchase to be rejected, got %v", err)
+	}
+	if wallet.purchaseCalls != 1 {
+		t.Fatalf("expected exactly one wallet charge, got %d", wallet.purchaseCalls)
+	}
+
+	// A different player is still eligible.
+	if _, err := svc.Create(context.Background(), "player-2", WelcomePackSKU, "", "k3"); err != nil {
+		t.Fatalf("second player's welcome pack purchase: %v", err)
+	}
+}
+
+func TestServiceCreateReleasesClaimWhenWalletPurchaseFails(t *testing.T) {
+	wallet := &fakeWallet{skus: []walletclient.SandboxSKU{{ID: WelcomePackSKU}}, purchaseErr: errors.New("wallet down")}
+	promo := newFakePromo()
+	svc := NewService(wallet, newFakeStore()).WithPromo(promo)
+
+	if _, err := svc.Create(context.Background(), "player-1", WelcomePackSKU, "", "k1"); err == nil {
+		t.Fatal("expected the wallet failure to propagate")
+	}
+	// The claim must have been released — a retry should be allowed to try
+	// again, not permanently blocked by the failed attempt.
+	wallet.purchaseErr = nil
+	wallet.purchase = &walletclient.SandboxPurchase{PurchaseID: "sbxp-5", SKU: WelcomePackSKU, Status: "pending"}
+	if _, err := svc.Create(context.Background(), "player-1", WelcomePackSKU, "", "k2"); err != nil {
+		t.Fatalf("expected retry after release to succeed, got %v", err)
+	}
 }

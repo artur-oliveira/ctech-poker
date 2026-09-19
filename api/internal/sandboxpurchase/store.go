@@ -22,6 +22,7 @@ type Record struct {
 	BonusPercent  int64  `dynamodbav:"bonus_percent" json:"bonus_percent"`
 	TotalCredits  int64  `dynamodbav:"total_credits" json:"total_credits"`
 	Status        string `dynamodbav:"status" json:"status"`
+	PromoCode     string `dynamodbav:"promo_code,omitempty" json:"promo_code,omitempty"`
 	PixCopiaECola string `dynamodbav:"pix_copia_e_cola,omitempty" json:"pix_copia_e_cola,omitempty"`
 	QRCodeBase64  string `dynamodbav:"qr_code_base64,omitempty" json:"qr_code_base64,omitempty"`
 	ExpiresAt     string `dynamodbav:"expires_at,omitempty" json:"expires_at,omitempty"`
