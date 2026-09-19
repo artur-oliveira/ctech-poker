@@ -2,7 +2,7 @@
 
 import {zodResolver} from '@hookform/resolvers/zod';
 import {useQuery} from '@tanstack/react-query';
-import {Lock, Repeat2} from 'lucide-react';
+import {Lock, Repeat2, Shuffle} from 'lucide-react';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Controller, useForm, useWatch} from 'react-hook-form';
@@ -32,6 +32,9 @@ const schema = z.object({
   maxSeats: z.union([z.literal(6), z.literal(9)]),
   currencyMode: z.union([z.literal('sandbox'), z.literal('real')]),
   runItTwiceEnabled: z.boolean(),
+  // Rule variant (#296): '' (standard) or 'short_deck'. Sandbox-only — the
+  // server rejects a non-empty value on a real-money room.
+  variant: z.union([z.literal(''), z.literal('short_deck')]),
 });
 type Values = z.infer<typeof schema>
 
@@ -63,7 +66,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
   });
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: {stakeIndex: 0, maxSeats: 6, currencyMode: 'sandbox', runItTwiceEnabled: false}
+    defaultValues: {stakeIndex: 0, maxSeats: 6, currencyMode: 'sandbox', runItTwiceEnabled: false, variant: ''}
   });
   const currencyMode = useWatch({control: form.control, name: 'currencyMode'});
   const stakes = currencyMode === 'real' ? realStakes : sandboxStakes;
@@ -84,7 +87,10 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
         max_seats: values.maxSeats,
         buy_in_min: range.min,
         buy_in_max: range.max,
-        run_it_twice_enabled: values.runItTwiceEnabled
+        run_it_twice_enabled: values.runItTwiceEnabled,
+        // Sandbox-only — never sent on a real-money room even if a prior
+        // sandbox selection lingered in form state across a mode switch.
+        variant: values.currencyMode === 'sandbox' ? values.variant : ''
       });
       const roomID = room.room_id || room.id || '';
       if (!roomID) throw new Error('A API criou uma mesa sem identificador.');
@@ -121,10 +127,13 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
                                                                                                       onClick={() => {
                                                                                                         field.onChange(option);
                                                                                                         form.setValue('stakeIndex', 0);
+                                                                                                        if (option === 'real') form.setValue('variant', '');
                                                                                                       }}
                                                                                                       onKeyDown={e => radioGroupKeyDown(e, index, 2, next => {
-                                                                                                        field.onChange((['sandbox', 'real'] as const)[next]);
+                                                                                                        const nextOption = (['sandbox', 'real'] as const)[next];
+                                                                                                        field.onChange(nextOption);
                                                                                                         form.setValue('stakeIndex', 0);
+                                                                                                        if (nextOption === 'real') form.setValue('variant', '');
                                                                                                       })}>{option === 'real' ? 'Dinheiro real' : 'Fichas'}</button>)}
                                                                                           </div>}/></div>}
         {currencyMode === 'real' &&
@@ -179,6 +188,17 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
               <small>Cada jogador decide por si. Em um all-in, todos os envolvidos precisam ter ativado.</small>
             </span>
           </label>}/>
+        {currencyMode === 'sandbox' &&
+            <Controller control={form.control} name="variant" render={({field}) =>
+              <label className="create-room-option">
+                <Checkbox checked={field.value === 'short_deck'}
+                          onCheckedChange={value => field.onChange(value === true ? 'short_deck' : '')}/>
+                <Shuffle aria-hidden="true"/>
+                <span><b>Short-deck (6+)</b>
+                  <small>Baralho sem 2 a 5. Flush vence full house; A-6-7-8-9 é a sequência mais baixa. Disponível
+                    apenas em mesas de fichas.</small>
+                </span>
+              </label>}/>}
         {form.formState.errors.root && <p className="form-error" role="alert">{form.formState.errors.root.message}</p>}
         <DialogFooter><Button type="submit" size="lg"
                               aria-busy={form.formState.isSubmitting}

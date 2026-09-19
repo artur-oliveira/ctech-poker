@@ -138,6 +138,29 @@ describe('HandOutcomeBanner', () => {
     expect(screen.queryByText('Mesma combinação, o kicker decidiu.')).not.toBeInTheDocument();
   });
 
+  // #296 regression: the server's own category label (computed with the
+  // correct ranking rules for this table's variant) must win over a local
+  // recompute — recomputing unconditionally under standard rules is exactly
+  // the bug that mislabeled a short-deck flush. Winner and viewer's raw
+  // cards here both recompute (under standard, with no variant passed) to
+  // the SAME category as each other, which would otherwise read as
+  // "same combination, kicker decided" — but the server said they're
+  // different categories (short-deck: flush beats full house), so the
+  // server labels must be what drives the framing.
+  test('trusts the server-sent category over a local standard-rules recompute', () => {
+    renderOutcome({
+      key: 62, kind: 'lose', winnerName: 'Bia', variant: 'short_deck',
+      viewerCards: ['KC', 'KD', 'KH', 'QC', 'QD'], viewerHoleCards: ['KC', 'KD'], handCategory: 'full_house',
+      winningCards: ['6C', '8C', 'TC', 'QC', 'AC'], opponentCategory: 'flush',
+    });
+    expect(screen.getByText('Full house')).toBeInTheDocument();
+    expect(screen.getByText('Flush')).toBeInTheDocument();
+    // Categories genuinely differ (server-authoritative), so this must never
+    // read as a same-category kicker/higher-combination decision.
+    expect(screen.queryByText('Mesma combinação, o kicker decidiu.')).not.toBeInTheDocument();
+    expect(screen.queryByText('A combinação mais alta venceu.')).not.toBeInTheDocument();
+  });
+
   // Regression: a long rival name + a wide 5-card showdown row raised a
   // horizontal scrollbar on the loss card on desktop. jsdom has no layout
   // engine, so this only pins the structure the CSS fix relies on — the name

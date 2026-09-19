@@ -68,3 +68,38 @@ describe('five-card evaluation edge cases', () => {
     expect(wasDecidedByKicker(['AH', 'AD'], ['AS', 'AC', 'KH', 'QD', '2C'])).toBe(false);
   });
 });
+
+// #296: short-deck (6+ hold'em) ranks flush above full house — the inverse
+// of standard — and recognizes A-6-7-8-9 as its own low straight. Every
+// function defaults to 'standard' so these must never change the assertions
+// above; the short-deck behaviour only appears when the variant is passed.
+describe('short-deck (#296) variant scoring', () => {
+  const flush = ['6C', '8C', 'TC', 'QC', 'AC'];
+  const fullHouse = ['KC', 'KD', 'KH', 'QC', 'QD'];
+
+  test('flush beats full house under short_deck', () => {
+    expect(bestHandCategory(flush, 'short_deck')).toBe('flush');
+    expect(bestHandCategory(fullHouse, 'short_deck')).toBe('full_house');
+    expect(compareHands(flush, fullHouse, 'short_deck')).toBeGreaterThan(0);
+  });
+
+  test('full house beats flush under standard (sanity check, same cards)', () => {
+    expect(compareHands(flush, fullHouse)).toBeLessThan(0);
+  });
+
+  test('A-6-7-8-9 is a straight under short_deck, and 6-7-8-9-10 outranks it', () => {
+    const lowStraight = ['AC', '6D', '7H', '8S', '9C'];
+    const sixToTen = ['6C', '7D', '8H', '9S', 'TC'];
+    expect(bestHandCategory(lowStraight, 'short_deck')).toBe('straight');
+    expect(compareHands(sixToTen, lowStraight, 'short_deck')).toBeGreaterThan(0);
+  });
+
+  test('A-6-7-8-9 is NOT a straight under standard (Two-Five ranks matter there)', () => {
+    expect(bestHandCategory(['AC', '6D', '7H', '8S', '9C'])).toBe('high_card');
+  });
+
+  test('bestFiveCardHand orders the short-deck low straight ace-low, like the wheel', () => {
+    expect(bestFiveCardHand(['AC', '6D', '7H', '8S', '9C'], 'short_deck'))
+      .toEqual(['9C', '8S', '7H', '6D', 'AC']);
+  });
+});

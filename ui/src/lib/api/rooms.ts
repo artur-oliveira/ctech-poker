@@ -25,6 +25,9 @@ export interface Room {
   // never a function of the pot (see docs/plans/2026-07-25-realmoney-fixed-fee-and-sandbox-rake.md).
   entry_fee_cents?: number;
   run_it_twice_enabled?: boolean;
+  // Rule variant (#296): '' | undefined (standard) or 'short_deck'. Sandbox
+  // only — the server rejects a non-empty value on a real-money room.
+  variant?: '' | 'short_deck';
 }
 
 export interface Stake {

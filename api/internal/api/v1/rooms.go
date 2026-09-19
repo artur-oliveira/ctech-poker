@@ -84,6 +84,16 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if currencyMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
 		return problem.BadRequest("unsupported currency mode").Send(c)
 	}
+	// #296: a rule variant (short-deck and any future one) is a sandbox-only
+	// feature. Reject it outright on a real-money room rather than silently
+	// downgrading to standard — a client that thinks it got short-deck and
+	// didn't must never find out mid-hand.
+	if req.Variant != "" && req.Variant != roomstore.VariantShortDeck {
+		return problem.BadRequest("unsupported variant").Send(c)
+	}
+	if req.Variant != "" && currencyMode != roomstore.CurrencyModeSandbox {
+		return problem.BadRequest("rule variants are only available on sandbox tables").Send(c)
+	}
 	if req.SmallBlind <= 0 || req.BigBlind <= req.SmallBlind {
 		return problem.BadRequest("blinds must be positive and big_blind greater than small_blind").Send(c)
 	}
@@ -146,6 +156,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		BuyInMax:             req.BuyInMax,
 		EntryFeeCents:        entryFeeCents,
 		Tier:                 tier,
+		Variant:              req.Variant,
 		EquityDisplayEnabled: equity,
 		RunItTwiceEnabled:    runItTwice,
 		Status:               "waiting",

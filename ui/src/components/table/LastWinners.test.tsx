@@ -44,6 +44,28 @@ describe('deriveWinners', () => {
     expect(winner.category).toBe('straight');
   });
   
+  // #296: the hand's own recorded variant (not the room's current one)
+  // decides the ranking. A-6-7-8-9 is only a straight under short-deck
+  // (there is no rank Two-Five to make 2-3-4-5-6 or the wheel) — under
+  // standard rules the same seven cards are just Ace-high, so this is a
+  // genuine category difference a wrong (or missing) variant would mislabel.
+  test('uses this hand\'s own recorded variant to recognize the short-deck low straight', () => {
+    const [winner] = deriveWinners([hand({
+      hole_cards: ['AC', '6D'],
+      board: ['7H', '8S', '9C', 'KH', 'JD'],
+      variant: 'short_deck',
+    })]);
+    expect(winner.category).toBe('straight');
+  });
+
+  test('defaults to standard when the hand carries no variant (legacy rows)', () => {
+    const [winner] = deriveWinners([hand({
+      hole_cards: ['AC', '6D'],
+      board: ['7H', '8S', '9C', 'KH', 'JD'],
+    })]);
+    expect(winner.category).toBe('high_card');
+  });
+
   test('filters losses without known winners and applies the limit before filtering', () => {
     const entries = deriveWinners([
       hand({hand_id: 'lost', outcome: 'lost'}),

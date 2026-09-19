@@ -178,9 +178,13 @@ function HandHistoryContent() {
   const h = hand.data;
   const viewerIsWinner = h.outcome === 'won' || h.outcome === 'tied';
 
+  // #296: this hand's own variant, not the room's current one — see
+  // HandItem.variant's doc comment.
+  const handVariant = h.variant === 'short_deck' ? 'short_deck' : 'standard';
+
   function categoryFor(holeCards?: string[]): string | null {
     if (holeCards?.length !== 2 || h.board?.length !== 5) return null;
-    return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...h.board])] || null;
+    return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...h.board], handVariant)] || null;
   }
 
   const viewerCategory = categoryFor(h.hole_cards);

@@ -126,6 +126,37 @@ describe('TodayHighlight', () => {
     await waitFor(() => expect(screen.getByText('Alice · Par')).toBeInTheDocument());
   });
 
+  // #296: cross-player "best shown hand" comparisons must rank by this
+  // table's own variant. Alice makes a flush, Bob a full house, off the same
+  // board: short-deck ranks Alice's flush above Bob's full house (the
+  // inverse of standard hold'em), so passing the wrong variant would credit
+  // the wrong player's hand as "the best shown".
+  test('ranks a cross-player comparison by the short-deck variant (flush beats full house)', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      board: ['Tc', 'Qc', 'Ac', 'Qd', 'Qh'],
+      revealed: [
+        {player_id: 'p1', name: 'Bob', hole_cards: ['Kc', 'Kd']},
+        {player_id: 'p2', name: 'Alice', hole_cards: ['6c', '8c']},
+      ],
+    }));
+    renderHighlight({variant: 'short_deck'});
+    await waitFor(() => expect(screen.getByText('Alice · Flush')).toBeInTheDocument());
+    expect(screen.queryByText(/Bob/)).not.toBeInTheDocument();
+  });
+
+  test('the same board ranks the full house above the flush under standard (sanity check)', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      board: ['Tc', 'Qc', 'Ac', 'Qd', 'Qh'],
+      revealed: [
+        {player_id: 'p1', name: 'Bob', hole_cards: ['Kc', 'Kd']},
+        {player_id: 'p2', name: 'Alice', hole_cards: ['6c', '8c']},
+      ],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Bob · Full house')).toBeInTheDocument());
+    expect(screen.queryByText(/Alice/)).not.toBeInTheDocument();
+  });
+
   test('names the paid winner, not the best hand shown, on a side pot', async () => {
     getTodayHighlight.mockResolvedValueOnce(highlight({
       board: ['Ac', '7d', '2s', '9h', '3c'],

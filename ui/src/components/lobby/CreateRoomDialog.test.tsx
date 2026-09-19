@@ -62,6 +62,7 @@ describe('CreateRoomDialog', () => {
       buy_in_min: 2_000,
       buy_in_max: 5_000,
       run_it_twice_enabled: false,
+      variant: '',
     }));
     expect(mocks.push).toHaveBeenCalledWith('/table?id=room%20%2F%20private');
   });
@@ -77,6 +78,19 @@ describe('CreateRoomDialog', () => {
     })));
   });
   
+  // #296: the short-deck variant is a sandbox-only option, sent as
+  // `variant: 'short_deck'` only when checked.
+  test('can enable the short-deck variant while creating a sandbox table', async () => {
+    mocks.createRoom.mockResolvedValue({room_id: 'sd-room'});
+    render(<CreateRoomDialog/>);
+    await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
+    await userEvent.click(screen.getByText('Short-deck (6+)'));
+    await userEvent.click(screen.getByRole('button', {name: 'Criar mesa privada'}));
+    await waitFor(() => expect(mocks.createRoom).toHaveBeenCalledWith(expect.objectContaining({
+      currency_mode: 'sandbox', variant: 'short_deck',
+    })));
+  });
+
   test('never offers real-money mode while the real-money UI is gated off', async () => {
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
       if (queryKey[0] === 'player') return {data: {wallet_mode: 'real'}};
@@ -114,7 +128,30 @@ describe('CreateRoomDialog', () => {
       buy_in_max: 20_000,
     })));
   });
-  
+
+  // #296: the variant is never offered on a real-money room, and switching
+  // to real money clears any short-deck choice made while sandbox was
+  // selected instead of silently sending it (the server would reject it).
+  test('hides the short-deck option in real-money mode and clears a prior sandbox selection', async () => {
+    mocks.realMoney.enabled = true;
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
+      if (queryKey[0] === 'player') return {data: {wallet_mode: 'real'}};
+      if (queryKey[1] === 'real') return {data: realStakes};
+      return {data: sandboxStakes};
+    });
+    mocks.createRoom.mockResolvedValue({id: 'real-room'});
+    render(<CreateRoomDialog/>);
+    await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
+    await userEvent.click(screen.getByText('Short-deck (6+)'));
+    await userEvent.click(screen.getByRole('radio', {name: 'Dinheiro real'}));
+
+    expect(screen.queryByText('Short-deck (6+)')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Criar mesa privada'}));
+    await waitFor(() => expect(mocks.createRoom).toHaveBeenCalledWith(expect.objectContaining({
+      currency_mode: 'real', variant: '',
+    })));
+  });
+
   test('supports roving keyboard selection for stakes and seats', async () => {
     render(<CreateRoomDialog/>);
     await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
