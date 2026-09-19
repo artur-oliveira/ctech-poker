@@ -58,6 +58,8 @@ func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Sto
 	// Both must be declared before "/:id", which would otherwise match them.
 	g.Post("/join-or-create", rateLimit(joinLimiter, ipKey("rooms:join")), h.joinOrCreate)
 	g.Get("/bot-eligibility", h.botEligibility)
+	g.Get("/:id/bots", h.botWaitStatus)
+	g.Post("/:id/bots/start", h.startBotsNow)
 	g.Get("/:id/reservations/:reservationID", h.botReservationStatus)
 	g.Delete("/:id/reservations/:reservationID", h.cancelBotReservation)
 	g.Get("/buckets", h.listBuckets)
@@ -503,6 +505,52 @@ func (h *roomHandlers) botEligibility(c fiber.Ctx) error {
 		return problem.InternalServer("bot availability is temporarily unavailable", c, err).Send(c)
 	}
 	return c.JSON(BotEligibilityResponse{Available: available, ExpiresAt: expiresAt})
+}
+
+func (h *roomHandlers) botWaitStatus(c fiber.Ctx) error {
+	playerID, ok := c.Locals(localsUserID).(string)
+	if !ok || playerID == "" {
+		return problem.Unauthorized("invalid credentials").Send(c)
+	}
+	room, err := h.rooms.Get(c.Context(), c.Params("id"))
+	if err != nil || room == nil {
+		return problem.NotFound("table not found").Send(c)
+	}
+	status, err := h.roomBotStatus(c.Context(), *room)
+	if err != nil {
+		return problem.InternalServer("failed to inspect bot wait", c, err).Send(c)
+	}
+	if status.BotPolicy.OwnerID != playerID {
+		return c.JSON(fiber.Map{"enabled": false, "activate_at": 0, "has_bot": false, "reserved": false})
+	}
+	return c.JSON(fiber.Map{"enabled": status.BotPolicy.Enabled,
+		"activate_at": status.BotPolicy.ActivateAtUnixMs, "has_bot": status.HasBot,
+		"reserved": status.Reservation != nil})
+}
+
+func (h *roomHandlers) startBotsNow(c fiber.Ctx) error {
+	playerID, ok := c.Locals(localsUserID).(string)
+	if !ok || playerID == "" {
+		return problem.Unauthorized("invalid credentials").Send(c)
+	}
+	room, err := h.rooms.Get(c.Context(), c.Params("id"))
+	if err != nil || room == nil {
+		return problem.NotFound("table not found").Send(c)
+	}
+	if room.Visibility != "public" || room.CurrencyMode != "sandbox" || room.BigBlind > 1_000 {
+		return problem.Forbidden("bots are unavailable at this table").Send(c)
+	}
+	actor, err := h.manager.GetOrCreateActor(c.Context(), room.ID, func() *hand.Table { return table.SeedForRoom(room) })
+	if err != nil {
+		return problem.InternalServer("bot table unavailable", c, err).Send(c)
+	}
+	if err := actor.Dispatch(table.StartBotsNowCmd{OwnerID: playerID, Reply: make(chan error, 1)}); err != nil {
+		if errors.Is(err, hand.ErrBotFillUnavailable) {
+			return problem.Conflict("bot wait is no longer available").Send(c)
+		}
+		return problem.InternalServer("failed to prepare bots", c, err).Send(c)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func (h *roomHandlers) roomBotStatus(ctx context.Context, room roomstore.Room) (table.BotMatchStatus, error) {

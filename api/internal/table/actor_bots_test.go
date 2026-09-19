@@ -2,6 +2,7 @@ package table
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -35,6 +36,27 @@ func TestFillBotsReachesFormatTargetAndStartsHand(t *testing.T) {
 		if p.ID != "human" && (!p.IsBot || p.BotProfile == "") {
 			t.Fatalf("bot identity/profile missing: %+v", p)
 		}
+	}
+}
+
+func TestStartBotsNowRequiresOwnerAndFillsBeforeDeadline(t *testing.T) {
+	game := sandboxBotTable(&hand.Player{ID: "human", Stack: 5_000, Ready: true})
+	if err := game.ConfigureBotsForActor("human", 4_000, 2, timeNowFunc().Add(time.Hour).UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	a := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	a.SetCachedForTest(game)
+	if err := a.handleStartBotsNow(context.Background(), StartBotsNowCmd{OwnerID: "other"}); !errors.Is(err, hand.ErrBotFillUnavailable) {
+		t.Fatalf("unauthorized start returned %v", err)
+	}
+	if len(a.cached.PlayersForActor()) != 1 {
+		t.Fatal("unauthorized start added a bot")
+	}
+	if err := a.handleStartBotsNow(context.Background(), StartBotsNowCmd{OwnerID: "human"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.cached.PlayersForActor(); len(got) != 2 || !got[1].IsBot || a.cached.Stage() != hand.PreFlop {
+		t.Fatalf("start did not fill table: stage=%v players=%+v", a.cached.Stage(), got)
 	}
 }
 

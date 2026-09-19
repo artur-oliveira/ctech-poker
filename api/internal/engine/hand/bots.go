@@ -8,6 +8,7 @@ import (
 var (
 	ErrNoReplaceableBotSeat = errors.New("hand: table has no replaceable bot seat")
 	ErrBotSeatReserved      = errors.New("hand: bot seat already reserved")
+	ErrBotFillUnavailable   = errors.New("hand: bot fill is unavailable")
 )
 
 type BotReservation struct {
@@ -58,6 +59,16 @@ func (t *Table) ConfigureBotsForActor(ownerID string, buyIn int64, maxSeats int,
 }
 
 func (t *Table) BotPolicyForActor() BotPolicy { return t.botPolicy }
+
+func (t *Table) ExpediteBotsForActor(ownerID string, nowUnixMs int64) error {
+	if !t.botPolicy.Enabled || t.botPolicy.OwnerID != ownerID || t.BotSeatsNeededForActor() == 0 {
+		return ErrBotFillUnavailable
+	}
+	if t.botPolicy.ActivateAtUnixMs > nowUnixMs {
+		t.botPolicy.ActivateAtUnixMs = nowUnixMs
+	}
+	return nil
+}
 
 func (t *Table) MarkBotFundingCheckedForActor(handID string) {
 	t.botPolicy.FundingCheckedHandID = handID

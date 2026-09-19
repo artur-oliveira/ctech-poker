@@ -275,6 +275,13 @@ type EnableBotsCmd struct {
 
 func (c EnableBotsCmd) reply() chan error { return c.Reply }
 
+type StartBotsNowCmd struct {
+	OwnerID string
+	Reply   chan error
+}
+
+func (c StartBotsNowCmd) reply() chan error { return c.Reply }
+
 type ReserveBotSeatCmd struct {
 	Reservation hand.BotReservation
 	Result      chan hand.BotReservation
@@ -297,6 +304,7 @@ type BotReservationStatusCmd struct {
 type BotMatchStatus struct {
 	HasBot      bool
 	Reservation *hand.BotReservation
+	BotPolicy   hand.BotPolicy
 }
 
 type BotMatchStatusCmd struct {

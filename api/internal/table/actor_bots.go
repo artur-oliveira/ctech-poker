@@ -131,7 +131,7 @@ func (a *Actor) handleBotMatchStatus(ctx context.Context, c BotMatchStatusCmd) e
 	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
-	status := BotMatchStatus{Reservation: a.cached.BotReservationForActor()}
+	status := BotMatchStatus{Reservation: a.cached.BotReservationForActor(), BotPolicy: a.cached.BotPolicyForActor()}
 	for _, player := range a.cached.PlayersForActor() {
 		status.HasBot = status.HasBot || player.IsBot
 	}
@@ -176,6 +176,24 @@ func (a *Actor) handleEnableBots(ctx context.Context, c EnableBotsCmd) error {
 	a.armBotFillTimer()
 	a.broadcastAll()
 	return nil
+}
+
+func (a *Actor) handleStartBotsNow(ctx context.Context, c StartBotsNowCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	apply := func() error {
+		return a.mutate(func() error {
+			if err := a.cached.ExpediteBotsForActor(c.OwnerID, timeNowFunc().UnixMilli()); err != nil {
+				return err
+			}
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.OwnerID, Action: "start_bots_now"})
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
+	return a.handleFillBots(ctx)
 }
 
 func (a *Actor) armBotFillTimer() {

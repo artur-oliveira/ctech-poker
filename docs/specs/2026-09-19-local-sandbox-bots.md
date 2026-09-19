@@ -26,9 +26,13 @@ The shared bot-funding window lives in `poker_achievement_progress` at `(player_
 
 Completed outcomes persist `contains_bot`. Human history keeps the hand and its sandbox net result, while the post-hand pipeline skips achievements, leaderboard counters, public poker stats, matchups, highlights and recent-player suggestions. Bots are also excluded from social lookups and seat action menus in the client.
 
-The buy-in response's `match_kind=bot_pending` survives navigation and reuses the felt's existing center status as “Preparando adversários…”. No new banner or fixed overlay is introduced. The seat's textual `BOT` marker is the persistent disclosure. The guide documents the opt-in, replacement and competitive exclusions.
+The buy-in response's `match_kind=bot_pending` survives navigation. A public table with the viewer seated and waiting for another person reuses the felt's center status as “Procurando uma pessoa para jogar…”, including after reconnect. No new banner or fixed overlay is introduced. The seat's textual `BOT` marker is the persistent disclosure. The guide documents the opt-in, replacement and competitive exclusions.
+
+The owner can use `POST /rooms/:id/bots/start` to bring the persisted activation time forward, without a second buy-in. The same control retries a stalled fill after the deadline. `GET /rooms/:id/bots` supplies the authoritative activation time for the felt countdown and hides controls after bots enter, a human reserves a seat, or bot play becomes unavailable.
+
+The `bot_wait` mock scenario provides a one-human table and an API-backed wait timer. Its start action deliberately leaves the fill stalled so the retry state can be reviewed without a live server.
 
 ## Remaining release work
 
-- Add the “start now”/retry controls and replaceable-bot bucket fields described in #395.
+- Add replaceable-bot bucket fields described in #395.
 - Add mock-runtime scenarios and complete the responsive/reconnection QA matrix.

@@ -751,6 +751,8 @@ function mockSocialRequest(method: string, path: string, body: Record<string, un
   return null;
 }
 
+let mockBotWaitActivateAt = 0;
+
 /** Axios adapter matching the REST surface used by Poker's UI. */
 export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
   const method = (config.method || 'get').toUpperCase();
@@ -1039,6 +1041,18 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       buckets.set(key, bucket);
     }
     return ok({data: [...buckets.values()]}, config);
+  }
+  if (method === 'GET' && /^\/v1\.0\/rooms\/[^/]+\/bots$/.test(path)) {
+    if (scenarioFromLocation() !== 'bot_wait') return ok({enabled: false}, config);
+    if (!mockBotWaitActivateAt || Date.now() - mockBotWaitActivateAt > 300_000) {
+      mockBotWaitActivateAt = Date.now() + 15_000;
+    }
+    return ok({enabled: true, activate_at: mockBotWaitActivateAt, has_bot: false, reserved: false}, config);
+  }
+  if (method === 'POST' && /^\/v1\.0\/rooms\/[^/]+\/bots\/start$/.test(path)) {
+    if (scenarioFromLocation() !== 'bot_wait') fail(409, 'bot wait is no longer available', config);
+    mockBotWaitActivateAt = Date.now();
+    return ok({}, config);
   }
   // Resolves the bucket server-side: seats the player at the fullest open
   // table, or opens one. Must precede the generic `/rooms/:id` match below.
@@ -1583,6 +1597,12 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     seats: seats.slice(0, 3).map((seat, index) => index === 0 ? {
       ...seat, stack: 0, contributed: 0, state: 'sitting_out', dealt_in: false, auto_rebuy: false
     } : {...seat, contributed: 0, dealt_in: false}),
+    rake: 0
+  };
+  if (scenario === 'bot_wait') return {
+    stage: 'waiting_for_players',
+    board: [],
+    seats: seats.slice(0, 1).map(seat => ({...seat, contributed: 0})),
     rake: 0
   };
   if (scenario === 'waiting') return {

@@ -69,8 +69,8 @@ export default function TableGuide() {
       title: 'Bots nas mesas de fichas',
       summary: 'Uma opção por entrada evita que você fique sozinho sem esconder que o adversário é automatizado.',
       body: <><p>Ao entrar por uma mesa pública de fichas de até <b>500 / 1.000</b>, você pode ativar
-        <b> Começar com bots após 15 s</b>. Enquanto a mesa aguarda, o centro do feltro mostra
-        <b> Preparando adversários…</b>. Cada assento automatizado tem o selo textual <b>BOT</b>.</p>
+        <b> Começar com bots após 15 s</b>. Enquanto a mesa aguarda, o centro do feltro informa a espera e permite
+        <b> Começar com bots agora</b>. Se a preparação demorar, use <b>Tentar novamente</b>; se a espera não puder ser consultada, use <b>Atualizar espera</b>. Cada assento automatizado tem o selo textual <b>BOT</b>.</p>
         <GuideBullets>
           <li><span>Heads-up recebe no máximo um bot; mesas de 6 e 9 lugares mantêm vagas livres para pessoas.</span></li>
           <li><span>Quando outra pessoa chega, os bots terminam ou abandonam a mão atual e cedem os lugares antes da próxima.</span></li>

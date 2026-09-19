@@ -23,6 +23,7 @@ export type MockScenario =
   | 'all_in'
   | 'auto_fold'
   | 'waiting'
+  | 'bot_wait'
   | 'pre_flop'
   | 'flop'
   | 'turn'

@@ -1037,6 +1037,44 @@
     font-size: 10px;
     color: var(--felt-text)
 }
+.game-table[data-stage="waiting_for_players"] .felt-center {
+    transform: translateY(-22px);
+}
+.game-table[data-stage="waiting_for_players"] .street-progress {
+    width: min(240px, 78vw);
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+}
+.game-table[data-stage="waiting_for_players"] .street-progress-label {
+    justify-content: center;
+}
+.bot-wait-controls {
+    position: absolute;
+    top: calc(100% + 48px);
+    left: 50%;
+    width: min(260px, 74vw);
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    transform: translateX(-50%);
+    text-align: center;
+    color: var(--felt-text);
+}
+.bot-wait-controls p {
+    margin: 0;
+    font: 600 10px var(--font-mono);
+    line-height: 1.35;
+}
+.bot-wait-controls button {
+    min-height: 44px;
+    max-width: 100%;
+    white-space: normal;
+    font-size: 12px;
+}
+.bot-wait-controls .bot-wait-error {
+    color: var(--danger-soft);
+}
 .street-progress-pips {
     display: flex;
     align-items: center;

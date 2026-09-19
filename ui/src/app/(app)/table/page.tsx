@@ -9,6 +9,7 @@ import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {BotReservationScreen} from '@/components/table/BotReservationScreen';
+import {BotWaitControls} from '@/components/table/BotWaitControls';
 import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
@@ -82,7 +83,7 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
 const MOCK_SCENARIOS = new Set<MockScenario>([
   'full_hand', 'heads_up', 'layout_3', 'layout_4', 'layout_5', 'six_max', 'layout_7', 'layout_8', 'nine_max',
   'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
-  'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
+  'waiting', 'bot_wait', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
   'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout'
@@ -382,7 +383,12 @@ function TableContent() {
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
                   maxSeats={layoutCapacity} seatLayoutKey={id}
-                  waitingForBots={params.get('match') === 'bot_pending' && s.stage === 'waiting_for_players'}
+                  waitingForBots={s.stage === 'waiting_for_players' && room?.visibility === 'public' &&
+                    Boolean(viewerSeat)}
+                  waitingContent={s.stage === 'waiting_for_players' && room?.visibility === 'public' &&
+                    room?.currency_mode === 'sandbox' &&
+                    <BotWaitControls roomId={id} connected={rt.status === 'connected'}
+                                     expected={params.get('match') === 'bot_pending' || scenario === 'bot_wait'}/>}
                   turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   nextHandDeadlineMs={!connectionMessage ? s.next_hand_unix_ms : undefined}

@@ -344,8 +344,8 @@ describe('table presentation', () => {
     const botWait = render(<TableStage snapshot={snapshotForScenario('waiting')} viewer={MOCK_PLAYER_ID}
                                        pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
                                        holdOutcomeOpen={false} waitingForBots/>);
-    expect(botWait.container.querySelector('.street-progress-label')).toHaveTextContent('Preparando adversários…');
-    expect(botWait.container.querySelector('.street-progress')).toHaveAttribute('aria-label', 'Preparando adversários…');
+    expect(botWait.container.querySelector('.street-progress-label')).toHaveTextContent('Procurando uma pessoa para jogar…');
+    expect(botWait.container.querySelector('.street-progress')).toHaveAttribute('aria-label', 'Procurando uma pessoa para jogar…');
     botWait.unmount();
 
     // No personalized outcome yet (outcome={null}), so the countdown ring

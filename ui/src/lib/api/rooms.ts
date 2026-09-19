@@ -109,6 +109,21 @@ export async function getBotEligibility() {
   return (await apiClient.get<BotEligibility>('/v1.0/rooms/bot-eligibility', {silentError: true})).data;
 }
 
+export interface BotWaitStatus {
+  enabled: boolean;
+  activate_at: number;
+  has_bot: boolean;
+  reserved: boolean;
+}
+
+export async function getBotWaitStatus(roomId: string) {
+  return (await apiClient.get<BotWaitStatus>(`/v1.0/rooms/${roomId}/bots`, {silentError: true})).data;
+}
+
+export async function startBotsNow(roomId: string) {
+  await apiClient.post(`/v1.0/rooms/${roomId}/bots/start`, undefined, {silentError: true});
+}
+
 export async function getBotReservation(roomId: string, reservationId: string) {
   return (await apiClient.get<BotReservationStatus>(
     `/v1.0/rooms/${roomId}/reservations/${reservationId}`, {silentError: true},

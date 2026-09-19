@@ -258,6 +258,7 @@ type Props = {
   onTargetPlayerAction?: (playerId: string) => void;
   announcement?: string;
   waitingForBots?: boolean;
+  waitingContent?: ReactNode;
   chatBubbles?: Record<string, { id: string; message: string }>;
   // Live table only: builds the per-seat player menu. Replay passes nothing.
   renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number]) => ReactNode;
@@ -296,6 +297,7 @@ function TableStageImpl({
                              onTargetPlayerAction,
                              announcement,
                              waitingForBots,
+                             waitingContent,
                              chatBubbles,
                              renderPlayerActionsAction
                            }: Props) {
@@ -370,7 +372,7 @@ function TableStageImpl({
         edge: down there it sat in the lane the bottom-row seats' bet chips
         travel through, so a raise from the viewer's own seat covered it. */}
     <div className="felt-center"><FeltWordmark/>{board}<StreetProgress stage={snapshot.stage}
-      waitingLabel={waitingForBots ? 'Preparando adversários…' : undefined}/></div>
+      waitingLabel={waitingForBots ? 'Procurando uma pessoa para jogar…' : undefined}/>{waitingContent}</div>
   </>;
 
   if (!vertical && !compactLandscape) return (

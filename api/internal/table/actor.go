@@ -453,6 +453,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleJoin(ctx, c)
 	case EnableBotsCmd:
 		return a.handleEnableBots(ctx, c)
+	case StartBotsNowCmd:
+		return a.handleStartBotsNow(ctx, c)
 	case ReserveBotSeatCmd:
 		return a.handleReserveBotSeat(ctx, c)
 	case BotReservationStatusCmd:

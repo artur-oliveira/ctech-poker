@@ -40,6 +40,29 @@ func TestSecondHumanStopsBotFill(t *testing.T) {
 	}
 }
 
+func TestOnlyWaitingOwnerCanExpediteBots(t *testing.T) {
+	table := NewTable([]*Player{{ID: "h1", Stack: 5000, Ready: true}}, 25, 50)
+	table.ConfigureRake("sandbox")
+	if err := table.ConfigureBotsForActor("h1", 3500, 2, 10_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := table.ExpediteBotsForActor("h2", 1000); !errors.Is(err, ErrBotFillUnavailable) {
+		t.Fatalf("other player expedited bots: %v", err)
+	}
+	if err := table.ExpediteBotsForActor("h1", 1000); err != nil {
+		t.Fatal(err)
+	}
+	if got := NewTableFromState(table.ExportState()).BotPolicyForActor().ActivateAtUnixMs; got != 1000 {
+		t.Fatalf("activation time was not persisted: %d", got)
+	}
+	if err := table.AddWaitingPlayer(&Player{ID: "h2", Stack: 3500, Ready: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := table.ExpediteBotsForActor("h1", 1001); !errors.Is(err, ErrBotFillUnavailable) {
+		t.Fatalf("human arrival did not stop bot fill: %v", err)
+	}
+}
+
 func TestBotReservationPersistsAndBlocksRefill(t *testing.T) {
 	table := NewTable([]*Player{{ID: "h1", Stack: 5000, Ready: true}}, 25, 50)
 	table.ConfigureRake("sandbox")

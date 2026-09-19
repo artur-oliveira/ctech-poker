@@ -27,6 +27,7 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('next/navigation', () => ({useRouter: () => ({push: mocks.push})}));
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
+  getBotEligibility: vi.fn(),
   joinRoom: mocks.joinRoom,
   joinOrCreateRoom: mocks.joinOrCreateRoom,
 }));
