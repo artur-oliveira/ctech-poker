@@ -157,6 +157,30 @@ describe('API client session and interceptors', () => {
     expect(httpRetryDelay(1, '2', () => 0.5)).toBe(2125);
   });
 
+  // #319: problem+json's own retry_after_seconds (e.g. the rate limiter's
+  // window) is the fallback when no Retry-After header was sent.
+  test('falls back to the problem body\'s retry_after_seconds with no Retry-After header', () => {
+    expect(httpRetryDelay(1, undefined, () => 0, 30)).toBe(30_000);
+    // The header still wins when both are present.
+    expect(httpRetryDelay(1, '2', () => 0, 30)).toBe(2000);
+  });
+
+  test('exposes next_action/retry_after_seconds on the normalized error, from the body', () => {
+    mocks.isAxiosError.mockReturnValue(true);
+    const error = normalizeApiError({
+      response: {
+        status: 429,
+        data: {detail: 'too many requests, slow down', title: 'Too Many Requests', next_action: 'retry', retry_after_seconds: 45},
+        headers: {},
+      },
+      message: 'Request failed',
+    });
+    expect(error.nextAction).toBe('retry');
+    expect(error.problem?.retry_after_seconds).toBe(45);
+    // No Retry-After header — the body's window is what drives retryAfterMs.
+    expect(error.retryAfterMs).toBe(45_000);
+  });
+
   test('retries a safe transient request with the same config before surfacing it', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const config = {method: 'get', headers: {}, url: '/rooms'};

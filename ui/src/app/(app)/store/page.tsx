@@ -23,9 +23,12 @@ import {
   listSkus,
   refundPurchase,
   WALLET_QUERY_ROOT,
+  WELCOME_PACK_SKU,
+  welcomePackErrorMessage,
   type SandboxPurchase,
   type SandboxSKU
 } from '@/lib/api/wallet';
+import {PromoCodeForm} from '@/components/store/PromoCodeForm';
 import type {Page} from '@/lib/api/client';
 import {pushNotification} from '@/lib/notify';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
@@ -148,11 +151,18 @@ export default function Store() {
       const purchase = await createPurchase(sku.id);
       setActivePurchase(purchase);
       void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
-    } catch {
-      pushNotification('Não foi possível iniciar a compra agora. Tente novamente.');
+    } catch (err) {
+      pushNotification(sku.id === WELCOME_PACK_SKU
+        ? welcomePackErrorMessage(err)
+        : 'Não foi possível iniciar a compra agora. Tente novamente.');
     } finally {
       setPendingSku(null);
     }
+  }, [queryClient]);
+
+  const redeemPromo = useCallback((purchase: SandboxPurchase) => {
+    setActivePurchase(purchase);
+    void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
   }, [queryClient]);
 
   const closePurchase = useCallback(() => setActivePurchase(null), []);
@@ -216,6 +226,10 @@ export default function Store() {
   const premiumFeltCount = (feltCatalog.data ?? []).filter(entry => entry.premium).length;
   const ownedFeltCount = (feltCatalog.data ?? []).filter(entry => entry.premium && entry.owned).length;
   const sandboxBalance = player.data?.sandbox_balance;
+  // Derived from whatever page of history is loaded (#348 has no dedicated
+  // eligibility field) — see SkuGrid's welcomePackClaimed doc comment.
+  const welcomePackClaimed = purchases.items.some(
+    purchase => purchase.sku === WELCOME_PACK_SKU && purchase.status !== 'expired' && purchase.status !== 'failed');
 
   return <TermsGate>
     <AppPage authed current="store">
@@ -384,7 +398,8 @@ export default function Store() {
             </div>
             <SkuGrid skus={skus.data ?? []} isLoading={skus.isLoading} isError={skus.isError}
                      onRetryAction={() => void skus.refetch()} onSelectAction={(sku, trigger) => openFrom(trigger, () => void selectSku(sku))}
-                     pendingSku={pendingSku}/>
+                     pendingSku={pendingSku} welcomePackClaimed={welcomePackClaimed}/>
+            <PromoCodeForm onRedeemedAction={redeemPromo}/>
             <section className="store-department-history" aria-labelledby="chip-activity-title">
               <h3 id="chip-activity-title"><Clock3 aria-hidden="true"/> Compras e estornos de fichas</h3>
               <PurchaseHistoryList purchases={purchases.items} isLoading={purchases.isLoading}

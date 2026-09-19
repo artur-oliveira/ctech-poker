@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/promocode"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 )
 
@@ -14,6 +15,10 @@ type sandboxPurchaseHandlers struct{ svc *sandboxpurchase.Service }
 
 type SandboxPurchaseCreateRequest struct {
 	SKU string `json:"sku"`
+	// PromoCode, if set, is redeemed server-side before any wallet charge —
+	// see sandboxpurchase.Service.Create. Never carries a price or bonus;
+	// those always come from the wallet catalog.
+	PromoCode string `json:"promo_code,omitempty"`
 	// IdempotencyKey is stable per purchase click and reused across network
 	// retries — mirrors JoinRoomRequest.IdempotencyKey's idem_key convention.
 	IdempotencyKey string `json:"idem_key,omitempty"`
@@ -56,8 +61,12 @@ func (h *sandboxPurchaseHandlers) create(c fiber.Ctx) error {
 		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
-	rec, err := h.svc.Create(c.Context(), userID, req.SKU, idemKey)
+	rec, err := h.svc.Create(c.Context(), userID, req.SKU, req.PromoCode, idemKey)
 	if err != nil {
+		if errors.Is(err, promocode.ErrAlreadyRedeemed) || errors.Is(err, promocode.ErrExpired) ||
+			errors.Is(err, promocode.ErrRedemptionLimit) || errors.Is(err, promocode.ErrNotFound) {
+			return problem.BadRequest(err.Error()).Send(c)
+		}
 		return walletOrInternalProblem(err, "purchase failed", c).Send(c)
 	}
 	return c.Status(fiber.StatusCreated).JSON(rec)

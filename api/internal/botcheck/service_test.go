@@ -27,6 +27,28 @@ func TestVerifyRequiresActionAndHostname(t *testing.T) {
 	}
 }
 
+// The three cases #322's acceptance criteria calls for: a low-risk signal
+// keeps the standard challenge, a high-risk one escalates, and — since this
+// is a pure function over the caller's own signal — the decision can never
+// itself weaken what Verify accepts.
+func TestDecideChallengeLevelLowRiskStandard(t *testing.T) {
+	if got := DecideChallengeLevel(RiskSignal{RecentAttempts: 1, ActionRiskScore: 0}); got != ChallengeStandard {
+		t.Fatalf("expected ChallengeStandard, got %v", got)
+	}
+}
+
+func TestDecideChallengeLevelHighAttemptsEscalates(t *testing.T) {
+	if got := DecideChallengeLevel(RiskSignal{RecentAttempts: 25}); got != ChallengeEscalated {
+		t.Fatalf("expected ChallengeEscalated, got %v", got)
+	}
+}
+
+func TestDecideChallengeLevelHighActionScoreEscalates(t *testing.T) {
+	if got := DecideChallengeLevel(RiskSignal{ActionRiskScore: 10}); got != ChallengeEscalated {
+		t.Fatalf("expected ChallengeEscalated, got %v", got)
+	}
+}
+
 func TestVerifyRejectsWrongAction(t *testing.T) {
 	service := New("secret", "")
 	service.SetTransportForTest(roundTripFunc(func(req *http.Request) (*http.Response, error) {

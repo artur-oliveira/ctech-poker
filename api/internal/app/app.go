@@ -30,7 +30,9 @@ import (
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
+	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
+	"gopkg.aoctech.app/poker/api/internal/chatprefs"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticloadout"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
@@ -51,6 +53,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/promocode"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
@@ -67,6 +70,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablenotify"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/tablestreak"
+	"gopkg.aoctech.app/poker/api/internal/walletalert"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
@@ -110,7 +114,10 @@ var Module = fx.Options(
 		newRouletteStore,
 		newRouletteService,
 		newSandboxPurchaseStore,
+		newPromoCodeStore,
 		newSandboxPurchaseService,
+		newWalletAlertStore,
+		newWalletAlertService,
 		newReactionEntitlementStore,
 		newReactionPurchaseStore,
 		newReactionPurchaseService,
@@ -125,6 +132,9 @@ var Module = fx.Options(
 		newRecentPlayersService,
 		newReportStore,
 		newReportService,
+		newChatPrefsStore,
+		newChatPrefsCache,
+		newBotCheckContestStore,
 		walletclient.New,
 		newBuyinService,
 		newPendingStore,
@@ -341,6 +351,15 @@ func newPlayerService(store *player.Store, wallet *walletclient.Client, cosmetic
 func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.Store {
 	return playernotes.NewStore(db, cfg.Env)
 }
+func newChatPrefsStore(db *dynamodb.Client, cfg *config.Config) *chatprefs.Store {
+	return chatprefs.NewStore(db, cfg.Env)
+}
+func newChatPrefsCache(store *chatprefs.Store, cacheBackend cache.Backend) *chatprefs.ExtraWordsCache {
+	return chatprefs.NewExtraWordsCache(store, cacheBackend)
+}
+func newBotCheckContestStore(db *dynamodb.Client, cfg *config.Config) *botcheck.ContestStore {
+	return botcheck.NewContestStore(db, cfg.Env)
+}
 func newHandMetaStore(db *dynamodb.Client, cfg *config.Config) *handmeta.Store {
 	return handmeta.NewStore(db, cfg.Env)
 }
@@ -400,8 +419,17 @@ func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *
 func newSandboxPurchaseStore(db *dynamodb.Client, cfg *config.Config) *sandboxpurchase.Store {
 	return sandboxpurchase.NewStore(db, cfg.Env)
 }
-func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store) *sandboxpurchase.Service {
-	return sandboxpurchase.NewService(wallet, store)
+func newPromoCodeStore(db *dynamodb.Client, cfg *config.Config) *promocode.Store {
+	return promocode.NewStore(db, cfg.Env)
+}
+func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store, promo *promocode.Store) *sandboxpurchase.Service {
+	return sandboxpurchase.NewService(wallet, store).WithPromo(promo)
+}
+func newWalletAlertStore(db *dynamodb.Client, cfg *config.Config) *walletalert.Store {
+	return walletalert.NewStore(db, cfg.Env)
+}
+func newWalletAlertService(store *walletalert.Store) *walletalert.Service {
+	return walletalert.NewService(store)
 }
 func newReactionEntitlementStore(db *dynamodb.Client, cfg *config.Config) *reactionpurchase.EntitlementStore {
 	return reactionpurchase.NewEntitlementStore(db, cfg.Env)
@@ -594,7 +622,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client) *tablemanager.Manager {
+func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -646,6 +674,9 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 	// The seat's connection dot has to see sockets terminating on other
 	// instances too (see internal/tableconn).
 	mgr.SetConnStore(tableconn.NewService(cacheBackend))
+	// Personal chat-filter preference lookup (#327) — decorative-only, see
+	// tablemanager.SetChatPrefsLookup's own doc comment.
+	mgr.SetChatPrefsLookup(chatPrefsCache.ExtraWords)
 	// Cross-process commit signal (see internal/tablenotify and
 	// docs/specs/2026-09-04-cross-instance-stale-turn-timer.md): without it,
 	// an instance serving a table it did not just commit to only reloads and
@@ -780,7 +811,7 @@ func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarUR
 	}
 	item := sessionlog.HandItem{
 		Outcome: result, NetChange: net,
-		SmallBlind: outcome.SmallBlind, BigBlind: outcome.BigBlind,
+		SmallBlind: outcome.SmallBlind, BigBlind: outcome.BigBlind, Variant: outcome.Variant,
 		Board: outcome.Board, BoardTwo: outcome.BoardTwo, HoleCards: holeCards, Opponents: opponents,
 		CommitHash:     outcome.CommitHash,
 		RootCommitHash: outcome.RootCommitHash,
@@ -984,9 +1015,13 @@ func registerRoutesWithSocialRuntime(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 	pending *reconcile.PendingStore,
+	walletAlertSvc *walletalert.Service,
+	chatPrefsStore *chatprefs.Store,
+	chatPrefsCache *chatprefs.ExtraWordsCache,
+	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, cosmeticLoadoutSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, botCheckContestStore, cosmeticLoadoutSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -1002,7 +1037,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so

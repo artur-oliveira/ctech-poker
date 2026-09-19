@@ -17,11 +17,21 @@ declare module 'axios' {
   }
 }
 
+// next_action's closed set (api-commons/problem, poker issue #319): what the
+// client can DO about this error without parsing `detail` textually.
+export type ApiNextAction = 'retry' | 'wait' | 'reauthenticate' | 'contact_support';
+
 export interface ApiProblem {
   type?: string;
   title?: string;
   detail?: string;
   request_id?: string;
+  // RFC 9457 extension members (#319): structured recovery guidance a
+  // service sets only when it actually knows the answer (a rate limiter's
+  // own window, an expired-token response). Absent means "no guidance",
+  // never a guess.
+  next_action?: ApiNextAction;
+  retry_after_seconds?: number;
 }
 
 export class ApiError extends Error {
@@ -34,6 +44,13 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  // Convenience accessor — same value as problem?.next_action, so a caller
+  // doesn't have to null-check `problem` first to ask "should I retry,
+  // wait, or send this player back to login?".
+  get nextAction(): ApiNextAction | undefined {
+    return this.problem?.next_action;
   }
 }
 
@@ -130,11 +147,20 @@ export function normalizeApiError(error: unknown): ApiError {
   if (!axios.isAxiosError<ApiProblem>(error)) return new ApiError('Unexpected client error', undefined, undefined, undefined, error);
   const status = error.response?.status;
   const problem = error.response?.data;
-  const retryAfter = error.response?.headers?.['retry-after'];
-  const seconds = retryAfter == null ? Number.NaN : Number(retryAfter);
-  const retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : undefined;
+  const retryAfterMs = retryAfterMsFrom(error.response?.headers?.['retry-after'], problem?.retry_after_seconds);
   return new ApiError(problem?.detail || problem?.title || error.message || 'API request failed',
     status, problem, retryAfterMs, error);
+}
+
+// The standard HTTP `Retry-After` header wins when present (it's what a
+// generic intermediary — a CDN, a load balancer — might also have set); the
+// problem+json body's own `retry_after_seconds` (#319) is the fallback, since
+// today only this service's own responses (the rate limiter, TooManyRequests)
+// ever set it and none set both.
+function retryAfterMsFrom(headerValue: unknown, bodySeconds?: number): number | undefined {
+  const headerSeconds = headerValue == null ? Number.NaN : Number(headerValue);
+  const seconds = Number.isFinite(headerSeconds) ? headerSeconds : bodySeconds;
+  return typeof seconds === 'number' && Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : undefined;
 }
 
 export function redirectOnServiceUnavailable(status?: number) {
@@ -146,9 +172,14 @@ const MAX_HTTP_RETRIES = 2;
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const SAFE_HTTP_METHODS = new Set(['get', 'head', 'options']);
 
-export function httpRetryDelay(attempt: number, retryAfter?: string, random = Math.random) {
-  const retryAfterMs = retryAfter == null ? Number.NaN : Number(retryAfter) * 1000;
-  if (Number.isFinite(retryAfterMs)) return Math.max(0, retryAfterMs) + Math.floor(random() * 250);
+// retryAfter is the HTTP `Retry-After` header value (seconds, as a string);
+// bodyRetryAfterSeconds is problem+json's own `retry_after_seconds` (#319),
+// consulted only when the header is absent — same precedence as
+// retryAfterMsFrom above.
+export function httpRetryDelay(attempt: number, retryAfter?: string, random = Math.random,
+                                bodyRetryAfterSeconds?: number) {
+  const retryAfterMs = retryAfterMsFrom(retryAfter, bodyRetryAfterSeconds);
+  if (retryAfterMs !== undefined) return retryAfterMs + Math.floor(random() * 250);
   const ceiling = Math.min(3_000, 250 * 2 ** Math.max(0, attempt - 1));
   return Math.floor(random() * ceiling);
 }
@@ -216,7 +247,12 @@ apiClient.interceptors.response.use(r => r, async e => {
     const retryCount = (e.config._networkRetryCount || 0) + 1;
     e.config._networkRetryCount = retryCount;
     const retryAfter = e.response?.headers?.['retry-after'];
-    await wait(httpRetryDelay(retryCount, retryAfter));
+    // #319: fall back to problem+json's own retry_after_seconds (e.g. the
+    // rate limiter's window) when no Retry-After header was sent — the
+    // automatic retry then waits the server's exact window instead of
+    // guessing an exponential backoff.
+    const bodyRetryAfterSeconds = (e.response?.data as ApiProblem | undefined)?.retry_after_seconds;
+    await wait(httpRetryDelay(retryCount, retryAfter, undefined, bodyRetryAfterSeconds));
     return apiClient.request(e.config);
   }
   redirectOnServiceUnavailable(e?.response?.status);

@@ -152,7 +152,8 @@ function TableContent() {
     sessions: session.sessions, sessionsLoading: session.sessionsLoading
   });
   const {handOutcome, viewerStackBefore, nextHandDurationMs} = useTableOutcome({
-    id, viewer, snapshot: rt.snapshot, snapshotAt: rt.snapshotAt
+    id, viewer, snapshot: rt.snapshot, snapshotAt: rt.snapshotAt,
+    variant: room?.variant === 'short_deck' ? 'short_deck' : 'standard'
   });
 
   // --- Memoised projections and handlers for the memoised surfaces (#230) ---
@@ -287,7 +288,8 @@ function TableContent() {
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
             <TodayHighlight tableId={id} handId={s.hand_id} handComplete={s.stage === 'complete'}
-                            handPot={highlightPot(s)}/>
+                            handPot={highlightPot(s)}
+                            variant={room?.variant === 'short_deck' ? 'short_deck' : 'standard'}/>
             <Button type="button" variant="ghost" size="icon" className="table-mobile-quick-action"
                     aria-label="Abrir reações" aria-keyshortcuts="e" aria-pressed={activeTablePanel === 'reactions'}
                     onClick={() => setActiveTablePanel(activeTablePanel === 'reactions' ? null : 'reactions')}>
@@ -449,7 +451,7 @@ function TableContent() {
                       onFavoriteReactionsChangeAction={saveFavoriteReactions}
                       open={activeTablePanel === 'reactions'}
                       onOpenChangeAction={panelOpenChange('reactions')}/>
-      <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
+      <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge} tableId={id}/>
       <LastWinners items={tableHands} tableId={id} open={activeTablePanel === 'winners'}
                    onOpenChangeAction={panelOpenChange('winners')}/>
       {viewerSeat && room?.currency_mode === 'sandbox' && preferences.equityTrainer &&

@@ -10,7 +10,9 @@ import (
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
+	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
+	"gopkg.aoctech.app/poker/api/internal/chatprefs"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticloadout"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
@@ -37,6 +39,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/social"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
+	"gopkg.aoctech.app/poker/api/internal/walletalert"
 )
 
 // Register mounts poker's routes under /v1.0. seed builds a brand-new
@@ -78,6 +81,10 @@ func Register(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 	pending *reconcile.PendingStore,
+	walletAlertSvc *walletalert.Service,
+	chatPrefsStore *chatprefs.Store,
+	chatPrefsCache *chatprefs.ExtraWordsCache,
+	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
@@ -136,9 +143,11 @@ func Register(
 		manager: manager, seed: seed, presence: presenceSvc,
 		players: players, stats: pokerStatsStore, cfg: cfg,
 	}
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher, leaderboardSvc, pending)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher, leaderboardSvc, pending, walletAlertSvc)
 	RegisterReactionWheel(router, auth, players)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
+	RegisterChatPrefs(router, auth, chatPrefsStore, chatPrefsCache)
+	RegisterBotCheckContest(router, auth, botCheckContestStore)
 	RegisterHandMeta(router, auth, handMetaStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterHandReveal(router, auth, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)

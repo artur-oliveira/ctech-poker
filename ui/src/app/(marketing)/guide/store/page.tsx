@@ -54,6 +54,12 @@ export default function StoreGuide() {
           <GuideCallout kind="warning" title="Confira antes de pagar">Valide recebedor e valor no seu banco antes de concluir.</GuideCallout></>
       },
       {
+        id: 'promocional', title: 'Código promocional e pacote de boas-vindas', summary: 'Um código digitado define o pacote; o pacote de boas-vindas vale uma vez por conta.',
+        body: <><p>Abaixo dos pacotes, o campo <b>Código promocional</b> é opcional. Digite o código e toque em <b>Aplicar código</b>: o pacote e o preço são definidos pelo próprio código, não pelo que estava selecionado antes. Um código já usado, vencido ou digitado errado mostra o motivo ali mesmo, sem abrir cobrança nenhuma.</p>
+          <p>O <b>pacote de boas-vindas</b> aparece com um selo dourado na grade de pacotes e vale uma única vez por conta. Depois de resgatado, o cartão mostra “Já resgatado” e fica desabilitado.</p>
+          <GuideCallout kind="safe" title="Pagamento sempre pelo Pix">Um código promocional nunca pula o pagamento: ele só muda qual pacote e qual preço você paga.</GuideCallout></>
+      },
+      {
         id: 'status', title: 'Os estados de uma compra', summary: 'O histórico separa cobrança aberta de compra concluída.',
         body: <GuideTerms><GuideTerm term="Aguardando pagamento">O Pix ainda vale. <b>Continuar pagamento</b> reabre QR e código.</GuideTerm>
           <GuideTerm term="Confirmada">O pagamento foi reconhecido e o crédito entrou no saldo.</GuideTerm>

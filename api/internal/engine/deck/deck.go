@@ -70,7 +70,109 @@ func NewShuffle() (*ShuffleResult, error) {
 	}, nil
 }
 
+// Variant names a table rule set that changes what the deck/evaluator are
+// (#296). It is a static, per-table attribute — never per-hand — set once at
+// table creation. Standard is the default and the only variant real-money
+// tables may ever use; ShortDeck (6+ hold'em) is sandbox-only.
+type Variant uint8
+
+const (
+	Standard Variant = iota
+	ShortDeck
+)
+
+// Label returns the wire/storage string for v — "" for Standard, "short_deck"
+// for ShortDeck — matching roomstore.VariantStandard/VariantShortDeck exactly
+// (duplicated as literals there rather than imported, since roomstore must
+// not depend on the engine and this package must not depend on roomstore).
+// Used to carry a hand's variant into persisted records (hand.HandOutcome,
+// sessionlog.HandItem) that outlive the room and must not be reinterpreted
+// against a room's current variant later (#296, mirrors why HandOutcome
+// captures its own SmallBlind/BigBlind instead of reading the room's).
+func (v Variant) Label() string {
+	if v == ShortDeck {
+		return "short_deck"
+	}
+	return ""
+}
+
 var standardDeck = orderedDeck()
+
+// shortDeckOrderedDeck returns the 36-card short-deck ordering: every rank
+// from Six up, all four suits — twos through fives never exist in short-deck
+// hold'em. Kept as its own literal build (mirroring orderedDeck) rather than
+// filtering standardDeck, so nothing about the standard 52-card path is
+// touched to derive it.
+func shortDeckOrderedDeck() [36]Card {
+	var d [36]Card
+	i := 0
+	for _, s := range []Suit{Clubs, Diamonds, Hearts, Spades} {
+		for r := Six; r <= Ace; r++ {
+			d[i] = Card{Rank: r, Suit: s}
+			i++
+		}
+	}
+	return d
+}
+
+var shortDeck = shortDeckOrderedDeck()
+
+// ShortDeckShuffleResult mirrors ShuffleResult for the 36-card short-deck
+// variant. Kept as its own type (Cards is [36]Card, not [52]Card) rather than
+// widening ShuffleResult, so the standard type's format — and every call site
+// that already indexes it as exactly 52 cards — never moves (#296's own
+// explicit constraint).
+type ShortDeckShuffleResult struct {
+	Cards      [36]Card
+	ServerSeed [32]byte
+}
+
+// NewShortDeckShuffle draws a fresh CSPRNG seed and produces a shuffled
+// 36-card short-deck plus its seed. Fairness commitment for this variant is
+// computed on demand via RootCommitHashN(seed, cards[:]) — there is no
+// standard-shaped CommitHash/legacy hash here, since nothing needs one: the
+// short-deck reveal path is a #296 follow-up (sandbox variant hands don't
+// yet publish a fairness proof at all — ViewFor/FairnessProofsForActor only
+// run when Table.shuffle, the standard-only field, is non-nil).
+func NewShortDeckShuffle() (*ShortDeckShuffleResult, error) {
+	var seed [32]byte
+	if _, err := rand.Read(seed[:]); err != nil {
+		return nil, err
+	}
+	return &ShortDeckShuffleResult{Cards: shuffleShortDeckWithSeed(seed), ServerSeed: seed}, nil
+}
+
+// shuffleShortDeckWithSeed is shuffleWithSeed's algorithm over the 36-card
+// short deck. Deliberately a separate copy rather than a generalized helper
+// shared with shuffleWithSeed: duplicating ~15 lines costs far less than the
+// risk of a refactor silently changing the standard 52-card shuffle's output
+// for a hand already relying on it being reproducible from its published seed.
+func shuffleShortDeckWithSeed(seed [32]byte) [36]Card {
+	d := shortDeck
+	var counter uint32
+	nextIndex := func(max uint32) uint32 {
+		for {
+			var ctrBytes [4]byte
+			binary.BigEndian.PutUint32(ctrBytes[:], counter)
+			counter++
+			mac := hmac.New(sha256.New, seed[:])
+			mac.Write(ctrBytes[:])
+			sum := mac.Sum(nil)
+			v := binary.BigEndian.Uint32(sum[:4])
+			m := uint32(^uint32(0))
+			rem := (m%max + 1) % max
+			limit := m - rem + 1
+			if rem == 0 || v < limit {
+				return v % max
+			}
+		}
+	}
+	for i := len(d) - 1; i > 0; i-- {
+		j := nextIndex(uint32(i + 1))
+		d[i], d[j] = d[j], d[i]
+	}
+	return d
+}
 
 func orderedDeck() [52]Card {
 	var d [52]Card
@@ -167,6 +269,19 @@ func RootCommitHash(seed [32]byte, cards [52]Card) [32]byte {
 		copy(buf[i*32:(i+1)*32], h[:])
 	}
 	return sha256.Sum256(buf[:])
+}
+
+// RootCommitHashN generalizes RootCommitHash to any deck size, for a variant
+// deck (#296, short-deck) whose card count differs from the standard 52 —
+// added rather than changing RootCommitHash's signature, so the standard
+// path's committed byte format never moves.
+func RootCommitHashN(seed [32]byte, cards []Card) [32]byte {
+	buf := make([]byte, len(cards)*32)
+	for i, c := range cards {
+		h := CardHash(seed, i, c)
+		copy(buf[i*32:(i+1)*32], h[:])
+	}
+	return sha256.Sum256(buf)
 }
 
 // VerifyPartial verifies that a set of revealed cards and unrevealed card commitments match rootCommit.

@@ -2,7 +2,7 @@
 import {useEffect, useState} from 'react';
 import {Equal, Flag, Layers3, PartyPopper, Repeat2, Swords, X} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
-import {bestHandCategory, HAND_MATCH_SIZE, wasDecidedByKicker} from '@/lib/pokerRules';
+import {bestHandCategory, HAND_MATCH_SIZE, type HandVariant, wasDecidedByKicker} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {ChipStack} from '@/components/table/ChipStack';
 import {PerimeterTimer} from '@/components/table/PerimeterTimer';
@@ -11,6 +11,10 @@ import {useChipExact, useChipFormat, useChipUnit} from '@/lib/chipFormat';
 
 export type HandOutcomeState = {
   key: number; kind: 'win' | 'lose' | 'tie' | 'mixed' | 'fold'; handCategory?: string; opponentCategory?: string;
+  // The table's rule variant (#296) — only consulted for the rare fallback
+  // recompute in categoryFor/wasDecidedByKicker when the server didn't send
+  // a category for a given seat. Defaults to 'standard'.
+  variant?: HandVariant;
   // Only set when kind is 'fold': whether the viewer's own hole cards would
   // actually have beaten the eventual winner's revealed hand had they stayed
   // in. Undefined when the hand never reached a showdown (no one's cards to
@@ -87,8 +91,15 @@ const BADGE_LABEL: Record<HandOutcomeState['kind'], string> = {
   tie: 'Ver resultado: pote dividido', mixed: 'Ver resultado misto', fold: 'Ver resultado: você desistiu'
 };
 
-function categoryFor(cards?: string[], fallback?: string): string | undefined {
-  return cards?.length === 5 ? bestHandCategory(cards) : fallback;
+// The server's own category label (already computed with the correct
+// ranking rules for this table's variant — Table.categoryOf on the backend)
+// is authoritative whenever it's present; the local recompute is only a
+// fallback for the rare frame that didn't carry one. Recomputing
+// unconditionally here was the #296 bug: a short-deck flush was mislabeled
+// against standard ranking even though the server had already sent the
+// right answer.
+function categoryFor(cards?: string[], fallback?: string, variant: HandVariant = 'standard'): string | undefined {
+  return fallback ?? (cards?.length === 5 ? bestHandCategory(cards, variant) : undefined);
 }
 
 function categoryLabel(category?: string): string | undefined {
@@ -100,9 +111,9 @@ function categoryLabel(category?: string): string | undefined {
 // named combination (two for a pair, four for two pair, all five for a
 // straight, and so on). A hand won without showdown has no revealed
 // combination, so it deliberately renders no cards.
-function combinationCards(cards?: string[], fallbackCategory?: string): string[] {
+function combinationCards(cards?: string[], fallbackCategory?: string, variant: HandVariant = 'standard'): string[] {
   if (cards?.length !== 5) return [];
-  const category = categoryFor(cards, fallbackCategory);
+  const category = categoryFor(cards, fallbackCategory, variant);
   return cards.slice(0, category ? HAND_MATCH_SIZE[category] ?? cards.length : cards.length);
 }
 
@@ -110,8 +121,9 @@ function combinationCards(cards?: string[], fallbackCategory?: string): string[]
 // after it, for a showdown lost or won by kicker within the same hand
 // category, where naming just "Par" for both sides hides the actual reason
 // one beat the other.
-function combinationWithKickers(cards?: string[], fallbackCategory?: string): { cards: string[]; kickerFrom: number } {
-  const combination = combinationCards(cards, fallbackCategory);
+function combinationWithKickers(cards?: string[], fallbackCategory?: string,
+                                 variant: HandVariant = 'standard'): { cards: string[]; kickerFrom: number } {
+  const combination = combinationCards(cards, fallbackCategory, variant);
   if (!combination.length || cards?.length !== 5) return {cards: combination, kickerFrom: combination.length};
   return {cards, kickerFrom: combination.length};
 }
@@ -306,24 +318,25 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
       </span>
     </div>;
   }
-  const ownCategory = categoryFor(shown.viewerCards || shown.winningCards, shown.handCategory);
-  const winnerCategory = categoryFor(shown.winningCards, shown.opponentCategory);
-  const ownCombination = combinationCards(shown.viewerCards || shown.winningCards, shown.handCategory);
-  const winningCombination = combinationCards(shown.winningCards, shown.opponentCategory);
+  const variant: HandVariant = shown.variant ?? 'standard';
+  const ownCategory = categoryFor(shown.viewerCards || shown.winningCards, shown.handCategory, variant);
+  const winnerCategory = categoryFor(shown.winningCards, shown.opponentCategory, variant);
+  const ownCombination = combinationCards(shown.viewerCards || shown.winningCards, shown.handCategory, variant);
+  const winningCombination = combinationCards(shown.winningCards, shown.opponentCategory, variant);
   // Naming the same category for both sides ("Par" vs. "Par") hides why one
   // beat the other, so show the kicker(s) that actually broke the tie instead.
   const sameCategory = shown.kind === 'lose' && ownCategory && ownCategory === winnerCategory;
   const decidedByKicker = Boolean(sameCategory && shown.viewerCards && shown.winningCards &&
-    wasDecidedByKicker(shown.viewerCards, shown.winningCards));
+    wasDecidedByKicker(shown.viewerCards, shown.winningCards, variant));
   const higherCombination = Boolean(sameCategory && !decidedByKicker);
   // Mirror of the above for a win: did the viewer's own kicker beat an
   // opponent who made the very same combination?
-  const beatenCategory = categoryFor(shown.beatenCards, shown.beatenCategory);
+  const beatenCategory = categoryFor(shown.beatenCards, shown.beatenCategory, variant);
   const sameCategoryWin = shown.kind === 'win' && ownCategory && ownCategory === beatenCategory;
   const wonByKicker = Boolean(sameCategoryWin && shown.viewerCards && shown.beatenCards &&
-    wasDecidedByKicker(shown.viewerCards, shown.beatenCards));
-  const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory);
-  const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory);
+    wasDecidedByKicker(shown.viewerCards, shown.beatenCards, variant));
+  const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory, variant);
+  const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory, variant);
   const chipChange = shown.stackBefore != null && shown.stackAfter != null &&
   shown.stackBefore !== shown.stackAfter
     ? <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>
@@ -430,7 +443,7 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
                 <small>{tied.name || 'Jogador'}</small>
                 <strong>{categoryLabel(ownCategory) || 'Mesma combinação'}</strong>
               </span>
-                <OutcomeCards cards={combinationCards(tied.cards)} startIndex={(index + 1) * 5}/>
+                <OutcomeCards cards={combinationCards(tied.cards, undefined, variant)} startIndex={(index + 1) * 5}/>
               </div>)}
           </div> :
             <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>}
@@ -455,14 +468,14 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
                     <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={index * 5}/>
                   </div>
                 );
-                const potCategory = categoryFor(potOutcome.winningCards, potOutcome.category);
+                const potCategory = categoryFor(potOutcome.winningCards, potOutcome.category, variant);
                 return (
                   <div key={index} className="hand-outcome-comparison-row winner">
                     <span className="hand-outcome-hand-name">
                       <small>{[label, potOutcome.winnerName || 'Vencedor'].filter(Boolean).join(' · ')}</small>
                       <strong>{categoryLabel(potCategory) || 'Mão vencedora'}</strong>
                     </span>
-                    <OutcomeCards cards={combinationCards(potOutcome.winningCards, potOutcome.category)}
+                    <OutcomeCards cards={combinationCards(potOutcome.winningCards, potOutcome.category, variant)}
                                   startIndex={index * 5}/>
                   </div>
                 );

@@ -14,6 +14,10 @@ type CreateRoomRequest struct {
 	RunItTwiceEnabled    *bool                      `json:"run_it_twice_enabled,omitempty"`
 	BlindEscalation      *roomstore.BlindEscalation `json:"blind_escalation,omitempty"`
 	TurnTimeoutSeconds   *int                       `json:"turn_timeout_seconds,omitempty"`
+	// Variant selects a rule variant (#296) — "" (default) or "short_deck".
+	// Sandbox-only: createRoom rejects any non-empty value on a real-money
+	// room outright.
+	Variant string `json:"variant,omitempty"`
 }
 
 type JoinRoomRequest struct {

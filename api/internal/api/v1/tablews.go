@@ -454,6 +454,14 @@ func RegisterTableWS(
 
 			botRiskScore := 0
 			challengeRequired := false
+			// Set only when challengeRequired flips true, from the same
+			// signal that triggered it (#322). It never changes what
+			// bot_challenge below accepts — checker.Verify's fail-closed
+			// result is unaffected — only how much risk budget a pass earns
+			// back: an escalated connection is handed a smaller one, so the
+			// next challenge comes sooner than it would for a connection
+			// that was merely borderline.
+			challengeLevel := botcheck.ChallengeStandard
 			done := make(chan struct{})
 			go startHeartbeat(ctx, safeConn, done, wsPingInterval, wsPongWait)
 
@@ -593,6 +601,7 @@ func RegisterTableWS(
 							}
 							if botRiskScore >= 16 {
 								challengeRequired = true
+								challengeLevel = botcheck.DecideChallengeLevel(botcheck.RiskSignal{ActionRiskScore: botRiskScore})
 								send(&pokerproto.ServerMessage{Type: "bot_challenge"})
 							}
 						}
@@ -610,7 +619,15 @@ func RegisterTableWS(
 						continue
 					}
 					challengeRequired = false
-					botRiskScore = 0
+					if challengeLevel == botcheck.ChallengeEscalated {
+						// A smaller risk budget than the standard reset to 0:
+						// the next chip-committing fast decision reaches the
+						// challenge threshold again much sooner (#322).
+						botRiskScore = 8
+					} else {
+						botRiskScore = 0
+					}
+					challengeLevel = botcheck.ChallengeStandard
 					send(&pokerproto.ServerMessage{Type: "bot_challenge_passed", ActionId: m.ActionId})
 				case "post_big_blind":
 					ensureActionID()

@@ -6,6 +6,14 @@ const (
 	CurrencyModeReal    = "real"
 )
 
+// Rule variants (#296) — sandbox-only, starting with short-deck (6+
+// hold'em). VariantStandard is the default and the only variant a real-money
+// room may ever carry; see createRoom's validation in internal/api/v1.
+const (
+	VariantStandard  = ""
+	VariantShortDeck = "short_deck"
+)
+
 // Room is the lobby directory entry — metadata only. Live seat/stack state
 // during play lives in Phase 2's table.Actor + snapshot/action-log, not here.
 type Room struct {
@@ -28,6 +36,11 @@ type Room struct {
 	// entitlement rebind never has to re-derive it from blinds. Empty for
 	// sandbox rooms (no entitlement).
 	Tier                 string           `dynamodbav:"tier,omitempty" json:"tier,omitempty"`
+	// Variant is the table rule set (#296): "" (VariantStandard, default) or
+	// "short_deck" (VariantShortDeck). Sandbox-only — createRoom rejects a
+	// non-empty Variant on any real-money room outright, never just hides
+	// the picker client-side. Immutable after creation, same as CurrencyMode.
+	Variant string `dynamodbav:"variant,omitempty" json:"variant,omitempty"`
 	ShareCode            string           `dynamodbav:"share_code,omitempty" json:"share_code,omitempty"`                     // private rooms only
 	BlindEscalation      *BlindEscalation `dynamodbav:"blind_escalation,omitempty" json:"blind_escalation,omitempty"`         // private rooms only
 	TurnTimeoutSeconds   int              `dynamodbav:"turn_timeout_seconds,omitempty" json:"turn_timeout_seconds,omitempty"` // private rooms only, 0 = default

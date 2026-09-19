@@ -5418,6 +5418,45 @@ button.deck-grid-slot:hover {
     font-size: var(--font-size-body);
     line-height: 1.5
 }
+.store-sku-card-welcome {
+    border-color: var(--gold)
+}
+.store-sku-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: var(--rounded-pill);
+    background: color-mix(in oklab, var(--gold) 20%, transparent);
+    color: var(--gold);
+    font-size: var(--font-size-tiny);
+    font-weight: 650;
+    letter-spacing: .02em
+}
+.store-sku-badge svg {
+    width: 13px;
+    height: 13px
+}
+.store-promo-form {
+    display: grid;
+    gap: 8px;
+    max-width: 480px;
+    margin-top: 20px
+}
+.store-promo-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px
+}
+.store-promo-row > input {
+    flex: 1 1 200px
+}
+.store-promo-success {
+    margin: 0;
+    color: var(--success);
+    font-size: var(--font-size-compact)
+}
 .store-department-history {
     margin-top: 32px;
     padding-top: 24px;
@@ -7211,6 +7250,28 @@ button.deck-grid-slot:hover {
 .player-profile-deck [data-slot='select-trigger'] {
     width: 100%
 }
+.player-profile-wallet-alert-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    max-width: 420px;
+    border-radius: var(--rounded-control);
+    background: color-mix(in oklab, var(--gold) 16%, transparent);
+    color: var(--gold-pale, var(--gold));
+    font-size: var(--font-size-compact)
+}
+.player-profile-wallet-alert-banner svg {
+    width: 16px;
+    height: 16px;
+    flex: none
+}
+.player-profile-wallet-alerts {
+    display: grid;
+    gap: 16px;
+    max-width: 420px
+}
 .player-profile-balances {
     display: grid;
     gap: 10px;
@@ -7368,6 +7429,60 @@ button.deck-grid-slot:hover {
     display: grid;
     gap: 16px;
     padding: 24px
+}
+.chatprefs-editor {
+    display: grid;
+    gap: 14px;
+    max-width: 480px
+}
+.chatprefs-add {
+    display: flex;
+    gap: 10px
+}
+.chatprefs-add > [data-slot='input'],
+.chatprefs-add input {
+    flex: 1 1 auto
+}
+.chatprefs-word-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+.chatprefs-word-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 6px 6px 14px;
+    border-radius: var(--rounded-pill);
+    background: var(--white-08);
+    color: var(--on-brand);
+    font-size: var(--font-size-body)
+}
+.chatprefs-word-pill button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: var(--text-secondary);
+    transition: background-color 0.2s var(--ease-out-quart), color 0.2s var(--ease-out-quart)
+}
+.chatprefs-word-pill button:hover {
+    background: var(--white-13);
+    color: var(--on-brand)
+}
+.chatprefs-word-pill button svg {
+    width: 14px;
+    height: 14px
+}
+.chatprefs-skeleton {
+    display: grid;
+    gap: 10px;
+    max-width: 480px
 }
 @media (max-width: 900px) {
 .player-profile-section {

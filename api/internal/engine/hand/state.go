@@ -52,6 +52,11 @@ type State struct {
 	// that armed its expiry timer — the same self-healing property
 	// rearmTimersFromCache gives every other post-hand timer.
 	PendingWinnerCards *WinnerCardsRequest
+	// Variant and ShortShuffle carry the #296 short-deck variant across a
+	// reload. Both are omitempty so a standard table's persisted State is
+	// unchanged (zero Variant, nil ShortShuffle write nothing).
+	Variant      deck.Variant                 `json:"variant,omitempty" dynamodbav:"variant,omitempty"`
+	ShortShuffle *deck.ShortDeckShuffleResult `json:"short_shuffle,omitempty" dynamodbav:"short_shuffle,omitempty"`
 }
 
 // ExportState captures every field this Table carries, for durable storage.
@@ -87,6 +92,8 @@ func (t *Table) ExportState() State {
 		WinnerCardsPaid:    t.winnerCardsPaid,
 		WinnerCardsAsked:   t.winnerCardsAsked,
 		PendingWinnerCards: t.pendingWinnerCards,
+		Variant:            t.variant,
+		ShortShuffle:       t.shortShuffle,
 	}
 }
 
@@ -142,6 +149,8 @@ func NewTableFromState(s State) *Table {
 		runItTwice:         s.RunItTwice,
 		runoutPhase:        s.RunoutPhase,
 		shuffle:            s.Shuffle,
+		shortShuffle:       s.ShortShuffle,
+		variant:            s.Variant,
 		nextCard:           s.NextCard,
 		round:              s.Round,
 		roundIdx:           s.RoundIdx,

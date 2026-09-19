@@ -123,6 +123,7 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	if a.cached != nil && a.trustCache && !force {
 		a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
 		a.refreshStreaks(ctx)
+		a.refreshChatPrefs(ctx)
 		a.syncFleetConns(false)
 		return nil
 	}
@@ -152,6 +153,7 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.pruneStalePresence()
 	a.rearmTimersFromCache()
 	a.refreshStreaks(ctx)
+	a.refreshChatPrefs(ctx)
 	a.syncFleetConns(false)
 	return nil
 }

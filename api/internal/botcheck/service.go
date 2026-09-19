@@ -105,3 +105,51 @@ func (s *Service) Verify(ctx context.Context, token, remoteIP string) error {
 func (s *Service) SetTransportForTest(transport http.RoundTripper) {
 	s.client.Transport = transport
 }
+
+// ChallengeLevel is how aggressively a caller should keep re-asking for a
+// Turnstile challenge (#322). It never changes what Verify itself accepts —
+// the same action and hostname are validated regardless of level, so an
+// escalated decision can only ever mean "ask again sooner," never "accept a
+// weaker proof." That is what keeps this fail-closed.
+type ChallengeLevel int
+
+const (
+	// ChallengeStandard is today's behaviour, unchanged: a fresh Verify
+	// clears the connection's risk budget back to zero.
+	ChallengeStandard ChallengeLevel = iota
+	// ChallengeEscalated means the caller should grant a smaller risk
+	// budget after a pass — the next challenge comes sooner than it would
+	// for a low-risk connection that just proved itself.
+	ChallengeEscalated
+)
+
+// RiskSignal carries the "sinais já disponíveis na borda" #322 asks
+// DecideChallengeLevel to grade, without botcheck itself having to own a
+// second Redis counter next to the rate limiters that already track them
+// (internal/api/v1/ratelimit.go). Both fields are the caller's own existing
+// signals — RecentAttempts a per-IP/per-player attempt count from whatever
+// counter the caller already runs requests through, ActionRiskScore the
+// decision-latency-derived bot score tablews.go already computes.
+type RiskSignal struct {
+	RecentAttempts  int64
+	ActionRiskScore int
+}
+
+// highRiskAttempts / highRiskActionScore are heuristic thresholds, not a
+// measured product SLA (#322 explicitly leaves that validation open) — same
+// spirit as tablews.go's pre-existing botRiskScore>=16 threshold for forcing
+// a challenge at all. Revisit once real false-positive-rate data exists.
+const (
+	highRiskAttempts    = 20
+	highRiskActionScore = 8
+)
+
+// DecideChallengeLevel grades a risk signal into a ChallengeLevel. Pure and
+// side-effect-free, so a caller can test the escalation decision without a
+// network dependency, mirroring resolution.
+func DecideChallengeLevel(signal RiskSignal) ChallengeLevel {
+	if signal.RecentAttempts >= highRiskAttempts || signal.ActionRiskScore >= highRiskActionScore {
+		return ChallengeEscalated
+	}
+	return ChallengeStandard
+}
