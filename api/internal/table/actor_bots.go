@@ -15,6 +15,7 @@ import (
 )
 
 const botFillDelay = 15 * time.Second
+const BotReservationTTL = 2 * time.Minute
 
 var botNames = []string{"Lia", "Caio", "Bia", "Nando", "Maya", "Theo", "Iris", "Davi"}
 
@@ -22,6 +23,139 @@ type botRandom struct{}
 
 func (botRandom) Float64() float64 { return rand.Float64() }
 func (botRandom) IntN(n int) int   { return rand.IntN(n) }
+
+func (a *Actor) handleReserveBotSeat(ctx context.Context, c ReserveBotSeatCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	apply := func() error {
+		return a.mutate(func() error {
+			if err := a.cached.ReserveBotSeatForActor(c.Reservation, timeNowFunc().UnixMilli()); err != nil {
+				return err
+			}
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.Reservation.PlayerID, Action: "reserve_bot_seat"})
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
+	if c.Result != nil {
+		if reservation := a.cached.BotReservationForActor(); reservation != nil {
+			c.Result <- *reservation
+		}
+	}
+	a.broadcastAll()
+	a.armBotReservationTimer()
+	return nil
+}
+
+func (a *Actor) armBotReservationTimer() {
+	if a.cached == nil {
+		return
+	}
+	reservation := a.cached.BotReservationForActor()
+	if reservation == nil {
+		if a.botReservationTimer != nil {
+			a.botReservationTimer.Stop()
+		}
+		a.botReservationArmedFor = ""
+		return
+	}
+	key := fmt.Sprintf("%s:%d", reservation.ID, reservation.ExpiresAtUnixMs)
+	if a.botReservationArmedFor == key {
+		return
+	}
+	if a.botReservationTimer != nil {
+		a.botReservationTimer.Stop()
+	}
+	a.botReservationArmedFor = key
+	delay := time.Until(time.UnixMilli(reservation.ExpiresAtUnixMs))
+	if delay < 0 {
+		delay = 0
+	}
+	a.botReservationTimer = time.AfterFunc(delay, func() {
+		reply := make(chan error, 1)
+		if err := a.Dispatch(expireBotReservationCmd{ReservationID: reservation.ID, Reply: reply}); err != nil {
+			slog.Warn("table bot reservation expiry dispatch failed", "table_id", a.id, "err", err)
+		}
+	})
+}
+
+func (a *Actor) handleExpireBotReservation(ctx context.Context, c expireBotReservationCmd) error {
+	a.botReservationArmedFor = ""
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	reservation := a.cached.BotReservationForActor()
+	if reservation == nil || reservation.ID != c.ReservationID || reservation.ExpiresAtUnixMs > timeNowFunc().UnixMilli() {
+		a.armBotReservationTimer()
+		return nil
+	}
+	if err := a.mutate(func() error {
+		a.cached.CancelBotReservationForActor(reservation.ID, reservation.PlayerID)
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: reservation.PlayerID, Action: "expire_bot_reservation"})
+	}); err != nil {
+		return err
+	}
+	a.armBotFillTimer()
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) handleBotReservationStatus(ctx context.Context, c BotReservationStatusCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	reservation := a.cached.BotReservationForActor()
+	if reservation == nil || reservation.PlayerID != c.PlayerID {
+		c.Status <- BotReservationStatus{}
+		return nil
+	}
+	if reservation.ExpiresAtUnixMs <= timeNowFunc().UnixMilli() {
+		if err := a.mutate(func() error {
+			a.cached.CancelBotReservationForActor(reservation.ID, c.PlayerID)
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "expire_bot_reservation"})
+		}); err != nil {
+			return err
+		}
+		a.armBotFillTimer()
+		a.armBotReservationTimer()
+		c.Status <- BotReservationStatus{}
+		return nil
+	}
+	c.Status <- BotReservationStatus{Reservation: reservation, Ready: a.cached.BotReservationReadyForActor()}
+	return nil
+}
+
+func (a *Actor) handleBotMatchStatus(ctx context.Context, c BotMatchStatusCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	status := BotMatchStatus{Reservation: a.cached.BotReservationForActor()}
+	for _, player := range a.cached.PlayersForActor() {
+		status.HasBot = status.HasBot || player.IsBot
+	}
+	c.Status <- status
+	return nil
+}
+
+func (a *Actor) handleCancelBotReservation(ctx context.Context, c CancelBotReservationCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	if err := a.mutate(func() error {
+		if !a.cached.CancelBotReservationForActor(c.ReservationID, c.PlayerID) {
+			return fmt.Errorf("table: bot reservation not found")
+		}
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "cancel_bot_reservation"})
+	}); err != nil {
+		return err
+	}
+	a.armBotFillTimer()
+	a.armBotReservationTimer()
+	a.broadcastAll()
+	return nil
+}
 
 func (a *Actor) handleEnableBots(ctx context.Context, c EnableBotsCmd) error {
 	if err := a.ensureLoaded(ctx, true); err != nil {
@@ -85,6 +219,22 @@ func (a *Actor) handleFillBots(ctx context.Context) error {
 		a.armBotFillTimer()
 		return nil
 	}
+	if a.botFundingAvailable != nil {
+		available, err := a.botFundingAvailable(ctx, policy.OwnerID)
+		if err != nil || !available {
+			if err != nil {
+				slog.Warn("bot funding availability failed closed", "table_id", a.id, "err", err)
+			}
+			if commitErr := a.mutate(func() error {
+				a.cached.DisableBotsForActor()
+				return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: policy.OwnerID, Action: "disable_bots_funding_limit"})
+			}); commitErr != nil {
+				return commitErr
+			}
+			a.broadcastAll()
+			return nil
+		}
+	}
 	apply := func() error {
 		return a.mutate(func() error {
 			needed := a.cached.BotSeatsNeededForActor()
@@ -108,6 +258,58 @@ func (a *Actor) handleFillBots(ctx context.Context) error {
 	a.notifySeatsChanged()
 	a.broadcastAll()
 	return nil
+}
+
+func (a *Actor) enforceBotFunding(ctx context.Context) {
+	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.botFundingCheckedFor == a.handID {
+		return
+	}
+	if a.botFundingRecord == nil {
+		return
+	}
+	outcome := a.cached.LastOutcomeForActor()
+	if outcome == nil || !outcome.ContainsBot {
+		return
+	}
+	if a.cached.BotPolicyForActor().FundingCheckedHandID == a.handID {
+		a.botFundingCheckedFor = a.handID
+		return
+	}
+	playerID := ""
+	for _, id := range outcome.Participants {
+		if !strings.HasPrefix(id, "bot:") {
+			if playerID != "" {
+				// Mixed human/bot hands are forbidden by policy. If an old rollout
+				// produces one, stop bots rather than attribute profit ambiguously.
+				playerID = ""
+				break
+			}
+			playerID = id
+		}
+	}
+	allowed := false
+	if playerID != "" {
+		delta := outcome.Payouts[playerID] - outcome.Contributions[playerID]
+		var err error
+		allowed, err = a.botFundingRecord(ctx, playerID, a.handID, delta)
+		if err != nil {
+			slog.Warn("bot funding update failed closed", "table_id", a.id, "hand_id", a.handID, "err", err)
+		}
+	}
+	if err := a.mutate(func() error {
+		a.cached.MarkBotFundingCheckedForActor(a.handID)
+		if !allowed {
+			if err := a.cached.RetireBotsForHumanArrival(); err != nil {
+				return err
+			}
+			a.cached.DisableBotsForActor()
+		}
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: playerID, Action: "check_bot_funding"})
+	}); err != nil {
+		slog.Error("failed to retire bots after funding decision", "table_id", a.id, "hand_id", a.handID, "err", err)
+		return
+	}
+	a.botFundingCheckedFor = a.handID
 }
 
 func nextBotIndex(players []*hand.Player, ownerID string) int {

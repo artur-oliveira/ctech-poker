@@ -157,6 +157,7 @@ func (a *Actor) sync(publish bool) {
 	defer cancel()
 	a.processPendingExitAutoFolds(sweepCtx)
 	a.processInlinePreselections(sweepCtx)
+	a.enforceBotFunding(sweepCtx)
 	a.removeEligiblePendingExits(sweepCtx)
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()

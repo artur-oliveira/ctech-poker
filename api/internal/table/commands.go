@@ -256,6 +256,7 @@ type JoinCmd struct {
 	MidHand          bool
 	HoldID           string
 	AutoRebuy        bool
+	ReservationID    string
 	SettlementIntent func() (types.TransactWriteItem, error)
 	Reply            chan error
 }
@@ -273,6 +274,54 @@ type EnableBotsCmd struct {
 }
 
 func (c EnableBotsCmd) reply() chan error { return c.Reply }
+
+type ReserveBotSeatCmd struct {
+	Reservation hand.BotReservation
+	Result      chan hand.BotReservation
+	Reply       chan error
+}
+
+func (c ReserveBotSeatCmd) reply() chan error { return c.Reply }
+
+type BotReservationStatus struct {
+	Reservation *hand.BotReservation
+	Ready       bool
+}
+
+type BotReservationStatusCmd struct {
+	PlayerID string
+	Status   chan BotReservationStatus
+	Reply    chan error
+}
+
+type BotMatchStatus struct {
+	HasBot      bool
+	Reservation *hand.BotReservation
+}
+
+type BotMatchStatusCmd struct {
+	Status chan BotMatchStatus
+	Reply  chan error
+}
+
+func (c BotMatchStatusCmd) reply() chan error { return c.Reply }
+
+func (c BotReservationStatusCmd) reply() chan error { return c.Reply }
+
+type CancelBotReservationCmd struct {
+	PlayerID      string
+	ReservationID string
+	Reply         chan error
+}
+
+type expireBotReservationCmd struct {
+	ReservationID string
+	Reply         chan error
+}
+
+func (c expireBotReservationCmd) reply() chan error { return c.Reply }
+
+func (c CancelBotReservationCmd) reply() chan error { return c.Reply }
 
 type LeaveCmd struct {
 	PlayerID         string

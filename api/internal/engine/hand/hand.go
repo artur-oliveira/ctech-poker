@@ -152,10 +152,11 @@ type Table struct {
 	// currencyMode already follows. It picks the deck and hand evaluator
 	// StartHand/showdown use; nothing about the betting/side-pot/settlement
 	// state machine reads it.
-	variant   deck.Variant
-	botPolicy BotPolicy
-	round     *betting.Round
-	roundIdx  map[string]int // playerID -> index into round.Players, for the active betting round
+	variant        deck.Variant
+	botPolicy      BotPolicy
+	botReservation *BotReservation
+	round          *betting.Round
+	roundIdx       map[string]int // playerID -> index into round.Players, for the active betting round
 
 	// roundBaseline records, for each player in the current round, the value
 	// round.Players[idx].Contributed held at the moment this round began

@@ -282,7 +282,10 @@ export class DynamoDBStack extends cdk.Stack {
     // naturally at UTC midnight since the sort key changes. No TTL; a
     // 30-day-old item table costs nothing to keep.
     table('poker_table_highlights', true);
-    table('poker_achievement_progress', true);
+    // Bot funding windows and their embedded per-hand idempotency guards share
+    // this player-keyed table. Existing achievement rows omit ttl and remain
+    // durable; only bot windows expire.
+    table('poker_achievement_progress', true, true);
     const leaderboardStats = table('poker_leaderboard_stats', true);
     leaderboardStats.addGlobalSecondaryIndex({
       indexName: 'gsi_hands_won',

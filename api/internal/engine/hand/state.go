@@ -55,9 +55,10 @@ type State struct {
 	// Variant and ShortShuffle carry the #296 short-deck variant across a
 	// reload. Both are omitempty so a standard table's persisted State is
 	// unchanged (zero Variant, nil ShortShuffle write nothing).
-	Variant      deck.Variant                 `json:"variant,omitempty" dynamodbav:"variant,omitempty"`
-	ShortShuffle *deck.ShortDeckShuffleResult `json:"short_shuffle,omitempty" dynamodbav:"short_shuffle,omitempty"`
-	BotPolicy    BotPolicy                    `json:"bot_policy,omitempty" dynamodbav:"bot_policy,omitempty"`
+	Variant        deck.Variant                 `json:"variant,omitempty" dynamodbav:"variant,omitempty"`
+	ShortShuffle   *deck.ShortDeckShuffleResult `json:"short_shuffle,omitempty" dynamodbav:"short_shuffle,omitempty"`
+	BotPolicy      BotPolicy                    `json:"bot_policy,omitempty" dynamodbav:"bot_policy,omitempty"`
+	BotReservation *BotReservation              `json:"bot_reservation,omitempty" dynamodbav:"bot_reservation,omitempty"`
 }
 
 // ExportState captures every field this Table carries, for durable storage.
@@ -96,6 +97,7 @@ func (t *Table) ExportState() State {
 		Variant:            t.variant,
 		ShortShuffle:       t.shortShuffle,
 		BotPolicy:          t.botPolicy,
+		BotReservation:     t.botReservation,
 	}
 }
 
@@ -154,6 +156,7 @@ func NewTableFromState(s State) *Table {
 		shortShuffle:       s.ShortShuffle,
 		variant:            s.Variant,
 		botPolicy:          s.BotPolicy,
+		botReservation:     s.BotReservation,
 		nextCard:           s.NextCard,
 		round:              s.Round,
 		roundIdx:           s.RoundIdx,

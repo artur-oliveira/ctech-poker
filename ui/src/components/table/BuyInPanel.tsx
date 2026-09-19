@@ -8,7 +8,7 @@ import axios from 'axios';
 import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {Switch} from '@/components/ui/switch';
-import {getRoom, joinOrCreateRoom, joinRoom, type Room} from '@/lib/api/rooms';
+import {getBotEligibility, getRoom, joinOrCreateRoom, joinRoom, type Room} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 import {pushNotification} from '@/lib/notify';
 import {type LobbyBucket, ROOM_BUCKETS_QUERY_KEY, tableBucketHref} from '@/lib/lobbyBuckets';
@@ -76,7 +76,7 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
   roomId?: string;
   bucket?: LobbyBucket;
   shareCode?: string;
-  onSeatedAction: (roomId: string, matchKind?: 'human' | 'waiting' | 'bot_pending' | 'reserved') => void
+  onSeatedAction: (roomId: string, matchKind?: 'human' | 'waiting' | 'bot_pending' | 'reserved', reservationId?: string) => void
 }) {
   const sliderId = useId();
   const autoRebuyId = useId();
@@ -101,6 +101,10 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
     queryKey: ['room', roomId],
     queryFn: () => getRoom(roomId),
     enabled: !bucket
+  });
+  const botEligibility = useQuery({
+    queryKey: ['bot-eligibility'], queryFn: getBotEligibility,
+    enabled: Boolean(bucket && bucket.bigBlind <= 1_000), staleTime: 30_000,
   });
   const room = bucket ? roomFromBucket(bucket) : fetchedRoom;
 
@@ -133,6 +137,14 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
   const isReal = room.currency_mode === 'real';
   const unit = isReal ? '' : 'fichas';
   const fmt = (n: number) => formatBuyIn(n, isReal);
+  const botsSupported = Boolean(bucket && bucket.bigBlind <= 1_000);
+  const botsAvailable = botsSupported && !botEligibility.isError && botEligibility.data?.available !== false;
+  const effectiveAllowBots = allowBots && botsAvailable;
+  const botReturnCopy = !botsSupported
+    ? 'Bots estão disponíveis até os blinds 500/1.000.'
+    : botEligibility.data?.expires_at
+      ? `Seu limite estará disponível novamente ${relativeReturn(botEligibility.data.expires_at)}.`
+      : 'Não foi possível confirmar o limite agora. Você ainda pode esperar outras pessoas.';
 
   async function confirm() {
     if (!room) return;
@@ -144,13 +156,14 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
         // table inside this bucket and seats the player, so losing the last
         // seat to a concurrent joiner resolves into another table here,
         // without a bounce back to the lobby.
-        const {room_id, match_kind} = await joinOrCreateRoom({
+        const {room_id, match_kind, reservation_id} = await joinOrCreateRoom({
           small_blind: bucket.smallBlind, big_blind: bucket.bigBlind, max_seats: bucket.maxSeats,
           amount: value, auto_rebuy: autoRebuy || undefined, idem_key: idemKeyFor(value),
-          ...(allowBots ? {allow_bots: true} : {}),
+          ...(effectiveAllowBots ? {allow_bots: true} : {}),
         });
         await queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
-        if (match_kind) onSeatedAction(room_id, match_kind);
+        if (match_kind && reservation_id) onSeatedAction(room_id, match_kind, reservation_id);
+        else if (match_kind) onSeatedAction(room_id, match_kind);
         else onSeatedAction(room_id);
         return;
       }
@@ -202,11 +215,12 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
       {!isReal && bucket && <div className="buyin-control table-preference-toggle">
         <span><Bot aria-hidden="true"/><span>
           <Label id={`${allowBotsId}-label`} htmlFor={allowBotsId}>Começar com bots após 15 s</Label>
-          <small>{allowBots
+          <small>{!botsAvailable ? botReturnCopy : effectiveAllowBots
             ? `Até ${room.max_seats === 2 ? 1 : room.max_seats === 6 ? 3 : 5} bots podem completar a mesa. Suas fichas podem aumentar ou diminuir; essas mãos ficam fora do ranking.`
             : 'Continuamos procurando pessoas. Você pode habilitar bots somente para esta entrada.'}</small>
         </span></span>
-        <Switch id={allowBotsId} aria-labelledby={`${allowBotsId}-label`} checked={allowBots} disabled={joining}
+        <Switch id={allowBotsId} aria-labelledby={`${allowBotsId}-label`} checked={effectiveAllowBots}
+                disabled={joining || botEligibility.isLoading || !botsAvailable}
                 onCheckedChange={setAllowBots}/>
       </div>}
       {!isReal &&
@@ -226,4 +240,11 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
       <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
     </main>
   );
+}
+
+function relativeReturn(expiresAt: number) {
+  const minutes = Math.max(1, Math.ceil((expiresAt - Date.now()) / 60_000));
+  if (minutes < 60) return `em cerca de ${minutes} min`;
+  const hours = Math.ceil(minutes / 60);
+  return `em cerca de ${hours} h`;
 }

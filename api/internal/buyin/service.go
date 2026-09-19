@@ -188,7 +188,7 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 // suffix) so the reversal can never collide with — or be mistaken as a retry
 // of — the original debit, nor collide with another player's refund.
 func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool, idemKey string) error {
-	return s.buyIn(ctx, roomID, playerID, amount, midHand, false, idemKey)
+	return s.buyIn(ctx, roomID, playerID, amount, midHand, false, idemKey, "")
 }
 
 // BuyInWithAutoRebuy is BuyIn plus the one-time auto-rebuy opt-in. Only
@@ -197,10 +197,19 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 // already-seated player's rebuy is a harmless no-op, never a way to
 // retroactively flip auto-rebuy on for an existing seat.
 func (s *Service) BuyInWithAutoRebuy(ctx context.Context, roomID, playerID string, amount int64, midHand, autoRebuy bool, idemKey string) error {
-	return s.buyIn(ctx, roomID, playerID, amount, midHand, autoRebuy, idemKey)
+	return s.buyIn(ctx, roomID, playerID, amount, midHand, autoRebuy, idemKey, "")
 }
 
-func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int64, midHand, autoRebuy bool, idemKey string) error {
+func (s *Service) BuyInReserved(ctx context.Context, roomID, playerID string, amount int64, autoRebuy bool, idemKey, reservationID string) error {
+	if reservationID == "" {
+		return errors.New("buyin: reservation id is required")
+	}
+	return s.buyIn(ctx, roomID, playerID, amount, false, autoRebuy, idemKey, reservationID)
+}
+
+var ErrBotReservationRequired = table.ErrBotReservationRequired
+
+func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int64, midHand, autoRebuy bool, idemKey, reservationID string) error {
 	maxSeats := 0
 	var room *roomstore.Room
 	if s.rooms != nil {
@@ -228,7 +237,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		return fmt.Errorf("buyin: table unavailable: %w", err)
 	}
 
-	seated, stack, occupiedSeats, err := s.isSeated(actor, playerID)
+	seated, stack, occupiedSeats, hasBots, err := s.isSeated(actor, playerID)
 	if err != nil {
 		return fmt.Errorf("buyin: seat check: %w", err)
 	}
@@ -238,6 +247,9 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	// through to debit + dispatch below, or the credit never happens.
 	if seated && stack > 0 {
 		return nil
+	}
+	if !seated && reservationID == "" && hasBots {
+		return ErrBotReservationRequired
 	}
 	// This is a fast-fail optimization, not the correctness mechanism: another
 	// player can still win the final seat after this snapshot. The actor's
@@ -282,7 +294,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	}
 
 	reply := make(chan error, 1)
-	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, AutoRebuy: autoRebuy, Reply: reply})
+	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, AutoRebuy: autoRebuy, ReservationID: reservationID, Reply: reply})
 	if joinErr != nil {
 		// hand.ErrAlreadySeated here is NOT a same-request retry — the isSeated
 		// check above already short-circuits those before any debit happens.
@@ -615,28 +627,31 @@ func (s *Service) feeSettled(ctx context.Context, playerID string, e entitlement
 // the current viewer snapshot from the actor's Run goroutine (hand.Table has
 // no lock), so it is safe to call concurrently with the actor's own
 // broadcastAll.
-func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, int64, int, error) {
+func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, int64, int, bool, error) {
 	snapCh := make(chan hand.Snapshot, 1)
 	reply := make(chan error, 1)
 	if err := actor.Dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: reply}); err != nil {
-		return false, 0, 0, err
+		return false, 0, 0, false, err
 	}
 	select {
 	case snap := <-snapCh:
 		occupiedHumans := 0
+		hasBots := false
 		for _, seat := range snap.Seats {
-			if !seat.IsBot {
+			if seat.IsBot {
+				hasBots = true
+			} else {
 				occupiedHumans++
 			}
 		}
 		for _, seat := range snap.Seats {
 			if seat.PlayerID == playerID {
-				return true, seat.Stack, occupiedHumans, nil
+				return true, seat.Stack, occupiedHumans, hasBots, nil
 			}
 		}
-		return false, 0, occupiedHumans, nil
+		return false, 0, occupiedHumans, hasBots, nil
 	default:
-		return false, 0, 0, nil
+		return false, 0, 0, false, nil
 	}
 }
 

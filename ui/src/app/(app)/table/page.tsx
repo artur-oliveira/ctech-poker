@@ -8,6 +8,7 @@ import {ChevronLeft, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
+import {BotReservationScreen} from '@/components/table/BotReservationScreen';
 import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
@@ -90,6 +91,7 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
 function TableContent() {
   const router = useRouter();
   const params = useSearchParams(), id = params.get('id') || '', valid = ROOM_ID.test(id);
+  const reservationId = params.get('reservation') || '';
   // A lobby pick arrives as a bucket instead of a room id: the buy-in
   // ceremony below confirms it with join-or-create, which is what decides
   // the table (#205). Everything past the ceremony still needs a real id.
@@ -210,7 +212,11 @@ function TableContent() {
     }
   }, [queryClient]);
   if (bucket) return <>
-    <BuyInPanel bucket={bucket} onSeatedAction={(roomId, matchKind) => {
+    <BuyInPanel bucket={bucket} onSeatedAction={(roomId, matchKind, reservedId) => {
+      if (matchKind === 'reserved' && reservedId) {
+        router.replace(`/table?id=${encodeURIComponent(roomId)}&reservation=${encodeURIComponent(reservedId)}`);
+        return;
+      }
       queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
       const match = matchKind === 'bot_pending' ? '&match=bot_pending' : '';
       router.replace(`/table?id=${encodeURIComponent(roomId)}${match}`);
@@ -225,6 +231,7 @@ function TableContent() {
       <Button render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
     </main>
   );
+  if (reservationId) return <BotReservationScreen roomId={id} reservationId={reservationId}/>;
   if (session.seatedLoading) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>

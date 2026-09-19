@@ -47,9 +47,25 @@ type JoinOrCreateRoomRequest struct {
 
 // JoinOrCreateRoomResponse tells the client exactly which table to open.
 type JoinOrCreateRoomResponse struct {
-	RoomID    string `json:"room_id"`
-	Created   bool   `json:"created"`              // true when no open table in the bucket could seat the player
-	MatchKind string `json:"match_kind,omitempty"` // human | waiting | bot_pending | reserved
+	RoomID               string `json:"room_id"`
+	Created              bool   `json:"created"`              // true when no open table in the bucket could seat the player
+	MatchKind            string `json:"match_kind,omitempty"` // human | waiting | bot_pending | reserved
+	ReservationID        string `json:"reservation_id,omitempty"`
+	ReservationExpiresAt int64  `json:"reservation_expires_at,omitempty"`
+}
+
+type BotReservationResponse struct {
+	RoomID        string `json:"room_id"`
+	ReservationID string `json:"reservation_id"`
+	Status        string `json:"status"` // pending | seated | expired | failed
+	ExpiresAt     int64  `json:"expires_at"`
+	Amount        int64  `json:"amount,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+type BotEligibilityResponse struct {
+	Available bool  `json:"available"`
+	ExpiresAt int64 `json:"expires_at,omitempty"`
 }
 
 // RoomBucket is one lobby tile's server-computed availability, aggregated

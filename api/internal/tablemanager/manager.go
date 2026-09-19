@@ -59,6 +59,8 @@ type Manager struct {
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
 	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
 	chatPrefsLookup        func(ctx context.Context, playerID string) ([]string, error)
+	botFundingAvailable    func(context.Context, string) (bool, error)
+	botFundingRecord       func(context.Context, string, string, string, int64) (bool, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -183,6 +185,14 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 }
 
 func (m *Manager) SetEnv(env string) { m.env = env }
+
+func (m *Manager) SetBotFunding(
+	available func(context.Context, string) (bool, error),
+	record func(context.Context, string, string, string, int64) (bool, error),
+) {
+	m.botFundingAvailable = available
+	m.botFundingRecord = record
+}
 
 func (m *Manager) SetOnHandUpdated(fn func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)) {
 	m.onHandUpdated = fn
@@ -425,6 +435,12 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 
 	actor := table.New(tableID, m.store, trustCache, m.broadcastFor(tableID))
+	actor.SetBotFundingForActor(m.botFundingAvailable, func(ctx context.Context, playerID, handID string, delta int64) (bool, error) {
+		if m.botFundingRecord == nil {
+			return false, errors.New("tablemanager: bot funding store unavailable")
+		}
+		return m.botFundingRecord(ctx, playerID, tableID, handID, delta)
+	})
 	if m.streakStore != nil {
 		actor.SetStreakStoreForActor(m.streakStore)
 	}

@@ -86,9 +86,37 @@ export interface JoinOrCreateInput {
 // last-seat race falls through to another table without the client walking
 // candidates or re-reading the lobby (#205, backend #76).
 export async function joinOrCreateRoom(input: JoinOrCreateInput) {
-  return (await apiClient.post<{ room_id: string; created: boolean; match_kind?: 'human' | 'waiting' | 'bot_pending' | 'reserved' }>(
+  return (await apiClient.post<{ room_id: string; created: boolean; match_kind?: 'human' | 'waiting' | 'bot_pending' | 'reserved'; reservation_id?: string; reservation_expires_at?: number }>(
     '/v1.0/rooms/join-or-create', input, {silentError: true},
   )).data;
+}
+
+export interface BotReservationStatus {
+  room_id: string;
+  reservation_id: string;
+  status: 'pending' | 'seated' | 'expired' | 'failed';
+  expires_at?: number;
+  amount?: number;
+  reason?: string;
+}
+
+export interface BotEligibility {
+  available: boolean;
+  expires_at?: number;
+}
+
+export async function getBotEligibility() {
+  return (await apiClient.get<BotEligibility>('/v1.0/rooms/bot-eligibility', {silentError: true})).data;
+}
+
+export async function getBotReservation(roomId: string, reservationId: string) {
+  return (await apiClient.get<BotReservationStatus>(
+    `/v1.0/rooms/${roomId}/reservations/${reservationId}`, {silentError: true},
+  )).data;
+}
+
+export async function cancelBotReservation(roomId: string, reservationId: string) {
+  await apiClient.delete(`/v1.0/rooms/${roomId}/reservations/${reservationId}`, {silentError: true});
 }
 
 export async function listStakes(currencyMode: 'sandbox' | 'real' = 'sandbox') {

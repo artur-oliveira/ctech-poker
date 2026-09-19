@@ -95,6 +95,14 @@ func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome, map[
 	a.onHandComplete = fn
 }
 
+func (a *Actor) SetBotFundingForActor(
+	available func(context.Context, string) (bool, error),
+	record func(context.Context, string, string, int64) (bool, error),
+) {
+	a.botFundingAvailable = available
+	a.botFundingRecord = record
+}
+
 // SetOnHandUpdatedForActor installs the history-only hook used when a
 // participant voluntarily reveals cards after completion.
 func (a *Actor) SetOnHandUpdatedForActor(fn func(string, hand.HandOutcome, map[string]string)) {

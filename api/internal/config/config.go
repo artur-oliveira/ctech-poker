@@ -68,6 +68,11 @@ type Config struct {
 	// poker's client_id in ctech-wallet's SSM M2M-clients param (see this
 	// plan's Global Constraints — a cross-repo/config blocker, not a code gap).
 	WalletWebhookHMACSecret string `env:"WALLET_WEBHOOK_HMAC_SECRET"`
+
+	// Maximum net sandbox profit a player may earn from bot hands during one
+	// 24-hour window. Operational so the pilot can be recalibrated without a
+	// binary release.
+	BotNetProfitLimit int64 `env:"BOT_NET_PROFIT_LIMIT" envDefault:"100000"`
 }
 
 // Load reads config from environment variables.
@@ -106,6 +111,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.ReadTimeout <= 0 || cfg.WriteTimeout <= 0 || cfg.IdleTimeout <= 0 {
 		return nil, fmt.Errorf("config: server timeouts must be positive")
+	}
+	if cfg.BotNetProfitLimit <= 0 {
+		return nil, fmt.Errorf("config: BOT_NET_PROFIT_LIMIT must be positive")
 	}
 	if cfg.CtechJWKSURL == "" && cfg.CtechURL != "" {
 		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"

@@ -146,6 +146,9 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 			botSeats++
 		}
 	}
+	if !alreadySeated && c.ReservationID == "" && (botSeats > 0 || a.cached.BotReservationForActor() != nil) {
+		return ErrBotReservationRequired
+	}
 	// A busted player still occupies their original seat. Capacity only
 	// rejects a genuinely new player; an existing player must reach the hand
 	// engine below, which restores a Stack<=0 seat and rejects a duplicate
@@ -168,8 +171,13 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	// commit persists the ghost seat for real the first time any other
 	// player's action commits — the 2026-09-01 incident.
 	return a.mutate(func() error {
-		if !alreadySeated {
-			if err := a.cached.RetireBotsForHumanArrival(); err != nil {
+		if c.ReservationID != "" {
+			reservation := a.cached.BotReservationForActor()
+			if reservation == nil || reservation.ExpiresAtUnixMs <= timeNowFunc().UnixMilli() ||
+				reservation.Amount != c.Stack || !a.cached.BotReservationReadyForActor() {
+				return ErrBotReservationRequired
+			}
+			if err := a.cached.ConsumeBotReservationForActor(c.ReservationID, c.PlayerID); err != nil {
 				return err
 			}
 		}

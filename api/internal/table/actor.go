@@ -157,10 +157,15 @@ type Actor struct {
 	runoutStreetDelay       time.Duration
 	botFillTimer            *time.Timer
 	botFillArmedFor         int64
+	botReservationTimer     *time.Timer
+	botReservationArmedFor  string
 	botActionTimer          *time.Timer
 	botActionArmedFor       string
 	botPostHandTimer        *time.Timer
 	botPostHandArmedFor     string
+	botFundingCheckedFor    string
+	botFundingAvailable     func(context.Context, string) (bool, error)
+	botFundingRecord        func(context.Context, string, string, int64) (bool, error)
 	// runoutRetries drives handleRunoutStep's bounded re-arm after a
 	// transient (non-panic) load/commit failure — see retryRunoutStep. A
 	// mid-runout hand has no current_player_id, so nothing else on this
@@ -277,6 +282,8 @@ var ErrActorStopped = errors.New("table: actor stopped")
 // problem type without parsing an internal error string. Buy-in wraps it after
 // successfully compensating the wallet debit, so errors.Is remains usable.
 var ErrNoSeatsAvailable = errors.New("table: no seats available")
+
+var ErrBotReservationRequired = errors.New("table: bot seat requires a reservation through join-or-create")
 
 func (a *Actor) Dispatch(cmd Command) error {
 	// The mailbox is deliberately blocking rather than lossy: a full channel
@@ -446,6 +453,16 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleJoin(ctx, c)
 	case EnableBotsCmd:
 		return a.handleEnableBots(ctx, c)
+	case ReserveBotSeatCmd:
+		return a.handleReserveBotSeat(ctx, c)
+	case BotReservationStatusCmd:
+		return a.handleBotReservationStatus(ctx, c)
+	case BotMatchStatusCmd:
+		return a.handleBotMatchStatus(ctx, c)
+	case CancelBotReservationCmd:
+		return a.handleCancelBotReservation(ctx, c)
+	case expireBotReservationCmd:
+		return a.handleExpireBotReservation(ctx, c)
 	case LeaveCmd:
 		return a.handleLeave(ctx, c)
 	case PostBigBlindCmd:

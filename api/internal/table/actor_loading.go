@@ -208,6 +208,7 @@ func (a *Actor) rearmTimersFromCache() {
 	a.armNextHandTimer(stage == hand.Complete)
 	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
 	a.armBotFillTimer()
+	a.armBotReservationTimer()
 	a.armBotActionTimer()
 	a.armBotPostHandTimer()
 }

@@ -65,17 +65,19 @@ export default function TableGuide() {
           reações e últimos vencedores passam para os ícones do cabeçalho, como no celular em pé.</p></>
     },
     {
-      id: 'bots-sandbox',
-      title: 'Bots nas mesas sandbox',
+      id: 'bots-fichas',
+      title: 'Bots nas mesas de fichas',
       summary: 'Uma opção por entrada evita que você fique sozinho sem esconder que o adversário é automatizado.',
-      body: <><p>Ao entrar por uma mesa pública sandbox de até <b>500 / 1.000</b>, você pode ativar
+      body: <><p>Ao entrar por uma mesa pública de fichas de até <b>500 / 1.000</b>, você pode ativar
         <b> Começar com bots após 15 s</b>. Enquanto a mesa aguarda, o centro do feltro mostra
         <b> Preparando adversários…</b>. Cada assento automatizado tem o selo textual <b>BOT</b>.</p>
         <GuideBullets>
           <li><span>Heads-up recebe no máximo um bot; mesas de 6 e 9 lugares mantêm vagas livres para pessoas.</span></li>
           <li><span>Quando outra pessoa chega, os bots terminam ou abandonam a mão atual e cedem os lugares antes da próxima.</span></li>
-          <li><span>As fichas ganhas ou perdidas valem na carteira sandbox e aparecem no seu histórico privado.</span></li>
+          <li><span>Quem chega espera na tela <b>Sua vaga está reservada</b>, fora da mesa. O buy-in só é debitado quando os bots saem e o assento é confirmado.</span></li>
+          <li><span>As fichas ganhas ou perdidas valem na sua carteira de fichas e aparecem no histórico privado.</span></li>
           <li><span>Mãos com bots não alteram ranking, conquistas, estatísticas públicas, confrontos ou jogadores recentes.</span></li>
+          <li><span>Ao atingir 100.000 fichas de lucro líquido contra bots na janela de 24 horas, novas mãos automáticas ficam pausadas até o horário indicado no buy-in. Mesas com pessoas continuam disponíveis.</span></li>
         </GuideBullets></>
     },
     {

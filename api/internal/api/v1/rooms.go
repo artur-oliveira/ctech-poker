@@ -17,6 +17,7 @@ import (
 	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/api-commons/ws"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
+	"gopkg.aoctech.app/poker/api/internal/botfunding"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -46,15 +47,19 @@ type roomHandlers struct {
 	reg      ws.Registry
 	cfg      *config.Config
 	sessions *sessionlog.Store
+	funding  *botfunding.Service
 	buckets  bucketCache
 }
 
-func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, createLimiter, joinLimiter *RateLimiter) {
-	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, reg: reg, cfg: cfg, sessions: sessions}
+func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, funding *botfunding.Service, createLimiter, joinLimiter *RateLimiter) {
+	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, reg: reg, cfg: cfg, sessions: sessions, funding: funding}
 	g := router.Group("/rooms", auth)
 	g.Post("/", rateLimit(createLimiter, ipKey("rooms:create")), h.createRoom)
 	// Both must be declared before "/:id", which would otherwise match them.
 	g.Post("/join-or-create", rateLimit(joinLimiter, ipKey("rooms:join")), h.joinOrCreate)
+	g.Get("/bot-eligibility", h.botEligibility)
+	g.Get("/:id/reservations/:reservationID", h.botReservationStatus)
+	g.Delete("/:id/reservations/:reservationID", h.cancelBotReservation)
 	g.Get("/buckets", h.listBuckets)
 	g.Get("/", h.listPublic)
 	g.Get("/stakes", h.listStakes)
@@ -366,6 +371,15 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	if !ok || userID == "" {
 		return problem.Unauthorized("invalid credentials").Send(c)
 	}
+	if req.AllowBots && h.funding != nil {
+		available, _, eligibilityErr := h.funding.Eligibility(c.Context(), userID)
+		if eligibilityErr != nil {
+			return problem.InternalServer("bot availability is temporarily unavailable", c, eligibilityErr).Send(c)
+		}
+		if !available {
+			return problem.Conflict("bot match limit reached for the current 24-hour window").Send(c)
+		}
+	}
 
 	// A retry of this same click (or a second tab) must land on the seat the
 	// player already holds, never buy a second one in a sibling table — so
@@ -388,8 +402,54 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	if err != nil {
 		return problem.InternalServer("failed to list rooms", c, err).Send(c)
 	}
+	candidates := openRoomsInBucket(rooms, req)
+	var humanRooms, botRooms []roomstore.Room
+	for _, room := range candidates {
+		botStatus, botErr := h.roomBotStatus(c.Context(), room)
+		if botErr != nil {
+			return problem.InternalServer("failed to inspect room", c, botErr).Send(c)
+		}
+		if botStatus.Reservation != nil {
+			if botStatus.Reservation.PlayerID == userID && botStatus.Reservation.IdempotencyKey == req.IdempotencyKey {
+				return c.JSON(JoinOrCreateRoomResponse{RoomID: room.ID, MatchKind: "reserved",
+					ReservationID: botStatus.Reservation.ID, ReservationExpiresAt: botStatus.Reservation.ExpiresAtUnixMs})
+			}
+			continue
+		}
+		if botStatus.HasBot {
+			botRooms = append(botRooms, room)
+		} else {
+			humanRooms = append(humanRooms, room)
+		}
+	}
+	for _, room := range humanRooms {
+		err := h.buyin.BuyInWithAutoRebuy(c.Context(), room.ID, userID, req.Amount, room.Status == "active", req.AutoRebuy, req.IdempotencyKey)
+		if err == nil {
+			return c.JSON(JoinOrCreateRoomResponse{RoomID: room.ID, MatchKind: "human"})
+		}
+		if errors.Is(err, table.ErrNoSeatsAvailable) || errors.Is(err, buyin.ErrBotReservationRequired) {
+			continue
+		}
+		if errors.Is(err, buyin.ErrTermsNotAccepted) {
+			return problem.Forbidden(err.Error()).Send(c)
+		}
+		if p, ok := problem.FromWalletError(err); ok {
+			return p.Send(c)
+		}
+		return problem.Conflict(err.Error()).Send(c)
+	}
+	for _, room := range botRooms {
+		reservation, reserveErr := h.reserveBotSeat(c.Context(), room, userID, req)
+		if reserveErr == nil {
+			return c.JSON(JoinOrCreateRoomResponse{RoomID: room.ID, MatchKind: "reserved",
+				ReservationID: reservation.ID, ReservationExpiresAt: reservation.ExpiresAtUnixMs})
+		}
+		if !errors.Is(reserveErr, hand.ErrBotSeatReserved) && !errors.Is(reserveErr, hand.ErrNoReplaceableBotSeat) {
+			return problem.Conflict(reserveErr.Error()).Send(c)
+		}
+	}
 	roomID, created, err := seatInBucket(
-		openRoomsInBucket(rooms, req),
+		nil,
 		func(room roomstore.Room) error {
 			return h.buyin.BuyInWithAutoRebuy(c.Context(), room.ID, userID, req.Amount, room.Status == "active", req.AutoRebuy, req.IdempotencyKey)
 		},
@@ -428,6 +488,117 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 		}
 	}
 	return c.JSON(JoinOrCreateRoomResponse{RoomID: roomID, Created: created, MatchKind: matchKind})
+}
+
+func (h *roomHandlers) botEligibility(c fiber.Ctx) error {
+	playerID, ok := c.Locals(localsUserID).(string)
+	if !ok || playerID == "" {
+		return problem.Unauthorized("invalid credentials").Send(c)
+	}
+	if h.funding == nil {
+		return c.JSON(BotEligibilityResponse{Available: false})
+	}
+	available, expiresAt, err := h.funding.Eligibility(c.Context(), playerID)
+	if err != nil {
+		return problem.InternalServer("bot availability is temporarily unavailable", c, err).Send(c)
+	}
+	return c.JSON(BotEligibilityResponse{Available: available, ExpiresAt: expiresAt})
+}
+
+func (h *roomHandlers) roomBotStatus(ctx context.Context, room roomstore.Room) (table.BotMatchStatus, error) {
+	actor, err := h.manager.GetOrCreateActor(ctx, room.ID, func() *hand.Table { return table.SeedForRoom(&room) })
+	if err != nil {
+		return table.BotMatchStatus{}, err
+	}
+	statuses, reply := make(chan table.BotMatchStatus, 1), make(chan error, 1)
+	if err := actor.Dispatch(table.BotMatchStatusCmd{Status: statuses, Reply: reply}); err != nil {
+		return table.BotMatchStatus{}, err
+	}
+	return <-statuses, nil
+}
+
+func (h *roomHandlers) reserveBotSeat(ctx context.Context, room roomstore.Room, playerID string, req JoinOrCreateRoomRequest) (*hand.BotReservation, error) {
+	actor, err := h.manager.GetOrCreateActor(ctx, room.ID, func() *hand.Table { return table.SeedForRoom(&room) })
+	if err != nil {
+		return nil, err
+	}
+	reservation := &hand.BotReservation{ID: newRoomID(), PlayerID: playerID, Amount: req.Amount,
+		AutoRebuy: req.AutoRebuy, IdempotencyKey: req.IdempotencyKey,
+		ExpiresAtUnixMs: time.Now().Add(table.BotReservationTTL).UnixMilli()}
+	reply, result := make(chan error, 1), make(chan hand.BotReservation, 1)
+	if err := actor.Dispatch(table.ReserveBotSeatCmd{Reservation: *reservation, Result: result, Reply: reply}); err != nil {
+		return nil, err
+	}
+	persisted := <-result
+	return &persisted, nil
+}
+
+func (h *roomHandlers) botReservationStatus(c fiber.Ctx) error {
+	playerID, ok := c.Locals(localsUserID).(string)
+	if !ok || playerID == "" {
+		return problem.Unauthorized("invalid credentials").Send(c)
+	}
+	roomID, reservationID := c.Params("id"), c.Params("reservationID")
+	room, err := h.rooms.Get(c.Context(), roomID)
+	if err != nil || room == nil {
+		return problem.NotFound("reservation table not found").Send(c)
+	}
+	actor, err := h.manager.GetOrCreateActor(c.Context(), roomID, func() *hand.Table { return table.SeedForRoom(room) })
+	if err != nil {
+		return problem.InternalServer("reservation unavailable", c, err).Send(c)
+	}
+	statusCh, reply := make(chan table.BotReservationStatus, 1), make(chan error, 1)
+	if err := actor.Dispatch(table.BotReservationStatusCmd{PlayerID: playerID, Status: statusCh, Reply: reply}); err != nil {
+		return problem.InternalServer("reservation unavailable", c, err).Send(c)
+	}
+	status := <-statusCh
+	if status.Reservation == nil || status.Reservation.ID != reservationID {
+		// The seating commit consumes the reservation. If its HTTP response
+		// was lost, a retry must observe the actual seat instead of telling
+		// the player that their already-debited entry expired.
+		if seated, _, seatedErr := h.buyin.Seated(c.Context(), roomID, playerID); seatedErr == nil && seated {
+			return c.JSON(BotReservationResponse{RoomID: roomID, ReservationID: reservationID, Status: "seated"})
+		}
+		return c.JSON(BotReservationResponse{RoomID: roomID, ReservationID: reservationID, Status: "expired"})
+	}
+	if !status.Ready {
+		return c.JSON(BotReservationResponse{RoomID: roomID, ReservationID: reservationID,
+			Status: "pending", ExpiresAt: status.Reservation.ExpiresAtUnixMs, Amount: status.Reservation.Amount})
+	}
+	reservation := status.Reservation
+	if err := h.buyin.BuyInReserved(c.Context(), roomID, playerID, reservation.Amount,
+		reservation.AutoRebuy, reservation.IdempotencyKey, reservation.ID); err != nil {
+		cancelReply := make(chan error, 1)
+		if cancelErr := actor.Dispatch(table.CancelBotReservationCmd{
+			PlayerID: playerID, ReservationID: reservation.ID, Reply: cancelReply,
+		}); cancelErr != nil {
+			observability.Warn(c.Context(), "failed to release rejected bot reservation", cancelErr, "room_id", roomID)
+		}
+		return c.JSON(BotReservationResponse{RoomID: roomID, ReservationID: reservationID,
+			Status: "failed", Reason: "Não foi possível debitar o buy-in. Nenhuma vaga foi ocupada."})
+	}
+	return c.JSON(BotReservationResponse{RoomID: roomID, ReservationID: reservationID, Status: "seated"})
+}
+
+func (h *roomHandlers) cancelBotReservation(c fiber.Ctx) error {
+	playerID, ok := c.Locals(localsUserID).(string)
+	if !ok || playerID == "" {
+		return problem.Unauthorized("invalid credentials").Send(c)
+	}
+	roomID, reservationID := c.Params("id"), c.Params("reservationID")
+	room, err := h.rooms.Get(c.Context(), roomID)
+	if err != nil || room == nil {
+		return problem.NotFound("reservation table not found").Send(c)
+	}
+	actor, err := h.manager.GetOrCreateActor(c.Context(), roomID, func() *hand.Table { return table.SeedForRoom(room) })
+	if err != nil {
+		return problem.InternalServer("reservation unavailable", c, err).Send(c)
+	}
+	reply := make(chan error, 1)
+	if err := actor.Dispatch(table.CancelBotReservationCmd{PlayerID: playerID, ReservationID: reservationID, Reply: reply}); err != nil {
+		return problem.Conflict(err.Error()).Send(c)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // roomMatchesBucket reports whether room is one this bucket spec would have
