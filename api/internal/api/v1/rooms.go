@@ -315,9 +315,15 @@ func aggregateBuckets(rooms []roomstore.Room, mode string) []RoomBucket {
 		}
 		bucket.Rooms++
 		bucket.SeatsTaken += room.SeatsTaken
+		bucket.HumanSeats += room.SeatsTaken
 		bucket.SeatsAvailable += free
 		if free > 0 {
 			bucket.OpenRooms++
+			if room.BotSeats > 0 && room.SeatsTaken > 0 {
+				bucket.ReplaceableBotTables++
+			} else if room.SeatsTaken > 0 {
+				bucket.HumanOpenTables++
+			}
 		}
 	}
 	out := make([]RoomBucket, 0, len(byKey))

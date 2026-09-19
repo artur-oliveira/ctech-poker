@@ -96,6 +96,16 @@ func (t *Table) HumanSeatCountForActor() int {
 	return count
 }
 
+func (t *Table) BotSeatCountForActor() int {
+	count := 0
+	for _, p := range t.players {
+		if p.IsBot {
+			count++
+		}
+	}
+	return count
+}
+
 // RetireBotsForHumanArrival keeps bots in the live hand long enough to fold
 // through the normal turn machinery, while making them ineligible for the
 // next deal. Between hands the actor removes them without wallet settlement.

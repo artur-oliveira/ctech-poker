@@ -127,6 +127,23 @@ func TestAggregateBucketsExcludesOtherCurrencyMode(t *testing.T) {
 	}
 }
 
+func TestAggregateBucketsSeparatesHumansFromReplaceableBots(t *testing.T) {
+	botRoom := bucketRoom("bot-room", 1)
+	botRoom.BotSeats = 5
+	sharedBotRoom := bucketRoom("shared-bot-room", 2)
+	sharedBotRoom.BotSeats = 2
+	humanRoom := bucketRoom("human-room", 2)
+	empty := bucketRoom("empty", 0)
+	buckets := aggregateBuckets([]roomstore.Room{botRoom, sharedBotRoom, humanRoom, empty}, "sandbox")
+	if len(buckets) != 1 {
+		t.Fatalf("buckets=%+v", buckets)
+	}
+	got := buckets[0]
+	if got.HumanSeats != 5 || got.HumanOpenTables != 1 || got.ReplaceableBotTables != 2 || got.OpenRooms != 4 {
+		t.Fatalf("bot seats were confused with people or capacity: %+v", got)
+	}
+}
+
 // The buckets aggregate is the only endpoint left that walks the whole public
 // index, so it must not walk it once per request (#213).
 func TestBucketCacheWalksThePublicIndexOncePerTTL(t *testing.T) {

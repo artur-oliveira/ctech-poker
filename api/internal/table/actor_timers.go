@@ -272,6 +272,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	// dealt from a stale player roster) trusted in a.cached for this actor's
 	// next command (see handleTurnTimeout's identical guard for the full
 	// story).
+	beforeHumans, beforeBots := a.cached.HumanSeatCountForActor(), a.cached.BotSeatCountForActor()
 	err := a.mutate(func() error {
 		if err := a.cached.StartHand(); err == nil {
 			a.handID = newHandID()
@@ -293,6 +294,9 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	}
 	a.nextHandRetries = 0
 	a.broadcastAll()
+	if a.cached.HumanSeatCountForActor() != beforeHumans || a.cached.BotSeatCountForActor() != beforeBots {
+		a.notifySeatsChanged()
+	}
 	return nil
 }
 

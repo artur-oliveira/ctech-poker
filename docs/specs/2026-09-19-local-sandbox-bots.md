@@ -32,6 +32,8 @@ The owner can use `POST /rooms/:id/bots/start` to bring the persisted activation
 
 The `bot_wait` mock scenario provides a one-human table and an API-backed wait timer. Its start action deliberately leaves the fill stalled so the retry state can be reviewed without a live server.
 
+The room occupancy mirror now stores `bot_seats` alongside `seats_taken` (which remains human-only for matchmaking). The bucket aggregate exposes `human_seats`, `human_open_tables` and `replaceable_bot_tables` without loading actors for each lobby visit. The lobby names a replaceable table as “1 pessoa jogando · vaga após a mão”, explains capacity separately and routes through the existing buy-in ceremony.
+
 ## Bot reactions
 
 Bots may use the existing standard and targeted catalog, including premium and provocative items, as system-controlled cosmetic actions. No purchase or wallet charge is created for a bot. The `BOT` identity remains visible. The policy uses only public events, never hole-card strength: a bot win, a human win, an all-in result or an uncontested pot. It responds in about 10% of ordinary eligible hands and 16% of all-in hands, with a persisted 90-second table cooldown and a maximum of one bot reaction per hand. A selected reaction uses the normal table activity and broadcast path; targeted items point only at the real opponent. All choices are probabilistic, including silence.

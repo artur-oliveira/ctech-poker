@@ -45,6 +45,7 @@ func (a *Actor) handleReserveBotSeat(ctx context.Context, c ReserveBotSeatCmd) e
 		}
 	}
 	a.broadcastAll()
+	a.notifySeatsChanged()
 	a.armBotReservationTimer()
 	return nil
 }
@@ -542,16 +543,31 @@ func (a *Actor) maybeReactAfterBotHand(ctx context.Context, handID string, outco
 		return
 	}
 	var botID, humanID string
+	humanPriority := -1
 	botWon := false
 	winners := stringSet(outcome.Winners)
+	participants := stringSet(outcome.Participants)
+	allInPlayers := stringSet(outcome.AllInPlayers)
 	for _, p := range a.cached.PlayersForActor() {
+		if !participants[p.ID] {
+			continue
+		}
 		if p.IsBot {
 			if botID == "" || winners[p.ID] {
 				botID = p.ID
 			}
 			botWon = botWon || winners[p.ID]
-		} else if p.ID == policy.OwnerID {
-			humanID = p.ID
+		} else {
+			priority := 0
+			if allInPlayers[p.ID] {
+				priority = 1
+			}
+			if winners[p.ID] {
+				priority = 2
+			}
+			if priority > humanPriority {
+				humanID, humanPriority = p.ID, priority
+			}
 		}
 	}
 	if botID == "" || humanID == "" {

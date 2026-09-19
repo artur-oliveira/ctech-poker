@@ -757,8 +757,8 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		pipeline.persistHandHistory(context.Background(), tableID, handID, mode, outcome, names)
 		pipeline.persistHandReveal(context.Background(), tableID, handID, mode, outcome)
 	})
-	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
-		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
+	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken, botSeats int) {
+		if err := rooms.SetOccupancy(context.Background(), tableID, seatsTaken, botSeats); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
 		}
 		data, err := goproto.Marshal(&pokerproto.ServerMessage{

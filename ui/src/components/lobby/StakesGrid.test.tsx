@@ -92,17 +92,40 @@ describe('lobby stakes integration', () => {
     expect(screen.queryByRole('button', {name: /HEADS-UP/})).not.toBeInTheDocument();
   });
 
-  test('shows the aggregate open-room count per format', () => {
+  test('does not present empty or bot seats as people', () => {
     stakesQuery = {data: [{small_blind: 25, big_blind: 50}], isLoading: false};
     // Counts the server reports across the whole directory, not a page of it.
     bucketsQuery = {data: [bucket(6, 3), bucket(9, 1)], isLoading: false};
     render(<StakesGrid/>);
 
-    expect(screen.getByText('3 mesas ativas · até 6 jogadores')).toBeInTheDocument();
-    expect(screen.getByText('1 mesa ativa · até 9 jogadores')).toBeInTheDocument();
+    expect(screen.getByText('Mesa disponível · aguardando pessoas · até 6 jogadores')).toBeInTheDocument();
+    expect(screen.getByText('Mesa disponível · aguardando pessoas · até 9 jogadores')).toBeInTheDocument();
     expect(screen.getByText('Nenhuma mesa ativa · até 2 jogadores')).toBeInTheDocument();
     expect(screen.getAllByText('Entrar agora')).toHaveLength(2);
     expect(screen.getAllByText('Criar mesa')).toHaveLength(1);
+  });
+
+  test('identifies a replaceable bot table without calling it full', () => {
+    stakesQuery = {data: [{small_blind: 25, big_blind: 50}], isLoading: false};
+    bucketsQuery = {data: [{
+      ...bucket(2, 1), seats_taken: 1, human_seats: 1,
+      human_open_tables: 0, replaceable_bot_tables: 1,
+    }], isLoading: false};
+    render(<StakesGrid/>);
+    expect(screen.getByText('1 pessoa jogando · vaga após a mão · até 2 jogadores')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /HEADS-UP.*Escolher entrada/})).toBeInTheDocument();
+    expect(screen.queryByText(/mesa cheia/i)).not.toBeInTheDocument();
+  });
+
+  test('keeps human availability primary when both human and bot tables exist', () => {
+    stakesQuery = {data: [{small_blind: 25, big_blind: 50}], isLoading: false};
+    bucketsQuery = {data: [{
+      ...bucket(6, 2), seats_taken: 3, human_seats: 3,
+      human_open_tables: 1, replaceable_bot_tables: 1,
+    }], isLoading: false};
+    render(<StakesGrid/>);
+    expect(screen.getByText('3 pessoas jogando · mesa humana disponível · até 6 jogadores')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /6-MAX.*Entrar agora/})).toBeInTheDocument();
   });
 
   // The click is navigation only: nothing is read or mutated in the lobby,

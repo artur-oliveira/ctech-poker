@@ -45,7 +45,7 @@ type Manager struct {
 	broadcast              func(tableID, viewerID string, snap hand.Snapshot)
 	onHandComplete         func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onHandUpdated          func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
-	onSeatsChanged         func(tableID string, seatsTaken int)
+	onSeatsChanged         func(tableID string, seatsTaken, botSeats int)
 	onPlayerRemoved        func(tableID, playerID, reason, settlementNonce string, stack int64, holdID string)
 	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
 	tableStreak            func(tableID, handID string, outcome hand.HandOutcome) map[string]int
@@ -211,9 +211,12 @@ func outcomeContainsBot(outcome hand.HandOutcome) bool {
 }
 
 // SetOnSeatsChanged installs the occupancy write-through hook, invoked with
-// (tableID, seatsTaken) after every table actor's committed join/leave, for
+// (tableID, humanSeats, botSeats) after every table actor's committed seat
+// change, for
 // every actor this manager creates (including ones created before this call).
-func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken int)) { m.onSeatsChanged = fn }
+func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken, botSeats int)) {
+	m.onSeatsChanged = fn
+}
 
 // SetOnPlayerRemoved installs the system-removal notification hook (AFK
 // sweep / disconnect kick timeout only — never a player-requested leave),
@@ -479,9 +482,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 			m.onHandUpdated(tableID, handID, outcome, names)
 		}
 	})
-	actor.SetOnSeatsChangedForActor(func(seatsTaken int) {
+	actor.SetOnSeatsChangedForActor(func(seatsTaken, botSeats int) {
 		if m.onSeatsChanged != nil {
-			m.onSeatsChanged(tableID, seatsTaken)
+			m.onSeatsChanged(tableID, seatsTaken, botSeats)
 		}
 	})
 	actor.SetOnPlayerRemovedForActor(func(playerID, reason, settlementNonce string, stack int64, holdID string) {

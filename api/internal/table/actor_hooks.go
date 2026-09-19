@@ -110,9 +110,9 @@ func (a *Actor) SetOnHandUpdatedForActor(fn func(string, hand.HandOutcome, map[s
 }
 
 // SetOnSeatsChangedForActor installs the post-commit occupancy write-through
-// hook, invoked with the new occupied-seat count after every committed join
-// or leave.
-func (a *Actor) SetOnSeatsChangedForActor(fn func(int)) { a.onSeatsChanged = fn }
+// hook, invoked with the new human and bot seat counts after a committed
+// seating change.
+func (a *Actor) SetOnSeatsChangedForActor(fn func(int, int)) { a.onSeatsChanged = fn }
 
 // SetOnPlayerRemovedForActor installs the system-removal notification hook —
 // see onPlayerRemoved's doc comment.
@@ -144,7 +144,7 @@ func (a *Actor) notifySeatsChanged() {
 		// The lobby's occupancy mirror controls whether a human may attempt to
 		// join. Bots are replaceable capacity and must never make a table look
 		// full to matchmaking, especially at heads-up tables.
-		a.onSeatsChanged(a.cached.HumanSeatCountForActor())
+		a.onSeatsChanged(a.cached.HumanSeatCountForActor(), a.cached.BotSeatCountForActor())
 	}
 }
 

@@ -59,6 +59,9 @@ export interface RoomBucket {
   open_rooms: number;
   seats_taken: number;
   seats_available: number;
+  human_seats?: number;
+  human_open_tables?: number;
+  replaceable_bot_tables?: number;
 }
 
 export async function listRoomBuckets(currencyMode: 'sandbox' | 'real' = 'sandbox') {

@@ -198,7 +198,7 @@ type Actor struct {
 	// where one instance is the whole fleet and the field above suffices.
 	handHooks            HandHookClaimer
 	outcomeLoggedForHand string
-	onSeatsChanged       func(int)
+	onSeatsChanged       func(int, int)
 	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
 	// disconnect kick timeout) — never for a player-requested LeaveCmd, which
 	// the client already knows about and navigates away for itself. It lets

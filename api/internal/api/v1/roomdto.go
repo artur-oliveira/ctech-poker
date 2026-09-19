@@ -72,14 +72,17 @@ type BotEligibilityResponse struct {
 // over EVERY page of the public index rather than the first one the client
 // happened to fetch (#76).
 type RoomBucket struct {
-	SmallBlind     int64  `json:"small_blind"`
-	BigBlind       int64  `json:"big_blind"`
-	MaxSeats       int    `json:"max_seats"`
-	CurrencyMode   string `json:"currency_mode"`
-	Rooms          int    `json:"rooms"`           // public rooms in this bucket
-	OpenRooms      int    `json:"open_rooms"`      // those with at least one free seat
-	SeatsTaken     int    `json:"seats_taken"`     // players currently seated across the bucket
-	SeatsAvailable int    `json:"seats_available"` // free seats across the bucket
+	SmallBlind           int64  `json:"small_blind"`
+	BigBlind             int64  `json:"big_blind"`
+	MaxSeats             int    `json:"max_seats"`
+	CurrencyMode         string `json:"currency_mode"`
+	Rooms                int    `json:"rooms"`           // public rooms in this bucket
+	OpenRooms            int    `json:"open_rooms"`      // those with at least one free seat
+	SeatsTaken           int    `json:"seats_taken"`     // humans currently seated across the bucket (legacy field)
+	SeatsAvailable       int    `json:"seats_available"` // free seats across the bucket
+	HumanSeats           int    `json:"human_seats"`
+	HumanOpenTables      int    `json:"human_open_tables"`
+	ReplaceableBotTables int    `json:"replaceable_bot_tables"`
 }
 
 type LeaveRoomRequest struct {
