@@ -11,6 +11,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/botcheck"
+	"gopkg.aoctech.app/poker/api/internal/botfunding"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/chatprefs"
 	"gopkg.aoctech.app/poker/api/internal/config"
@@ -86,6 +87,7 @@ func Register(
 	chatPrefsCache *chatprefs.ExtraWordsCache,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
+	botFundingSvc *botfunding.Service,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
@@ -138,7 +140,7 @@ func Register(
 
 	// Unauthenticated, unlike every Register* call below it.
 	RegisterAvatars(router, avatars, avatarReadLimiter)
-	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, sessionStore, createLimiter, joinLimiter)
+	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, sessionStore, botFundingSvc, createLimiter, joinLimiter)
 	identityPusher := &tableIdentityPusher{
 		manager: manager, seed: seed, presence: presenceSvc,
 		players: players, stats: pokerStatsStore, cfg: cfg,

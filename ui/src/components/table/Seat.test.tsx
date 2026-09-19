@@ -20,6 +20,10 @@ const render_ = (props: Partial<Parameters<typeof Seat>[0]> = {}) =>
   render(<Seat seat={seat()} isViewer={false} isTurn={false} index={0} {...props}/>);
 
 describe('Seat', () => {
+  test('identifies an automated seat with text', () => {
+    render_({seat: seat({is_bot: true, name: 'Lia'})});
+    expect(screen.getByLabelText('Jogador automatizado')).toHaveTextContent('BOT');
+  });
   test('names the seat, its stack and its hand category', () => {
     render_({seat: seat({hand_category: 'two_pair'})});
     expect(screen.getByText('Bia')).toBeInTheDocument();

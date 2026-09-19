@@ -250,6 +250,14 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 		a.nextHandRetries = 0
 		return nil
 	}
+	// A timer restored on a sibling instance may fire without that actor ever
+	// broadcasting the completed hand. Never deal through an unrecorded bot
+	// funding result; the marker is committed in the versioned table state.
+	a.enforceBotFunding(ctx)
+	if policy := a.cached.BotPolicyForActor(); a.cached.LastOutcomeForActor() != nil &&
+		a.cached.LastOutcomeForActor().ContainsBot && policy.FundingCheckedHandID != a.handID {
+		return a.retryNextHand(errors.New("table: bot funding has not been recorded"))
+	}
 	a.saveHandHistorySnapshot(ctx)
 	a.removeIdlePlayersBetweenHands(ctx)
 	// A concurrent actor may have advanced the table while an idle-player
@@ -264,6 +272,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	// dealt from a stale player roster) trusted in a.cached for this actor's
 	// next command (see handleTurnTimeout's identical guard for the full
 	// story).
+	beforeHumans, beforeBots := a.cached.HumanSeatCountForActor(), a.cached.BotSeatCountForActor()
 	err := a.mutate(func() error {
 		if err := a.cached.StartHand(); err == nil {
 			a.handID = newHandID()
@@ -285,6 +294,9 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	}
 	a.nextHandRetries = 0
 	a.broadcastAll()
+	if a.cached.HumanSeatCountForActor() != beforeHumans || a.cached.BotSeatCountForActor() != beforeBots {
+		a.notifySeatsChanged()
+	}
 	return nil
 }
 

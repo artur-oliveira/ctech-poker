@@ -155,6 +155,17 @@ type Actor struct {
 	runoutTimerStage        hand.Stage
 	runoutTimerPhase        int
 	runoutStreetDelay       time.Duration
+	botFillTimer            *time.Timer
+	botFillArmedFor         int64
+	botReservationTimer     *time.Timer
+	botReservationArmedFor  string
+	botActionTimer          *time.Timer
+	botActionArmedFor       string
+	botPostHandTimer        *time.Timer
+	botPostHandArmedFor     string
+	botFundingCheckedFor    string
+	botFundingAvailable     func(context.Context, string) (bool, error)
+	botFundingRecord        func(context.Context, string, string, int64) (bool, error)
 	// runoutRetries drives handleRunoutStep's bounded re-arm after a
 	// transient (non-panic) load/commit failure — see retryRunoutStep. A
 	// mid-runout hand has no current_player_id, so nothing else on this
@@ -187,7 +198,7 @@ type Actor struct {
 	// where one instance is the whole fleet and the field above suffices.
 	handHooks            HandHookClaimer
 	outcomeLoggedForHand string
-	onSeatsChanged       func(int)
+	onSeatsChanged       func(int, int)
 	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
 	// disconnect kick timeout) — never for a player-requested LeaveCmd, which
 	// the client already knows about and navigates away for itself. It lets
@@ -271,6 +282,8 @@ var ErrActorStopped = errors.New("table: actor stopped")
 // problem type without parsing an internal error string. Buy-in wraps it after
 // successfully compensating the wallet debit, so errors.Is remains usable.
 var ErrNoSeatsAvailable = errors.New("table: no seats available")
+
+var ErrBotReservationRequired = errors.New("table: bot seat requires a reservation through join-or-create")
 
 func (a *Actor) Dispatch(cmd Command) error {
 	// The mailbox is deliberately blocking rather than lossy: a full channel
@@ -438,6 +451,20 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handlePeekCards(ctx, c)
 	case JoinCmd:
 		return a.handleJoin(ctx, c)
+	case EnableBotsCmd:
+		return a.handleEnableBots(ctx, c)
+	case StartBotsNowCmd:
+		return a.handleStartBotsNow(ctx, c)
+	case ReserveBotSeatCmd:
+		return a.handleReserveBotSeat(ctx, c)
+	case BotReservationStatusCmd:
+		return a.handleBotReservationStatus(ctx, c)
+	case BotMatchStatusCmd:
+		return a.handleBotMatchStatus(ctx, c)
+	case CancelBotReservationCmd:
+		return a.handleCancelBotReservation(ctx, c)
+	case expireBotReservationCmd:
+		return a.handleExpireBotReservation(ctx, c)
 	case LeaveCmd:
 		return a.handleLeave(ctx, c)
 	case PostBigBlindCmd:
@@ -456,6 +483,12 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleKickTimeout(ctx, c)
 	case afkSweepCmd:
 		return a.handleAFKSweep(ctx, c)
+	case fillBotsCmd:
+		return a.handleFillBots(ctx)
+	case botActCmd:
+		return a.handleBotAct(ctx, c)
+	case botPostHandCmd:
+		return a.handleBotPostHand(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:

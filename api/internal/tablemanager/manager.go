@@ -45,7 +45,7 @@ type Manager struct {
 	broadcast              func(tableID, viewerID string, snap hand.Snapshot)
 	onHandComplete         func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onHandUpdated          func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
-	onSeatsChanged         func(tableID string, seatsTaken int)
+	onSeatsChanged         func(tableID string, seatsTaken, botSeats int)
 	onPlayerRemoved        func(tableID, playerID, reason, settlementNonce string, stack int64, holdID string)
 	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
 	tableStreak            func(tableID, handID string, outcome hand.HandOutcome) map[string]int
@@ -59,6 +59,8 @@ type Manager struct {
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
 	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
 	chatPrefsLookup        func(ctx context.Context, playerID string) ([]string, error)
+	botFundingAvailable    func(context.Context, string) (bool, error)
+	botFundingRecord       func(context.Context, string, string, string, int64) (bool, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -184,14 +186,37 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 
 func (m *Manager) SetEnv(env string) { m.env = env }
 
+func (m *Manager) SetBotFunding(
+	available func(context.Context, string) (bool, error),
+	record func(context.Context, string, string, string, int64) (bool, error),
+) {
+	m.botFundingAvailable = available
+	m.botFundingRecord = record
+}
+
 func (m *Manager) SetOnHandUpdated(fn func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)) {
 	m.onHandUpdated = fn
 }
 
+func outcomeContainsBot(outcome hand.HandOutcome) bool {
+	if outcome.ContainsBot {
+		return true
+	}
+	for _, id := range outcome.Participants {
+		if strings.HasPrefix(id, "bot:") {
+			return true
+		}
+	}
+	return false
+}
+
 // SetOnSeatsChanged installs the occupancy write-through hook, invoked with
-// (tableID, seatsTaken) after every table actor's committed join/leave, for
+// (tableID, humanSeats, botSeats) after every table actor's committed seat
+// change, for
 // every actor this manager creates (including ones created before this call).
-func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken int)) { m.onSeatsChanged = fn }
+func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken, botSeats int)) {
+	m.onSeatsChanged = fn
+}
 
 // SetOnPlayerRemoved installs the system-removal notification hook (AFK
 // sweep / disconnect kick timeout only — never a player-requested leave),
@@ -413,6 +438,12 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 
 	actor := table.New(tableID, m.store, trustCache, m.broadcastFor(tableID))
+	actor.SetBotFundingForActor(m.botFundingAvailable, func(ctx context.Context, playerID, handID string, delta int64) (bool, error) {
+		if m.botFundingRecord == nil {
+			return false, errors.New("tablemanager: bot funding store unavailable")
+		}
+		return m.botFundingRecord(ctx, playerID, tableID, handID, delta)
+	})
 	if m.streakStore != nil {
 		actor.SetStreakStoreForActor(m.streakStore)
 	}
@@ -436,6 +467,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		if m.onHandComplete != nil {
 			m.onHandComplete(tableID, handID, outcome, names)
 		}
+		if outcomeContainsBot(outcome) {
+			return
+		}
 		if m.autoRebuySweep != nil {
 			m.autoRebuySweep(tableID, handID, outcome)
 		}
@@ -448,9 +482,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 			m.onHandUpdated(tableID, handID, outcome, names)
 		}
 	})
-	actor.SetOnSeatsChangedForActor(func(seatsTaken int) {
+	actor.SetOnSeatsChangedForActor(func(seatsTaken, botSeats int) {
 		if m.onSeatsChanged != nil {
-			m.onSeatsChanged(tableID, seatsTaken)
+			m.onSeatsChanged(tableID, seatsTaken, botSeats)
 		}
 	})
 	actor.SetOnPlayerRemovedForActor(func(playerID, reason, settlementNonce string, stack int64, holdID string) {

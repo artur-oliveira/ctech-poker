@@ -39,26 +39,50 @@ type JoinOrCreateRoomRequest struct {
 	Amount         int64  `json:"amount"`
 	IdempotencyKey string `json:"idem_key,omitempty"`   // stable per click; a retry re-seats at the same table instead of a second one
 	AutoRebuy      bool   `json:"auto_rebuy,omitempty"` // only meaningful on a fresh join
+	// AllowBots is an explicit, per-entry sandbox consent. It is accepted now
+	// so old/new clients can roll independently; the matchmaker only acts on it
+	// once the bot seating coordinator is enabled.
+	AllowBots bool `json:"allow_bots,omitempty"`
 }
 
 // JoinOrCreateRoomResponse tells the client exactly which table to open.
 type JoinOrCreateRoomResponse struct {
-	RoomID  string `json:"room_id"`
-	Created bool   `json:"created"` // true when no open table in the bucket could seat the player
+	RoomID               string `json:"room_id"`
+	Created              bool   `json:"created"`              // true when no open table in the bucket could seat the player
+	MatchKind            string `json:"match_kind,omitempty"` // human | waiting | bot_pending | reserved
+	ReservationID        string `json:"reservation_id,omitempty"`
+	ReservationExpiresAt int64  `json:"reservation_expires_at,omitempty"`
+}
+
+type BotReservationResponse struct {
+	RoomID        string `json:"room_id"`
+	ReservationID string `json:"reservation_id"`
+	Status        string `json:"status"` // pending | seated | expired | failed
+	ExpiresAt     int64  `json:"expires_at"`
+	Amount        int64  `json:"amount,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+type BotEligibilityResponse struct {
+	Available bool  `json:"available"`
+	ExpiresAt int64 `json:"expires_at,omitempty"`
 }
 
 // RoomBucket is one lobby tile's server-computed availability, aggregated
 // over EVERY page of the public index rather than the first one the client
 // happened to fetch (#76).
 type RoomBucket struct {
-	SmallBlind     int64  `json:"small_blind"`
-	BigBlind       int64  `json:"big_blind"`
-	MaxSeats       int    `json:"max_seats"`
-	CurrencyMode   string `json:"currency_mode"`
-	Rooms          int    `json:"rooms"`           // public rooms in this bucket
-	OpenRooms      int    `json:"open_rooms"`      // those with at least one free seat
-	SeatsTaken     int    `json:"seats_taken"`     // players currently seated across the bucket
-	SeatsAvailable int    `json:"seats_available"` // free seats across the bucket
+	SmallBlind           int64  `json:"small_blind"`
+	BigBlind             int64  `json:"big_blind"`
+	MaxSeats             int    `json:"max_seats"`
+	CurrencyMode         string `json:"currency_mode"`
+	Rooms                int    `json:"rooms"`           // public rooms in this bucket
+	OpenRooms            int    `json:"open_rooms"`      // those with at least one free seat
+	SeatsTaken           int    `json:"seats_taken"`     // humans currently seated across the bucket (legacy field)
+	SeatsAvailable       int    `json:"seats_available"` // free seats across the bucket
+	HumanSeats           int    `json:"human_seats"`
+	HumanOpenTables      int    `json:"human_open_tables"`
+	ReplaceableBotTables int    `json:"replaceable_bot_tables"`
 }
 
 type LeaveRoomRequest struct {

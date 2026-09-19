@@ -35,12 +35,12 @@ type Room struct {
 	// room's stake pair belongs to, recorded at creation so buyin's
 	// entitlement rebind never has to re-derive it from blinds. Empty for
 	// sandbox rooms (no entitlement).
-	Tier                 string           `dynamodbav:"tier,omitempty" json:"tier,omitempty"`
+	Tier string `dynamodbav:"tier,omitempty" json:"tier,omitempty"`
 	// Variant is the table rule set (#296): "" (VariantStandard, default) or
 	// "short_deck" (VariantShortDeck). Sandbox-only — createRoom rejects a
 	// non-empty Variant on any real-money room outright, never just hides
 	// the picker client-side. Immutable after creation, same as CurrencyMode.
-	Variant string `dynamodbav:"variant,omitempty" json:"variant,omitempty"`
+	Variant              string           `dynamodbav:"variant,omitempty" json:"variant,omitempty"`
 	ShareCode            string           `dynamodbav:"share_code,omitempty" json:"share_code,omitempty"`                     // private rooms only
 	BlindEscalation      *BlindEscalation `dynamodbav:"blind_escalation,omitempty" json:"blind_escalation,omitempty"`         // private rooms only
 	TurnTimeoutSeconds   int              `dynamodbav:"turn_timeout_seconds,omitempty" json:"turn_timeout_seconds,omitempty"` // private rooms only, 0 = default
@@ -49,9 +49,11 @@ type Room struct {
 	Status               string           `dynamodbav:"status" json:"status"` // "waiting" | "active"
 	// SeatsTaken mirrors the table actor's live occupied-seat count, written
 	// through on every join/leave commit (table.Actor's onSeatsChanged hook via
-	// tablemanager). Never computed live from tablemanager at read time — the
-	// lobby list must work fleet-wide without touching in-memory actor state.
+	// tablemanager). Counts humans only; bot seats are replaceable. Never
+	// computed live from tablemanager at read time — the lobby list must work
+	// fleet-wide without touching in-memory actor state.
 	SeatsTaken int    `dynamodbav:"seats_taken" json:"seats_taken"`
+	BotSeats   int    `dynamodbav:"bot_seats,omitempty" json:"bot_seats,omitempty"`
 	CreatedBy  string `dynamodbav:"created_by" json:"created_by"`
 	CreatedAt  string `dynamodbav:"created_at" json:"created_at"` // RFC3339Nano, see dynamo.NowStr()
 }

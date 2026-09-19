@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -180,8 +181,17 @@ func (p *handPipeline) persistHandHistory(ctx context.Context, tableID, handID, 
 	// (internal/buyin/service.go). Participants missing from the batch
 	// (deleted profile, or a partial failure) simply get no avatar, the
 	// same fallback the per-player GetOrCreate error path had.
+	humanParticipants := make([]string, 0, len(outcome.Participants))
+	for _, id := range outcome.Participants {
+		if !isLocalBotID(id) {
+			humanParticipants = append(humanParticipants, id)
+		}
+	}
+	if len(humanParticipants) == 0 {
+		return
+	}
 	profileStart := time.Now()
-	profiles, profileErr := p.players.GetMany(ctx, outcome.Participants)
+	profiles, profileErr := p.players.GetMany(ctx, humanParticipants)
 	recordStepDuration("profiles", profileStart)
 	avatarURLs := make(map[string]string, len(outcome.Participants))
 	if profileErr != nil {
@@ -193,8 +203,8 @@ func (p *handPipeline) persistHandHistory(ctx context.Context, tableID, handID, 
 		}
 	}
 	endedAt := time.Now().UnixMilli()
-	items := make([]sessionlog.HandItem, 0, len(outcome.Participants))
-	for _, id := range outcome.Participants {
+	items := make([]sessionlog.HandItem, 0, len(humanParticipants))
+	for _, id := range humanParticipants {
 		item := handItemForWithAvatars(outcome, id, names, avatarURLs)
 		item.PK, item.TableID, item.HandID, item.CurrencyMode, item.EndedAt = id, tableID, handID, mode, endedAt
 		items = append(items, item)
@@ -275,6 +285,11 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 	// a whole hand late. All three are plain idempotent overwrites and
 	// depend only on the outcome, not on any metrics computed below.
 	p.persistHandHistory(ctx, tableID, handID, mode, outcome, names)
+	// A human still gets their private hand history, including bot opponents,
+	// but bot hands never feed competitive or social systems.
+	if outcomeHasLocalBot(outcome) {
+		return
+	}
 	p.persistHandReveal(ctx, tableID, handID, mode, outcome)
 	highlightsStart := time.Now()
 	err = p.highlights.RecordHand(ctx, tableID, handID, outcome, names)
@@ -401,6 +416,20 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 		Names:         names,
 		CompletedAt:   time.Now(),
 	}, p.consumers, observeConsumer)
+}
+
+func isLocalBotID(id string) bool { return strings.HasPrefix(id, "bot:") }
+
+func outcomeHasLocalBot(outcome hand.HandOutcome) bool {
+	if outcome.ContainsBot {
+		return true
+	}
+	for _, id := range outcome.Participants {
+		if isLocalBotID(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // observeConsumer gives every registered consumer the same duration/failure

@@ -31,6 +31,7 @@ import (
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/botcheck"
+	"gopkg.aoctech.app/poker/api/internal/botfunding"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/chatprefs"
 	"gopkg.aoctech.app/poker/api/internal/config"
@@ -135,6 +136,8 @@ var Module = fx.Options(
 		newChatPrefsStore,
 		newChatPrefsCache,
 		newBotCheckContestStore,
+		newBotFundingStore,
+		newBotFundingService,
 		walletclient.New,
 		newBuyinService,
 		newPendingStore,
@@ -359,6 +362,12 @@ func newChatPrefsCache(store *chatprefs.Store, cacheBackend cache.Backend) *chat
 }
 func newBotCheckContestStore(db *dynamodb.Client, cfg *config.Config) *botcheck.ContestStore {
 	return botcheck.NewContestStore(db, cfg.Env)
+}
+func newBotFundingStore(db *dynamodb.Client, cfg *config.Config) *botfunding.Store {
+	return botfunding.NewStore(db, cfg.Env)
+}
+func newBotFundingService(store *botfunding.Store, cfg *config.Config) *botfunding.Service {
+	return botfunding.NewService(store, cfg.BotNetProfitLimit)
 }
 func newHandMetaStore(db *dynamodb.Client, cfg *config.Config) *handmeta.Store {
 	return handmeta.NewStore(db, cfg.Env)
@@ -622,7 +631,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache) *tablemanager.Manager {
+func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache, funding *botfunding.Service) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -659,6 +668,12 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		return r, true, nil
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
+	mgr.SetBotFunding(
+		func(ctx context.Context, playerID string) (bool, error) { return funding.Available(ctx, playerID) },
+		func(ctx context.Context, playerID, tableID, handID string, delta int64) (bool, error) {
+			return funding.Record(ctx, playerID, tableID, handID, delta)
+		},
+	)
 	// The streak badge is shared state, not per-process state: several
 	// instances can run an actor for one table and each used to publish its
 	// own tally (see internal/tablestreak).
@@ -742,8 +757,8 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		pipeline.persistHandHistory(context.Background(), tableID, handID, mode, outcome, names)
 		pipeline.persistHandReveal(context.Background(), tableID, handID, mode, outcome)
 	})
-	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
-		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
+	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken, botSeats int) {
+		if err := rooms.SetOccupancy(context.Background(), tableID, seatsTaken, botSeats); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
 		}
 		data, err := goproto.Marshal(&pokerproto.ServerMessage{
@@ -810,7 +825,7 @@ func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarUR
 		opponents = append(opponents, summary)
 	}
 	item := sessionlog.HandItem{
-		Outcome: result, NetChange: net,
+		Outcome: result, NetChange: net, ContainsBot: outcome.ContainsBot,
 		SmallBlind: outcome.SmallBlind, BigBlind: outcome.BigBlind, Variant: outcome.Variant,
 		Board: outcome.Board, BoardTwo: outcome.BoardTwo, HoleCards: holeCards, Opponents: opponents,
 		CommitHash:     outcome.CommitHash,
@@ -1020,8 +1035,9 @@ func registerRoutesWithSocialRuntime(
 	chatPrefsCache *chatprefs.ExtraWordsCache,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
+	botFundingSvc *botfunding.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, botCheckContestStore, cosmeticLoadoutSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, botCheckContestStore, cosmeticLoadoutSvc, botFundingSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -1037,7 +1053,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so

@@ -17,9 +17,9 @@ function bucketKey(smallBlind: number, bigBlind: number, maxSeats: number) {
 
 // Availability comes from the server's own aggregate over the whole public
 // directory — the lobby never paginates the room list to count it (#205).
-function openRooms(buckets: RoomBucket[], smallBlind: number, bigBlind: number, maxSeats: number) {
+function bucketFor(buckets: RoomBucket[], smallBlind: number, bigBlind: number, maxSeats: number) {
   return buckets.find(bucket => bucket.small_blind === smallBlind && bucket.big_blind === bigBlind
-    && bucket.max_seats === maxSeats)?.open_rooms ?? 0;
+    && bucket.max_seats === maxSeats);
 }
 
 export function StakesGrid() {
@@ -100,9 +100,20 @@ export function StakesGrid() {
           const maxSeats = opt[0];
           const displayName = opt[1];
           const key = bucketKey(selectedStake.small_blind, selectedStake.big_blind, maxSeats);
-          const active = openRooms(buckets, selectedStake.small_blind, selectedStake.big_blind, maxSeats);
+          const bucket = bucketFor(buckets, selectedStake.small_blind, selectedStake.big_blind, maxSeats);
+          const active = bucket?.open_rooms ?? 0;
+          const humanSeats = bucket?.human_seats ?? bucket?.seats_taken ?? 0;
+          const replaceable = bucket?.replaceable_bot_tables ?? 0;
+          const humanOpen = bucket?.human_open_tables ?? 0;
           const isJoining = joiningKey === key;
-          const actionLabel = active > 0 ? 'Entrar agora' : 'Criar mesa';
+          const actionLabel = humanOpen > 0 ? 'Entrar agora' :
+            replaceable > 0 ? 'Escolher entrada' : active > 0 ? 'Entrar agora' : 'Criar mesa';
+          const availability = humanOpen > 0
+            ? `${humanSeats} pessoa${humanSeats === 1 ? '' : 's'} jogando · mesa humana disponível`
+            : replaceable > 0
+              ? `${humanSeats} pessoa${humanSeats === 1 ? '' : 's'} jogando · vaga após a mão`
+              : humanSeats > 0 ? `${humanSeats} pessoa${humanSeats === 1 ? '' : 's'} jogando`
+              : active > 0 ? 'Mesa disponível · aguardando pessoas' : 'Nenhuma mesa ativa';
           const {min: buyInMin, max: buyInMax} = buyInRange(selectedStake.big_blind);
           // A join in flight blocks the other two options, but with
           // `aria-disabled` rather than `disabled`: the card stays focusable and
@@ -116,13 +127,13 @@ export function StakesGrid() {
                              : waiting ? 'aguarde, outra mesa está sendo aberta' : actionLabel}`}
                          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
                          onClick={() => pickBucket(selectedStake.small_blind, selectedStake.big_blind, maxSeats)}>
-            {active > 0 && <span className="status-dot"/>}
+            {humanSeats > 0 && <span className="status-dot"/>}
             <div>
               <small>MESA</small>
               <b className="room-card-name">{displayName}</b>
               <span>
                 <Users/>
-                {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}` : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores
+                {availability} · até {maxSeats} jogadores
               </span>
               <span className="room-card-buy-in">
                 Entrada: {buyInMin.toLocaleString('pt-BR')} a {buyInMax.toLocaleString('pt-BR')} fichas ({BUY_IN_MIN_BB}-{BUY_IN_MAX_BB} BB)
