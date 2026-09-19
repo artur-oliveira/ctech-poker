@@ -77,6 +77,7 @@ export default function TableGuide() {
           <li><span>Quem chega espera na tela <b>Sua vaga está reservada</b>, fora da mesa. O buy-in só é debitado quando os bots saem e o assento é confirmado.</span></li>
           <li><span>As fichas ganhas ou perdidas valem na sua carteira de fichas e aparecem no histórico privado.</span></li>
           <li><span>Mãos com bots não alteram ranking, conquistas, estatísticas públicas, confrontos ou jogadores recentes.</span></li>
+          <li><span>Depois de momentos marcantes, bots podem enviar reações da mesa ou direcionadas a você. Elas são ocasionais, inclusive quando o tom é provocativo, e não indicam quais cartas o bot tinha.</span></li>
           <li><span>Ao atingir 100.000 fichas de lucro líquido contra bots na janela de 24 horas, novas mãos automáticas ficam pausadas até o horário indicado no buy-in. Mesas com pessoas continuam disponíveis.</span></li>
         </GuideBullets></>
     },

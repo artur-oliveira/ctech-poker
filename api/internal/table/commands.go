@@ -47,6 +47,8 @@ type ReactionCmd struct {
 	ActionID       string
 	ReactionID     string
 	TargetPlayerID string
+	BotGenerated   bool
+	BotHandID      string
 	Reply          chan error
 }
 

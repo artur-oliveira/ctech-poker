@@ -32,6 +32,19 @@ The owner can use `POST /rooms/:id/bots/start` to bring the persisted activation
 
 The `bot_wait` mock scenario provides a one-human table and an API-backed wait timer. Its start action deliberately leaves the fill stalled so the retry state can be reviewed without a live server.
 
+## Bot reactions
+
+Bots may use the existing standard and targeted catalog, including premium and provocative items, as system-controlled cosmetic actions. No purchase or wallet charge is created for a bot. The `BOT` identity remains visible. The policy uses only public events, never hole-card strength: a bot win, a human win, an all-in result or an uncontested pot. It responds in about 10% of ordinary eligible hands and 16% of all-in hands, with a persisted 90-second table cooldown and a maximum of one bot reaction per hand. A selected reaction uses the normal table activity and broadcast path; targeted items point only at the real opponent. All choices are probabilistic, including silence.
+
+| Public moment | Sentiment and available examples |
+| --- | --- |
+| Bot wins | Confidence, humor or provocation: Aplausos, Risada, Pegando fogo, Modo tubarão, Pokerface; directed Jogar ficha, Jogar lágrima, Jogar tomate, Jogar cocô, Rir da cara, Jogar pato, Boa leitura, Passar a coroa, Mandar flores, Curar bad beat. |
+| Human wins | Respect, surprise, frustration or teasing: Aplausos, Uau, Raiva, Choro, Respeito; directed Dar sorte, Jogar ferradura, Jogar faca, Jogar bumerangue. |
+| All-in result | Tension and surprise: Uau, Nervoso, Coração all-in, Pokerface; directed Dar sorte or Botar pepino. |
+| Uncontested pot | Boredom or a light jab: Frio na mesa, Sono, Pokerface; directed Mandar café, Chamar de lento, Botar pepino. |
+
+The post-hand trigger avoids distracting from a betting decision. Further triggers during a hand require their own public-event timing and visual validation.
+
 ## Remaining release work
 
 - Add replaceable-bot bucket fields described in #395.

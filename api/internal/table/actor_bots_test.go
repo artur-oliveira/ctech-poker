@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -57,6 +58,37 @@ func TestStartBotsNowRequiresOwnerAndFillsBeforeDeadline(t *testing.T) {
 	}
 	if got := a.cached.PlayersForActor(); len(got) != 2 || !got[1].IsBot || a.cached.Stage() != hand.PreFlop {
 		t.Fatalf("start did not fill table: stage=%v players=%+v", a.cached.Stage(), got)
+	}
+}
+
+func TestBotReactionUsesNormalActivityWithoutPremiumOwnership(t *testing.T) {
+	game := sandboxBotTable(&hand.Player{ID: "human", Stack: 5_000, Ready: true})
+	if err := game.ConfigureBotsForActor("human", 4_000, 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := game.AddBotForActor("bot:human:0", "Lia", "tag"); err != nil {
+		t.Fatal(err)
+	}
+	if err := game.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	if err := game.Act(game.CurrentPlayerIDForActor(), betting.ActionFold, 0); err != nil {
+		t.Fatal(err)
+	}
+	a := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	a.SetCachedForTest(game)
+	a.handID = "hand-1"
+	command := ReactionCmd{PlayerID: "bot:human:0", ActionID: "bot-reaction-hand-1",
+		ReactionID: "poop", TargetPlayerID: "human", BotGenerated: true, BotHandID: "hand-1"}
+	if err := a.handleReaction(context.Background(), command); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.activity.Reactions) != 1 || a.activity.Reactions[0].ReactionID != "poop" ||
+		a.cached.BotPolicyForActor().LastReactionHandID != "hand-1" {
+		t.Fatalf("bot reaction was not recorded: %+v", a.activity.Reactions)
+	}
+	if err := a.handleReaction(context.Background(), command); err == nil {
+		t.Fatal("same bot reacted twice in one hand")
 	}
 }
 

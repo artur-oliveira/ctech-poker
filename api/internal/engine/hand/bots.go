@@ -29,6 +29,8 @@ type BotPolicy struct {
 	TargetOccupancy      int    `json:"target_occupancy" dynamodbav:"target_occupancy"`
 	ActivateAtUnixMs     int64  `json:"activate_at_unix_ms" dynamodbav:"activate_at_unix_ms"`
 	FundingCheckedHandID string `json:"funding_checked_hand_id,omitempty" dynamodbav:"funding_checked_hand_id,omitempty"`
+	LastReactionHandID   string `json:"last_reaction_hand_id,omitempty" dynamodbav:"last_reaction_hand_id,omitempty"`
+	LastReactionAtUnixMs int64  `json:"last_reaction_at_unix_ms,omitempty" dynamodbav:"last_reaction_at_unix_ms,omitempty"`
 }
 
 func BotTargetOccupancy(maxSeats int) (int, error) {
@@ -59,6 +61,11 @@ func (t *Table) ConfigureBotsForActor(ownerID string, buyIn int64, maxSeats int,
 }
 
 func (t *Table) BotPolicyForActor() BotPolicy { return t.botPolicy }
+
+func (t *Table) MarkBotReactionForActor(handID string, atUnixMs int64) {
+	t.botPolicy.LastReactionHandID = handID
+	t.botPolicy.LastReactionAtUnixMs = atUnixMs
+}
 
 func (t *Table) ExpediteBotsForActor(ownerID string, nowUnixMs int64) error {
 	if !t.botPolicy.Enabled || t.botPolicy.OwnerID != ownerID || t.BotSeatsNeededForActor() == 0 {

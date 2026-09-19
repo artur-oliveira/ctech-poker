@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -78,7 +79,7 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 	if !reactions.IsKnown(c.ReactionID) {
 		return errors.New("table: unknown reaction_id")
 	}
-	if reactions.IsPremium(c.ReactionID) {
+	if reactions.IsPremium(c.ReactionID) && !c.BotGenerated {
 		if a.reactionOwnership == nil {
 			return errors.New("table: reaction ownership check unavailable")
 		}
@@ -98,11 +99,22 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 			if !a.isSeated(c.PlayerID) {
 				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 			}
+			if c.BotGenerated {
+				bot, ok := a.cached.BotForActor(c.PlayerID)
+				policy := a.cached.BotPolicyForActor()
+				now := timeNowFunc().UnixMilli()
+				if !ok || bot == nil || c.BotHandID == "" || a.handID != c.BotHandID ||
+					a.cached.Stage() != hand.Complete || policy.LastReactionHandID == c.BotHandID ||
+					now-policy.LastReactionAtUnixMs < int64((90*time.Second).Milliseconds()) ||
+					reactions.IsTargeted(c.ReactionID) != (c.TargetPlayerID != "") {
+					return errors.New("table: bot reaction no longer available")
+				}
+			}
 			if c.TargetPlayerID != "" && (c.TargetPlayerID == c.PlayerID || !a.isSeated(c.TargetPlayerID)) {
 				return errors.New("table: invalid reaction target")
 			}
 			var extra []types.TransactWriteItem
-			if reactions.IsPremium(c.ReactionID) {
+			if reactions.IsPremium(c.ReactionID) && !c.BotGenerated {
 				if a.reactionMarkUsed == nil {
 					return errors.New("table: reaction usage recorder unavailable")
 				}
@@ -118,6 +130,9 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 			}
 			a.markLastAction(c.PlayerID)
 			now := timeNowFunc().UnixMilli()
+			if c.BotGenerated {
+				a.cached.MarkBotReactionForActor(c.BotHandID, now)
+			}
 			a.activity.Reactions = append(a.activity.Reactions, tablestore.Reaction{
 				ID: c.ActionID, PlayerID: c.PlayerID, ReactionID: c.ReactionID,
 				TargetPlayerID: c.TargetPlayerID, Timestamp: now, ExpiresAt: now + reactionLifetime.Milliseconds(),

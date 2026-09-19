@@ -479,7 +479,10 @@ func (a *Actor) handleBotPostHand(ctx context.Context, c botPostHandCmd) error {
 	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
-	if a.handID != c.HandID || a.version != c.Version || a.cached.Stage() != hand.Complete {
+	// Cosmetic activity or the funding check can advance the table version
+	// while this timer waits. The hand ID and stage are the durable stale-work
+	// boundary; a version mismatch alone must not suppress post-hand behavior.
+	if a.handID != c.HandID || a.cached.Stage() != hand.Complete {
 		return nil
 	}
 	outcome := a.cached.LastOutcomeForActor()
@@ -528,7 +531,56 @@ func (a *Actor) handleBotPostHand(ctx context.Context, c botPostHandCmd) error {
 	if changed {
 		a.broadcastAll()
 	}
+	a.maybeReactAfterBotHand(ctx, c.HandID, outcome)
 	return nil
+}
+
+func (a *Actor) maybeReactAfterBotHand(ctx context.Context, handID string, outcome *hand.HandOutcome) {
+	policy := a.cached.BotPolicyForActor()
+	if !outcome.ContainsBot || policy.LastReactionHandID == handID ||
+		timeNowFunc().UnixMilli()-policy.LastReactionAtUnixMs < int64((90*time.Second).Milliseconds()) {
+		return
+	}
+	var botID, humanID string
+	botWon := false
+	winners := stringSet(outcome.Winners)
+	for _, p := range a.cached.PlayersForActor() {
+		if p.IsBot {
+			if botID == "" || winners[p.ID] {
+				botID = p.ID
+			}
+			botWon = botWon || winners[p.ID]
+		} else if p.ID == policy.OwnerID {
+			humanID = p.ID
+		}
+	}
+	if botID == "" || humanID == "" {
+		return
+	}
+	moment := pokerbot.ReactionHumanWon
+	if botWon {
+		moment = pokerbot.ReactionBotWon
+	}
+	if len(outcome.AllInPlayers) > 0 {
+		moment = pokerbot.ReactionAllIn
+	} else if outcome.WonWithoutShowdown {
+		moment = pokerbot.ReactionUncontested
+	}
+	choice, ok := pokerbot.ChooseReaction(moment, botRandom{})
+	if !ok {
+		return
+	}
+	target := ""
+	if choice.Targeted {
+		target = humanID
+	}
+	if err := a.handleReaction(ctx, ReactionCmd{
+		PlayerID: botID, ActionID: "bot-reaction-" + handID,
+		ReactionID: choice.ID, TargetPlayerID: target,
+		BotGenerated: true, BotHandID: handID,
+	}); err != nil {
+		slog.Warn("table bot reaction skipped", "table_id", a.id, "hand_id", handID, "err", err)
+	}
 }
 
 func stringSet(ids []string) map[string]bool {
