@@ -6,6 +6,7 @@ import type {Page} from '@/lib/api/client';
 import type {HandItem} from '@/lib/api/player';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {buildHandOutcome, seatParticipated} from '@/lib/tableOutcome';
+import type {HandVariant} from '@/lib/pokerRules';
 import {invalidateAfterSettle} from '@/lib/settleRefetch';
 
 /** The showdown banner and the two frozen timestamps around it.
@@ -14,11 +15,14 @@ import {invalidateAfterSettle} from '@/lib/settleRefetch';
  * hook owns only the bookkeeping that cannot be derived from the current frame:
  * which payout is new, which starting stack the hand began with, and when the
  * next-hand deadline was armed. */
-export function useTableOutcome({id, viewer, snapshot, snapshotAt}: {
+export function useTableOutcome({id, viewer, snapshot, snapshotAt, variant = 'standard'}: {
   id: string;
   viewer?: string;
   snapshot: TableSnapshot | null;
   snapshotAt: number;
+  // The room's rule variant (#296), so the banner ranks/labels a short-deck
+  // showdown correctly instead of assuming standard hold'em.
+  variant?: HandVariant;
 }) {
   const queryClient = useQueryClient();
   // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
@@ -82,11 +86,11 @@ export function useTableOutcome({id, viewer, snapshot, snapshotAt}: {
     previousPayoutsRef.current = {tableID: id, payouts: hasPayouts ? snapshot?.payouts : undefined};
     if (!isFreshPayout || !snapshot || !viewer) return;
     const remembered = rememberedStart?.tableID === id ? rememberedStart : null;
-    const value = buildHandOutcome(snapshot, viewer, remembered, outcomeKeyRef.current + 1);
+    const value = buildHandOutcome(snapshot, viewer, remembered, outcomeKeyRef.current + 1, variant);
     if (!value) return;
     outcomeKeyRef.current += 1;
     setScopedHandOutcome({tableID: id, handID: snapshot.hand_id, value});
-  }, [snapshot, viewer, id, rememberedStart]);
+  }, [snapshot, viewer, id, rememberedStart, variant]);
 
   // The banner/toast-blocking state above is scoped to the hand that produced
   // it and must not survive into the next one: once the server deals a new

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"gopkg.aoctech.app/poker/api/internal/chatfilter"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
@@ -201,7 +202,7 @@ func (a *Actor) publishSnapshots() {
 		}
 		a.applyPresence(snapshot.Seats)
 		a.applyStreaks(snapshot.Seats)
-		a.applyActivity(p.ID, &snapshot, chat, reactions)
+		a.applyActivity(p.ID, &snapshot, chatFor(chat, a.chatPrefsExtra[p.ID]), reactions)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
 				opponents := 0
@@ -250,8 +251,27 @@ func (a *Actor) activityViews() ([]hand.ChatMessageView, []hand.ReactionView) {
 	return chat, reactions
 }
 
-// applyActivity attaches the shared activity views built by activityViews
-// plus the one genuinely per-viewer piece: that viewer's own preselection.
+// chatFor overlays one viewer's personal chat-filter addition (#327) onto
+// the shared, already floor-filtered chat slice activityViews built once for
+// the whole broadcast. Cloning only happens when that viewer actually has
+// extra words configured — the common case (no personal preference) still
+// shares the one slice every other viewer gets, same as before #327.
+func chatFor(chat []hand.ChatMessageView, extraWords []string) []hand.ChatMessageView {
+	if len(extraWords) == 0 {
+		return chat
+	}
+	filter := chatfilter.New(extraWords)
+	out := make([]hand.ChatMessageView, len(chat))
+	for i, message := range chat {
+		message.Message = filter.Clean(message.Message)
+		out[i] = message
+	}
+	return out
+}
+
+// applyActivity attaches the (possibly per-viewer, see chatFor) activity
+// views built by activityViews plus the one genuinely per-viewer piece
+// that predates it: that viewer's own preselection.
 func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot, chat []hand.ChatMessageView, reactions []hand.ReactionView) {
 	snapshot.ChatMessages = chat
 	snapshot.Reactions = reactions
@@ -552,3 +572,43 @@ func (a *Actor) TableForTest() *hand.Table { return a.cached }
 
 // SetCachedForTest seeds the cached hand.Table when running without a store.
 func (a *Actor) SetCachedForTest(t *hand.Table) { a.cached = t }
+
+// ChatPrefsRefreshInterval paces chatPrefsLookup the same way
+// StreakRefreshInterval paces streakStore above: personal chat preferences
+// change rarely, while ensureLoaded runs on every command, so an unpaced
+// refresh would put a cache round trip per seated player in front of every
+// action — exactly the "extra DynamoDB read per chat message" cost #327's
+// own issue calls out to avoid.
+const ChatPrefsRefreshInterval = 30 * time.Second
+
+// refreshChatPrefs re-reads each currently seated player's personal
+// extra-word list. Called from ensureLoaded, paced like refreshStreaks. A
+// lookup failure for one player just leaves their last known list in place
+// (or floor-only, if there never was one) rather than blocking the reload.
+func (a *Actor) refreshChatPrefs(ctx context.Context) {
+	if a.chatPrefsLookup == nil || a.cached == nil {
+		return
+	}
+	now := timeNowFunc()
+	if !a.chatPrefsRefreshedAt.IsZero() && now.Sub(a.chatPrefsRefreshedAt) < ChatPrefsRefreshInterval {
+		return
+	}
+	a.chatPrefsRefreshedAt = now
+	fresh := make(map[string][]string, len(a.cached.PlayersForActor()))
+	for _, p := range a.cached.PlayersForActor() {
+		lookupCtx, cancel := context.WithTimeout(ctx, streakStoreTimeout)
+		words, err := a.chatPrefsLookup(lookupCtx, p.ID)
+		cancel()
+		if err != nil {
+			slog.Warn("table chat prefs lookup failed", "table_id", a.id, "player", p.ID, "err", err)
+			if existing := a.chatPrefsExtra[p.ID]; len(existing) > 0 {
+				fresh[p.ID] = existing
+			}
+			continue
+		}
+		if len(words) > 0 {
+			fresh[p.ID] = words
+		}
+	}
+	a.chatPrefsExtra = fresh
+}

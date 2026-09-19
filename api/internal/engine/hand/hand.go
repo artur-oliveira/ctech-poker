@@ -15,6 +15,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
+	"gopkg.aoctech.app/poker/api/internal/engine/handeval/shortdeck"
 	"gopkg.aoctech.app/poker/api/internal/engine/sidepots"
 )
 
@@ -132,7 +133,24 @@ type Table struct {
 	runItTwice        bool
 	runoutPhase       int
 	shuffle           *deck.ShuffleResult
-	nextCard          int
+	// shortShuffle is StartHand's shuffled deck for a ShortDeck-variant table
+	// (#296), mutually exclusive with shuffle (exactly one of the two is
+	// non-nil after a successful StartHand, based on variant). Kept as a
+	// separate field of its own [36]Card-backed type rather than widening
+	// shuffle, so every existing shuffle-based call (dealCard's bounds check,
+	// RootCommitHash, the fairness-proof builders in snapshot.go) keeps
+	// operating on the standard 52-card format completely unchanged — a
+	// ShortDeck table simply never populates shuffle, so those call sites'
+	// existing `t.shuffle != nil` guards already skip them for it.
+	shortShuffle *deck.ShortDeckShuffleResult
+	nextCard     int
+
+	// variant is set once at table creation (NewTableWithVariant) and never
+	// changes for the table's lifetime (#296) — same immutability rule
+	// currencyMode already follows. It picks the deck and hand evaluator
+	// StartHand/showdown use; nothing about the betting/side-pot/settlement
+	// state machine reads it.
+	variant deck.Variant
 	round             *betting.Round
 	roundIdx          map[string]int // playerID -> index into round.Players, for the active betting round
 
@@ -232,6 +250,15 @@ type HandOutcome struct {
 	// to render pot sizes and the blind markers at the right scale.
 	SmallBlind int64
 	BigBlind   int64
+	// Variant is this hand's rule variant (deck.Variant.Label(): "" for
+	// standard, "short_deck") — captured here for the same reason as
+	// SmallBlind/BigBlind above: a table's variant is static for its whole
+	// lifetime, but the room record a much-later reader fetches may no
+	// longer exist (ephemeral public tables), or in principle could be
+	// reused. Every consumer that recomputes hand strength from raw cards
+	// (a hand-history client, a replayer) needs this to pick the correct
+	// ranking rules instead of assuming standard (#296).
+	Variant string
 	// ShowdownResults holds each non-folded participant's OWN best-hand
 	// category and result. Unlike PlayerHands/Revealed, this is never
 	// exposed to opponents — it only drives per-player achievements
@@ -319,12 +346,49 @@ var categoryNames = map[handeval.Category]string{
 }
 
 func NewTable(players []*Player, smallBlind, bigBlind int64) *Table {
+	return NewTableWithVariant(players, smallBlind, bigBlind, deck.Standard)
+}
+
+// NewTableWithVariant is NewTable with an explicit rule variant (#296).
+// Callers outside this package must reject deck.ShortDeck for any real-money
+// table before ever reaching here — this constructor enforces nothing about
+// currency mode itself, since ConfigureRake (the currency-mode setter) is a
+// separate call that can come before or after this one.
+func NewTableWithVariant(players []*Player, smallBlind, bigBlind int64, variant deck.Variant) *Table {
 	return &Table{
 		players:    players,
 		smallBlind: smallBlind,
 		bigBlind:   bigBlind,
 		stage:      WaitingForPlayers,
+		variant:    variant,
 	}
+}
+
+// Variant reports the table's rule variant (#296).
+func (t *Table) Variant() deck.Variant { return t.variant }
+
+// best7 dispatches to the standard or short-deck evaluator per t.variant.
+// Every showdown/evaluation call site in this package must go through this
+// (or categoryOf below) rather than calling handeval.Best7 directly, so a
+// ShortDeck table's winner determination and hand-category labels use
+// short-deck's own ranking (flush beats full house, A-6-7-8-9 low straight)
+// instead of silently reusing the standard evaluator.
+func (t *Table) best7(cards [7]deck.Card) handeval.Score {
+	if t.variant == deck.ShortDeck {
+		return shortdeck.Best7(cards)
+	}
+	return handeval.Best7(cards)
+}
+
+// categoryOf recovers the display category from a Score this table's own
+// best7 produced. handeval.Score.Category() only knows the standard
+// evaluator's packed table, so a ShortDeck table's scores must never reach
+// it directly — see shortdeck.Category's doc comment.
+func (t *Table) categoryOf(s handeval.Score) handeval.Category {
+	if t.variant == deck.ShortDeck {
+		return shortdeck.Category(s)
+	}
+	return s.Category()
 }
 
 func (t *Table) Stage() Stage { return t.stage }
@@ -860,6 +924,7 @@ func (t *Table) StartHand() error {
 		t.runItTwice = false
 		t.runoutPhase = 0
 		t.shuffle = nil
+		t.shortShuffle = nil
 		t.nextCard = 0
 		t.stage = WaitingForPlayers
 		for _, p := range t.players {
@@ -868,11 +933,25 @@ func (t *Table) StartHand() error {
 		return fmt.Errorf("hand: need at least 2 ready players, have %d", readyCount)
 	}
 
-	shuffle, err := deck.NewShuffle()
-	if err != nil {
-		return fmt.Errorf("hand: shuffle: %w", err)
+	// #296: a ShortDeck table shuffles the 36-card deck into shortShuffle and
+	// leaves the standard shuffle field nil — every fairness-proof/commit-
+	// hash call site below is already guarded on `t.shuffle != nil`, so a
+	// ShortDeck hand simply skips those (see shortShuffle's doc comment).
+	if t.variant == deck.ShortDeck {
+		shuffle, err := deck.NewShortDeckShuffle()
+		if err != nil {
+			return fmt.Errorf("hand: shuffle: %w", err)
+		}
+		t.shortShuffle = shuffle
+		t.shuffle = nil
+	} else {
+		shuffle, err := deck.NewShuffle()
+		if err != nil {
+			return fmt.Errorf("hand: shuffle: %w", err)
+		}
+		t.shuffle = shuffle
+		t.shortShuffle = nil
 	}
-	t.shuffle = shuffle
 	t.nextCard = 0
 	t.board = nil
 	t.boardTwo = nil
@@ -1472,16 +1551,27 @@ func (t *Table) postBlind(p *Player, amount int64) {
 	p.Contributed += amount
 }
 
+// dealtCards returns this hand's shuffled deck regardless of variant — the
+// standard 52-card shuffle, or the short-deck 36-card one (#296), whichever
+// StartHand populated.
+func (t *Table) dealtCards() []deck.Card {
+	if t.variant == deck.ShortDeck {
+		return t.shortShuffle.Cards[:]
+	}
+	return t.shuffle.Cards[:]
+}
+
 func (t *Table) dealCard() deck.Card {
-	// Defensive bounds check: a 52-card shuffle can only be over-drawn if hand
+	cards := t.dealtCards()
+	// Defensive bounds check: a shuffle can only be over-drawn if hand
 	// progression itself is buggy. Panic with context (recovered by the table
 	// Actor's handler loop, which then reloads authoritative state) instead of
 	// a bare runtime index-out-of-range with no table/stage in the message.
-	if t.nextCard < 0 || t.nextCard >= len(t.shuffle.Cards) {
+	if t.nextCard < 0 || t.nextCard >= len(cards) {
 		panic(fmt.Sprintf("hand: deal past end of shuffle (nextCard=%d, deck=%d, stage=%d)",
-			t.nextCard, len(t.shuffle.Cards), t.stage))
+			t.nextCard, len(cards), t.stage))
 	}
-	c := t.shuffle.Cards[t.nextCard]
+	c := cards[t.nextCard]
 	t.nextCard++
 	return c
 }
@@ -1957,6 +2047,7 @@ func (t *Table) runShowdown() {
 		PotResults:         potResults,
 		SmallBlind:         t.smallBlind,
 		BigBlind:           t.bigBlind,
+		Variant:            t.variant.Label(),
 	}
 	if t.shuffle != nil {
 		outcome.ServerSeed = hex.EncodeToString(t.shuffle.ServerSeed[:])
@@ -1965,7 +2056,7 @@ func (t *Table) runShowdown() {
 		outcome.RootCommitHash = hex.EncodeToString(rootCommit[:])
 	}
 	if !wonWithoutShowdown {
-		outcome.WinningCategory = categoryNames[winningScore.Category()]
+		outcome.WinningCategory = categoryNames[t.categoryOf(winningScore)]
 		winnerSet := make(map[string]bool, len(outcome.Winners))
 		for _, w := range outcome.Winners {
 			winnerSet[w] = true
@@ -1978,11 +2069,11 @@ func (t *Table) runShowdown() {
 			var full [7]deck.Card
 			full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 			copy(full[2:], t.board)
-			playerScore := handeval.Best7(full)
+			playerScore := t.best7(full)
 			if t.runItTwice && len(t.boardTwo) > 0 {
 				secondBoard := append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
 				copy(full[2:], secondBoard)
-				if secondScore := handeval.Best7(full); secondScore > playerScore {
+				if secondScore := t.best7(full); secondScore > playerScore {
 					playerScore = secondScore
 				}
 			}
@@ -2001,7 +2092,7 @@ func (t *Table) runShowdown() {
 				}
 			}
 			outcome.ShowdownResults[p.ID] = ShowdownResult{
-				Category: categoryNames[playerScore.Category()],
+				Category: categoryNames[t.categoryOf(playerScore)],
 				Won:      won,
 				Tied:     won && splitPot && !wonOutright,
 				SplitPot: splitPot,
@@ -2047,7 +2138,7 @@ func (t *Table) evaluateLayer(layer sidepots.PotLayer, board []deck.Card) ([]str
 		var full [7]deck.Card
 		full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 		copy(full[2:], board)
-		score := handeval.Best7(full)
+		score := t.best7(full)
 		switch {
 		case score > bestScore:
 			bestScore = score

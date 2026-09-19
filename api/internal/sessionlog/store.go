@@ -113,6 +113,15 @@ type HandItem struct {
 	// default.
 	SmallBlind int64             `dynamodbav:"small_blind,omitempty" json:"small_blind,omitempty"`
 	BigBlind   int64             `dynamodbav:"big_blind,omitempty" json:"big_blind,omitempty"`
+	// Variant is the rule variant this hand was played under (#296) —
+	// hand.HandOutcome.Variant verbatim ("" for standard, "short_deck").
+	// Same reasoning as SmallBlind/BigBlind: captured at hand-complete time
+	// because a client re-deriving hand strength from Board/HoleCards must
+	// use the rules that applied to THIS hand, not whatever a since-changed
+	// or since-deleted room says now. Empty on hands recorded before this
+	// field existed, which readers must treat as standard (the only variant
+	// that existed then).
+	Variant string `dynamodbav:"variant,omitempty" json:"variant,omitempty"`
 	Board      []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
 	BoardTwo   []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
 	HoleCards  []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`

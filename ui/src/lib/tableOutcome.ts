@@ -1,6 +1,6 @@
 import type {SeatView, TableSnapshot} from '@/lib/api/table';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
-import {bestFiveCardHand} from '@/lib/pokerRules';
+import {bestFiveCardHand, type HandVariant} from '@/lib/pokerRules';
 
 export type TableOutcomeKind = 'win' | 'lose' | 'tie' | 'mixed';
 
@@ -165,9 +165,9 @@ function knownHoleCards(seat?: SeatView) {
  * player won with when the winning combination uses the board too.
  * Presentation only: `bestFiveCardHand` orders the cards shown in the banner
  * and never decides who won (that stays server-authoritative). */
-function resolvedHand(snapshot: TableSnapshot, seat?: SeatView) {
+function resolvedHand(snapshot: TableSnapshot, seat?: SeatView, variant: HandVariant = 'standard') {
   const hole = knownHoleCards(seat);
-  return hole && snapshot.board.length === 5 ? bestFiveCardHand([...hole, ...snapshot.board]) : hole;
+  return hole && snapshot.board.length === 5 ? bestFiveCardHand([...hole, ...snapshot.board], variant) : hole;
 }
 
 /** Assembles the whole showdown banner for one resolved snapshot: the
@@ -181,7 +181,7 @@ function resolvedHand(snapshot: TableSnapshot, seat?: SeatView) {
  * become active mid-hand and only be eligible for the next deal. */
 export function buildHandOutcome(snapshot: TableSnapshot, viewer: string,
                                  rememberedStart?: {handID: string; stack: number} | null,
-                                 key = 0): HandOutcomeState | null {
+                                 key = 0, variant: HandVariant = 'standard'): HandOutcomeState | null {
   const seat = snapshot.seats.find(item => item.player_id === viewer);
   if (!shouldShowOutcome(seat)) return null;
   // Membership in `winners`, not a truthy payout, decides win/lose: an
@@ -212,12 +212,12 @@ export function buildHandOutcome(snapshot: TableSnapshot, viewer: string,
       won: false as const,
       winnerName: potOutcome.winnerSeat?.name,
       category: potOutcome.winnerSeat?.hand_category,
-      winningCards: resolvedHand(snapshot, potOutcome.winnerSeat)
+      winningCards: resolvedHand(snapshot, potOutcome.winnerSeat, variant)
     }) : undefined;
   // A tie means every contested pot the viewer won was split; name the other
   // hand(s) in that split (2-way or 3+-way chop).
   const tiedWith = kind === 'tie' ? tiedWinners(snapshot, viewer).map(tiedSeat => ({
-    name: tiedSeat.name, cards: resolvedHand(snapshot, tiedSeat)
+    name: tiedSeat.name, cards: resolvedHand(snapshot, tiedSeat, variant)
   })) : undefined;
   const breakdown = playerPotBreakdown(snapshot, viewer);
   // Folding is not a loss in the sense of having contested the pot. It gets
@@ -232,16 +232,17 @@ export function buildHandOutcome(snapshot: TableSnapshot, viewer: string,
   return {
     key,
     kind: folded ? 'fold' : kind,
+    variant,
     couldHaveWon: folded && winnerWasPubliclyRevealed &&
     seat.hand_score != null && winnerSeat?.hand_score != null ?
       seat.hand_score > winnerSeat.hand_score : undefined,
     handCategory: seat.hand_category,
     opponentCategory,
-    winningCards: resolvedHand(snapshot, winnerSeat),
+    winningCards: resolvedHand(snapshot, winnerSeat, variant),
     winningHoleCards: winnerHole,
-    viewerCards: resolvedHand(snapshot, seat),
+    viewerCards: resolvedHand(snapshot, seat, variant),
     viewerHoleCards: viewerHole,
-    beatenCards: resolvedHand(snapshot, beatenSeat),
+    beatenCards: resolvedHand(snapshot, beatenSeat, variant),
     beatenCategory: beatenSeat?.hand_category,
     pots,
     tiedWith,

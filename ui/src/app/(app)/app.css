@@ -7221,6 +7221,60 @@ button.deck-grid-slot:hover {
     gap: 16px;
     padding: 24px
 }
+.chatprefs-editor {
+    display: grid;
+    gap: 14px;
+    max-width: 480px
+}
+.chatprefs-add {
+    display: flex;
+    gap: 10px
+}
+.chatprefs-add > [data-slot='input'],
+.chatprefs-add input {
+    flex: 1 1 auto
+}
+.chatprefs-word-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+.chatprefs-word-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 6px 6px 14px;
+    border-radius: var(--rounded-pill);
+    background: var(--white-08);
+    color: var(--on-brand);
+    font-size: var(--font-size-body)
+}
+.chatprefs-word-pill button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: var(--text-secondary);
+    transition: background-color 0.2s var(--ease-out-quart), color 0.2s var(--ease-out-quart)
+}
+.chatprefs-word-pill button:hover {
+    background: var(--white-13);
+    color: var(--on-brand)
+}
+.chatprefs-word-pill button svg {
+    width: 14px;
+    height: 14px
+}
+.chatprefs-skeleton {
+    display: grid;
+    gap: 10px;
+    max-width: 480px
+}
 @media (max-width: 900px) {
 .player-profile-section {
         grid-template-columns: minmax(0, 1fr);

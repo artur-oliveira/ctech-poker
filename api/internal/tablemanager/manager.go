@@ -58,6 +58,7 @@ type Manager struct {
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
 	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
+	chatPrefsLookup        func(ctx context.Context, playerID string) ([]string, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -475,6 +476,12 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		}
 		return m.reactionMarkUsed(ctx, playerID, reactionID)
 	})
+	// Chat preferences are decorative (#327), not correctness — unlike the
+	// reaction hooks above, no lookup wired just means every viewer keeps
+	// seeing floor-only chat, never an error.
+	if m.chatPrefsLookup != nil {
+		actor.SetChatPrefsLookupForActor(m.chatPrefsLookup)
+	}
 	runCtx, cancel := context.WithCancel(context.Background())
 
 	m.mu.Lock()
@@ -680,4 +687,12 @@ func (m *Manager) SetReactionOwnership(fn func(ctx context.Context, playerID, re
 
 func (m *Manager) SetReactionMarkUsed(fn func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)) {
 	m.reactionMarkUsed = fn
+}
+
+// SetChatPrefsLookup wires the personal chat-filter preference lookup every
+// actor this instance creates uses (#327, internal/chatprefs). Never set
+// means every table stays exactly as it was before #327: floor-filtered
+// chat, identical for every seat.
+func (m *Manager) SetChatPrefsLookup(fn func(ctx context.Context, playerID string) ([]string, error)) {
+	m.chatPrefsLookup = fn
 }

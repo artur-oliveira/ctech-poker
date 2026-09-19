@@ -10,6 +10,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/valkey-io/valkey-go"
 	"gopkg.aoctech.app/api-commons/cache"
+
+	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 // incrAndBoundTTLScript atomically increments key and guarantees it carries a
@@ -144,10 +146,10 @@ func rateLimit(rl *RateLimiter, keyFn func(c fiber.Ctx) string) fiber.Handler {
 			return c.Next()
 		}
 		if !allow {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"error":   "rate_limit_exceeded",
-				"message": "too many requests, slow down",
-			})
+			// #319: retry_after_seconds is the limiter's own fixed window —
+			// the window that was just hit, not a per-request remaining-time
+			// estimate (the backend, Redis or in-memory, doesn't track that).
+			return problem.TooManyRequests(int(rl.window.Seconds())).Send(c)
 		}
 		return c.Next()
 	}

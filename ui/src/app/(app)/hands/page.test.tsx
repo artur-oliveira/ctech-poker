@@ -311,6 +311,20 @@ describe('hands list page', () => {
   });
 
 
+  // #296: this hand's own recorded variant, not standard, decides how a
+  // client-recomputed category is labeled. A-6-7-8-9 is a straight only
+  // under short-deck (there is no rank Two-Five to make any standard
+  // low straight), so a hand recorded as 'short_deck' must show
+  // "Sequência" here instead of the "high card" a standard recompute
+  // would give the same seven cards.
+  test('categorizes a hand by its own recorded variant, not standard rules', () => {
+    mocks.query.mockReturnValue(queryResult([pageOf([
+      {...hands[0], hole_cards: ['AC', '6D'], board: ['7H', '8S', '9C', 'KH', 'JD'], variant: 'short_deck'},
+    ])]));
+    render(<HandsHistory/>);
+    expect(screen.getByText(/Sequência/)).toBeInTheDocument();
+  });
+
   test('saves the current filter under a player-given name and applies it later', async () => {
     mocks.saveSavedHandFilters.mockResolvedValueOnce([{name: 'Minhas bad beats', outcome: 'lost', table_id: 'all'}]);
     render(<HandsHistory/>);

@@ -38,6 +38,12 @@ type UpdatePlayerRequest struct {
 	FeaturedAchievements *[]string              `json:"featured_achievements"`
 	ShowcaseLayout       *player.ShowcaseLayout `json:"showcase_layout"`
 	FavoriteReactions    *[]string              `json:"favorite_reactions"`
+	// EquippedFrameID/EquippedBadgeIDs back issue #292's seasonal avatar
+	// frames/badges. *string/*[]string for the same "absent key means don't
+	// touch this field" reason as the others; an empty string/slice
+	// unequips.
+	EquippedFrameID  *string   `json:"equipped_frame_id"`
+	EquippedBadgeIDs *[]string `json:"equipped_badge_ids"`
 }
 
 type sessionLogReader interface {
@@ -371,6 +377,28 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 				return problem.BadRequest("showcase_layout must order every section once and may not hide achievements").Send(c)
 			}
 			return problem.InternalServer("failed to update profile showcase layout", c, err).Send(c)
+		}
+	}
+	if req.EquippedFrameID != nil {
+		if _, err := h.players.SetEquippedFrame(c.Context(), userID, *req.EquippedFrameID); err != nil {
+			if errors.Is(err, player.ErrInvalidFrame) {
+				return problem.BadRequest("equipped_frame_id must be a known frame").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("equipped_frame_id is not owned").Send(c)
+			}
+			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+		}
+	}
+	if req.EquippedBadgeIDs != nil {
+		if _, err := h.players.SetEquippedBadges(c.Context(), userID, *req.EquippedBadgeIDs); err != nil {
+			if errors.Is(err, player.ErrInvalidBadges) {
+				return problem.BadRequest("equipped_badge_ids must contain up to three unique known badges").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("equipped_badge_ids contains a badge that is not owned").Send(c)
+			}
+			return problem.InternalServer("failed to update player profile", c, err).Send(c)
 		}
 	}
 	if req.BetPresetMode != nil {

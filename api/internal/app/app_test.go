@@ -213,6 +213,30 @@ func TestHandItemForMarksWinnerAmongMultipleOpponents(t *testing.T) {
 	}
 }
 
+// #296: handItemFor must carry the hand's own recorded variant through to
+// the persisted HandItem verbatim, the same way it already does for
+// SmallBlind/BigBlind — a frontend re-deriving hand strength from this row
+// later needs to know which ranking rules applied to THIS hand, not
+// whichever variant the room happens to have now.
+func TestHandItemForCarriesVariantThrough(t *testing.T) {
+	base := hand.HandOutcome{
+		Winners: []string{"p1"}, Participants: []string{"p1"},
+		Payouts: map[string]int64{"p1": 100}, Contributions: map[string]int64{"p1": 100},
+	}
+
+	standard := base
+	standard.Variant = ""
+	if got := handItemFor(standard, "p1", nil).Variant; got != "" {
+		t.Fatalf("standard hand: Variant = %q, want empty", got)
+	}
+
+	shortDeck := base
+	shortDeck.Variant = "short_deck"
+	if got := handItemFor(shortDeck, "p1", nil).Variant; got != "short_deck" {
+		t.Fatalf("short-deck hand: Variant = %q, want short_deck", got)
+	}
+}
+
 func TestHandItemForDoesNotCallDistinctSidePotWinnersTied(t *testing.T) {
 	outcome := hand.HandOutcome{
 		Winners:      []string{"main-winner", "side-winner"},

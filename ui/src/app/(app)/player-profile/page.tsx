@@ -10,6 +10,7 @@ import {chipsExact, moneyExact} from '@/lib/chips';
 import {getMe, type PlayerProfile} from '@/lib/api/player';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
+import {ChatFilterSection} from './ChatFilterSection';
 import {IdentitySection} from './IdentitySection';
 import {ShowcaseSection} from './ShowcaseSection';
 import {TableSection} from './TableSection';
@@ -70,6 +71,7 @@ export default function PlayerProfilePage() {
               key={`showcase:${me.showcase_public}:${me.playstyle_public}:${me.table_public}:${(me.featured_achievements || []).join(',')}:${JSON.stringify(me.showcase_layout || {})}`}
               me={me}/>
             <TableSection me={me}/>
+            <ChatFilterSection/>
             <BalancesSection me={me}/>
             <WalletAlertsSection/>
           </>

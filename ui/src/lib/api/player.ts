@@ -212,6 +212,14 @@ export interface HandItem {
   // Zero/absent means unknown — never substitute a default.
   small_blind?: number;
   big_blind?: number;
+  // Rule variant this hand was played under (#296): '' / absent for
+  // standard, 'short_deck' for 6+ hold'em. Captured at hand-complete time,
+  // same reasoning as small_blind/big_blind above — re-deriving hand
+  // strength from board/hole_cards must use the rules THIS hand was played
+  // under, not a since-changed or since-deleted room's current one. Absent
+  // on hands recorded before this field existed, which readers must treat
+  // as standard (the only variant that existed then).
+  variant?: '' | 'short_deck';
   board?: string[];
   board_two?: string[];
   hole_cards?: string[];

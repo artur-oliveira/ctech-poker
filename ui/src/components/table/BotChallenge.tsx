@@ -4,6 +4,8 @@ import Link from 'next/link';
 import {LoaderCircle, ShieldCheck} from 'lucide-react';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {Button} from '@/components/ui/button';
+import {Label} from '@/components/ui/label';
+import {BOT_CHECK_CONTEST_MAX_REASON_LENGTH, fileBotCheckContest} from '@/lib/api/botCheckContest';
 
 const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-script';
 const TURNSTILE_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
@@ -21,9 +23,72 @@ function turnstileAPI() {
   return (window as typeof window & { turnstile?: TurnstileAPI }).turnstile;
 }
 
-export function BotChallenge({required, onTokenAction}: {
+/**
+ * A failed or blocked bot-check used to be a dead end: reload or leave, no
+ * other path (#322). `BotChallengeContest` gives the player still on this
+ * screen a way to say "I'm not a bot" that a human can review — it never
+ * reopens the table itself (it doesn't touch `required`/`onTokenAction` at
+ * all), only records the claim as `pending` for later review.
+ */
+function BotChallengeContest({tableId}: { tableId?: string }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setState('sending');
+    try {
+      await fileBotCheckContest({tableId, reason: reason.trim() || undefined});
+      setState('sent');
+    } catch {
+      setState('error');
+    }
+  }
+
+  if (state === 'sent') {
+    return <p className="bot-challenge-contest-sent" role="status">
+      Contestação enviada — status: aguardando revisão. Isso não libera a mesa automaticamente;
+      nossa equipe vai analisar o caso.
+    </p>;
+  }
+
+  if (!open) {
+    return <Button type="button" variant="ghost" size="sm" className="bot-challenge-contest-toggle"
+                    onClick={() => setOpen(true)}>
+      Acha que não é um bot? Conte pra gente
+    </Button>;
+  }
+
+  return <form className="bot-challenge-contest-form" onSubmit={submit}>
+    <Label htmlFor="bot-challenge-contest-reason">O que aconteceu (opcional)</Label>
+    <textarea
+      id="bot-challenge-contest-reason"
+      value={reason}
+      onChange={e => setReason(e.target.value.slice(0, BOT_CHECK_CONTEST_MAX_REASON_LENGTH))}
+      maxLength={BOT_CHECK_CONTEST_MAX_REASON_LENGTH}
+      disabled={state === 'sending'}
+      placeholder="Ex.: joguei rápido porque já sabia minha jogada"
+    />
+    {state === 'error' && <p className="form-error" role="alert">
+      Não foi possível enviar sua contestação agora. Tente de novo.
+    </p>}
+    <div className="bot-challenge-contest-actions">
+      <Button type="submit" variant="outline" size="sm" loading={state === 'sending'}>
+        Enviar contestação
+      </Button>
+      <Button type="button" variant="ghost" size="sm" disabled={state === 'sending'}
+              onClick={() => setOpen(false)}>
+        Cancelar
+      </Button>
+    </div>
+  </form>;
+}
+
+export function BotChallenge({required, onTokenAction, tableId}: {
   required: boolean;
   onTokenAction: (token: string) => boolean;
+  tableId?: string;
 }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,9 +165,12 @@ export function BotChallenge({required, onTokenAction}: {
             <LoaderCircle className="spin" aria-hidden="true"/>
           {status === 'checking' ? 'Validando…' : 'Preparando verificação…'}
         </p>}
-        {status === 'error' && <p className="bot-challenge-error" role="alert">
+        {status === 'error' && <>
+          <p className="bot-challenge-error" role="alert">
             Não foi possível validar. Recarregue a página para tentar novamente.
-        </p>}
+          </p>
+          <BotChallengeContest tableId={tableId}/>
+        </>}
         {status !== 'ready' && recovery}
       </>}
       <small>O relógio da mesa continua visível ao fundo e seu Time Bank permanece disponível.</small>

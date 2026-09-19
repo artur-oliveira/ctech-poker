@@ -14,10 +14,11 @@ export default function ProfileGuide() {
           alt: 'Página Seu perfil com a seção Identidade e, abaixo, os controles de privacidade de Sua vitrine'
         },
         body: <><p>Há dois caminhos, e eles combinam. Toque no seu avatar, no topo: o menu resolve na hora o que é rápido, ou seja, trocar o nome, trocar a foto e escolher o baralho. Ele também mostra se a sua vitrine está pública ou privada, os seus saldos, e leva à Loja, a <b>Seu jogo</b> e a <b>Sair da conta</b>.</p>
-          <p>No mesmo menu, <b>Editar perfil</b> abre a página <b>Seu perfil</b>, que tem tudo isso e mais, em quatro seções.</p>
+          <p>No mesmo menu, <b>Editar perfil</b> abre a página <b>Seu perfil</b>, que tem tudo isso e mais, em seis seções.</p>
           <GuideBullets><li><span><b>Identidade:</b> nome de exibição e foto.</span></li>
             <li><span><b>Sua vitrine:</b> privacidade, conquistas em destaque e ordem das seções.</span></li>
             <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo.</span></li>
+            <li><span><b>Filtro de chat:</b> palavras que você mesmo quer que fiquem mascaradas no chat da mesa, além do filtro padrão que já vale para todos.</span></li>
             <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li>
             <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li></GuideBullets>
           <p>Nome, foto e baralho aparecem nos dois lugares de propósito: é o mesmo controle, salvando no mesmo lugar. Alterou num, o outro já mostra o valor novo.</p></>

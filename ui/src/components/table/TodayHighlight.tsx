@@ -4,7 +4,7 @@ import {Trophy} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {getTodayHighlight, type TableHighlight} from '@/lib/api/highlights';
 import {HAND_CATEGORY_LABELS} from '@/lib/handCategories';
-import {bestHandCategory, compareHands} from '@/lib/pokerRules';
+import {bestHandCategory, compareHands, type HandVariant} from '@/lib/pokerRules';
 import {invalidateAfterSettle} from '@/lib/settleRefetch';
 
 const CARD_CODE = /^[2-9TJQKA][CDHS]$/i;
@@ -17,33 +17,38 @@ const CARD_CODE = /^[2-9TJQKA][CDHS]$/i;
 // who won the most, and `winners` carries the per-player payout to sort by.
 // `revealed` is now only consulted to decorate the caption with the made hand,
 // and as the whole answer for rows written before `winners` existed.
-function madeHandOf(board: string[] | undefined, hole: string[]) {
+function madeHandOf(board: string[] | undefined, hole: string[], variant: HandVariant) {
   if (board?.length !== 5 || new Set(board.map(card => card.toUpperCase())).size !== 5 ||
     board.some(card => !CARD_CODE.test(card))) return undefined;
   if (hole.length !== 2 || !hole.every(card => CARD_CODE.test(card)) ||
     new Set([...board, ...hole].map(card => card.toUpperCase())).size !== 7) return undefined;
-  return HAND_CATEGORY_LABELS[bestHandCategory([...hole, ...board])];
+  return HAND_CATEGORY_LABELS[bestHandCategory([...hole, ...board], variant)];
 }
 
 // Pre-`winners` fallback: the best raw hand among those shown. Kept because a
 // highlight row is overwritten only by a bigger pot, so rows written before
 // this field shipped stay on display for the rest of the UTC day.
-function bestShownLabel(board?: string[], revealed?: Array<{name?: string; hole_cards: string[]}>) {
-  const candidates = (revealed || []).filter(hand => madeHandOf(board, hand.hole_cards));
+function bestShownLabel(board: string[] | undefined,
+                        revealed: Array<{name?: string; hole_cards: string[]}> | undefined, variant: HandVariant) {
+  const candidates = (revealed || []).filter(hand => madeHandOf(board, hand.hole_cards, variant));
   if (candidates.length === 0 || !board) return undefined;
   const best = candidates.reduce((winner, hand) =>
-    compareHands([...hand.hole_cards, ...board], [...winner.hole_cards, ...board]) > 0 ? hand : winner);
+    compareHands([...hand.hole_cards, ...board], [...winner.hole_cards, ...board], variant) > 0 ? hand : winner);
   const tied = candidates.filter(hand =>
-    compareHands([...hand.hole_cards, ...board], [...best.hole_cards, ...board]) === 0);
+    compareHands([...hand.hole_cards, ...board], [...best.hole_cards, ...board], variant) === 0);
   const names = tied.map(hand => hand.name || 'Jogador').join(' e ');
-  const category = madeHandOf(board, best.hole_cards);
+  const category = madeHandOf(board, best.hole_cards, variant);
   return category ? `${names} · ${category}` : names;
 }
 
+// `variant` (#296) is this table's own rule variant, from `room.variant` —
+// the row is always this table's own highlight, so its hands were always
+// played under the room's current (immutable-for-life) variant.
 export function highlightWinnerLabel(board?: string[],
   revealed?: Array<{player_id: string; name?: string; hole_cards: string[]}>,
-  winners?: Array<{player_id: string; name?: string; payout: number}>) {
-  if (!winners?.length) return bestShownLabel(board, revealed);
+  winners?: Array<{player_id: string; name?: string; payout: number}>,
+  variant: HandVariant = 'standard') {
+  if (!winners?.length) return bestShownLabel(board, revealed, variant);
   const top = Math.max(...winners.map(winner => winner.payout));
   const paid = winners.filter(winner => winner.payout === top);
   const names = paid.map(winner => winner.name || 'Jogador').join(' e ');
@@ -52,7 +57,7 @@ export function highlightWinnerLabel(board?: string[],
   const shown = paid.length === 1
     ? revealed?.find(hand => hand.player_id === paid[0].player_id)
     : undefined;
-  const category = shown && madeHandOf(board, shown.hole_cards);
+  const category = shown && madeHandOf(board, shown.hole_cards, variant);
   return category ? `${names} · ${category}` : names;
 }
 
@@ -61,7 +66,7 @@ export function highlightWinnerLabel(board?: string[],
 // Fetched once on mount; re-fetched (via invalidateQueries, not polling) the
 // moment a hand this viewer was watching completes, so a bigger pot from
 // this table shows up without a page reload.
-export function TodayHighlight({tableId, handId, handComplete, handPot}: {
+export function TodayHighlight({tableId, handId, handComplete, handPot, variant = 'standard'}: {
   tableId: string;
   handId?: string;
   handComplete: boolean;
@@ -69,6 +74,8 @@ export function TodayHighlight({tableId, handId, handComplete, handPot}: {
    *  overwrites today's row when a hand beats it, so a hand that cannot beat
    *  the pot already on display needs no read at all. */
   handPot?: number;
+  /** This table's rule variant (#296), from `room.variant`. */
+  variant?: HandVariant;
 }) {
   const queryClient = useQueryClient();
   const {data} = useQuery({
@@ -116,7 +123,7 @@ export function TodayHighlight({tableId, handId, handComplete, handPot}: {
   }, [expanded]);
 
   if (!data?.pot) return null;
-  const revealedText = highlightWinnerLabel(data.board, data.revealed, data.winners);
+  const revealedText = highlightWinnerLabel(data.board, data.revealed, data.winners, variant);
   return (
     <div className={`today-highlight-wrap ${expanded ? 'expanded' : ''}`} ref={wrapRef}>
       <button type="button" className="today-highlight" aria-expanded={expanded}

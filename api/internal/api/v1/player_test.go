@@ -237,6 +237,16 @@ func (s *fakePlayerStore) SetStatsGoals(_ context.Context, id string, goals map[
 	s.profile.StatsGoals = goals
 	return nil
 }
+func (s *fakePlayerStore) SetEquippedFrame(_ context.Context, id string, frameID string) error {
+	s.profile.UserID = id
+	s.profile.EquippedFrameID = frameID
+	return nil
+}
+func (s *fakePlayerStore) SetEquippedBadges(_ context.Context, id string, badgeIDs []string) error {
+	s.profile.UserID = id
+	s.profile.EquippedBadgeIDs = badgeIDs
+	return nil
+}
 func (s *fakePlayerStore) ReportAvatar(context.Context, string, string) error {
 	s.avatarReports++
 	return nil
@@ -422,6 +432,50 @@ func TestUpdateMeSetsTableThemeAndEchoesIt(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 for an unknown felt id", resp.StatusCode)
+	}
+}
+
+// TestUpdateMeEquippedFrameAndBadges covers #292's HTTP surface: an unknown
+// id is rejected, and a known (always-premium) id is rejected too when
+// ownership can't be verified — the fail-closed behavior
+// player.Service.requireCosmetic guarantees reaches the HTTP layer
+// unchanged.
+func TestUpdateMeEquippedFrameAndBadges(t *testing.T) {
+	store := &fakePlayerStore{}
+	h := &playerHandlers{players: player.NewService(store)}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
+	app.Post("/players/me", auth, h.updateMe)
+
+	post := func(body string) *http.Response {
+		t.Helper()
+		req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	if resp := post(`{"equipped_frame_id":"not-a-real-frame"}`); resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("unknown frame id: status = %d, want 400", resp.StatusCode)
+	}
+	// Every catalog frame is premium (see cosmetics.KindFrame's doc comment),
+	// and this handler is wired with no ownership checker at all — the same
+	// "wiring mistake must fail closed" guarantee SetDeckVariant already has.
+	if resp := post(`{"equipped_frame_id":"season-2026-q3"}`); resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("unowned frame id: status = %d, want 400", resp.StatusCode)
+	}
+	if resp := post(`{"equipped_badge_ids":["not-a-real-badge"]}`); resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("unknown badge id: status = %d, want 400", resp.StatusCode)
+	}
+	if resp := post(`{"equipped_badge_ids":["season-2026-q3-top10","season-2026-q3-champion","a","b"]}`); resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("too many badge ids: status = %d, want 400", resp.StatusCode)
+	}
+	// Unequipping never needs ownership.
+	if resp := post(`{"equipped_frame_id":"","equipped_badge_ids":[]}`); resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("unequip: status = %d, want 200", resp.StatusCode)
 	}
 }
 

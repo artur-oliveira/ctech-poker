@@ -124,6 +124,13 @@ func (a *Actor) SetReactionMarkUsedForActor(fn func(ctx context.Context, playerI
 	a.reactionMarkUsed = fn
 }
 
+// SetChatPrefsLookupForActor wires the personal chat-filter preference
+// lookup (#327). Set once, right after construction, by tablemanager —
+// same convention as SetReactionOwnershipForActor above.
+func (a *Actor) SetChatPrefsLookupForActor(fn func(ctx context.Context, playerID string) ([]string, error)) {
+	a.chatPrefsLookup = fn
+}
+
 func (a *Actor) notifySeatsChanged() {
 	if a.onSeatsChanged != nil && a.cached != nil {
 		a.onSeatsChanged(len(a.cached.PlayersForActor()))

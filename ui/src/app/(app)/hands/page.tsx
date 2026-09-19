@@ -55,10 +55,13 @@ function truncateSeed(hex: string) {
 }
 
 // Server only sends a category on live table state, never on hand history.
-// It's resolvable client-side whenever the full 2 hole + 5 board cards are known.
-function handCategoryLabel(holeCards?: string[], board?: string[]): string | null {
+// It's resolvable client-side whenever the full 2 hole + 5 board cards are
+// known — using THIS hand's own variant (#296), never the room's current
+// one (see HandItem.variant's doc comment).
+function handCategoryLabel(holeCards?: string[], board?: string[], variant?: HandItem['variant']): string | null {
   if (holeCards?.length !== 2 || board?.length !== 5) return null;
-  return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...board])] || null;
+  return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...board],
+    variant === 'short_deck' ? 'short_deck' : 'standard')] || null;
 }
 
 const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: WalletMode }) {
@@ -67,7 +70,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
     hand_id: hand.hand_id,
     mode
   });
-  const category = handCategoryLabel(hand.hole_cards, hand.board);
+  const category = handCategoryLabel(hand.hole_cards, hand.board, hand.variant);
   return <Link href={`/hands/history?${historyParams.toString()}`} className={`hand-row static-cards is-${hand.outcome}`}>
     <div className="hand-row-top">
       <div className="hand-row-card-group">

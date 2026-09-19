@@ -477,6 +477,40 @@ func (s *Store) SetReactionWheel(ctx context.Context, userID string, reactionIDs
 	return nil
 }
 
+func (s *Store) SetEquippedFrame(ctx context.Context, userID, frameID string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"equipped_frame_id": frameID,
+		"updated_at":        dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set equipped frame: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting equipped frame")
+	}
+	return nil
+}
+
+func (s *Store) SetEquippedBadges(ctx context.Context, userID string, badgeIDs []string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"equipped_badge_ids": badgeIDs,
+		"updated_at":         dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set equipped badges: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting equipped badges")
+	}
+	return nil
+}
+
 func (s *Store) SetStatsGoals(ctx context.Context, userID string, goals map[string]float64) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err
