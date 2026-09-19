@@ -12,6 +12,7 @@ import (
 
 type windowStore interface {
 	Load(context.Context, string) (*Window, error)
+	AlreadyRecorded(context.Context, string, string) (bool, error)
 	Create(context.Context, string, string, string, int64, time.Time) (*Window, error)
 	Update(context.Context, *Window, string, string, string, int64, time.Time) (*Window, error)
 }
@@ -81,13 +82,8 @@ func (s *Service) Record(ctx context.Context, playerID, tableID, handID string, 
 			return false, err
 		}
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 0; attempt < 4; attempt++ {
 		if current != nil && current.ExpiresAt > now.UnixMilli() {
-			if current.Hands[handKey(tableID, handID)] != 0 {
-				s.setCached(playerID, current)
-				outcome = "duplicate"
-				return current.NetProfit < s.limit, nil
-			}
 			updated, err := s.store.Update(ctx, current, playerID, tableID, handID, delta, now)
 			if err == nil {
 				s.setCached(playerID, updated)
@@ -116,10 +112,18 @@ func (s *Service) Record(ctx context.Context, playerID, tableID, handID string, 
 				return false, err
 			}
 		}
-		var err error
+		duplicate, err := s.store.AlreadyRecorded(ctx, tableID, handID)
+		if err != nil {
+			return false, err
+		}
 		current, err = s.store.Load(ctx, playerID)
 		if err != nil {
 			return false, err
+		}
+		if duplicate {
+			s.setCached(playerID, current)
+			outcome = "duplicate"
+			return current == nil || current.ExpiresAt <= now.UnixMilli() || current.NetProfit < s.limit, nil
 		}
 	}
 	return false, fmt.Errorf("bot funding: concurrent window update did not converge")
