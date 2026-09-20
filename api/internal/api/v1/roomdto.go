@@ -65,6 +65,7 @@ type BotReservationResponse struct {
 
 type BotEligibilityResponse struct {
 	Available bool  `json:"available"`
+	Enabled   bool  `json:"enabled"`
 	ExpiresAt int64 `json:"expires_at,omitempty"`
 }
 

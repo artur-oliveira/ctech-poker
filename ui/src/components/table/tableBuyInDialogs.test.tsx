@@ -202,6 +202,19 @@ describe('BuyInPanel', () => {
     expect(seated).toHaveBeenCalledWith('bot-room', 'bot_pending');
   });
 
+  test('explains a paused bot rollout and keeps human matchmaking available', async () => {
+    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) => queryKey[0] === 'bot-eligibility'
+      ? {data: {available: false, enabled: false}, isLoading: false, isError: false}
+      : {data: sandboxRoom, isLoading: false, isError: false, refetch: mocks.refetch});
+    mocks.joinOrCreateRoom.mockResolvedValue({room_id: 'human-room', match_kind: 'waiting'});
+    render(<BuyInPanel bucket={{smallBlind: 25, bigBlind: 50, maxSeats: 6}} onSeatedAction={vi.fn()}/>);
+
+    expect(screen.getByRole('switch', {name: 'Começar com bots após 15 s'})).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Bots estão temporariamente indisponíveis. Você ainda pode esperar outras pessoas.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+    await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledWith(expect.not.objectContaining({allow_bots: true})));
+  });
+
   test('retrying the same amount reuses the idempotency key, a new amount does not', async () => {
     // Every attempt fails, so the ceremony stays open and the player can retry
     // the same amount and then pick a different one.

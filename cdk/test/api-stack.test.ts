@@ -68,6 +68,7 @@ function synthStack(overrides: Partial<{environment: Environment; cloudwatchAlar
     socialEventsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_social_events',
     playerReportsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_reports',
     socialGraphEnabledParam: '/ctech/dev/poker/social-graph-enabled',
+    sandboxBotsEnabledParam: '/ctech/dev/poker/sandbox-bots-enabled',
   });
 }
 
@@ -121,6 +122,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
   expect(rendered).toContain('dynamodb:BatchGetItem');
   expect(rendered).toContain('/ctech/dev/poker/social-graph-enabled');
   expect(rendered).toContain('SOCIAL_GRAPH_ENABLED');
+  expect(rendered).toContain('/ctech/dev/poker/sandbox-bots-enabled');
+  expect(rendered).toContain('SANDBOX_BOTS_ENABLED');
   expect(rendered).not.toContain('AWS::WAFv2');
   template.hasResourceProperties('AWS::AutoScaling::LifecycleHook', {
     LifecycleHookName: 'dev-ctech-poker-termination-drain',

@@ -669,9 +669,15 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
 	mgr.SetBotFunding(
-		func(ctx context.Context, playerID string) (bool, error) { return funding.Available(ctx, playerID) },
+		func(ctx context.Context, playerID string) (bool, error) {
+			if !cfg.SandboxBotsEnabled {
+				return false, nil
+			}
+			return funding.Available(ctx, playerID)
+		},
 		func(ctx context.Context, playerID, tableID, handID string, delta int64) (bool, error) {
-			return funding.Record(ctx, playerID, tableID, handID, delta)
+			allowed, err := funding.Record(ctx, playerID, tableID, handID, delta)
+			return allowed && cfg.SandboxBotsEnabled, err
 		},
 	)
 	// The streak badge is shared state, not per-process state: several

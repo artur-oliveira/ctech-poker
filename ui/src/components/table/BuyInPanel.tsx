@@ -142,6 +142,8 @@ export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
   const effectiveAllowBots = allowBots && botsAvailable;
   const botReturnCopy = !botsSupported
     ? 'Bots estão disponíveis até os blinds 500/1.000.'
+    : botEligibility.data?.enabled === false
+      ? 'Bots estão temporariamente indisponíveis. Você ainda pode esperar outras pessoas.'
     : botEligibility.data?.expires_at
       ? `Seu limite estará disponível novamente ${relativeReturn(botEligibility.data.expires_at)}.`
       : 'Não foi possível confirmar o limite agora. Você ainda pode esperar outras pessoas.';

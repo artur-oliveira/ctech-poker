@@ -73,6 +73,9 @@ type Config struct {
 	// 24-hour window. Operational so the pilot can be recalibrated without a
 	// binary release.
 	BotNetProfitLimit int64 `env:"BOT_NET_PROFIT_LIMIT" envDefault:"100000"`
+	// SandboxBotsEnabled is a fleet-wide rollout gate. Keep it off until every
+	// instance understands bot reservations and persisted bot state.
+	SandboxBotsEnabled bool `env:"SANDBOX_BOTS_ENABLED" envDefault:"false"`
 }
 
 // Load reads config from environment variables.

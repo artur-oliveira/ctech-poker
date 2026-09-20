@@ -360,6 +360,9 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	if req.AllowBots && req.BigBlind > 1000 {
 		return problem.BadRequest("bots are only available up to 500/1000 blinds").Send(c)
 	}
+	if req.AllowBots && (h.cfg == nil || !h.cfg.SandboxBotsEnabled) {
+		return problem.Conflict("bots are temporarily unavailable").Send(c)
+	}
 	if req.CurrencyMode == roomstore.CurrencyModeReal && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
 		return problem.BadRequest("unsupported currency mode").Send(c)
 	}
@@ -503,14 +506,14 @@ func (h *roomHandlers) botEligibility(c fiber.Ctx) error {
 	if !ok || playerID == "" {
 		return problem.Unauthorized("invalid credentials").Send(c)
 	}
-	if h.funding == nil {
-		return c.JSON(BotEligibilityResponse{Available: false})
+	if h.cfg == nil || !h.cfg.SandboxBotsEnabled || h.funding == nil {
+		return c.JSON(BotEligibilityResponse{Available: false, Enabled: false})
 	}
 	available, expiresAt, err := h.funding.Eligibility(c.Context(), playerID)
 	if err != nil {
 		return problem.InternalServer("bot availability is temporarily unavailable", c, err).Send(c)
 	}
-	return c.JSON(BotEligibilityResponse{Available: available, ExpiresAt: expiresAt})
+	return c.JSON(BotEligibilityResponse{Available: available, Enabled: true, ExpiresAt: expiresAt})
 }
 
 func (h *roomHandlers) botWaitStatus(c fiber.Ctx) error {
@@ -535,6 +538,9 @@ func (h *roomHandlers) botWaitStatus(c fiber.Ctx) error {
 }
 
 func (h *roomHandlers) startBotsNow(c fiber.Ctx) error {
+	if h.cfg == nil || !h.cfg.SandboxBotsEnabled {
+		return problem.Conflict("bots are temporarily unavailable").Send(c)
+	}
 	playerID, ok := c.Locals(localsUserID).(string)
 	if !ok || playerID == "" {
 		return problem.Unauthorized("invalid credentials").Send(c)

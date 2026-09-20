@@ -106,6 +106,7 @@ export interface BotReservationStatus {
 
 export interface BotEligibility {
   available: boolean;
+  enabled?: boolean;
   expires_at?: number;
 }
 

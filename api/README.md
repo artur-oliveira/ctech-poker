@@ -425,6 +425,14 @@ all bots at the hand boundary. Bot chips never call wallet debit/cash-out. Hands
 and sandbox balance keep the result, while ranking, achievements, public stats, matchups, highlights and recent-player
 suggestions skip that hand.
 
+`SANDBOX_BOTS_ENABLED` defaults to `false` and is loaded from `/ctech/{env}/poker/sandbox-bots-enabled` at service start.
+Deploy the new API to every instance with this flag off, verify the fleet, then set the SSM parameter to `true` and
+restart/roll the service. Do not enable it during a mixed-version fleet: an older actor may load a bot table without
+understanding its reservation policy. Turning the flag off again rejects new opt-ins and start-now requests, reports
+`{enabled:false,available:false}` from `GET /rooms/bot-eligibility`, and stops bot play at the next funding check;
+human seats and existing reservation confirmation remain available. The static UI treats an absent `enabled` field as
+compatible with an older API and displays a disabled option when it is explicitly false.
+
 `GET /rooms/buckets` is the grid's companion aggregate: it walks **every** page of `gsi_public` (not just the first) and
 returns one row per `(blinds, seats)` within the requested currency mode —
 `{small_blind, big_blind, max_seats, currency_mode, rooms, open_rooms, seats_taken, seats_available}`.

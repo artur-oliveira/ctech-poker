@@ -240,3 +240,9 @@ func TestJoinOrCreateRejectsBotsAboveSupportedStake(t *testing.T) {
 		t.Fatalf("got %d", got)
 	}
 }
+
+func TestJoinOrCreateRejectsBotsWhenRolloutGateIsOff(t *testing.T) {
+	if got := postJoinOrCreate(t, `{"small_blind":25,"big_blind":50,"max_seats":6,"amount":1000,"allow_bots":true}`); got != fiber.StatusConflict {
+		t.Fatalf("expected disabled rollout to reject bot opt-in before debit, got %d", got)
+	}
+}

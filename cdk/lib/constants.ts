@@ -199,6 +199,7 @@ export const SSM_POKER = (env: Environment) => ({
   // empty (api/internal/config/config.go).
   realMoneyEnabled: `/ctech/${env}/poker/real-money-enabled`,
   socialGraphEnabled: `/ctech/${env}/poker/social-graph-enabled`,
+  sandboxBotsEnabled: `/ctech/${env}/poker/sandbox-bots-enabled`,
   legalSignoffRef: `/ctech/${env}/poker/legal-signoff-ref`,
   // Read by the API as AVATAR_BASE_URL and prefixed onto every avatar URL it
   // serialises. Since the Cloudflare migration its value is the API's own
