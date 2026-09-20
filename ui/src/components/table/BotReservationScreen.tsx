@@ -13,6 +13,7 @@ export function BotReservationScreen({roomId, reservationId}: { roomId: string; 
   const router = useRouter();
   const queryClient = useQueryClient();
   const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState(false);
   const reservation = useQuery({
     queryKey: ['bot-reservation', roomId, reservationId],
     queryFn: () => getBotReservation(roomId, reservationId),
@@ -32,10 +33,12 @@ export function BotReservationScreen({roomId, reservationId}: { roomId: string; 
   const failed = reservation.data?.status === 'failed';
   async function cancel() {
     setCancelling(true);
+    setCancelError(false);
     try {
       await cancelBotReservation(roomId, reservationId);
       router.replace('/lobby');
     } catch {
+      setCancelError(true);
       void reservation.refetch();
     } finally {
       setCancelling(false);
@@ -52,13 +55,14 @@ export function BotReservationScreen({roomId, reservationId}: { roomId: string; 
       ? 'A mão demorou mais que o período da reserva. Nenhuma ficha foi debitada.'
       : failed ? reservation.data?.reason || 'Não foi possível concluir o buy-in.'
         : 'Uma mão está terminando. Você entra antes da próxima distribuição e suas fichas ainda não foram debitadas.'}</p>
-    {!expired && !failed && !reservation.isError && <small>Conectado · acompanhando sua reserva</small>}
+    {!expired && !failed && reservation.isSuccess && <small>Conectado · acompanhando sua reserva</small>}
     {reservation.isError && <p className="buyin-error" role="alert">Não foi possível consultar a reserva. Tentaremos novamente.
       <Button variant="ghost" onClick={() => void reservation.refetch()}>Atualizar agora</Button></p>}
-    {!expired && !failed && <Button variant="outline" disabled={cancelling} onClick={() => void cancel()}>
+    {cancelError && <p className="buyin-error" role="alert">Não foi possível cancelar a entrada. Tente novamente.</p>}
+    {!expired && !failed && reservation.data?.status !== 'seated' && <Button variant="outline" disabled={cancelling} onClick={() => void cancel()}>
       {cancelling ? 'Cancelando…' : 'Cancelar entrada'}
     </Button>}
     {(expired || failed) && <Button render={<Link href="/lobby"/>}>Tentar outra mesa</Button>}
-    <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
+    {(expired || failed) && <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>}
   </main>;
 }

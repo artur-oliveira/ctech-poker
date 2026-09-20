@@ -70,11 +70,11 @@ export default function TableGuide() {
       summary: 'Uma opção por entrada evita que você fique sozinho sem esconder que o adversário é automatizado.',
       body: <><p>Ao entrar por uma mesa pública de fichas de até <b>500 / 1.000</b>, você pode ativar
         <b> Começar com bots após 15 s</b>. Enquanto a mesa aguarda, o centro do feltro informa a espera e permite
-        <b> Começar com bots agora</b>. Se a preparação demorar, use <b>Tentar novamente</b>; se a espera não puder ser consultada, use <b>Atualizar espera</b>. Cada assento automatizado tem o selo textual <b>BOT</b>.</p>
+        <b> Começar com bots agora</b>. Se a preparação demorar, use <b>Tentar novamente</b>; se a espera não puder ser consultada, use <b>Atualizar espera</b>. Cada assento automatizado tem o selo textual <b>BOT</b>, compacto ao lado das fichas em telas pequenas.</p>
         <GuideBullets>
           <li><span>Heads-up recebe no máximo um bot; mesas de 6 e 9 lugares mantêm vagas livres para pessoas.</span></li>
           <li><span>Quando outra pessoa chega, os bots terminam ou abandonam a mão atual e cedem os lugares antes da próxima.</span></li>
-          <li><span>Quem chega espera na tela <b>Sua vaga está reservada</b>, fora da mesa. O buy-in só é debitado quando os bots saem e o assento é confirmado.</span></li>
+          <li><span>Quem chega espera na tela <b>Sua vaga está reservada</b>, fora da mesa. O buy-in só é debitado quando os bots saem e o assento é confirmado. Para desistir enquanto aguarda, use <b>Cancelar entrada</b>; a tela volta ao lobby depois que o cancelamento for confirmado. Se a rede impedir o cancelamento, a tela mostra <b>Não foi possível cancelar a entrada. Tente novamente.</b> e mantém a vaga visível.</span></li>
           <li><span>As fichas ganhas ou perdidas valem na sua carteira de fichas e aparecem no histórico privado.</span></li>
           <li><span>Mãos com bots não alteram ranking, conquistas, estatísticas públicas, confrontos ou jogadores recentes.</span></li>
           <li><span>Depois de momentos marcantes, bots podem enviar reações da mesa ou direcionadas a você. Elas são ocasionais, inclusive quando o tom é provocativo, e não indicam quais cartas o bot tinha.</span></li>

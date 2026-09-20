@@ -92,6 +92,8 @@ between them without losing the room id. The post-hand and session flows have de
 - `rabbit_hunt` — a verified, paid hypothetical runout after an uncontested hand;
 - `rebuy` — the viewer is sitting out with a zero stack and the rebuy dialog is open;
 - `reality_check` — a two-hour session opens the neutral session summary away from the viewer's turn.
+- `bot_wait` — one human waits 15 seconds or uses “Começar com bots agora”; the mock then seats five bots. `bot_play` opens that six-player state directly.
+- `bot_reservation_pending`, `bot_reservation_failed`, `bot_reservation_expired` — open `/table?id=01ARZ3NDEKTSV4RRFFQ69G5FAV&reservation=mock-reservation&scenario=...` to review the out-of-table reservation and its terminal states. Pending reservations offer cancellation as the only way back to the lobby, so a click cannot silently leave a seat reserved.
 - `heads_up`, `six_max`, `nine_max` — fixed portrait seat-capacity layouts with the viewer at the bottom.
 - At narrow portrait widths, verify the largest-pot value uses remaining header width, Chat/Reactions appear only as quick actions, and compact outcome/seat controls retain 44px hit areas without visually expanding their rings.
 - In preferences, verify “Sons da mesa” starts disabled, survives reload only after opt-in, and stays independent from “Dealer auditivo”.

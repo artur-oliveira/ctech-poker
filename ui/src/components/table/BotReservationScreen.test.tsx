@@ -18,7 +18,7 @@ vi.mock('@/lib/api/rooms', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.query.mockReturnValue({data: {status: 'pending'}, isError: false, refetch: mocks.refetch});
+  mocks.query.mockReturnValue({data: {status: 'pending'}, isError: false, isSuccess: true, refetch: mocks.refetch});
 });
 
 test('keeps the reserved player outside the table and explains that no chips were debited', () => {
@@ -26,6 +26,7 @@ test('keeps the reserved player outside the table and explains that no chips wer
   expect(screen.getByRole('heading', {name: 'Sua vaga está reservada'})).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('suas fichas ainda não foram debitadas');
   expect(screen.queryByText(/pote|cartas/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', {name: 'Voltar ao lobby'})).not.toBeInTheDocument();
 });
 
 test('cancels without seating and returns to the lobby', async () => {
@@ -34,6 +35,15 @@ test('cancels without seating and returns to the lobby', async () => {
   await userEvent.click(screen.getByRole('button', {name: 'Cancelar entrada'}));
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('room-1', 'reservation-1'));
   expect(mocks.replace).toHaveBeenCalledWith('/lobby');
+});
+
+test('keeps the reservation visible and explains a failed cancellation', async () => {
+  mocks.cancel.mockRejectedValue(new Error('offline'));
+  render(<BotReservationScreen roomId="room-1" reservationId="reservation-1"/>);
+  await userEvent.click(screen.getByRole('button', {name: 'Cancelar entrada'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível cancelar a entrada');
+  expect(mocks.replace).not.toHaveBeenCalled();
+  expect(mocks.refetch).toHaveBeenCalled();
 });
 
 test('moves to the table only after the server confirms the seat', async () => {
@@ -66,4 +76,12 @@ test('offers an explicit retry when reservation lookup fails', async () => {
   render(<BotReservationScreen roomId="room-1" reservationId="reservation-1"/>);
   await userEvent.click(screen.getByRole('button', {name: 'Atualizar agora'}));
   expect(mocks.refetch).toHaveBeenCalled();
+  expect(screen.queryByText('Conectado · acompanhando sua reserva')).not.toBeInTheDocument();
+});
+
+test('does not announce a connection before the first successful lookup', () => {
+  mocks.query.mockReturnValue({data: undefined, isError: false, isSuccess: false, refetch: mocks.refetch});
+  render(<BotReservationScreen roomId="room-1" reservationId="reservation-1"/>);
+  expect(screen.queryByText('Conectado · acompanhando sua reserva')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Cancelar entrada'})).toBeInTheDocument();
 });

@@ -53,3 +53,7 @@ The generated poker and lobby bindings were regenerated with protoc 36.1 to matc
 
 - Add replaceable-bot bucket fields described in #395.
 - Add mock-runtime scenarios and complete the responsive/reconnection QA matrix.
+The reserved-entry integration test uses DynamoDB Local to prove that creating
+a replacement reservation moves no wallet funds, a rejected reservation ID is
+compensated after its attempted debit, and the valid confirmation is debited
+exactly once even when the HTTP request is retried.

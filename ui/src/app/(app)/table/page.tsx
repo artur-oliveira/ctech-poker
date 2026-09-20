@@ -83,7 +83,8 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
 const MOCK_SCENARIOS = new Set<MockScenario>([
   'full_hand', 'heads_up', 'layout_3', 'layout_4', 'layout_5', 'six_max', 'layout_7', 'layout_8', 'nine_max',
   'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
-  'waiting', 'bot_wait', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
+  'waiting', 'bot_wait', 'bot_play', 'bot_reservation_pending', 'bot_reservation_failed',
+  'bot_reservation_expired', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
   'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout'

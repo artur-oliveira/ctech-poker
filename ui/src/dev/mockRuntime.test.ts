@@ -5,7 +5,7 @@ import type {InternalAxiosRequestConfig} from 'axios';
 const scenarios: MockScenario[] = [
   'full_hand', 'heads_up', 'layout_3', 'layout_4', 'layout_5', 'six_max', 'layout_7', 'layout_8', 'nine_max',
   'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
-  'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
+  'waiting', 'bot_wait', 'bot_play', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'run_it_twice', 'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout', 'complete_loss',
   'complete_tie', 'fold_win', 'complete',
@@ -96,6 +96,23 @@ describe('mock store REST contract', () => {
       window.history.replaceState({}, '', '/');
     }
   });
+
+  test.each([
+    ['bot_reservation_pending', 'pending'],
+    ['bot_reservation_failed', 'failed'],
+    ['bot_reservation_expired', 'expired'],
+  ] as const)('%s serves the reservation state without seating the player', async (scenario, status) => {
+    window.history.replaceState({}, '', `/table?id=01ARZ3NDEKTSV4RRFFQ69G5FAV&reservation=mock-reservation&scenario=${scenario}`);
+    try {
+      const response = await request('GET', '/v1.0/rooms/01ARZ3NDEKTSV4RRFFQ69G5FAV/reservations/mock-reservation');
+      expect(response.data).toMatchObject({status, reservation_id: 'mock-reservation', amount: 2_000});
+      if (status === 'failed') expect(response.data.reason).toContain('debitar');
+      const cancelled = await request('DELETE', '/v1.0/rooms/01ARZ3NDEKTSV4RRFFQ69G5FAV/reservations/mock-reservation');
+      expect(cancelled.status).toBe(200);
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
 });
 
 describe('mock table state contract', () => {
@@ -117,6 +134,14 @@ describe('mock table state contract', () => {
     expect(snapshot).toMatchObject({stage: 'waiting_for_players', board: []});
     expect(snapshot.seats.every(seat => seat.contributed === 0)).toBe(true);
     expect(snapshot.current_player_id).toBeUndefined();
+  });
+
+  test('bot play has one human, five labeled bots and masked opponent cards', () => {
+    const snapshot = snapshotForScenario('bot_play');
+    expect(snapshot.seats.filter(seat => seat.is_bot)).toHaveLength(5);
+    expect(snapshot.seats.filter(seat => !seat.is_bot)).toHaveLength(1);
+    expect(snapshot.seats.filter(seat => seat.is_bot).flatMap(seat => seat.hole_cards))
+      .toEqual(Array(10).fill('back'));
   });
   
   test('every street exposes the expected number of community cards', () => {
@@ -207,6 +232,40 @@ describe('mock realtime service contract', () => {
     });
     return {service, messages, statuses};
   }
+
+  test('bot wait seats the configured five bots and preserves them after reconnect', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2035-01-01T00:00:00Z'));
+    const {service, messages} = serviceFor('bot_wait', 0);
+    service.connect();
+    vi.advanceTimersByTime(1);
+    const lastSnapshot = () => messages.at(-1)?.snapshot as {stage: string; seats: Array<{is_bot?: boolean}>};
+    expect(lastSnapshot().stage).toBe('waiting_for_players');
+    service.startBots();
+    expect(lastSnapshot().seats.filter(seat => seat.is_bot)).toHaveLength(5);
+    service.reconnect();
+    vi.advanceTimersByTime(1);
+    expect(lastSnapshot().seats.filter(seat => seat.is_bot)).toHaveLength(5);
+    service.close();
+  });
+
+  test('start-now HTTP action advances the active mock table and wait status', async () => {
+    localStorage.setItem('ctech_poker_mock_delay', '0');
+    window.history.replaceState({}, '', '/table?scenario=bot_wait');
+    const {service, messages} = serviceFor('bot_wait', 0);
+    try {
+      service.connect();
+      await new Promise(resolve => setTimeout(resolve, 5));
+      await mockAdapter({method: 'POST', url: '/v1.0/rooms/room-1/bots/start', headers: {}} as InternalAxiosRequestConfig);
+      const snapshot = messages.at(-1)?.snapshot as {seats: Array<{is_bot?: boolean}>};
+      expect(snapshot.seats.filter(seat => seat.is_bot)).toHaveLength(5);
+      const status = await mockAdapter({method: 'GET', url: '/v1.0/rooms/room-1/bots', headers: {}} as InternalAxiosRequestConfig);
+      expect(status.data).toMatchObject({enabled: true, has_bot: true});
+    } finally {
+      service.close();
+      window.history.replaceState({}, '', '/');
+    }
+  });
   
   test('connects, responds to ping/sync and reconnects with an incremented attempt', () => {
     vi.useFakeTimers();

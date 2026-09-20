@@ -16,6 +16,7 @@ export interface Room {
   // Persisted by the table actor as players join/leave (never computed live
   // from tablemanager). This is how the lobby knows a table has a free seat.
   seats_taken: number;
+  bot_seats?: number;
   // Present only for a private room's own creator (the server strips both
   // from every other viewer's response).
   share_code?: string;
