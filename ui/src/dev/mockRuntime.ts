@@ -751,6 +751,9 @@ function mockSocialRequest(method: string, path: string, body: Record<string, un
   return null;
 }
 
+let mockBotWaitActivateAt = 0;
+const activeMockBotWaitServices = new Set<MockTableService>();
+
 /** Axios adapter matching the REST surface used by Poker's UI. */
 export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
   const method = (config.method || 'get').toUpperCase();
@@ -1031,15 +1034,47 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       const bucket = buckets.get(key) ?? {
         small_blind: room.small_blind, big_blind: room.big_blind, max_seats: room.max_seats,
         currency_mode: mode, rooms: 0, open_rooms: 0, seats_taken: 0, seats_available: 0,
+        human_seats: 0, human_open_tables: 0, replaceable_bot_tables: 0,
       };
       bucket.rooms = (bucket.rooms as number) + 1;
       bucket.open_rooms = (bucket.open_rooms as number) + (free > 0 ? 1 : 0);
       bucket.seats_taken = (bucket.seats_taken as number) + room.seats_taken;
+      bucket.human_seats = (bucket.human_seats as number) + room.seats_taken;
       bucket.seats_available = (bucket.seats_available as number) + free;
+      bucket.human_open_tables = (bucket.human_open_tables as number) +
+        (free > 0 && room.seats_taken > 0 && !room.bot_seats ? 1 : 0);
+      bucket.replaceable_bot_tables = (bucket.replaceable_bot_tables as number) +
+        (free > 0 && room.seats_taken > 0 && (room.bot_seats || 0) > 0 ? 1 : 0);
       buckets.set(key, bucket);
     }
     return ok({data: [...buckets.values()]}, config);
   }
+  if (method === 'GET' && /^\/v1\.0\/rooms\/[^/]+\/bots$/.test(path)) {
+    if (scenarioFromLocation() !== 'bot_wait') return ok({enabled: false}, config);
+    if (!mockBotWaitActivateAt || Date.now() - mockBotWaitActivateAt > 300_000) {
+      mockBotWaitActivateAt = Date.now() + 15_000;
+    }
+    return ok({enabled: true, activate_at: mockBotWaitActivateAt,
+      has_bot: Date.now() >= mockBotWaitActivateAt, reserved: false}, config);
+  }
+  if (method === 'POST' && /^\/v1\.0\/rooms\/[^/]+\/bots\/start$/.test(path)) {
+    if (scenarioFromLocation() !== 'bot_wait') fail(409, 'bot wait is no longer available', config);
+    mockBotWaitActivateAt = Date.now();
+    activeMockBotWaitServices.forEach(service => service.startBots());
+    return ok({}, config);
+  }
+  const botReservationMatch = path.match(/^\/v1\.0\/rooms\/([^/]+)\/reservations\/([^/]+)$/);
+  if (botReservationMatch && method === 'GET') {
+    const scenario = scenarioFromLocation();
+    const status = scenario === 'bot_reservation_failed' ? 'failed'
+      : scenario === 'bot_reservation_expired' ? 'expired' : 'pending';
+    return ok({
+      room_id: botReservationMatch[1], reservation_id: botReservationMatch[2], status,
+      expires_at: Date.now() + 120_000, amount: 2_000,
+      ...(status === 'failed' ? {reason: 'Não foi possível debitar o buy-in. Nenhuma vaga foi ocupada.'} : {})
+    }, config);
+  }
+  if (botReservationMatch && method === 'DELETE') return ok({}, config);
   // Resolves the bucket server-side: seats the player at the fullest open
   // table, or opens one. Must precede the generic `/rooms/:id` match below.
   if (method === 'POST' && path === '/v1.0/rooms/join-or-create') {
@@ -1585,6 +1620,30 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     } : {...seat, contributed: 0, dealt_in: false}),
     rake: 0
   };
+  if (scenario === 'bot_wait') return {
+    stage: 'waiting_for_players',
+    board: [],
+    seats: seats.slice(0, 1).map(seat => ({...seat, contributed: 0})),
+    rake: 0
+  };
+  if (scenario === 'bot_play') {
+    const botSeats = seats.slice(0, 6).map((seat, index) => index === 0 ? seat : {
+      ...seat, player_id: `bot:${MOCK_PLAYER_ID}:${index - 1}`,
+      name: ['Caio', 'Bia', 'Léo', 'Nina', 'João'][index - 1], is_bot: true,
+      playstyle_badge: undefined, hole_cards: ['back', 'back'],
+    });
+    return {
+      stage: 'flop', board: ['7H', '8C', 'QS'], seats: botSeats,
+      current_player_id: MOCK_PLAYER_ID,
+      legal_actions: {actions: ['fold', 'call', 'raise'], call_amount: 25,
+        min_raise_to: 100, max_raise_to: 4_900, step: 25,
+        current_bet: 75, current_contribution: 50},
+      dealer_player_id: botSeats[5].player_id,
+      small_blind_player_id: botSeats[1].player_id,
+      big_blind_player_id: MOCK_PLAYER_ID,
+      rake: 0,
+    };
+  }
   if (scenario === 'waiting') return {
     stage: 'waiting_for_players',
     board: [],
@@ -1887,7 +1946,14 @@ export class MockTableService {
   private snapshotVersion = 0;
 
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
-    this.snapshot = snapshotForScenario(scenario);
+    if (scenario === 'bot_wait') {
+      if (!mockBotWaitActivateAt || Date.now() - mockBotWaitActivateAt > 300_000) {
+        mockBotWaitActivateAt = Date.now() + 15_000;
+      }
+      activeMockBotWaitServices.add(this);
+    }
+    this.snapshot = snapshotForScenario(scenario === 'bot_wait' && Date.now() >= mockBotWaitActivateAt
+      ? 'bot_play' : scenario);
     applyActiveMockRebuy = (amount, autoRebuy) => this.applyRebuy(amount, autoRebuy);
     if (INTERACTIVE_SCENARIOS.has(scenario)) this.beginStreet(false);
   }
@@ -1915,6 +1981,15 @@ export class MockTableService {
       if (INTERACTIVE_SCENARIOS.has(this.scenario)) this.startInteractiveHand();
       else this.emitState();
     });
+    if (this.scenario === 'bot_wait' && this.snapshot.stage === 'waiting_for_players') {
+      this.laterMs(() => this.startBots(), Math.max(0, mockBotWaitActivateAt - Date.now()));
+    }
+  }
+
+  startBots() {
+    if (this.scenario !== 'bot_wait' || this.snapshot.seats.some(seat => seat.is_bot)) return;
+    this.snapshot = snapshotForScenario('bot_play');
+    if (this.status === 'connected') this.emitState();
   }
 
   reconnect() {
@@ -2159,6 +2234,7 @@ export class MockTableService {
   }
 
   close() {
+    activeMockBotWaitServices.delete(this);
     this.timers.forEach(clearTimeout);
     this.timers.clear();
     this.turnTimer = undefined;

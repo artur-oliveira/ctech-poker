@@ -84,6 +84,7 @@ interface ApiStackProps extends cdk.StackProps {
   socialEventsTableArn: string;
   playerReportsTableArn: string;
   socialGraphEnabledParam: string;
+  sandboxBotsEnabledParam: string;
   /** Enables billable custom metrics/alarms; off unless explicitly opted in. */
   cloudwatchAlarmsEnabled?: boolean;
   // Session Manager. **On**: CI deploys over SSM RunCommand (/opt/app/deploy.sh),
@@ -153,6 +154,7 @@ export class PokerApiStack extends cdk.Stack {
       socialEventsTableArn,
       playerReportsTableArn,
       socialGraphEnabledParam,
+      sandboxBotsEnabledParam,
       cloudwatchAlarmsEnabled = false,
       enableSsmAgent = false,
       osFamily = 'alpine',
@@ -203,7 +205,7 @@ export class PokerApiStack extends cdk.Stack {
       actions: ['ssm:GetParameter'],
       resources: [
         shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam, turnstileSecretParam,
-        realMoneyEnabledParam, socialGraphEnabledParam, legalSignoffRefParam,
+        realMoneyEnabledParam, socialGraphEnabledParam, sandboxBotsEnabledParam, legalSignoffRefParam,
         avatarBaseUrlParam, walletWebhookHmacSecretParam,
         account.internalBaseUrl, account.appUrl, account.internalJwksUrl, poker.appUrl,
       ].map(
@@ -347,6 +349,7 @@ export class PokerApiStack extends cdk.Stack {
       `WALLET_WEBHOOK_HMAC_SECRET=${walletWebhookHmacSecretParam}`,
       `REAL_MONEY_ENABLED=${realMoneyEnabledParam}`,
       `SOCIAL_GRAPH_ENABLED=${socialGraphEnabledParam}`,
+      `SANDBOX_BOTS_ENABLED=${sandboxBotsEnabledParam}`,
       `LEGAL_SIGNOFF_REF=${legalSignoffRefParam}`,
       `AVATAR_BASE_URL=${avatarBaseUrlParam}`,
     ];
@@ -657,6 +660,10 @@ def handler(event, context):
     new cdk.CfnOutput(this, 'SocialGraphEnabledParameterArn', {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${socialGraphEnabledParam}`,
       exportName: `${id}-social-graph-enabled-parameter-arn`,
+    });
+    new cdk.CfnOutput(this, 'SandboxBotsEnabledParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${sandboxBotsEnabledParam}`,
+      exportName: `${id}-sandbox-bots-enabled-parameter-arn`,
     });
     new cdk.CfnOutput(this, 'LegalSignoffRefParameterArn', {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${legalSignoffRefParam}`,

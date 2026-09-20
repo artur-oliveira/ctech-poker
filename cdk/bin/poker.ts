@@ -149,6 +149,7 @@ new PokerApiStack(app, id('API'), {
   realMoneyEnabledParam: pokerParameters.realMoneyEnabled,
   legalSignoffRefParam: pokerParameters.legalSignoffRef,
   socialGraphEnabledParam: pokerParameters.socialGraphEnabled,
+  sandboxBotsEnabledParam: pokerParameters.sandboxBotsEnabled,
   cloudwatchAlarmsEnabled: CLOUDWATCH_ALARMS_ENABLED,
   enableSsmAgent: ENABLE_SSM_AGENT,
   socialEdgesTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEdges)!.tableArn,

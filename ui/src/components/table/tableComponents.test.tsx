@@ -341,6 +341,13 @@ describe('table presentation', () => {
     expect(waiting.container.querySelector('.hand-outcome-ring-standalone')).not.toBeInTheDocument();
     waiting.unmount();
 
+    const botWait = render(<TableStage snapshot={snapshotForScenario('waiting')} viewer={MOCK_PLAYER_ID}
+                                       pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
+                                       holdOutcomeOpen={false} waitingForBots/>);
+    expect(botWait.container.querySelector('.street-progress-label')).toHaveTextContent('Procurando uma pessoa para jogar…');
+    expect(botWait.container.querySelector('.street-progress')).toHaveAttribute('aria-label', 'Procurando uma pessoa para jogar…');
+    botWait.unmount();
+
     // No personalized outcome yet (outcome={null}), so the countdown ring
     // falls back to the standalone corner dot instead of the felt center
     // (see HandOutcomeBanner: that center spot is where a winner's payout

@@ -5060,6 +5060,37 @@
     font-size: var(--font-size-tiny);
     white-space: nowrap
 }
+/* A bot's textual marker and stack share one caption line on the compact
+   ring. A second line pushes the top seat's marker under the table header. */
+.stage-v-ring .game-seat:has(.seat-bot-badge) .seat-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    column-gap: 2px;
+    row-gap: 0
+}
+.stage-v-ring .seat-info .seat-bot-badge {
+    display: inline-flex;
+    width: auto;
+    padding: 0 2px;
+    margin-top: 0;
+    font-size: 9px;
+    line-height: 1.2;
+    vertical-align: middle
+}
+.stage-v-ring .seat-info .seat-bot-badge + span {
+    display: inline-block;
+    margin-top: 0;
+    vertical-align: middle
+}
+.stage-v-ring .game-seat:has(.seat-bot-badge) .seat-info .seat-state {
+    flex-basis: 100%
+}
+.stage-v-ring :is(.seat-zone-left, .seat-zone-right):has(.seat-bot-badge) .seat-info {
+    width: 64px;
+    max-width: 64px
+}
 /* "fichas" costs ~33px of a 64-78px caption lane, and a number beside an
    avatar at a poker table is never anything but a stack. The unit stays in the
    accessibility tree; only the ring drops it, so the viewer's own HUD and every

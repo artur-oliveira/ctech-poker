@@ -120,8 +120,8 @@ function FeltWordmark() {
  *
  * It is a labelled image rather than aria-hidden decoration: "etapa 2 de 4" is
  * progress the sr-only page heading does not otherwise convey. */
-function StreetProgress({stage}: { stage: string }) {
-  const label = STAGE_LABELS[stage] || stage.replaceAll('_', ' ');
+function StreetProgress({stage, waitingLabel}: { stage: string; waitingLabel?: string }) {
+  const label = waitingLabel || STAGE_LABELS[stage] || stage.replaceAll('_', ' ');
   if (stage === 'waiting_for_players') return <div className="street-progress" role="img" aria-label={label}>
     <span className="street-progress-label" aria-hidden="true">{label}</span>
   </div>;
@@ -257,6 +257,8 @@ type Props = {
   targetedReactionLabel?: string;
   onTargetPlayerAction?: (playerId: string) => void;
   announcement?: string;
+  waitingForBots?: boolean;
+  waitingContent?: ReactNode;
   chatBubbles?: Record<string, { id: string; message: string }>;
   // Live table only: builds the per-seat player menu. Replay passes nothing.
   renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number]) => ReactNode;
@@ -294,6 +296,8 @@ function TableStageImpl({
                              targetedReactionLabel,
                              onTargetPlayerAction,
                              announcement,
+                             waitingForBots,
+                             waitingContent,
                              chatBubbles,
                              renderPlayerActionsAction
                            }: Props) {
@@ -346,16 +350,16 @@ function TableStageImpl({
                  handId={snapshot.hand_id}
                  onPeekCards={seat.player_id === viewer ? onPeekCardsAction : undefined}
                  playerNote={playerNotes?.[seat.player_id]}
-                 onEditNote={seat.player_id !== viewer ? onEditPlayerNoteAction : undefined}
-                 reactionTargetLabel={seat.player_id !== viewer ? targetedReactionLabel : undefined}
-                 onReactionTarget={seat.player_id !== viewer ? onTargetPlayerAction : undefined}
+                 onEditNote={seat.player_id !== viewer && !seat.is_bot ? onEditPlayerNoteAction : undefined}
+                 reactionTargetLabel={seat.player_id !== viewer && !seat.is_bot ? targetedReactionLabel : undefined}
+                 onReactionTarget={seat.player_id !== viewer && !seat.is_bot ? onTargetPlayerAction : undefined}
                  stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
                  isDealer={snapshot.dealer_player_id === seat.player_id}
                  isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
                  isBigBlind={snapshot.big_blind_player_id === seat.player_id}
                  chatBubble={chatBubbles?.[seat.player_id]}
                  layoutPosition={layoutPosition}
-                 renderActionsMenu={seat.player_id !== viewer ? renderPlayerActionsAction : undefined}/>;
+                 renderActionsMenu={seat.player_id !== viewer && !seat.is_bot ? renderPlayerActionsAction : undefined}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
@@ -367,7 +371,8 @@ function TableStageImpl({
     {/* The street rail hangs off the board rather than off the felt's bottom
         edge: down there it sat in the lane the bottom-row seats' bet chips
         travel through, so a raise from the viewer's own seat covered it. */}
-    <div className="felt-center"><FeltWordmark/>{board}<StreetProgress stage={snapshot.stage}/></div>
+    <div className="felt-center"><FeltWordmark/>{board}<StreetProgress stage={snapshot.stage}
+      waitingLabel={waitingForBots ? 'Procurando uma pessoa para jogar…' : undefined}/>{waitingContent}</div>
   </>;
 
   if (!vertical && !compactLandscape) return (

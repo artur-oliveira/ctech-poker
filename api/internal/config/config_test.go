@@ -116,3 +116,22 @@ func TestLoadParsesSocialGraphEnabled(t *testing.T) {
 		t.Fatal("expected SOCIAL_GRAPH_ENABLED=true to enable the rollout gate")
 	}
 }
+
+func TestSandboxBotsRolloutGateDefaultsOffAndCanBeEnabled(t *testing.T) {
+	t.Setenv("SANDBOX_BOTS_ENABLED", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SandboxBotsEnabled {
+		t.Fatal("sandbox bots must default off during a mixed-version rollout")
+	}
+	t.Setenv("SANDBOX_BOTS_ENABLED", "true")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SandboxBotsEnabled {
+		t.Fatal("explicitly enabled sandbox bots should be available")
+	}
+}

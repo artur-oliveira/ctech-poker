@@ -149,6 +149,69 @@ func TestBuyInDebitsThenSeats(t *testing.T) {
 	}
 }
 
+func TestReservedBotSeatDebitsOnlyAtConfirmationAndRefundsRejectedJoin(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "bot-room", CurrencyMode: "sandbox", BigBlind: 20,
+		BuyInMin: 40, BuyInMax: 400, MaxSeats: 2,
+	}}
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+	seed := func() *hand.Table {
+		game := hand.NewTable([]*hand.Player{{ID: "owner", Stack: 100, Ready: true}}, 10, 20)
+		game.ConfigureRake("sandbox")
+		if err := game.ConfigureBotsForActor("owner", 100, 2, time.Now().UnixMilli()); err != nil {
+			t.Fatal(err)
+		}
+		if err := game.AddBotForActor("bot:owner:0", "Lia", "tag"); err != nil {
+			t.Fatal(err)
+		}
+		return game
+	}
+	actor, err := mgr.GetOrCreateActor(ctx, "bot-room", seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reservation := hand.BotReservation{ID: "reservation-1", PlayerID: "challenger", Amount: 100,
+		IdempotencyKey: "entry-1", ExpiresAtUnixMs: time.Now().Add(time.Minute).UnixMilli()}
+	result, reply := make(chan hand.BotReservation, 1), make(chan error, 1)
+	if err := actor.Dispatch(table.ReserveBotSeatCmd{Reservation: reservation, Result: result, Reply: reply}); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-result; got.ID != reservation.ID {
+		t.Fatalf("reservation=%+v", got)
+	}
+	if len(wallet.debits) != 0 || len(wallet.credits) != 0 {
+		t.Fatalf("reservation moved wallet funds: debits=%+v credits=%+v", wallet.debits, wallet.credits)
+	}
+
+	if err := svc.BuyInReserved(ctx, "bot-room", "challenger", 100, false, "bad-attempt", "wrong-reservation"); err == nil {
+		t.Fatal("join with a different reservation should fail")
+	}
+	if len(wallet.debits) != 1 || len(wallet.credits) != 1 || wallet.credits[0].amount != 100 {
+		t.Fatalf("rejected join was not compensated: debits=%+v credits=%+v", wallet.debits, wallet.credits)
+	}
+	if seated, _, err := svc.Seated(ctx, "bot-room", "challenger"); err != nil || seated {
+		t.Fatalf("rejected join occupied a seat: seated=%v err=%v", seated, err)
+	}
+
+	if err := svc.BuyInReserved(ctx, "bot-room", "challenger", 100, false, "entry-1", reservation.ID); err != nil {
+		t.Fatalf("reserved buy-in: %v", err)
+	}
+	// The actor may immediately deal the first all-human hand and collect the
+	// blind, so the live stack can be lower than the 100-chip buy-in already.
+	if seated, stack, err := svc.Seated(ctx, "bot-room", "challenger"); err != nil || !seated || stack <= 0 || stack > 100 {
+		t.Fatalf("confirmed join missing: seated=%v stack=%d err=%v", seated, stack, err)
+	}
+	if err := svc.BuyInReserved(ctx, "bot-room", "challenger", 100, false, "entry-1", reservation.ID); err != nil {
+		t.Fatalf("retry of seated player: %v", err)
+	}
+	if len(wallet.debits) != 2 || len(wallet.credits) != 1 {
+		t.Fatalf("confirmation/retry moved the wrong funds: debits=%+v credits=%+v", wallet.debits, wallet.credits)
+	}
+}
+
 // raceWallet lets a test force two BuyIn calls to interleave: the first
 // caller to Debit blocks until released, so a second, concurrent BuyIn for
 // the same seat can win the race and commit its JoinCmd first.

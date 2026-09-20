@@ -95,6 +95,14 @@ func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome, map[
 	a.onHandComplete = fn
 }
 
+func (a *Actor) SetBotFundingForActor(
+	available func(context.Context, string) (bool, error),
+	record func(context.Context, string, string, int64) (bool, error),
+) {
+	a.botFundingAvailable = available
+	a.botFundingRecord = record
+}
+
 // SetOnHandUpdatedForActor installs the history-only hook used when a
 // participant voluntarily reveals cards after completion.
 func (a *Actor) SetOnHandUpdatedForActor(fn func(string, hand.HandOutcome, map[string]string)) {
@@ -102,9 +110,9 @@ func (a *Actor) SetOnHandUpdatedForActor(fn func(string, hand.HandOutcome, map[s
 }
 
 // SetOnSeatsChangedForActor installs the post-commit occupancy write-through
-// hook, invoked with the new occupied-seat count after every committed join
-// or leave.
-func (a *Actor) SetOnSeatsChangedForActor(fn func(int)) { a.onSeatsChanged = fn }
+// hook, invoked with the new human and bot seat counts after a committed
+// seating change.
+func (a *Actor) SetOnSeatsChangedForActor(fn func(int, int)) { a.onSeatsChanged = fn }
 
 // SetOnPlayerRemovedForActor installs the system-removal notification hook —
 // see onPlayerRemoved's doc comment.
@@ -133,7 +141,10 @@ func (a *Actor) SetChatPrefsLookupForActor(fn func(ctx context.Context, playerID
 
 func (a *Actor) notifySeatsChanged() {
 	if a.onSeatsChanged != nil && a.cached != nil {
-		a.onSeatsChanged(len(a.cached.PlayersForActor()))
+		// The lobby's occupancy mirror controls whether a human may attempt to
+		// join. Bots are replaceable capacity and must never make a table look
+		// full to matchmaking, especially at heads-up tables.
+		a.onSeatsChanged(a.cached.HumanSeatCountForActor(), a.cached.BotSeatCountForActor())
 	}
 }
 

@@ -307,7 +307,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /ws`                                    | first-frame JWT | lobby/user WebSocket; registers `lobby` + `user#<id>`                                      |
 | `POST /rooms/`                               | JWT             | create room; takes `currency_mode` + `entry_fee_cents`; rate-limited 10/min/IP             |
 | `GET /rooms/`                                | JWT             | list public rooms (paginated, 50)                                                          |
-| `POST /rooms/join-or-create`                 | JWT             | seat the caller in a stake bucket, server-resolved → `{room_id, created}`; 30/min/IP        |
+| `POST /rooms/join-or-create`                 | JWT             | seat the caller in a stake bucket, server-resolved → `{room_id, created, match_kind}`; 30/min/IP |
 | `GET /rooms/buckets`                         | JWT             | per-bucket lobby availability across every page; `?currency_mode=sandbox\|real`             |
 | `GET /rooms/stakes`                          | JWT             | stake catalog; `?currency_mode=sandbox\|real`                                              |
 | `GET /rooms/code/:code`                      | JWT             | lookup by share code                                                                       |
@@ -402,8 +402,10 @@ carries `hands_played` in the response for the client to render alongside the ra
 The lobby used to decide "join vs create" itself from the **first page** of `GET /rooms` and then navigate to a room id
 that could already be full — two players clicking the same tile both navigated, and the loser only found out as a
 buy-in error on the table page. `POST /rooms/join-or-create` takes a **bucket spec**
-(`{small_blind, big_blind, max_seats, currency_mode, amount, auto_rebuy?, idem_key?}`) instead of a room id and answers
-`{room_id, created}` after the player is actually seated:
+(`{small_blind, big_blind, max_seats, currency_mode, amount, auto_rebuy?, allow_bots?, idem_key?}`) instead of a room id and answers
+`{room_id, created, match_kind}` after the player is actually seated. `allow_bots` is a per-entry opt-in accepted only
+for public sandbox stakes through 500/1,000; absent is false. `match_kind` is `human`, `waiting`, `bot_pending`, or the
+reserved value held for the durable between-hands reservation flow:
 
 1. An open session already inside that bucket short-circuits (a retry, or a second tab, lands on the seat the player
    already holds instead of buying a second one).
@@ -415,6 +417,21 @@ buy-in error on the table page. `POST /rooms/join-or-create` takes a **bucket sp
 
 Any other buy-in failure (wallet, terms, entry fee) stops the walk and is returned — retrying it against a sibling
 table would just repeat it, and on the money paths could debit twice.
+
+With `allow_bots`, a newly created one-human table persists a 15-second activation request. If no human arrives, the
+actor fills to 2/4/6 total seats for 2/6/9-max and schedules local legal actions with variable timing. Bot seats carry
+`is_bot` on the protobuf snapshot and do not count toward the lobby's human occupancy mirror. A human arrival retires
+all bots at the hand boundary. Bot chips never call wallet debit/cash-out. Hands record `contains_bot`; private history
+and sandbox balance keep the result, while ranking, achievements, public stats, matchups, highlights and recent-player
+suggestions skip that hand.
+
+`SANDBOX_BOTS_ENABLED` defaults to `false` and is loaded from `/ctech/{env}/poker/sandbox-bots-enabled` at service start.
+Deploy the new API to every instance with this flag off, verify the fleet, then set the SSM parameter to `true` and
+restart/roll the service. Do not enable it during a mixed-version fleet: an older actor may load a bot table without
+understanding its reservation policy. Turning the flag off again rejects new opt-ins and start-now requests, reports
+`{enabled:false,available:false}` from `GET /rooms/bot-eligibility`, and stops bot play at the next funding check;
+human seats and existing reservation confirmation remain available. The static UI treats an absent `enabled` field as
+compatible with an older API and displays a disabled option when it is explicitly false.
 
 `GET /rooms/buckets` is the grid's companion aggregate: it walks **every** page of `gsi_public` (not just the first) and
 returns one row per `(blinds, seats)` within the requested currency mode —

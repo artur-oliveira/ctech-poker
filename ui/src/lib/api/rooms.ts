@@ -16,6 +16,7 @@ export interface Room {
   // Persisted by the table actor as players join/leave (never computed live
   // from tablemanager). This is how the lobby knows a table has a free seat.
   seats_taken: number;
+  bot_seats?: number;
   // Present only for a private room's own creator (the server strips both
   // from every other viewer's response).
   share_code?: string;
@@ -59,6 +60,9 @@ export interface RoomBucket {
   open_rooms: number;
   seats_taken: number;
   seats_available: number;
+  human_seats?: number;
+  human_open_tables?: number;
+  replaceable_bot_tables?: number;
 }
 
 export async function listRoomBuckets(currencyMode: 'sandbox' | 'real' = 'sandbox') {
@@ -74,6 +78,7 @@ export interface JoinOrCreateInput {
   amount: number;
   currency_mode?: 'sandbox' | 'real';
   auto_rebuy?: boolean;
+  allow_bots?: boolean;
   // Stable per click (a retry of the same click must re-seat at the same
   // table, not buy a second seat in a sibling one). The caller owns it, so a
   // retry can reuse the key it already sent.
@@ -85,9 +90,53 @@ export interface JoinOrCreateInput {
 // last-seat race falls through to another table without the client walking
 // candidates or re-reading the lobby (#205, backend #76).
 export async function joinOrCreateRoom(input: JoinOrCreateInput) {
-  return (await apiClient.post<{ room_id: string; created: boolean }>(
+  return (await apiClient.post<{ room_id: string; created: boolean; match_kind?: 'human' | 'waiting' | 'bot_pending' | 'reserved'; reservation_id?: string; reservation_expires_at?: number }>(
     '/v1.0/rooms/join-or-create', input, {silentError: true},
   )).data;
+}
+
+export interface BotReservationStatus {
+  room_id: string;
+  reservation_id: string;
+  status: 'pending' | 'seated' | 'expired' | 'failed';
+  expires_at?: number;
+  amount?: number;
+  reason?: string;
+}
+
+export interface BotEligibility {
+  available: boolean;
+  enabled?: boolean;
+  expires_at?: number;
+}
+
+export async function getBotEligibility() {
+  return (await apiClient.get<BotEligibility>('/v1.0/rooms/bot-eligibility', {silentError: true})).data;
+}
+
+export interface BotWaitStatus {
+  enabled: boolean;
+  activate_at: number;
+  has_bot: boolean;
+  reserved: boolean;
+}
+
+export async function getBotWaitStatus(roomId: string) {
+  return (await apiClient.get<BotWaitStatus>(`/v1.0/rooms/${roomId}/bots`, {silentError: true})).data;
+}
+
+export async function startBotsNow(roomId: string) {
+  await apiClient.post(`/v1.0/rooms/${roomId}/bots/start`, undefined, {silentError: true});
+}
+
+export async function getBotReservation(roomId: string, reservationId: string) {
+  return (await apiClient.get<BotReservationStatus>(
+    `/v1.0/rooms/${roomId}/reservations/${reservationId}`, {silentError: true},
+  )).data;
+}
+
+export async function cancelBotReservation(roomId: string, reservationId: string) {
+  await apiClient.delete(`/v1.0/rooms/${roomId}/reservations/${reservationId}`, {silentError: true});
 }
 
 export async function listStakes(currencyMode: 'sandbox' | 'real' = 'sandbox') {

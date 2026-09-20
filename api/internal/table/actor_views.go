@@ -157,6 +157,7 @@ func (a *Actor) sync(publish bool) {
 	defer cancel()
 	a.processPendingExitAutoFolds(sweepCtx)
 	a.processInlinePreselections(sweepCtx)
+	a.enforceBotFunding(sweepCtx)
 	a.removeEligiblePendingExits(sweepCtx)
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
@@ -168,6 +169,9 @@ func (a *Actor) sync(publish bool) {
 	a.armRunoutTimer(a.cached.IsAwaitingRunoutForActor(), stage)
 	a.armNextHandTimer(stage == hand.Complete)
 	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
+	a.armBotFillTimer()
+	a.armBotActionTimer()
+	a.armBotPostHandTimer()
 	a.lastBroadcastStage = stage
 	if publish {
 		a.publishSnapshots()
@@ -293,6 +297,10 @@ func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot, chat []h
 // disconnected rather than defaulting to connected.
 func (a *Actor) applyPresence(seats []hand.SeatView) {
 	for i := range seats {
+		if seats[i].IsBot {
+			seats[i].ConnectionState = "connected"
+			continue
+		}
 		playerID := seats[i].PlayerID
 		_, locallyConnected := a.activeConns[playerID]
 		_, locallyDisconnected := a.disconnectedSince[playerID]

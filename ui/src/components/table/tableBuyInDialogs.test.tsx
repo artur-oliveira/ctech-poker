@@ -27,6 +27,7 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('next/navigation', () => ({useRouter: () => ({push: mocks.push})}));
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
+  getBotEligibility: vi.fn(),
   joinRoom: mocks.joinRoom,
   joinOrCreateRoom: mocks.joinOrCreateRoom,
 }));
@@ -181,6 +182,37 @@ describe('BuyInPanel', () => {
     }));
     expect(mocks.joinRoom).not.toHaveBeenCalled();
     expect(seated).toHaveBeenCalledExactlyOnceWith('resolved-room');
+  });
+
+  test('requires per-entry bot consent and sends it only after opt-in', async () => {
+    mocks.joinOrCreateRoom.mockResolvedValue({room_id: 'bot-room', created: true, match_kind: 'bot_pending'});
+    const seated = vi.fn();
+    render(<BuyInPanel bucket={{smallBlind: 250, bigBlind: 500, maxSeats: 9}} onSeatedAction={seated}/>);
+
+    const botSwitch = screen.getByRole('switch', {name: 'Começar com bots após 15 s'});
+    expect(botSwitch).not.toBeChecked();
+    expect(screen.getByText(/habilitar bots somente para esta entrada/i)).toBeInTheDocument();
+    await userEvent.click(botSwitch);
+    expect(screen.getByText(/Até 5 bots podem completar a mesa/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+
+    await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
+      allow_bots: true, max_seats: 9,
+    })));
+    expect(seated).toHaveBeenCalledWith('bot-room', 'bot_pending');
+  });
+
+  test('explains a paused bot rollout and keeps human matchmaking available', async () => {
+    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) => queryKey[0] === 'bot-eligibility'
+      ? {data: {available: false, enabled: false}, isLoading: false, isError: false}
+      : {data: sandboxRoom, isLoading: false, isError: false, refetch: mocks.refetch});
+    mocks.joinOrCreateRoom.mockResolvedValue({room_id: 'human-room', match_kind: 'waiting'});
+    render(<BuyInPanel bucket={{smallBlind: 25, bigBlind: 50, maxSeats: 6}} onSeatedAction={vi.fn()}/>);
+
+    expect(screen.getByRole('switch', {name: 'Começar com bots após 15 s'})).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Bots estão temporariamente indisponíveis. Você ainda pode esperar outras pessoas.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+    await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledWith(expect.not.objectContaining({allow_bots: true})));
   });
 
   test('retrying the same amount reuses the idempotency key, a new amount does not', async () => {

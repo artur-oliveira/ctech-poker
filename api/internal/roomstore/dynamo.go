@@ -128,11 +128,11 @@ func (s *Store) ListBucket(ctx context.Context, currencyMode string, smallBlind,
 	return decodeRooms(result.Items)
 }
 
-// SetSeatsTaken persists the table actor's live occupied-seat count so the
-// lobby can list "active tables" without querying tablemanager.
-func (s *Store) SetSeatsTaken(ctx context.Context, roomID string, seatsTaken int) error {
+// SetOccupancy persists human and bot counts without querying live actors
+// from the lobby. SeatsTaken remains the replaceable human-capacity mirror.
+func (s *Store) SetOccupancy(ctx context.Context, roomID string, seatsTaken, botSeats int) error {
 	sk := roomSK
-	ok, err := s.base.UpdateItem(ctx, roomID, &sk, map[string]any{"seats_taken": seatsTaken})
+	ok, err := s.base.UpdateItem(ctx, roomID, &sk, map[string]any{"seats_taken": seatsTaken, "bot_seats": botSeats})
 	if err != nil {
 		return fmt.Errorf("roomstore: set seats taken: %w", err)
 	}

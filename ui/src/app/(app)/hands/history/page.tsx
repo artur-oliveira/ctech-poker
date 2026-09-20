@@ -233,6 +233,7 @@ function HandHistoryContent() {
           </button>
         </span>
         <span><Coins aria-hidden="true"/>{mode === 'real' ? 'Dinheiro real' : 'Fichas'}</span>
+        {h.contains_bot && <span>BOT · fora do ranking</span>}
       </div>
       <div className="hand-history-net">
         <small>Resultado líquido</small>

@@ -127,6 +127,23 @@ func TestAggregateBucketsExcludesOtherCurrencyMode(t *testing.T) {
 	}
 }
 
+func TestAggregateBucketsSeparatesHumansFromReplaceableBots(t *testing.T) {
+	botRoom := bucketRoom("bot-room", 1)
+	botRoom.BotSeats = 5
+	sharedBotRoom := bucketRoom("shared-bot-room", 2)
+	sharedBotRoom.BotSeats = 2
+	humanRoom := bucketRoom("human-room", 2)
+	empty := bucketRoom("empty", 0)
+	buckets := aggregateBuckets([]roomstore.Room{botRoom, sharedBotRoom, humanRoom, empty}, "sandbox")
+	if len(buckets) != 1 {
+		t.Fatalf("buckets=%+v", buckets)
+	}
+	got := buckets[0]
+	if got.HumanSeats != 5 || got.HumanOpenTables != 1 || got.ReplaceableBotTables != 2 || got.OpenRooms != 4 {
+		t.Fatalf("bot seats were confused with people or capacity: %+v", got)
+	}
+}
+
 // The buckets aggregate is the only endpoint left that walks the whole public
 // index, so it must not walk it once per request (#213).
 func TestBucketCacheWalksThePublicIndexOncePerTTL(t *testing.T) {
@@ -209,5 +226,23 @@ func TestJoinOrCreateRejectsBuyInOutsideThePublicWindow(t *testing.T) {
 func TestJoinOrCreateRejectsUnsupportedSeatCount(t *testing.T) {
 	if got := postJoinOrCreate(t, `{"small_blind":10,"big_blind":20,"max_seats":4,"amount":1000}`); got != fiber.StatusBadRequest {
 		t.Fatalf("got %d", got)
+	}
+}
+
+func TestJoinOrCreateRejectsBotsOutsideSandbox(t *testing.T) {
+	if got := postJoinOrCreate(t, `{"small_blind":10,"big_blind":20,"max_seats":6,"amount":1000,"currency_mode":"real","allow_bots":true}`); got != fiber.StatusBadRequest {
+		t.Fatalf("got %d", got)
+	}
+}
+
+func TestJoinOrCreateRejectsBotsAboveSupportedStake(t *testing.T) {
+	if got := postJoinOrCreate(t, `{"small_blind":1000,"big_blind":2000,"max_seats":6,"amount":40000,"allow_bots":true}`); got != fiber.StatusBadRequest {
+		t.Fatalf("got %d", got)
+	}
+}
+
+func TestJoinOrCreateRejectsBotsWhenRolloutGateIsOff(t *testing.T) {
+	if got := postJoinOrCreate(t, `{"small_blind":25,"big_blind":50,"max_seats":6,"amount":1000,"allow_bots":true}`); got != fiber.StatusConflict {
+		t.Fatalf("expected disabled rollout to reject bot opt-in before debit, got %d", got)
 	}
 }

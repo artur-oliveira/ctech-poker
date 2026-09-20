@@ -8,6 +8,8 @@ import {ChevronLeft, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
+import {BotReservationScreen} from '@/components/table/BotReservationScreen';
+import {BotWaitControls} from '@/components/table/BotWaitControls';
 import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
@@ -81,7 +83,8 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
 const MOCK_SCENARIOS = new Set<MockScenario>([
   'full_hand', 'heads_up', 'layout_3', 'layout_4', 'layout_5', 'six_max', 'layout_7', 'layout_8', 'nine_max',
   'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
-  'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
+  'waiting', 'bot_wait', 'bot_play', 'bot_reservation_pending', 'bot_reservation_failed',
+  'bot_reservation_expired', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
   'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout'
@@ -90,6 +93,7 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
 function TableContent() {
   const router = useRouter();
   const params = useSearchParams(), id = params.get('id') || '', valid = ROOM_ID.test(id);
+  const reservationId = params.get('reservation') || '';
   // A lobby pick arrives as a bucket instead of a room id: the buy-in
   // ceremony below confirms it with join-or-create, which is what decides
   // the table (#205). Everything past the ceremony still needs a real id.
@@ -129,7 +133,7 @@ function TableContent() {
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode,
     USE_MOCK ? {scenario, delay} : undefined, suppressed);
   useEffect(() => {
-    const ids = (rt.snapshot?.seats ?? []).map(seat => seat.player_id)
+    const ids = (rt.snapshot?.seats ?? []).filter(seat => !seat.is_bot).map(seat => seat.player_id)
       .filter(playerId => playerId && playerId !== viewer).sort();
     // Seat membership is only knowable from the authoritative snapshot; this
     // mirrors it into the query key instead of re-deriving it during render.
@@ -210,9 +214,14 @@ function TableContent() {
     }
   }, [queryClient]);
   if (bucket) return <>
-    <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
+    <BuyInPanel bucket={bucket} onSeatedAction={(roomId, matchKind, reservedId) => {
+      if (matchKind === 'reserved' && reservedId) {
+        router.replace(`/table?id=${encodeURIComponent(roomId)}&reservation=${encodeURIComponent(reservedId)}`);
+        return;
+      }
       queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
-      router.replace(`/table?id=${encodeURIComponent(roomId)}`);
+      const match = matchKind === 'bot_pending' ? '&match=bot_pending' : '';
+      router.replace(`/table?id=${encodeURIComponent(roomId)}${match}`);
     }}/>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
@@ -224,6 +233,7 @@ function TableContent() {
       <Button render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
     </main>
   );
+  if (reservationId) return <BotReservationScreen roomId={id} reservationId={reservationId}/>;
   if (session.seatedLoading) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -374,6 +384,12 @@ function TableContent() {
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
                   maxSeats={layoutCapacity} seatLayoutKey={id}
+                  waitingForBots={s.stage === 'waiting_for_players' && room?.visibility === 'public' &&
+                    Boolean(viewerSeat)}
+                  waitingContent={s.stage === 'waiting_for_players' && room?.visibility === 'public' &&
+                    room?.currency_mode === 'sandbox' &&
+                    <BotWaitControls roomId={id} connected={rt.status === 'connected'}
+                                     expected={params.get('match') === 'bot_pending' || scenario === 'bot_wait'}/>}
                   turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   nextHandDeadlineMs={!connectionMessage ? s.next_hand_unix_ms : undefined}

@@ -47,6 +47,8 @@ type ReactionCmd struct {
 	ActionID       string
 	ReactionID     string
 	TargetPlayerID string
+	BotGenerated   bool
+	BotHandID      string
 	Reply          chan error
 }
 
@@ -256,11 +258,80 @@ type JoinCmd struct {
 	MidHand          bool
 	HoldID           string
 	AutoRebuy        bool
+	ReservationID    string
 	SettlementIntent func() (types.TransactWriteItem, error)
 	Reply            chan error
 }
 
 func (c JoinCmd) reply() chan error { return c.Reply }
+
+// EnableBotsCmd records the creator's explicit sandbox opt-in. The persisted
+// activation timestamp lets a replacement actor resume the wait instead of
+// either filling immediately or forgetting the request.
+type EnableBotsCmd struct {
+	OwnerID  string
+	BuyIn    int64
+	MaxSeats int
+	Reply    chan error
+}
+
+func (c EnableBotsCmd) reply() chan error { return c.Reply }
+
+type StartBotsNowCmd struct {
+	OwnerID string
+	Reply   chan error
+}
+
+func (c StartBotsNowCmd) reply() chan error { return c.Reply }
+
+type ReserveBotSeatCmd struct {
+	Reservation hand.BotReservation
+	Result      chan hand.BotReservation
+	Reply       chan error
+}
+
+func (c ReserveBotSeatCmd) reply() chan error { return c.Reply }
+
+type BotReservationStatus struct {
+	Reservation *hand.BotReservation
+	Ready       bool
+}
+
+type BotReservationStatusCmd struct {
+	PlayerID string
+	Status   chan BotReservationStatus
+	Reply    chan error
+}
+
+type BotMatchStatus struct {
+	HasBot      bool
+	Reservation *hand.BotReservation
+	BotPolicy   hand.BotPolicy
+}
+
+type BotMatchStatusCmd struct {
+	Status chan BotMatchStatus
+	Reply  chan error
+}
+
+func (c BotMatchStatusCmd) reply() chan error { return c.Reply }
+
+func (c BotReservationStatusCmd) reply() chan error { return c.Reply }
+
+type CancelBotReservationCmd struct {
+	PlayerID      string
+	ReservationID string
+	Reply         chan error
+}
+
+type expireBotReservationCmd struct {
+	ReservationID string
+	Reply         chan error
+}
+
+func (c expireBotReservationCmd) reply() chan error { return c.Reply }
+
+func (c CancelBotReservationCmd) reply() chan error { return c.Reply }
 
 type LeaveCmd struct {
 	PlayerID         string
@@ -368,3 +439,24 @@ func (c kickTimeoutCmd) reply() chan error { return c.Reply }
 type afkSweepCmd struct{ Reply chan error }
 
 func (c afkSweepCmd) reply() chan error { return c.Reply }
+
+type fillBotsCmd struct{ Reply chan error }
+
+func (c fillBotsCmd) reply() chan error { return c.Reply }
+
+type botActCmd struct {
+	PlayerID string
+	HandID   string
+	Version  int
+	Reply    chan error
+}
+
+func (c botActCmd) reply() chan error { return c.Reply }
+
+type botPostHandCmd struct {
+	HandID  string
+	Version int
+	Reply   chan error
+}
+
+func (c botPostHandCmd) reply() chan error { return c.Reply }

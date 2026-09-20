@@ -18,9 +18,10 @@ export default function BasicsGuide() {
       {
         id: 'lobby', title: 'O lobby em duas escolhas', summary: 'Primeiro os blinds, depois o tamanho da mesa.',
         image: {src: '/guide/lobby.webp', alt: 'Lobby com a lista de blinds e os três formatos de mesa'},
-        body: <><p>Escolha um par de blinds e em seguida o formato: <b>Heads-up</b> (2), <b>6-max</b> (6) ou <b>Full-ring</b> (9). Cada cartão mostra quantas mesas daquele formato têm vaga agora e a faixa de entrada correspondente.</p>
+        body: <><p>Escolha um par de blinds e em seguida o formato: <b>Heads-up</b> (2), <b>6-max</b> (6) ou <b>Full-ring</b> (9). Cada cartão mostra pessoas jogando e a faixa de entrada correspondente. Bots não são contados como pessoas.</p>
           <GuideTerms><GuideTerm term="Blinds">Apostas obrigatórias que abrem cada mão. O primeiro número é o small blind; o segundo, o big blind.</GuideTerm>
             <GuideTerm term="Entrar agora">Existe mesa pública com vaga naquele formato e você senta nela.</GuideTerm>
+            <GuideTerm term="Escolher entrada">Há uma pessoa jogando com bots. Você pode reservar a vaga de um bot para a próxima mão; o buy-in só é debitado quando seu assento for confirmado.</GuideTerm>
             <GuideTerm term="Criar mesa">Não há vaga; uma nova mesa pública é aberta com a sua escolha.</GuideTerm></GuideTerms>
           <p>Se você já está sentado em algum lugar, <b>Sua mesa continua aberta</b> aparece no topo com a entrada usada e leva de volta ao mesmo assento, nunca cria um segundo. Um ponto dourado na Loja significa que a recompensa diária já pode ser resgatada.</p>
           <p>Se a última vaga for ocupada no momento em que você entra, você volta ao lobby com um aviso e tentamos de novo nos mesmos blinds e formato. Suas fichas nunca ficam presas.</p></>
