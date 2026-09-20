@@ -57,3 +57,8 @@ The reserved-entry integration test uses DynamoDB Local to prove that creating
 a replacement reservation moves no wallet funds, a rejected reservation ID is
 compensated after its attempted debit, and the valid confirmation is debited
 exactly once even when the HTTP request is retried.
+
+A second DynamoDB Local integration test races two independent table managers
+against the same bot seat. The version-guarded table commit must leave exactly
+one winning reservation in persisted state; the losing server receives the
+already-reserved result after reloading the committed version.
