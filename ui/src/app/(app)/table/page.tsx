@@ -230,6 +230,19 @@ function TableContent() {
       <span className="loader"/>
     </main>
   );
+  // The recap has to outlive the seat it summarises. useTableRemoval drops
+  // `['seated']` the instant the server confirms the exit, so without this
+  // gate the buy-in/rebuy panel below replaced the recap in the very commit
+  // that created it and the player never saw the session summary at all.
+  // Rendered before `!seated` (not only inside the seated tree) because by
+  // then the socket is already torn down and `rt.snapshot` gone.
+  if (sessionRecap) return <>
+    <main className="game-loading"><h1 className="sr-only">Resumo da sessão</h1></main>
+    <SessionRecap joinedAt={sessionRecap.joinedAt} buyIn={sessionRecap.buyIn}
+                  finalStack={sessionRecap.finalStack} tableId={id}
+                  mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
+                  onCloseAction={closeRecap}/>
+  </>;
   if (!seated) return <>
     <BuyInPanel roomId={id} shareCode={inviteCode} onSeatedAction={() => {
       queryClient.setQueryData(['seated', id], {seated: true, stack: 0});
@@ -428,10 +441,6 @@ function TableContent() {
                                    buyIn={openSession?.buyin_amount || viewerSeat.stack_at_hand_start || viewerSeat.stack}
                                    currentStack={viewerSeat.stack} handId={s.hand_id}
                                    handComplete={s.stage === 'complete'} isTurn={actions.isTurn}/>}
-      {sessionRecap && <SessionRecap joinedAt={sessionRecap.joinedAt} buyIn={sessionRecap.buyIn}
-                                     finalStack={sessionRecap.finalStack} tableId={id}
-                                     mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
-                                     onCloseAction={closeRecap}/>}
       <Chat items={rt.chat}
             onSendAction={rt.sendChat}
             connected={rt.status === 'connected'}

@@ -28,6 +28,23 @@ export function shouldRetryPendingAction(action: PendingTableAction | null, code
     action.retries < MAX_ACTION_RETRIES;
 }
 
+/** Whether a stale_state retry still has a turn to land on.
+ *
+ * `shouldRetryPendingAction` only answers "is this action within the retry
+ * budget?". That budget says nothing about whether resubmitting is still
+ * *legal*: a stale_state can mean the version drifted under a still-open turn
+ * (retry), but it can equally mean the turn was already resolved without this
+ * frame — a preselection played it inline, or a turn timeout folded it. The
+ * resync that follows is what tells the two apart, and resubmitting blindly
+ * against it made the server answer `invalid_action` ("it is not player X's
+ * turn to act"), which surfaces to the player as a spurious "ação inválida"
+ * alert for a turn that was in fact played correctly. Seen live in the
+ * 2026-09-21 table capture. */
+export function retryTargetStillOpen(action: PendingTableAction,
+  handId: string | undefined, currentPlayerId: string, viewerId: string | undefined) {
+  return action.handId === handId && Boolean(viewerId) && currentPlayerId === viewerId;
+}
+
 export function advancePendingAction(action: PendingTableAction, snapshotVersion: number,
   handId: string): PendingTableAction {
   return {...action, snapshotVersion, handId, retries: action.retries + 1, awaitingRetry: false};

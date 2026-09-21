@@ -65,15 +65,7 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 // pot beats whatever is currently on record — same "update only if better"
 // shape a leaderboard Top-N write uses.
 func (s *Store) RecordHand(ctx context.Context, tableID, handID string, outcome hand.HandOutcome, names map[string]string) error {
-	// Sum only contested layers — a Refund layer is uncalled excess returned to
-	// its own bettor (e.g. an all-in everyone folds to), never chips actually
-	// won, so it must not inflate "biggest pot of the day".
-	pot := int64(0)
-	for _, result := range outcome.PotResults {
-		if !result.Refund {
-			pot += result.PayoutAmount
-		}
-	}
+	pot := ContestedPot(outcome)
 	if pot <= 0 {
 		return nil // no chips changed hands (e.g. a walkover) — nothing to highlight
 	}
@@ -152,4 +144,29 @@ func winnersOf(outcome hand.HandOutcome, names map[string]string) []HighlightWin
 		return winners[i].PlayerID < winners[j].PlayerID
 	})
 	return winners
+}
+
+// ContestedPot is the number this package means by "pote": the gross size of
+// the layers that were actually fought over.
+//
+// Two deliberate choices, both of which a player can check against what the
+// felt showed them:
+//
+//   - Refund layers are excluded. Uncalled excess returned to its own bettor
+//     (an all-in everyone folds to) was never won by anyone, and counting it
+//     would let a hand nobody contested top the day. This is why a felt
+//     showing a 206.750 pot can legitimately fail to beat a 154.250 record:
+//     125.750 of it went straight back to the player who bet it.
+//   - The layer's gross Amount is used, not PayoutAmount. PayoutAmount is net
+//     of rake, and rake is invisible on the table's pot display, so recording
+//     it made the highlight read a few hundred chips lower than the number
+//     every player at the table had just been looking at.
+func ContestedPot(outcome hand.HandOutcome) int64 {
+	pot := int64(0)
+	for _, result := range outcome.PotResults {
+		if !result.Refund {
+			pot += result.Amount
+		}
+	}
+	return pot
 }

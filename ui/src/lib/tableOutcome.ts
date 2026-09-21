@@ -17,17 +17,23 @@ export type WinnerStanding = {
   tied: boolean;
 };
 
-/** The pot the server weighs when it records "maior pote de hoje": the sum of
- *  the contested layers' payouts, refund layers excluded (uncalled excess
- *  returned to its own bettor was never won). Mirrors `highlights.Store`'s
- *  `RecordHand`, which only overwrites today's row when this number beats the
- *  one on record — so a client that knows it can tell whether re-reading the
- *  highlight after a hand could possibly return anything new.
+/** The pot the server weighs when it records "maior pote disputado hoje": the
+ *  gross size of the contested layers, refund layers excluded (uncalled excess
+ *  returned to its own bettor was never won by anyone). Must mirror
+ *  `highlights.ContestedPot` exactly — the server only overwrites today's row
+ *  when this number beats the one on record, so a client that can compute it
+ *  knows whether re-reading the highlight after a hand could return anything
+ *  new, and spends no request when it cannot.
+ *
+ *  Gross `amount`, not `payout_amount`: the latter is net of rake, which never
+ *  appears on the pot the table was showing, and recording it left the trophy
+ *  reading a few hundred chips under the number every player had just seen.
+ *
  *  `undefined` when the frame carries no `pot_results` and the amount is
  *  therefore unknowable here. */
 export function highlightPot(snapshot: TableSnapshot): number | undefined {
   if (!snapshot.pot_results?.length) return undefined;
-  return snapshot.pot_results.reduce((total, pot) => pot.refund ? total : total + pot.payout_amount, 0);
+  return snapshot.pot_results.reduce((total, pot) => pot.refund ? total : total + pot.amount, 0);
 }
 
 export function seatParticipated(seat?: SeatView) {

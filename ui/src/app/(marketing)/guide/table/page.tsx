@@ -27,9 +27,11 @@ export default function TableGuide() {
           bloqueados até o estado da mesa chegar completo. Quando um servidor entra em manutenção, o mesmo aviso
           informa que a mesa está migrando de servidor. A reconexão acontece sozinha e o jogo continua de onde
           parou.</GuideTerm>
-        <GuideTerm term="Maior pote de hoje">O maior pote já disputado nesta mesa hoje, sempre com o nome de quem
-          levou, inclusive quando todos correram e não houve showdown. A mão feita aparece junto quando o vencedor
-          mostrou as cartas. Atualiza a cada mão concluída.</GuideTerm>
+        <GuideTerm term="Maior pote disputado hoje">O maior pote realmente disputado nesta mesa hoje, sempre com o
+          nome de quem levou, inclusive quando todos correram e não houve showdown. A mão feita aparece junto quando o
+          vencedor mostrou as cartas. Só conta o que foi de fato disputado: quando alguém vai de all in e ninguém paga
+          o valor inteiro, a parte não paga volta para quem apostou e fica de fora da conta. Por isso um pote grande
+          na tela pode não bater o recorde do dia.</GuideTerm>
         <GuideTerm term="Mais ações da mesa">Reúne Ranking de mãos, Últimos vencedores e Preferências, mais Treinador e
           Convidar quando a mesa oferece os dois. Em telas largas esses itens também aparecem soltos no
           cabeçalho.</GuideTerm>
@@ -297,9 +299,10 @@ export default function TableGuide() {
         <li><span><b>Recompra:</b> com a pilha zerada e a participação pausada, o diálogo oferece um novo buy-in
           dentro dos limites da mesa, com auto rebuy e um atalho para resgatar as fichas grátis do dia.</span></li>
         <li><span><b>Sair da mesa:</b> fora de uma mão, a saída é imediata; dentro dela, fica marcada e acontece no
-          fim. Até lá, <b>Cancelar saída</b> desfaz o pedido.</span></li>
+          fim. Se a vez chegar até você antes disso, o servidor corre por você. <b>Cancelar saída</b> desfaz o pedido
+          a qualquer momento enquanto a saída ainda estiver marcada, inclusive na sua vez.</span></li>
         <li><span><b>Resumo da sessão:</b> ao sair, um resumo mostra tempo na mesa, entrada, mãos jogadas, maior pote
-          ganho e o resultado.</span></li>
+          ganho e o resultado. Ele fica na tela até você fechar; só então a mesa é liberada.</span></li>
         <li><span><b>Inatividade:</b> no último minuto antes da remoção, um aviso conta o tempo e oferece
           <b> Continuar na mesa</b>.</span></li>
       </GuideBullets></>

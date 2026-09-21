@@ -747,7 +747,13 @@ catalog.
   folded), and `stillInHand` counts `SittingOut` as in the hand for `countRemainingAndActable`/`activePlayers`/
   `shouldRunItTwice` (every seat `StartHand` deals in starts `Active`, so a `SittingOut` entry in `handOrder` is by
   construction a mid-hand pause — reading it as "out of the hand" deleted a live contestant and froze the runout).
-  See `docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md`. Both are hooked into `broadcastAll` (the same
+  See `docs/specs/2026-09-17-frozen-table-runout-and-sitout-fold.md`. **Both sweeps are loops, and both must stay
+  loops**: `applyActAndCommit` returns `(applied, completed, err)`, and they branch on `applied`. It used to return
+  only `completed` (`applied && Stage() == Complete`) as a bare bool, so every ordinary mid-hand auto-action read as
+  a failure, aborted the loop and forced a pointless reload, leaving the *second* unwaitable seat on the clock until
+  the turn timer fired: 15s plus a full 30s time bank the player could neither spend nor skip, since a pending exit
+  takes their action buttons away. Reported live on 2026-09-21; see
+  `docs/specs/2026-09-21-table-capture-four-fixes.md`. Both are hooked into `broadcastAll` (the same
   per-commit point `armTurnTimer`/inline preselections already use) — not gated behind
   `claimHandHooks`, since `RemovePlayerForActor`'s conditional commit already makes a duplicate sweep a safe no-op.
   `dealtIntoCurrentHand`/`handOrder` stays true through the entire post-hand
@@ -1051,6 +1057,29 @@ catalog.
   serializes `RequestHandoffCmd` against any in-flight command from the old connection, so a queued action from the
   device being replaced always commits before the handoff runs, and nothing new from it can arrive after its socket
   closes. See `docs/specs/2026-09-05-session-handoff-tableconn.md`.
+
+- **An action's precondition is `[gameplay_version, version]`, never `version` exactly.** The table item's `version`
+  is its optimistic-concurrency token, so *every* commit bumps it, including ones no viewer can observe:
+  `peek_cards` never broadcasts at all and a `reaction` only fans out its own dedicated frame. Requiring
+  `expected_snapshot_version == version` therefore rejected a perfectly legal call as `stale_state` because someone
+  else peeked at their own cards (23 times in 40 minutes in the 2026-09-21 capture). `StoredTable.GameplayVersion`
+  (`gameplay_version`, written in `CommitAction`'s own `UpdateExpression`) records the `version` of the last
+  **non-cosmetic** commit; `tablestore.CosmeticAction` (chat, reaction, peek_cards) is the one list, shared with the
+  `ReplayFrame` omission it already governed. `Actor.actionPreconditionHolds` accepts any expected version in
+  `[gameplayVersion, version]` with a matching `hand_id`, which keeps every safety property of the strict check:
+  nothing that touched the board, the pot, the betting round or a seat can have happened in that window, and the
+  engine still rejects an out-of-turn action. Same reasoning `handlePreselect` already applied via `expected_stage`.
+  Rows predating the attribute carry `0`, which callers read as "equal to `version`", degrading to the old strict
+  behaviour rather than accepting an arbitrarily stale action. A new cosmetic command goes in `CosmeticAction`;
+  anything that changes what a player sees must NOT. See `docs/specs/2026-09-21-table-capture-four-fixes.md`.
+
+- **"Maior pote disputado hoje" is `highlights.ContestedPot`, and the UI mirrors it exactly.** Refund layers are
+  excluded (uncalled excess handed back to its own bettor was never won, so a hand nobody contested must not lead
+  the day), and the layer's **gross** `Amount` is used rather than `PayoutAmount`, which is net of a rake the pot
+  display never shows. `ui`'s `highlightPot` must stay equivalent: it is what lets a client skip the post-hand read
+  entirely when the settled hand cannot beat the row already on screen. The label says *disputado* on purpose, since
+  a felt showing 206.750 can legitimately fail to beat a 154.250 record when 125.750 of it was refunded, and calling
+  that "maior pote de hoje" read as a frozen number. See `docs/specs/2026-09-21-table-capture-four-fixes.md`.
 
 ## Layout
 

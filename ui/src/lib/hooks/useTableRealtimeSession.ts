@@ -13,7 +13,7 @@ import {
 } from '@/lib/tableResilience';
 import {describeSnapshot, playSoundForTransition} from '@/lib/tableNarration';
 import {
-  advancePendingAction, resyncDelayMs, shouldRetryPendingAction, useTableActionQueue,
+  advancePendingAction, resyncDelayMs, retryTargetStillOpen, shouldRetryPendingAction, useTableActionQueue,
   type PendingTableAction
 } from '@/lib/hooks/useTableActionQueue';
 import {useTableSocket} from '@/lib/hooks/useTableSocket';
@@ -352,7 +352,12 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       // before commit), so resubmitting it is safe.
       if (message.action_id && pendingActionRef.current?.id === message.action_id) {
         const pending = pendingActionRef.current;
-        if (pending.awaitingRetry && pending.retries < MAX_ACTION_RETRIES) {
+        // The retry budget alone is not enough: the resync may be reporting a
+        // turn that is already over (see retryTargetStillOpen). Resubmitting
+        // into it is what turned a silent stale_state into a visible
+        // "ação inválida".
+        if (pending.awaitingRetry && pending.retries < MAX_ACTION_RETRIES &&
+          retryTargetStillOpen(pending, view.handId, message.snapshot.current_player_id || '', viewerId)) {
           const advanced = advancePendingAction(pending, version, view.handId);
           pendingActionRef.current = advanced;
           sendActFrame(advanced.id, advanced.action, advanced.amount, advanced.snapshotVersion, advanced.handId);

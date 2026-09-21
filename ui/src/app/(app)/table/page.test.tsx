@@ -394,6 +394,28 @@ describe('table page integration', () => {
     expect(mocks.push).toHaveBeenCalledWith('/lobby');
   });
   
+  test('keeps the recap on screen after the seat query reflects the removal', async () => {
+    // The removal effect writes `seated: false` into the cache. Rendering the
+    // buy-in panel on that write unmounts the recap before the player can read
+    // it — the seat is only really dropped when they close the recap.
+    let seatedNow = true;
+    mocks.setQueryData.mockImplementation((key: string[], value: {seated: boolean}) => {
+      if (key[0] === 'seated') seatedNow = value.seated;
+    });
+    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) => {
+      if (queryKey[0] === 'room') return {data: room};
+      if (queryKey[0] === 'seated') return {data: {seated: seatedNow, stack: 500}, isLoading: false};
+      return {data: []};
+    });
+    realtime({removed: {code: 'exit_requested', amount: 1234}});
+    const {rerender} = render(<TablePage/>);
+    await waitFor(() => expect(mocks.notification).toHaveBeenCalledWith('Você saiu com 1.234 fichas.', 'info'));
+
+    rerender(<TablePage/>);
+    expect(screen.getByRole('button', {name: 'close-recap'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /^buy-in/})).not.toBeInTheDocument();
+  });
+
   test('reacts to server removal by clearing the seat and leaving the frozen table', async () => {
     realtime({removed: {code: 'idle'}});
     render(<TablePage/>);

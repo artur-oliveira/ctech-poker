@@ -84,7 +84,7 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	if a.cached.ProspectiveCallAmountForActor(c.PlayerID) == 0 {
 		timeoutAction = betting.ActionCheck
 	}
-	_, err := a.applyActAndCommit(ctx, ActCmd{
+	_, _, err := a.applyActAndCommit(ctx, ActCmd{
 		PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: timeoutAction, Amount: 0, Reply: c.Reply,
 	})
 	if errors.Is(err, tablestore.ErrVersionConflict) {
@@ -100,7 +100,7 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 		if a.cached.ProspectiveCallAmountForActor(c.PlayerID) == 0 {
 			timeoutAction = betting.ActionCheck
 		}
-		_, err = a.applyActAndCommit(ctx, ActCmd{
+		_, _, err = a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: timeoutAction, Amount: 0, Reply: c.Reply,
 		})
 	}

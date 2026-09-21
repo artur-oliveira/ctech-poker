@@ -36,18 +36,19 @@ func TestRecordHand_OnlyOverwritesOnBiggerPot(t *testing.T) {
 	store := NewStore(db, env)
 	ctx := context.Background()
 
-	// The recorded pot is summed from contested PotResult layers, not from
-	// Payouts (which also carries uncalled-bet refunds) — see RecordHand.
+	// The recorded pot is the gross size of the contested PotResult layers, not
+	// Payouts (which also carries uncalled-bet refunds) and not PayoutAmount
+	// (which is net of rake, invisible on the felt) — see ContestedPot.
 	bigOutcome := hand.HandOutcome{
 		Payouts:    map[string]int64{"a": 500},
-		PotResults: []hand.PotResult{{PayoutAmount: 500, Winners: []string{"a"}}},
+		PotResults: []hand.PotResult{{Amount: 500, PayoutAmount: 495, Winners: []string{"a"}}},
 	}
 	if err := store.RecordHand(ctx, "table", "hand-1", bigOutcome, nil); err != nil {
 		t.Fatal(err)
 	}
 	smallOutcome := hand.HandOutcome{
 		Payouts:    map[string]int64{"a": 100},
-		PotResults: []hand.PotResult{{PayoutAmount: 100, Winners: []string{"a"}}},
+		PotResults: []hand.PotResult{{Amount: 100, PayoutAmount: 99, Winners: []string{"a"}}},
 	}
 	if err := store.RecordHand(ctx, "table", "hand-2", smallOutcome, nil); err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestRecordHand_OnlyOverwritesOnBiggerPot(t *testing.T) {
 
 	biggerOutcome := hand.HandOutcome{
 		Payouts:    map[string]int64{"a": 900},
-		PotResults: []hand.PotResult{{PayoutAmount: 900, Winners: []string{"a"}}},
+		PotResults: []hand.PotResult{{Amount: 900, PayoutAmount: 891, Winners: []string{"a"}}},
 	}
 	if err := store.RecordHand(ctx, "table", "hand-3", biggerOutcome, nil); err != nil {
 		t.Fatal(err)
@@ -110,7 +111,7 @@ func TestRecordHand_IgnoresRefundOnlyPots(t *testing.T) {
 
 	refundOnly := hand.HandOutcome{
 		Payouts:    map[string]int64{"a": 100_000},
-		PotResults: []hand.PotResult{{PayoutAmount: 100_000, Winners: []string{"a"}, Refund: true}},
+		PotResults: []hand.PotResult{{Amount: 100_000, PayoutAmount: 100_000, Winners: []string{"a"}, Refund: true}},
 	}
 	if err := store.RecordHand(ctx, "table", "hand-1", refundOnly, nil); err != nil {
 		t.Fatal(err)

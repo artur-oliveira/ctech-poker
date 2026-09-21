@@ -43,8 +43,12 @@ type Actor struct {
 	// handleSnapshot's authoritative read — see SnapshotReloadInterval.
 	lastLoadedAt time.Time
 	version      int
-	handID       string
-	activity     tablestore.TableActivity
+	// gameplayVersion mirrors StoredTable.GameplayVersion: the version as of
+	// the last commit that changed something a player can see. Everything
+	// between it and version is cosmetic drift a client had no way to observe.
+	gameplayVersion int
+	handID          string
+	activity        tablestore.TableActivity
 
 	turnTimeout       time.Duration
 	timeBankEnabled   bool

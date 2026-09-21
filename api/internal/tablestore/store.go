@@ -119,11 +119,24 @@ type ReplaySeat struct {
 // StoredTable is the current authoritative state of one table, as read from
 // poker_table_state.
 type StoredTable struct {
-	TableID  string        `dynamodbav:"pk"`
-	Version  int           `dynamodbav:"version"`
-	HandID   string        `dynamodbav:"hand_id"`
-	State    hand.State    `dynamodbav:"state"`
-	Activity TableActivity `dynamodbav:"activity,omitempty"`
+	TableID string `dynamodbav:"pk"`
+	Version int    `dynamodbav:"version"`
+	// GameplayVersion is the value Version had after the most recent commit
+	// that actually changed something a player can see. Cosmetic commits
+	// (CosmeticAction: chat, reactions, peek_cards) still bump Version — it is
+	// the item's optimistic-concurrency token and every write must move it —
+	// but they leave this one alone. A client holding any version in
+	// [GameplayVersion, Version] has therefore seen every gameplay event the
+	// server has, which is the real precondition an action needs; requiring
+	// exact equality with Version instead rejected actions whenever another
+	// player merely peeked at their own cards or sent a reaction (neither of
+	// which broadcasts a state frame, so nobody could even observe the drift).
+	// Absent on rows written before this shipped; callers treat 0 as "equal to
+	// Version", i.e. the old strict behaviour.
+	GameplayVersion int           `dynamodbav:"gameplay_version,omitempty"`
+	HandID          string        `dynamodbav:"hand_id"`
+	State           hand.State    `dynamodbav:"state"`
+	Activity        TableActivity `dynamodbav:"activity,omitempty"`
 	// TurnDeadlineUnixMs is the current player's absolute action deadline
 	// (unix millis), committed atomically with the state that made them
 	// current. It lives here, not inside hand.State, because it is wall-clock
@@ -152,4 +165,13 @@ type StoredTable struct {
 	// a live table never expires and a dead one is reaped after stateTTLDays.
 	// Never read for correctness — recovery ignores it.
 	TTL int64 `dynamodbav:"ttl,omitempty"`
+}
+
+// CosmeticAction reports whether an action log entry describes something that
+// never changed poker state: chat, reactions and peek_cards. They are still
+// committed (the audit trail and the reconnect-restorable activity blob both
+// need them) but they carry no replay frame and do not advance
+// StoredTable.GameplayVersion.
+func CosmeticAction(action string) bool {
+	return action == "chat" || action == "reaction" || action == "peek_cards"
 }

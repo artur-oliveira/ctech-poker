@@ -144,6 +144,13 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.cached = hand.NewTableFromState(stored.State)
 	a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
 	a.version = stored.Version
+	// Rows written before gameplay_version shipped carry 0; treating that as
+	// "equal to version" degrades to the old strict precondition rather than
+	// accepting an unboundedly old action.
+	a.gameplayVersion = stored.GameplayVersion
+	if a.gameplayVersion <= 0 || a.gameplayVersion > stored.Version {
+		a.gameplayVersion = stored.Version
+	}
 	a.handID = stored.HandID
 	a.activity = stored.Activity
 	a.pendingPersistedDeadline = stored.TurnDeadlineUnixMs

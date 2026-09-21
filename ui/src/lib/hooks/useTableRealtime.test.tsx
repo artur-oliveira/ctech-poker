@@ -273,6 +273,51 @@ describe('useTableRealtime', () => {
     }));
   });
 
+  test('drops a stale_state retry when the resync shows the turn already moved on', () => {
+    // Seen live (HAR 2026-09-21, table 01M327ZR25JS10AMJ7NWMK5YSE): a preselection
+    // resolved the viewer's turn server-side, the manual act came back
+    // stale_state, and the blind resubmit against the fresh version then hit
+    // "it is not player X's turn to act" — surfacing an "ação inválida" alert
+    // for a turn that had in fact been played correctly.
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('check'));
+
+    receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
+    act(() => vi.advanceTimersByTime(50));
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'sync_state', action_id: 'action-1'});
+
+    ws.send.mockClear();
+    receive({
+      type: 'state', action_id: 'action-1',
+      snapshot: snapshot({snapshot_version: 2, stage: 'turn', current_player_id: 'player-2'}),
+    });
+    expect(result.current.pendingAction).toBeNull();
+    expect(result.current.actionError).toBeNull();
+    expect(ws.send).not.toHaveBeenCalledWith(expect.objectContaining({type: 'act'}));
+  });
+
+  test('drops a stale_state retry when the resync shows a different hand', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('call'));
+
+    receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
+    act(() => vi.advanceTimersByTime(50));
+
+    ws.send.mockClear();
+    receive({
+      type: 'state', action_id: 'action-1',
+      snapshot: snapshot({snapshot_version: 2, hand_id: 'hand-next'}),
+    });
+    expect(result.current.pendingAction).toBeNull();
+    expect(ws.send).not.toHaveBeenCalledWith(expect.objectContaining({type: 'act'}));
+  });
+
   test('auto-retries a stale_state action against each fresh resync up to the retry cap', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);

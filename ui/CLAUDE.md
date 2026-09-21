@@ -126,6 +126,13 @@ off by default — do not build UI that assumes real money is on.
   behind two one-way render-time latches (first snapshot; reactions panel opened). A new table read
   belongs in the progressive hook unless it gates entry itself, and neither latch may be armed from
   an effect. See `docs/2026-09-04-table-entry-request-budget.md` and #212.
+  **The leave recap outlives the seat.** `useTableRemoval` clears `['seated']` the moment the server confirms an
+  `exit_requested` removal, and the page's `if (!seated) return <BuyInPanel/>` gate runs long before anything
+  inside the seated tree, so the recap gets its own branch *above* that gate and the seat is only really given up
+  when the player closes it (`closeRecap`). Rendering it inside the table tree meant the rebuy panel replaced it in
+  the very commit that created it, and the hook's own unit tests could not see that (their `setQueryData` is an
+  inert mock); the regression is pinned in the page's integration suite instead. See
+  `docs/specs/2026-09-21-table-capture-four-fixes.md`.
   Showdown bookkeeping is in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
   cooldown in `lib/hooks/useTableOverlays.ts`, the action-bar derivation in `lib/tableActions.ts`,
   and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that
@@ -257,7 +264,13 @@ off by default — do not build UI that assumes real money is on.
   `RESYNC_ERROR_CODES`, `TERMINAL_ERROR_CODES`, `MAX_ACTION_RETRIES`, the timeouts, the
   `auxRetryDelayMs` backoff and the player-facing copy — lives in `lib/tableResilience.ts` and is
   unit-tested there; `useTableActionQueue` owns the retry registry and timer lifecycle, with its
-  retry decision independently covered as a pure function.
+  retry decision independently covered as a pure function. **A `stale_state` retry is judged against the resync, not
+  only against the retry budget.** `retryTargetStillOpen` gates the resubmit on the fresh snapshot still carrying the
+  same `hand_id` *and* still having the viewer on the clock; otherwise the pending action is dropped silently,
+  because the turn is already over. Without that gate a `check` whose turn had meanwhile been resolved by the
+  player's own preselection was resubmitted out of turn, the server answered `invalid_action` ("it is not player X's
+  turn to act"), and the player saw a spurious "Essa ação não é mais válida" for a turn that was in fact played
+  correctly. See `docs/specs/2026-09-21-table-capture-four-fixes.md`.
   Snapshot-transition narration (`describeSnapshot`, `playSoundForTransition`) is
   `lib/tableNarration.ts`. See `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
 - **Press-and-hold is one hook.** `lib/hooks/useHoldRepeat.ts` owns the accelerating repeat used by

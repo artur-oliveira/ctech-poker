@@ -50,7 +50,7 @@ func TestRaiseCancelsFixedCallWhenAmountChanges(t *testing.T) {
 	if legal == nil || legal.MinRaiseTo <= 0 {
 		t.Fatal("current player cannot raise in test setup")
 	}
-	if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+	if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 		PlayerID: current, ActionID: "raise-1", Action: betting.ActionRaise, Amount: legal.MinRaiseTo,
 	}); err != nil {
 		t.Fatalf("raise: %v", err)
@@ -94,7 +94,7 @@ func TestInlinePreselectionExecution(t *testing.T) {
 
 	// Now p1 calls. broadcastAll will trigger processInlinePreselections for p2.
 	callAmount := game.ProspectiveCallAmountForActor(p1)
-	if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+	if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 		PlayerID: p1, ActionID: "p1-call", Action: betting.ActionCall, Amount: callAmount,
 	}); err != nil {
 		t.Fatalf("p1 call: %v", err)
@@ -183,7 +183,7 @@ func TestCheckFoldCancelledByNewRaise(t *testing.T) {
 	if legal == nil || legal.MinRaiseTo <= 0 {
 		t.Fatal("current player cannot raise in test setup")
 	}
-	if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+	if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 		PlayerID: current, ActionID: "raise-1", Action: betting.ActionRaise, Amount: legal.MinRaiseTo,
 	}); err != nil {
 		t.Fatalf("raise: %v", err)
@@ -232,7 +232,7 @@ func TestCheckFoldStillResolvesFoldWhenAmountUnchanged(t *testing.T) {
 			t.Fatal("test setup: hand ended before the waiting player's turn")
 		}
 		callAmount := game.ProspectiveCallAmountForActor(acting)
-		if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+		if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 			PlayerID: acting, ActionID: "advance-" + acting, Action: betting.ActionCall, Amount: callAmount,
 		}); err != nil {
 			t.Fatalf("advance turn: %v", err)
@@ -329,7 +329,7 @@ func TestAllInPreselectionDowngradesToCallWhenStackIsShort(t *testing.T) {
 		t.Fatalf("set preselect all_in: %v", err)
 	}
 
-	if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+	if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 		PlayerID: "big", ActionID: "raise-1", Action: betting.ActionRaise, Amount: 500,
 	}); err != nil {
 		t.Fatalf("raise: %v", err)
@@ -386,7 +386,7 @@ func TestAllInPreselectionUnaffectedByAnotherRaise(t *testing.T) {
 	if legal == nil || legal.MinRaiseTo <= 0 {
 		t.Fatal("current player cannot raise in test setup")
 	}
-	if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+	if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 		PlayerID: current, ActionID: "raise-1", Action: betting.ActionRaise, Amount: legal.MinRaiseTo,
 	}); err != nil {
 		t.Fatalf("raise: %v", err)

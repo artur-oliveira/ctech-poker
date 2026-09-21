@@ -13,9 +13,16 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
-func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
-	var applied bool
-	err := a.mutate(func() error {
+// applyActAndCommit reports two distinct things the callers used to conflate.
+// `applied` is whether the action was actually taken (false for an idempotent
+// replay of an action_id already committed); `completed` is whether taking it
+// pushed the hand all the way to Complete on THIS actor, which is the signal
+// the gamification hooks key off. Returning only the second as a bare bool
+// meant the auto-fold/preselection sweeps read every ordinary mid-hand
+// auto-action as a failure and bailed out of their own loop — see
+// processPendingExitAutoFolds.
+func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (applied bool, completed bool, err error) {
+	err = a.mutate(func() error {
 		bettingAction := a.cached.NormalizedActionForActor(c.PlayerID, c.Action)
 		ok, err := a.cached.ActIdempotent(c.ActionID, c.PlayerID, c.Action, c.Amount)
 		if err != nil {
@@ -53,9 +60,9 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 		return a.commit(ctx, c.ActionID, &entry)
 	})
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
-	return applied && a.cached.Stage() == hand.Complete, nil
+	return applied, applied && a.cached.Stage() == hand.Complete, nil
 }
 
 // commitOutcomeLogEntries appends one "won" or "tie" ActionLogEntry per
@@ -125,6 +132,9 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 		// without a real (DynamoDB Local) backing store. Never nil in
 		// production — the manager always supplies a real *tablestore.Store.
 		a.version++
+		if !tablestore.CosmeticAction(entry.Action) {
+			a.gameplayVersion = a.version
+		}
 		a.notifyChange()
 		return nil
 	}
@@ -148,7 +158,7 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	}
 	newState := a.cached.ExportState()
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
-	if !cosmeticAction(entry.Action) {
+	if !tablestore.CosmeticAction(entry.Action) {
 		entry.Frame = replayFrameFor(a.cached.ViewFor(""))
 	}
 	deadline := a.turnDeadlineForPersist()
@@ -157,6 +167,9 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 		return err
 	}
 	a.version++
+	if !tablestore.CosmeticAction(entry.Action) {
+		a.gameplayVersion = a.version
+	}
 	a.notifyChange()
 	return nil
 }
@@ -174,20 +187,17 @@ func (a *Actor) notifyChange() {
 	go a.changeNotifier.Notify(context.Background(), a.id)
 }
 
-// cosmeticAction reports whether a log entry describes something that never
-// changed the poker state — chat and reactions. Their rows used to carry a
-// full ReplayFrame (up to nine seats, board, pots) exactly like a bet or a
-// fold, which is pure write amplification: the frame would be byte-identical
-// to the one on the poker action that preceded it, and it is written
-// transactionally with state/log/guard and then shipped on to Stream/S3 (#221).
+// The canonical list lives in tablestore.CosmeticAction, because the store
+// needs the same answer to decide whether a commit advances gameplay_version.
+// Cosmetic rows carry no ReplayFrame (up to nine seats, board, pots), which
+// would otherwise be pure write amplification: byte-identical to the frame on
+// the poker action that preceded it, written transactionally with
+// state/log/guard and then shipped on to Stream/S3 (#221).
 //
 // Every consumer already tolerates a frameless row: the replayer steps only
 // through actions that carry a frame, the timeline falls back to the previous
 // street, pokerstats reads the board off poker actions, and a report resolves
 // its evidence (player, message, reaction) from the entry's own fields.
-func cosmeticAction(action string) bool {
-	return action == "chat" || action == "reaction"
-}
 
 // replayFrameFor deliberately copies only public gameplay state. In
 // particular, SeatView.HoleCards is never persisted in the shared action log:

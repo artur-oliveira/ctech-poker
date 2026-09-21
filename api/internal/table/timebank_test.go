@@ -39,7 +39,7 @@ func TestTimeBankConsumesOnlyAfterBaseDeadline(t *testing.T) {
 
 	actor.armTurnTimer(current, hand.PreFlop, 0)
 	timeNowFunc = func() time.Time { return actor.turnBaseDeadline.Add(7 * time.Second) }
-	if _, err := actor.applyActAndCommit(context.Background(), ActCmd{
+	if _, _, err := actor.applyActAndCommit(context.Background(), ActCmd{
 		PlayerID: current, ActionID: "act-1", Action: betting.ActionFold,
 	}); err != nil {
 		t.Fatal(err)

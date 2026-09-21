@@ -44,7 +44,7 @@ describe('TodayHighlight', () => {
   test('renders the pot amount once a highlight is recorded', async () => {
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Maior pote de hoje')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Maior pote disputado hoje')).toBeInTheDocument());
     expect(screen.getByText('25.000')).toBeInTheDocument();
   });
 
@@ -95,14 +95,14 @@ describe('TodayHighlight', () => {
       revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Maior pote de hoje')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Maior pote disputado hoje')).toBeInTheDocument());
     expect(screen.queryByText(/Alice/)).not.toBeInTheDocument();
   });
 
   test('omits card text when nothing was revealed', async () => {
     getTodayHighlight.mockResolvedValueOnce(highlight({revealed: []}));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Maior pote de hoje')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Maior pote disputado hoje')).toBeInTheDocument());
     expect(screen.queryByText(/Ah|Kd/)).not.toBeInTheDocument();
   });
 
@@ -194,7 +194,7 @@ describe('TodayHighlight', () => {
     const user = userEvent.setup();
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
     renderHighlight();
-    const button = await screen.findByRole('button', {name: /Maior pote de hoje/});
+    const button = await screen.findByRole('button', {name: /Maior pote disputado hoje/});
     expect(button).toHaveAttribute('aria-expanded', 'false');
 
     await user.click(button);
@@ -208,7 +208,7 @@ describe('TodayHighlight', () => {
     const user = userEvent.setup();
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
     renderHighlight();
-    const button = await screen.findByRole('button', {name: /Maior pote de hoje/});
+    const button = await screen.findByRole('button', {name: /Maior pote disputado hoje/});
 
     await user.click(button);
     expect(button).toHaveAttribute('aria-expanded', 'true');
@@ -221,7 +221,7 @@ describe('TodayHighlight', () => {
     const user = userEvent.setup();
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
     renderHighlight();
-    const button = await screen.findByRole('button', {name: /Maior pote de hoje/});
+    const button = await screen.findByRole('button', {name: /Maior pote disputado hoje/});
 
     await user.click(button);
     expect(button).toHaveAttribute('aria-expanded', 'true');

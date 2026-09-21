@@ -61,8 +61,16 @@ export function highlightWinnerLabel(board?: string[],
   return category ? `${names} · ${category}` : names;
 }
 
-// System-detected "biggest pot of the day" for this table — no player action
-// required, distinct from the manual, player-initiated hand-share flow.
+// System-detected biggest CONTESTED pot of the day for this table — no player
+// action required, distinct from the manual, player-initiated hand-share flow.
+//
+// "Disputado" is load-bearing, not decoration. An uncalled all-in everyone
+// folds to is handed straight back to the player who bet it, so a felt showing
+// a 206.750 pot can legitimately fail to beat a 154.250 record (only 81.000 of
+// it was ever contested). Labelling that "maior pote de hoje" read as a number
+// frozen on a stale value — the reported bug — because the comparison the
+// player was making was against a pot they had just watched. See
+// highlights.ContestedPot and `highlightPot`.
 // Fetched once on mount; re-fetched (via invalidateQueries, not polling) the
 // moment a hand this viewer was watching completes, so a bigger pot from
 // this table shows up without a page reload.
@@ -127,9 +135,10 @@ export function TodayHighlight({tableId, handId, handComplete, handPot, variant 
   return (
     <div className={`today-highlight-wrap ${expanded ? 'expanded' : ''}`} ref={wrapRef}>
       <button type="button" className="today-highlight" aria-expanded={expanded}
+              title="O maior pote realmente disputado nesta mesa hoje. Apostas não pagas, devolvidas a quem apostou, não contam."
               onClick={() => setExpanded(v => !v)}>
         <Trophy aria-hidden="true"/>
-        <span className="today-highlight-label">Maior pote de hoje</span>
+        <span className="today-highlight-label">Maior pote disputado hoje</span>
         <span className="today-highlight-pot">{data.pot.toLocaleString('pt-BR')}</span>
         {revealedText && <span className="today-highlight-cards">{revealedText}</span>}
       </button>

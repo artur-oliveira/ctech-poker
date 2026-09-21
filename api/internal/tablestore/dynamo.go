@@ -246,10 +246,17 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		"#state":   "state",
 		"#ttl":     "ttl",
 	}
+	// A cosmetic commit leaves gameplay_version untouched, which is what lets
+	// validateActionPrecondition accept an action submitted against any
+	// version in [gameplay_version, version] — see StoredTable.GameplayVersion.
+	gameplayAssignment := ", gameplay_version = :newVersion"
+	if CosmeticAction(entry.Action) {
+		gameplayAssignment = ""
+	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
 		"SET #version = :newVersion, hand_id = :handID, #state = :state, activity = :activity, "+
 			"turn_deadline_unix_ms = :turnDeadline, next_hand_deadline_unix_ms = :nextHandDeadline, "+
-			"last_action_at = :lastActionAt, #ttl = :ttl",
+			"last_action_at = :lastActionAt, #ttl = :ttl"+gameplayAssignment,
 		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {

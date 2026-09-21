@@ -21,9 +21,14 @@ describe('ExitStatus', () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  test('does not show a cancel action once it is the viewer\'s own turn (an imminent auto-fold)', () => {
-    render(<ExitStatus pendingExit isViewerTurn onCancelAction={vi.fn()}/>);
-    expect(screen.queryByRole('button', {name: 'Cancelar saída'})).not.toBeInTheDocument();
+  test('keeps cancel reachable on the viewer\'s own turn, when they have no other control left', async () => {
+    // A pending exit hides the action buttons. If the server's auto-fold sweep
+    // is late, withholding cancel too left the player unable to do anything at
+    // all while their turn and time bank ran out (live report, 2026-09-21).
+    const onCancel = vi.fn();
+    render(<ExitStatus pendingExit isViewerTurn onCancelAction={onCancel}/>);
     expect(screen.getByText(/Saindo/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Cancelar saída'}));
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 });

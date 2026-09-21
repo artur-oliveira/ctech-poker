@@ -453,7 +453,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 		return err
 	}
 	a.markLastAction(c.PlayerID)
-	_, err := a.applyActAndCommit(ctx, c)
+	_, _, err := a.applyActAndCommit(ctx, c)
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		// Two distinct reasons to reload and retry exactly once:
 		//   - ErrVersionConflict: another instance committed first: definite
@@ -476,7 +476,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 				return reloadErr
 			}
 			a.markLastAction(c.PlayerID)
-			_, err = a.applyActAndCommit(ctx, c)
+			_, _, err = a.applyActAndCommit(ctx, c)
 		}
 	}
 	if errors.Is(err, tablestore.ErrDuplicateAction) {
@@ -505,13 +505,42 @@ func (a *Actor) validateActionPrecondition(ctx context.Context, c ActCmd) error 
 	if c.ExpectedSnapshotVersion == 0 || c.ExpectedHandID == "" {
 		return fmt.Errorf("table: incomplete action precondition")
 	}
-	if uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
+	if !a.actionPreconditionHolds(c) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
 	}
-	if uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
+	if !a.actionPreconditionHolds(c) {
 		return fmt.Errorf("table: stale action state")
 	}
 	return nil
+}
+
+// actionPreconditionHolds answers "was this action decided on a view of the
+// table that has not missed a single gameplay event?".
+//
+// It deliberately does NOT require exact equality with a.version. That counter
+// is bumped by every commit, cosmetic ones included — and a peek_cards never
+// broadcasts at all while a reaction only fans out its own dedicated frame, so
+// a client cannot even observe those bumps, let alone echo them back. Demanding
+// equality made another player peeking at their own cards reject this player's
+// perfectly legal call as "stale action state" — 23 times in 40 minutes in the
+// 2026-09-21 capture of table 01M327ZR25JS10AMJ7NWMK5YSE, each one costing the
+// player a resync round trip mid-decision.
+//
+// Accepting the whole [gameplayVersion, version] window keeps every safety
+// property the strict check had: the hand must match, nothing that touched the
+// board, the pot, the betting round or any seat may have happened since (that
+// would have moved gameplayVersion), and the engine still rejects an action
+// arriving out of turn. Preselections already reason this way — see
+// handlePreselect's expected_stage branch.
+func (a *Actor) actionPreconditionHolds(c ActCmd) bool {
+	if a.handID != c.ExpectedHandID {
+		return false
+	}
+	floor := a.gameplayVersion
+	if floor <= 0 || floor > a.version {
+		floor = a.version
+	}
+	return c.ExpectedSnapshotVersion >= uint64(floor) && c.ExpectedSnapshotVersion <= uint64(a.version)
 }

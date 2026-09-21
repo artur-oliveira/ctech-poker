@@ -74,7 +74,10 @@ func (a *Actor) processInlinePreselections(ctx context.Context) {
 
 		delete(a.activity.Preselections, current)
 		autoActionID := fmt.Sprintf("auto-preselect-%s-%s-%d", current, preselection.Selection, a.version)
-		applied, err := a.applyActAndCommit(ctx, ActCmd{
+		// `applied`, not `completed`: an ordinary mid-hand preselection does not
+		// end the hand, and reading that as a failure used to abandon the loop
+		// (and force a pointless reload) after every single auto-action.
+		applied, _, err := a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: current,
 			ActionID: autoActionID,
 			Action:   action,
@@ -108,7 +111,12 @@ func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
 	for a.cached != nil && a.cached.Stage() != hand.Complete && a.cached.CurrentPlayerShouldAutoFoldForActor() {
 		current := a.cached.CurrentPlayerIDForActor()
 		autoActionID := fmt.Sprintf("auto-fold-%s-%d", current, a.version)
-		applied, err := a.applyActAndCommit(ctx, ActCmd{
+		// See processInlinePreselections: a mid-hand auto-fold is `applied` but
+		// not `completed`. Bailing on the latter left every seat behind the
+		// first one still on the clock, waiting out a turn timer and a full
+		// time bank nobody could spend — a pending exit hides the action
+		// buttons, so the player it is waiting on cannot act at all.
+		applied, _, err := a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: current, ActionID: autoActionID, Action: betting.ActionFold,
 		})
 		if err != nil || !applied {
