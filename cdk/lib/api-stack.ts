@@ -44,45 +44,13 @@ interface ApiStackProps extends cdk.StackProps {
   logsBucketName: string;
   avatarsBucketName: string;
   avatarBaseUrlParam: string;
-  tableStateArn: string;
-  tableStateHistoryArn: string;
-  actionLogArn: string;
-  actionGuardsArn: string;
-  roomsTableArn: string;
-  playerProfilesTableArn: string;
-  playerNotesTableArn: string;
-  chatPrefsTableArn: string;
-  botcheckContestsTableArn: string;
-  handMetaTableArn: string;
-  handSharesTableArn: string;
-  pokerStatsTableArn: string;
-  highlightsTableArn: string;
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
   turnstileSecretParam: string;
   realMoneyEnabledParam: string;
   legalSignoffRefParam: string;
-  achievementProgressTableArn: string;
-  leaderboardStatsTableArn: string;
-  dailyRewardTableArn: string;
-  playerSessionsTableArn: string;
-  playerHandsTableArn: string;
-  handRevealsTableArn: string;
-  playerMatchupsTableArn: string;
   walletWebhookHmacSecretParam: string;
-  sandboxPurchasesTableArn: string;
-  pendingCashoutsTableArn: string;
-  reactionEntitlementsTableArn: string;
-  reactionPurchasesTableArn: string;
-  cosmeticEntitlementsTableArn: string;
-  cosmeticPurchasesTableArn: string;
-  cosmeticLoadoutsTableArn: string;
-  tableEntitlementsTableArn: string;
-  socialEdgesTableArn: string;
-  recentPlayersTableArn: string;
-  socialEventsTableArn: string;
-  playerReportsTableArn: string;
   socialGraphEnabledParam: string;
   /** Enables billable custom metrics/alarms; off unless explicitly opted in. */
   cloudwatchAlarmsEnabled?: boolean;
@@ -112,19 +80,6 @@ export class PokerApiStack extends cdk.Stack {
       deploymentsBucketName,
       logsBucketName,
       avatarsBucketName,
-      tableStateArn,
-      tableStateHistoryArn,
-      actionLogArn,
-      actionGuardsArn,
-      roomsTableArn,
-      playerProfilesTableArn,
-      playerNotesTableArn,
-      chatPrefsTableArn,
-      botcheckContestsTableArn,
-      handMetaTableArn,
-      handSharesTableArn,
-      pokerStatsTableArn,
-      highlightsTableArn,
       walletUrlParam,
       pokerClientIdParam,
       pokerClientSecretParam,
@@ -132,26 +87,7 @@ export class PokerApiStack extends cdk.Stack {
       realMoneyEnabledParam,
       legalSignoffRefParam,
       avatarBaseUrlParam,
-      achievementProgressTableArn,
-      leaderboardStatsTableArn,
-      playerSessionsTableArn,
-      playerHandsTableArn,
-      handRevealsTableArn,
-      playerMatchupsTableArn,
-      dailyRewardTableArn,
       walletWebhookHmacSecretParam,
-      sandboxPurchasesTableArn,
-      pendingCashoutsTableArn,
-      reactionEntitlementsTableArn,
-      reactionPurchasesTableArn,
-      cosmeticPurchasesTableArn,
-      cosmeticEntitlementsTableArn,
-      cosmeticLoadoutsTableArn,
-      tableEntitlementsTableArn,
-      socialEdgesTableArn,
-      recentPlayersTableArn,
-      socialEventsTableArn,
-      playerReportsTableArn,
       socialGraphEnabledParam,
       cloudwatchAlarmsEnabled = false,
       enableSsmAgent = false,
@@ -176,14 +112,12 @@ export class PokerApiStack extends cdk.Stack {
       roles: [instanceRole.roleName],
     });
 
-    const tableArns = [
-      tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
-      achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn, handRevealsTableArn, playerMatchupsTableArn,
-      playerNotesTableArn, chatPrefsTableArn, botcheckContestsTableArn, handMetaTableArn, handSharesTableArn, pokerStatsTableArn, highlightsTableArn, sandboxPurchasesTableArn,
-      pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn, cosmeticEntitlementsTableArn,
-      cosmeticPurchasesTableArn, cosmeticLoadoutsTableArn, tableEntitlementsTableArn, socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
-    ];
+    const pokerTableArn =
+      `arn:aws:dynamodb:${this.region}:${this.account}:table/${environment}_poker*`;
+
+    const pokerIndexArn =
+      `arn:aws:dynamodb:${this.region}:${this.account}:table/${environment}_poker*/index/*`;
+
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
         'dynamodb:GetItem',
@@ -197,7 +131,10 @@ export class PokerApiStack extends cdk.Stack {
         'dynamodb:ConditionCheckItem',
         'dynamodb:TransactWriteItems',
       ],
-      resources: [...tableArns, ...tableArns.map((arn) => `${arn}/index/*`)],
+      resources: [
+        pokerTableArn,
+        pokerIndexArn,
+      ],
     }));
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
@@ -634,10 +571,6 @@ def handler(event, context):
     //
     // The role and instance profile are owned by this stack so permissions
     // evolve together with the API's storage and runtime configuration.
-    new cdk.CfnOutput(this, 'TableStateArn', {value: tableStateArn, exportName: `${id}-table-state-arn`});
-    new cdk.CfnOutput(this, 'ActionLogArn', {value: actionLogArn, exportName: `${id}-action-log-arn`});
-    new cdk.CfnOutput(this, 'ActionGuardsArn', {value: actionGuardsArn, exportName: `${id}-action-guards-arn`});
-    new cdk.CfnOutput(this, 'RoomsTableArn', {value: roomsTableArn, exportName: `${id}-rooms-table-arn`});
     new cdk.CfnOutput(this, 'WalletUrlParameterArn', {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${walletUrlParam}`,
       exportName: `${id}-wallet-url-parameter-arn`,

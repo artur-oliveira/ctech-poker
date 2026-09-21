@@ -39,9 +39,11 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   itself only ever configures one instance type. `minCapacity`/`maxCapacity` are unchanged; the
   table-leasing model already tolerates 2 concurrently-running instances (`tablelease` is a
   latency hint, not a correctness lock). No on-demand base instance — deferred, see `README.md`.
-- **33 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
-  then 27, then 29, then 30). `poker_cosmetic_loadouts` (#313), `poker_chat_prefs` (#327) and `poker_botcheck_contests`
-  (#322) are the newest three. `poker_hand_reveals` / `poker_hand_reveal_payments` back the paid history winner-cards
+- **36 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
+  then 27, then 29, then 30, then 33). `poker_wallet_alert_prefs` (#304), `poker_promo_codes` and
+  `poker_promo_redemptions` (#348) are the newest three; all shipped in the promo-codes-and-wallet-alerts PR but were
+  missed from this table list at the time. `poker_cosmetic_loadouts` (#313), `poker_chat_prefs` (#327) and
+  `poker_botcheck_contests` (#322) predate them. `poker_hand_reveals` / `poker_hand_reveal_payments` back the paid history winner-cards
   reveal (`docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`). The newest, `poker_hand_meta`, is the single
   "player metadata about a hand" record #349 and #347 were coordinated to share (`internal/handmeta`): a
   per-(player, hand) street-note/review-marker/collections row, plus a player's saved `/hands` filters under a fixed

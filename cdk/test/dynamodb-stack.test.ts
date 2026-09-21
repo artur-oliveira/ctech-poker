@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 33);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 36);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -419,5 +419,5 @@ test('creates no alarms and no SNS topic reference when cloudwatchAlarmsEnabled 
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::SNS::Topic', 0);
   // Tables themselves are unaffected by the flag.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 33);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 36);
 });
