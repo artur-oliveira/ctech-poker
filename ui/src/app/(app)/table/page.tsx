@@ -386,6 +386,7 @@ function TableContent() {
           racing the banner's own exit timer into dismissing it before
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
+                  connected={rt.status === 'connected'}
                   maxSeats={layoutCapacity} seatLayoutKey={id}
                   turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}

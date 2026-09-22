@@ -354,6 +354,26 @@ describe('table presentation', () => {
     expect(armed.container.querySelector('.hand-outcome-ring-standalone')).toBeInTheDocument();
   });
 
+  test('freezes the on-the-clock seat\'s countdown ring while the viewer is disconnected, without hiding whose turn it was', () => {
+    const snapshot = {
+      ...snapshotForScenario('pre_flop'),
+      current_player_id: 'leo_rio',
+      action_base_deadline_unix_ms: Date.now() + 15_000,
+      action_deadline_unix_ms: Date.now() + 30_000
+    };
+    const live = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+                                    pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}
+                                    connected/>);
+    expect(live.container.querySelector('.game-seat.is-turn .seat-turn-ring')).toBeInTheDocument();
+    live.unmount();
+
+    const disconnected = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+                                            pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
+                                            holdOutcomeOpen={false} connected={false}/>);
+    expect(disconnected.container.querySelector('.game-seat.is-turn')).toBeInTheDocument();
+    expect(disconnected.container.querySelector('.game-seat.is-turn .seat-turn-ring')).not.toBeInTheDocument();
+  });
+
   test('queues the paid winner-card offer behind the primary hand outcome', async () => {
     useVerticalStage();
     const snapshot = snapshotForScenario('winner_cards');

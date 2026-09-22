@@ -227,6 +227,12 @@ type Props = {
   bigBlind: number;
   turnTimeoutMs?: number;
   nowMs: number;
+  // False while the viewer's own socket is down: the on-the-clock seat still
+  // highlights (real information from the last snapshot), but its countdown
+  // ring stops ticking rather than counting down live against a turn the
+  // server may have already moved past. Defaults true so replay (no socket)
+  // is unaffected.
+  connected?: boolean;
   outcome: HandOutcomeState | null;
   holdOutcomeOpen: boolean;
   // Undefined/0 hides the ring; the page only supplies a deadline once one
@@ -271,6 +277,7 @@ function TableStageImpl({
                              bigBlind,
                              turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
                              nowMs,
+                             connected = true,
                              outcome,
                              holdOutcomeOpen,
                              nextHandDeadlineMs,
@@ -324,6 +331,7 @@ function TableStageImpl({
     // isTurn). Handing them to the other eight would re-render all of them on
     // every frame for a clock none of them draws.
     const isTurn = snapshot.current_player_id === seat.player_id;
+    const showTiming = isTurn && connected;
     return <Seat key={leaving ? `left:${seat.player_id}` : seat.player_id} seat={seat} index={index}
                  leaving={leaving}
                  joining={!leaving && joined.has(seat.player_id)}
@@ -333,10 +341,10 @@ function TableStageImpl({
                  winStanding={standing}
                  refundAmount={breakdown.refund}
                  isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
-                 baseDeadlineMs={isTurn ? snapshot.action_base_deadline_unix_ms : undefined}
-                 actionDeadlineMs={isTurn ? snapshot.action_deadline_unix_ms : undefined}
-                 nowMs={isTurn ? nowMs : undefined}
-                 turnTimeoutMs={isTurn ? turnTimeoutMs : undefined}
+                 baseDeadlineMs={showTiming ? snapshot.action_base_deadline_unix_ms : undefined}
+                 actionDeadlineMs={showTiming ? snapshot.action_deadline_unix_ms : undefined}
+                 nowMs={showTiming ? nowMs : undefined}
+                 turnTimeoutMs={showTiming ? turnTimeoutMs : undefined}
                  bigBlind={bigBlind}
                  isViewer={seat.player_id === viewer}
                  canRevealCards={seat.player_id === viewer && canRevealCards}
