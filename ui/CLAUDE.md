@@ -293,6 +293,30 @@ off by default — do not build UI that assumes real money is on.
   keyboard ramp identically. OS key auto-repeat stays ignored (`isBetAdjustKey` drops
   `event.repeat`); the hook's timers are the cadence. See
   `docs/2026-09-01-bet-hold-repeat.md`.
+- **A reaction impact is a material behaving, not a particle cloud.** The effects that
+  work (`knife`, `tomato`, `poop`, `turtle`) all share one grammar: a solid
+  silhouette, **one decisive physical event**, gravity, and irregular sizing —
+  `knife` is eight drips of eight lengths on eight delays, not a spray. `cry`,
+  `tear` and `chip` were rebuilt to it (2026-09-29): tears leave the 😭's eyes and
+  swell → neck → stretch → flatten, a thrown drop breaks into a wet ring plus a
+  rebound jet plus a crown of ballistic droplets. A new impact belongs in that
+  grammar, in tokens, with no library, no filter and no canvas, and entirely inside
+  `.reaction-impact` so the sheet's `prefers-reduced-motion` block (`display: none`
+  plus a landed projectile) keeps covering it. See
+  `docs/2026-09-29-reaction-impact-materials.md`.
+- **A chip is a disc with a milled rim, and there is one of them.** `.chip`
+  (`renderer.css`) is the single chip anatomy behind the pot, every seat bet and every
+  thrown reaction chip: five `closest-side` background layers — specular, an outer rim
+  ring, the face disc ending in a dark inner ring, six `--paper` edge spots, the rim —
+  plus a bottom edge and cast shadow. Two traps are load-bearing. A `radial-gradient`'s
+  percentages resolve against **`farthest-corner`** unless you say `closest-side`, so a
+  face written as `66%` covers 94% of the disc and swallows the spot band whole; and
+  edge spots that reach the outer edge read as cog teeth, which is the failure the old
+  2px dashed border already had — the outer rim ring exists to inset them. A value tier
+  repaints **only** `--chip-face` (and tiers 4–5 append a glow after `--chip-edge`);
+  the rim, the spots and the edge are what still say "chip" at 15px, so tier must never
+  touch the anatomy. The landing page's `.chip-orbit`/`.chip-a`/`.chip-b` are separate
+  decorations and are not this. See `docs/2026-09-29-reaction-impact-materials.md`.
 - **The docked asides are one pattern.** `Chat`, `TableReactions` and `LastWinners` share the
   `column-reverse` toggle/panel stack, `useHoverPanel` (hover open with a close grace period) and
   the `.table-aside-skirt` hit-area class. The toggle's click belongs to that hook too

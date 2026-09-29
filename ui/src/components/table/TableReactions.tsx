@@ -30,7 +30,7 @@ const REACTION_THEATER = {
   laugh: {accent: 'HA!', particles: ['HA', 'HA', 'HA', 'HA']},
   wow: {accent: '!', particles: ['✦', '!', '✦', '!']},
   angry: {accent: '', particles: ['', '', '', '']},
-  cry: {accent: '', particles: ['', '', '', '', '']},
+  cry: {accent: '', particles: ['', '', '', '', '', '']},
   nervous: {accent: '', particles: ['•', '•', '•', '•', '•']},
   cold: {accent: '', particles: ['❄', '❄', '❄', '❄', '❄', '❄']},
   fire: {accent: '', particles: ['', '', '', '', '', '']},
@@ -43,7 +43,7 @@ const REACTION_THEATER = {
   coffee: {accent: '', particles: ['~', '~', '~']},
   clover: {accent: '', particles: ['🍀', '✦', '🍀', '✦', '🍀', '✦']},
   horseshoe: {accent: '', particles: ['★', '★', '★', '★', '★', '★']},
-  tear: {accent: '', particles: []},
+  tear: {accent: '', particles: ['', '', '', '', '', '', '', '']},
   tomato: {accent: 'SPLAT', particles: ['', '', '', '', '', '']},
   poop: {accent: 'ECA', particles: ['·', '·', '·', '·', '·']},
   rofl: {accent: 'HA!', particles: ['🤣', '🤣', '🤣']},
@@ -58,33 +58,47 @@ const REACTION_THEATER = {
   boomerang: {accent: 'VOLTOU', particles: ['', '', '']}
 } satisfies Record<TableReactionID, {accent: string; particles: string[]}>;
 
-function ReactionChipStack({className = '', style}: {className?: string; style?: CSSProperties}) {
-  return <span className={`reaction-table-chip-stack ${className}`} style={style} aria-hidden="true">
-    {[0, 1, 2].map(index => <span key={index} className="chip"
-                                  style={{'--i': index} as CSSProperties}/>)}</span>;
+/** A stack of `count` chips. Three reads as the catalogue's icon; the thrown
+ *  projectile and the scattered burst pieces are one or two, because a column
+ *  of discs at 20px is a blob and a single disc still reads as a chip. */
+function ReactionChipStack({count = 3, className = '', style}: {
+  count?: number; className?: string; style?: CSSProperties;
+}) {
+  return <span className={`reaction-table-chip-stack ${className}`}
+               style={{'--tier': count, ...style} as CSSProperties} aria-hidden="true">
+    {Array.from({length: count}, (_, index) => <span key={index} className="chip"
+                                                     style={{'--i': index} as CSSProperties}/>)}</span>;
 }
 
-function ReactionGlyph({reactionId, glyph}: {reactionId: TableReactionID; glyph: string}) {
+function ReactionGlyph({reactionId, glyph, chipCount}: {
+  reactionId: TableReactionID; glyph: string; chipCount?: number;
+}) {
   return reactionId === 'chip'
-    ? <ReactionChipStack/>
+    ? <ReactionChipStack count={chipCount}/>
     : <EmojiGlyph glyph={glyph}/>;
 }
 
+/** A fistful of chips thrown at someone: each piece leaves the impact point on
+ *  its own bearing, hops, then lands flat on the felt and settles. The spread
+ *  is deliberately wide and unevenly weighted — twelve pieces landing at one
+ *  radius read as a clump, which is what the old ring of overlapping stacks
+ *  did. Values are px in the impact box's own space; the CSS owns the timing. */
 function chipBurstStyle(index: number): CSSProperties {
-  const angle = (index / CHIP_PIECES.length) * 360 + (index % 2 === 0 ? -9 : 9);
+  const angle = (index / CHIP_PIECES.length) * 360 + (index % 2 === 0 ? -14 : 14);
   const rad = (angle * Math.PI) / 180;
-  const burstDist = 30 + (index % 4) * 9;
-  const burstX = Math.cos(rad) * burstDist;
-  const burstY = Math.sin(rad) * burstDist * 0.55 - 6;
-  const fallExtra = 46 + (index % 3) * 20;
+  const spread = 34 + (index % 4) * 13;
+  const hopX = Math.cos(rad) * spread * 0.62;
+  const hopY = Math.sin(rad) * spread * 0.4 - 26 - (index % 3) * 7;
+  const landX = Math.cos(rad) * spread;
+  const landY = Math.sin(rad) * spread * 0.46 + 12 + (index % 3) * 9;
   return {
     '--piece': index,
-    '--chip-burst-x': `${burstX.toFixed(1)}px`,
-    '--chip-burst-y': `${burstY.toFixed(1)}px`,
-    '--chip-fall-x': `${(burstX + ((index % 5) - 2) * 6).toFixed(1)}px`,
-    '--chip-fall-y': `${(burstY + fallExtra).toFixed(1)}px`,
-    '--chip-rot0': `${index % 2 === 0 ? -70 : 70}deg`,
-    '--chip-rot1': `${(index % 2 === 0 ? -18 : 18) + index * 3}deg`,
+    '--chip-hop-x': `${hopX.toFixed(1)}px`,
+    '--chip-hop-y': `${hopY.toFixed(1)}px`,
+    '--chip-land-x': `${landX.toFixed(1)}px`,
+    '--chip-land-y': `${landY.toFixed(1)}px`,
+    '--chip-rot0': `${index % 2 === 0 ? -64 : 72}deg`,
+    '--chip-rot1': `${(index % 2 === 0 ? -21 : 17) + index * 11}deg`,
   } as CSSProperties;
 }
 
@@ -92,7 +106,8 @@ function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
   if (reactionId === 'chip') {
     return <span className="reaction-impact reaction-impact-chip" data-reaction-impact={reactionId} aria-hidden="true">
       <i className="reaction-chip-flash"/>
-      {CHIP_PIECES.map(index => <ReactionChipStack key={index} className="reaction-jackpot-stack"
+      {CHIP_PIECES.map(index => <ReactionChipStack key={index} count={index % 4 === 0 ? 2 : 1}
+                                                   className="reaction-jackpot-stack"
                                                    style={chipBurstStyle(index)}/>)}
     </span>;
   }
@@ -155,7 +170,8 @@ function ReactionEffect({item}: {item: TableReactionEvent}) {
   return <span ref={attach}
                className={`table-reaction-effect reaction-${item.reactionId} ${definition.targeted ? 'thrown' : 'emote'}`}
                data-reaction-id={item.reactionId} role="img" aria-label={definition.label}>
-    <span className="reaction-projectile"><ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph}/></span>
+    <span className="reaction-projectile">
+      <ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph} chipCount={1}/></span>
     <ReactionImpact reactionId={item.reactionId}/>
   </span>;
 }

@@ -267,6 +267,48 @@ describe('TableReactions Poker Theater', () => {
     expect(container.querySelectorAll(
       '[data-reaction-impact="knife"] .reaction-impact-particles i'
     )).toHaveLength(8);
+    // The two water impacts are built from droplets, not from one blob: the
+    // crown is eight, and each eye of the crying face releases three.
+    expect(container.querySelectorAll(
+      '[data-reaction-impact="tear"] .reaction-impact-particles i'
+    )).toHaveLength(8);
+    expect(container.querySelectorAll(
+      '[data-reaction-impact="cry"] .reaction-impact-particles i'
+    )).toHaveLength(6);
+  });
+
+  test('throws one chip and scatters it as single discs on their own bearings', async () => {
+    const {container} = renderReactions({
+      items: [{
+        id: 'reaction-chip', playerId: viewer.player_id,
+        reactionId: 'chip', targetPlayerId: opponent.player_id,
+      }],
+    });
+
+    await waitFor(() => expect(container.querySelector('[data-reaction-impact="chip"]')).toBeInTheDocument());
+
+    // A chip in flight is one chip, not a column of three: a stack at 20px is a
+    // blob, and a single disc still reads as a chip.
+    const projectile = container.querySelector('.reaction-projectile .reaction-table-chip-stack');
+    expect(projectile?.querySelectorAll('.chip')).toHaveLength(1);
+    expect(projectile).toHaveStyle({'--tier': '1'});
+
+    const pieces = container.querySelectorAll<HTMLElement>('.reaction-jackpot-stack');
+    expect(pieces).toHaveLength(12);
+    // Irregular by construction — every fourth piece is a pair — so twelve
+    // pieces never land as one even ring.
+    expect([...pieces].map(piece => piece.querySelectorAll('.chip').length))
+      .toEqual([2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1]);
+    // Each piece carries its own hop apex and landing point; no two share both.
+    const landings = new Set([...pieces].map(piece =>
+      `${piece.style.getPropertyValue('--chip-land-x')}:${piece.style.getPropertyValue('--chip-land-y')}`));
+    expect(landings.size).toBe(pieces.length);
+    for (const piece of pieces) {
+      for (const property of ['--chip-hop-x', '--chip-hop-y', '--chip-land-x', '--chip-land-y',
+        '--chip-rot0', '--chip-rot1']) {
+        expect(piece.style.getPropertyValue(property)).not.toBe('');
+      }
+    }
   });
 
   test('keeps an effect hidden until its required seat nodes exist', () => {

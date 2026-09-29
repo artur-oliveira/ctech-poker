@@ -1949,6 +1949,16 @@
     --chip-size: 18px;
     --chip-gap: 3px
 }
+/* A chip is a disc with a milled rim, not a gold dot. Five background layers,
+   outermost first: the specular, an outer rim ring that *insets* the edge spots
+   (spots reaching the edge read as cog teeth — the failure the old 2px dashed
+   border had), the face disc ending in a dark inner ring, six --paper edge spots,
+   and the rim itself. Every stop is `closest-side`, because a radial-gradient's
+   percentages otherwise resolve against farthest-corner: a face written as 66%
+   covers 94% of the disc and swallows the spot band whole. The rim, the spots and
+   the bottom edge are what still say "chip" at 15px, so tier repaints only the
+   face (--chip-face) and never the anatomy. See
+   ui/docs/2026-09-29-reaction-impact-materials.md. */
 .chip {
     position: absolute;
     left: 0;
@@ -1956,28 +1966,41 @@
     z-index: var(--i);
     width: 100%;
     aspect-ratio: 1;
+    border: 0;
     border-radius: 50%;
-    border: 2px dashed var(--gold-ink);
-    background: radial-gradient(circle at 32% 28%, var(--gold-bright-2), var(--gold) 60%, var(--gold-deep) 100%);
-    box-shadow: 0 1px 0 var(--gold-ink), 0 2px 3px var(--black-06);
+    --chip-face: radial-gradient(circle closest-side at 50% 50%,
+        var(--gold-bright-2) 0 18%, var(--gold) 54%, var(--gold-deep) 64%,
+        color-mix(in srgb, var(--gold-ink) 70%, transparent) 66% 71%, transparent 71%);
+    --chip-edge: inset 0 0 0 1px color-mix(in srgb, var(--gold-ink) 55%, transparent),
+        0 1px 0 var(--gold-ink), 0 2px 3px var(--black-06);
+    background:
+        radial-gradient(circle closest-side at 36% 28%,
+            color-mix(in srgb, var(--paper) 72%, var(--gold-bright-3)) 0 4%, transparent 22%),
+        radial-gradient(circle closest-side at 50% 50%, transparent 0 88%, var(--gold-deep) 88%),
+        var(--chip-face),
+        repeating-conic-gradient(from 30deg, var(--paper) 0 11deg, transparent 11deg 60deg),
+        radial-gradient(circle closest-side at 50% 50%, var(--gold-deep) 0 72%, var(--gold-ink) 100%);
+    box-shadow: var(--chip-edge);
     animation: chip-drop 260ms var(--ease-out-quint) both;
     animation-delay: calc(var(--i) * 45ms)
 }
-.chip-stack-pot .chip {
-    border-width: 3px
-}
 .chip-stack.tier-1 .chip {
-    background: radial-gradient(circle at 32% 28%, var(--gold-pale), var(--gold-deep) 100%)
+    --chip-face: radial-gradient(circle closest-side at 50% 50%,
+        var(--gold-pale) 0 18%, var(--gold-deep) 62%,
+        color-mix(in srgb, var(--gold-ink) 70%, transparent) 66% 71%, transparent 71%)
 }
-.chip-stack.tier-3 .chip {
-    background: radial-gradient(circle at 32% 28%, var(--gold-bright-3), var(--gold-bright) 55%, var(--gold-deep) 100%)
+.chip-stack.tier-3 .chip,
+.chip-stack.tier-4 .chip,
+.chip-stack.tier-5 .chip {
+    --chip-face: radial-gradient(circle closest-side at 50% 50%,
+        var(--gold-bright-3) 0 20%, var(--gold-bright) 56%, var(--gold-deep) 66%,
+        color-mix(in srgb, var(--gold-ink) 70%, transparent) 67% 71%, transparent 71%)
 }
 .chip-stack.tier-4 .chip, .chip-stack.tier-5 .chip {
-    background: radial-gradient(circle at 32% 28%, var(--gold-bright-3), var(--gold-bright) 50%, var(--gold-deep) 100%);
-    box-shadow: 0 1px 0 var(--gold-ink), 0 0 6px 1px color-mix(in srgb, var(--gold-bright) 55%, transparent)
+    box-shadow: var(--chip-edge), 0 0 6px 1px color-mix(in srgb, var(--gold-bright) 55%, transparent)
 }
 .chip-stack.tier-5 .chip {
-    box-shadow: 0 1px 0 var(--gold-ink), 0 0 9px 2px color-mix(in srgb, var(--gold-bright) 70%, transparent)
+    box-shadow: var(--chip-edge), 0 0 9px 2px color-mix(in srgb, var(--gold-bright) 70%, transparent)
 }
 @keyframes chip-drop {
     from {
@@ -2892,20 +2915,15 @@
     margin: -66px;
     overflow: visible
 }
+/* Size, placement and the scatter itself are owned by table-reactions.css;
+   this only establishes the piece as an absolutely-placed, initially-hidden
+   node on the impact's own centre. */
 .reaction-jackpot-stack {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 22px;
-    height: 29px;
-    margin: -14px -11px;
     opacity: 0;
-    transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.35);
-    animation: reaction-chip-pop 1.9s var(--ease-out-quart) both;
-    animation-delay: calc(900ms + var(--piece) * 10ms)
-}
-.reaction-jackpot-stack .chip {
-    border-width: 2px
+    transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.38)
 }
 .reaction-impact-tomato,
 .reaction-impact-poop {
@@ -3348,22 +3366,6 @@
 @keyframes reaction-projectile-fade {
     0%, 25% { opacity: 1; transform: scale(1) }
     32%, 100% { opacity: 0; transform: scale(.45) }
-}
-@keyframes reaction-chip-pop {
-    0% { opacity: 0; transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.35) }
-    12% { opacity: 1 }
-    26% {
-        opacity: 1;
-        transform: translate(var(--chip-burst-x), var(--chip-burst-y)) rotate(var(--chip-rot1)) scale(1.18)
-    }
-    40%, 74% {
-        opacity: 1;
-        transform: translate(var(--chip-burst-x), var(--chip-burst-y)) rotate(var(--chip-rot1)) scale(1)
-    }
-    100% {
-        opacity: 0;
-        transform: translate(var(--chip-fall-x), var(--chip-fall-y)) rotate(var(--chip-rot1)) scale(.9)
-    }
 }
 @keyframes reaction-flash-pop {
     0% { opacity: 0; transform: scale(.4) }

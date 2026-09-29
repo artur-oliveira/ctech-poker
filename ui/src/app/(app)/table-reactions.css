@@ -561,19 +561,61 @@
                calc(var(--impact-delay) + var(--piece) * 90ms) both;
 }
 
+/* One water material for both weeping reactions: a drop pointed at the *top*
+   (the trailing edge of something falling), a specular catchlight up and left,
+   and a shaded underside. --drop-w/--drop-h size it per reaction. */
+.reaction-impact-cry i,
+.reaction-impact-tear::after,
+.reaction-impact-tear .reaction-impact-particles i {
+    width: var(--drop-w);
+    height: var(--drop-h);
+    margin: calc(var(--drop-h) / -2) 0 0 calc(var(--drop-w) / -2);
+    border-radius: 50% / 100% 100% 58% 58%;
+    background:
+        radial-gradient(circle at 33% 66%, color-mix(in srgb, var(--paper) 88%, var(--tag-blue)) 0 14%,
+            transparent 40%),
+        linear-gradient(168deg, color-mix(in srgb, var(--tag-blue) 42%, var(--paper)) 0%,
+            var(--tag-blue) 58%, color-mix(in srgb, var(--tag-blue) 76%, var(--black)) 100%);
+    box-shadow: inset -1px -2px 3px color-mix(in srgb, var(--black) 26%, transparent),
+                0 0 7px color-mix(in srgb, var(--tag-blue) 32%, transparent);
+    transform-origin: center;
+}
+
 .reaction-impact-cry {
     animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
 }
 
+/* Tears leave the eyes, not the air beside the face: odd pieces well up at the
+   left eye, even at the right. Each swells while surface tension holds it,
+   necks off, stretches as it accelerates, then flattens on landing. The old
+   curtain spread them sideways in a row, which is why they read as blue pills. */
 .reaction-impact-cry i {
-    width: 9px;
-    height: 13px;
-    border-radius: 50% 50% 50% 50% / 62% 62% 100% 100%;
-    background: linear-gradient(155deg, color-mix(in srgb, var(--tag-blue) 34%, var(--paper)), var(--tag-blue) 82%);
-    box-shadow: inset 2px -3px 4px color-mix(in srgb, var(--paper) 45%, transparent),
-                0 0 8px color-mix(in srgb, var(--tag-blue) 38%, transparent);
-    animation: reaction-tear-curtain 1.9s ease-in
-               calc(var(--impact-delay) + var(--piece) * 110ms) both;
+    --drop-w: 8px;
+    --drop-h: 12px;
+    --eye: -1;
+    animation: reaction-eye-tear 1.5s cubic-bezier(.46, 0, .78, .36)
+               calc(var(--impact-delay) + var(--piece) * 175ms) both;
+}
+
+.reaction-impact-cry i:nth-child(even) { --eye: 1 }
+
+/* Where the tears land. Two rings, offset, so the surface reads as wet. */
+.reaction-impact-cry::before,
+.reaction-impact-cry::after {
+    left: 50%;
+    top: 50%;
+    width: 21px;
+    height: 8px;
+    margin: 44px 0 0 -17px;
+    border: 1px solid color-mix(in srgb, var(--tag-blue) 60%, transparent);
+    border-radius: 50%;
+    animation: reaction-tear-ripple 1.15s var(--ease-out-quart)
+               calc(var(--impact-delay) + 660ms + var(--ring, 0) * 340ms) both;
+}
+
+.reaction-impact-cry::after {
+    --ring: 1;
+    margin-left: 0;
 }
 
 .reaction-nervous .reaction-projectile {
@@ -777,16 +819,42 @@
 }
 
 /* Directed gestures: flight arrives at 27%, then the target owns the impact. */
+
+/* The chip's own anatomy — milled rim, inset paper edge spots, dark inner ring —
+   is the table-wide `.chip` in renderer.css; a thrown chip is the same object the
+   pot is made of. All this sheet owns is how many are stacked and how big. */
+.reaction-table-chip-stack {
+    --tier: 3;
+    --chip-w: 19px;
+    width: var(--chip-w);
+    height: calc(var(--chip-w) + (var(--tier) - 1) * var(--chip-gap));
+}
+
 .reaction-impact-chip {
     animation: reaction-impact-hold 2.3s var(--ease-out-quart) var(--impact-delay) both;
 }
 
+/* Each piece leaves on its own bearing, hops, lands flat and settles. The
+   drop-shadow is what puts it *on* the felt rather than floating over it. */
 .reaction-jackpot-stack {
-    animation-delay: calc(var(--impact-delay) + var(--piece) * 10ms);
+    --chip-w: 21px;
+    width: var(--chip-w);
+    height: calc(var(--chip-w) + (var(--tier) - 1) * var(--chip-gap));
+    margin: calc(var(--chip-w) / -2) calc(var(--chip-w) / -2);
+    filter: drop-shadow(0 3px 3px var(--black-06));
+    animation: reaction-chip-scatter 2s cubic-bezier(.22, .7, .35, 1)
+               calc(var(--impact-delay) + var(--piece) * 16ms) both;
 }
 
+/* The impact reads as a hit, not a glare: one crisp rim that expands and dies.
+   The old filled gold radial was the yellow smear over the whole burst. */
 .reaction-chip-flash {
-    animation-delay: var(--impact-delay);
+    width: 30px;
+    height: 30px;
+    margin: -15px;
+    border: 2px solid color-mix(in srgb, var(--gold-pale) 78%, transparent);
+    background: none;
+    animation: reaction-shock-ring 900ms var(--ease-out-expo) var(--impact-delay) both;
 }
 
 .reaction-impact-coffee {
@@ -857,31 +925,53 @@
     animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-/* One heavy teardrop wells up over the target, swells, then rolls down. */
+/* The thrown drop breaks on the target. Three parts of one water impact: the
+   wet ring spreading outward, the rebound jet that leaps back up out of the
+   crater and falls, and eight crown droplets on ballistic arcs. The previous
+   version was a single blob over a vertical bar — a balloon on a stick. */
 .reaction-impact-tear::before {
     left: 50%;
     top: 50%;
-    width: 34px;
-    height: 44px;
-    margin: -40px 0 0 -17px;
-    border-radius: 50% 50% 50% 50% / 62% 62% 100% 100%;
-    background: linear-gradient(150deg, color-mix(in srgb, var(--tag-blue) 30%, var(--paper)), var(--tag-blue) 82%);
-    box-shadow: inset 4px -5px 8px color-mix(in srgb, var(--paper) 40%, transparent),
-                0 0 16px color-mix(in srgb, var(--tag-blue) 45%, transparent);
-    animation: reaction-single-tear 2.3s var(--ease-out-quart) var(--impact-delay) both;
+    width: 78px;
+    height: 27px;
+    margin: -10px 0 0 -39px;
+    border: 2px solid color-mix(in srgb, var(--tag-blue) 48%, transparent);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%,
+        color-mix(in srgb, var(--tag-blue) 24%, transparent), transparent 70%);
+    animation: reaction-splash-ring 1.7s var(--ease-out-expo) var(--impact-delay) both;
 }
 
 .reaction-impact-tear::after {
+    --drop-w: 12px;
+    --drop-h: 19px;
     left: 50%;
     top: 50%;
-    width: 5px;
-    height: 50px;
-    margin: -10px 0 0 -2.5px;
-    border-radius: 0 0 var(--rounded-pill) var(--rounded-pill);
-    background: linear-gradient(to bottom, var(--tag-blue), transparent);
-    transform-origin: top center;
-    animation: reaction-tear-streak 2.3s var(--ease-out-quart) calc(var(--impact-delay) + 300ms) both;
+    animation: reaction-splash-jet 1.6s var(--ease-out-quart)
+               calc(var(--impact-delay) + 40ms) both;
 }
+
+.reaction-impact-tear .reaction-impact-particles i {
+    --drop-w: 7px;
+    --drop-h: 11px;
+    --apex-x: 0;
+    --apex-y: -40px;
+    --land-x: 0;
+    --land-y: 17px;
+    left: 50%;
+    top: 50%;
+    animation: reaction-splash-arc 1.3s cubic-bezier(.2, .62, .4, 1)
+               calc(var(--impact-delay) + 60ms + var(--piece) * 28ms) both;
+}
+
+.reaction-impact-tear i:nth-child(1) { --apex-x: -29px; --apex-y: -36px; --land-x: -49px; --land-y: 16px }
+.reaction-impact-tear i:nth-child(2) { --apex-x: 30px; --apex-y: -37px; --land-x: 50px; --land-y: 14px }
+.reaction-impact-tear i:nth-child(3) { --apex-x: -16px; --apex-y: -47px; --land-x: -26px; --land-y: 20px }
+.reaction-impact-tear i:nth-child(4) { --apex-x: 17px; --apex-y: -48px; --land-x: 29px; --land-y: 19px }
+.reaction-impact-tear i:nth-child(5) { --apex-x: -42px; --apex-y: -23px; --land-x: -65px; --land-y: 11px }
+.reaction-impact-tear i:nth-child(6) { --apex-x: 43px; --apex-y: -24px; --land-x: 66px; --land-y: 12px }
+.reaction-impact-tear i:nth-child(7) { --apex-x: -5px; --apex-y: -54px; --land-x: -8px; --land-y: 23px }
+.reaction-impact-tear i:nth-child(8) { --apex-x: 6px; --apex-y: -53px; --land-x: 10px; --land-y: 22px }
 
 .reaction-impact-tomato,
 .reaction-impact-poop {
@@ -1417,11 +1507,22 @@
     100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 28px), -54px) scaleY(1.25) }
 }
 
-@keyframes reaction-tear-curtain {
-    0% { opacity: 0; transform: translate(calc((var(--piece) - 2) * 15px), -34px) scale(.5) rotate(8deg) }
-    16% { opacity: 1; transform: translate(calc((var(--piece) - 2) * 15px), -20px) scale(1) rotate(4deg) }
-    72% { opacity: 1 }
-    100% { opacity: 0; transform: translate(calc((var(--piece) - 2) * 17px), 56px) scale(1.05) rotate(0) }
+/* Swell at the eye (surface tension holds), neck off, stretch under
+   acceleration, flatten on landing. Scale is anisotropic throughout — a drop
+   that keeps its aspect ratio while it falls is a bead, not water. */
+@keyframes reaction-eye-tear {
+    0% { opacity: 0; transform: translate(calc(var(--eye) * 7px), -7px) scale(.24, .26) }
+    15% { opacity: 1; transform: translate(calc(var(--eye) * 7px), -4px) scale(1, .84) }
+    27% { opacity: 1; transform: translate(calc(var(--eye) * 7px), 0) scale(.8, 1.28) }
+    63% { opacity: 1; transform: translate(calc(var(--eye) * 9px), 30px) scale(.7, 1.46) }
+    88% { opacity: .92; transform: translate(calc(var(--eye) * 11px), 50px) scale(1.12, .68) }
+    100% { opacity: 0; transform: translate(calc(var(--eye) * 11px), 52px) scale(1.38, .36) }
+}
+
+@keyframes reaction-tear-ripple {
+    0% { opacity: 0; transform: scale(.22) }
+    32% { opacity: .78; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1.95) }
 }
 
 @keyframes reaction-nervous-tremble {
@@ -1558,19 +1659,58 @@
     100% { opacity: 0; transform: scale(1.3) }
 }
 
-@keyframes reaction-single-tear {
-    0% { opacity: 0; transform: translateY(-16px) scale(.25) }
-    16% { opacity: 1; transform: translateY(0) scale(1) }
-    30% { transform: translateY(0) scale(1.08, .92) }
-    44% { transform: translateY(2px) scale(.96, 1.06) }
-    62% { opacity: 1; transform: translateY(8px) scale(1) }
-    100% { opacity: 0; transform: translateY(68px) scale(.7) }
+@keyframes reaction-splash-ring {
+    0% { opacity: 0; transform: scale(.12) }
+    20% { opacity: .92; transform: scale(.66) }
+    52% { opacity: .42; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1.26) }
 }
 
-@keyframes reaction-tear-streak {
-    0% { opacity: 0; transform: scaleY(0) }
-    34% { opacity: .75; transform: scaleY(1) }
-    100% { opacity: 0; transform: scaleY(1) translateY(46px) }
+/* The rebound jet: the crater closes and throws a column back up, which pinches
+   off into a bead at the top, falls, and flattens. This is the single read that
+   makes an impact look like water rather than like a shape appearing. */
+@keyframes reaction-splash-jet {
+    0% { opacity: 0; transform: translateY(7px) scale(.38, .44) }
+    13% { opacity: 1; transform: translateY(-7px) scale(.66, 1.58) }
+    37% { opacity: 1; transform: translateY(-31px) scale(.9, 1.12) }
+    61% { opacity: 1; transform: translateY(-15px) scale(1, 1) }
+    85% { opacity: .92; transform: translateY(5px) scale(1.28, .6) }
+    100% { opacity: 0; transform: translateY(6px) scale(1.62, .34) }
+}
+
+@keyframes reaction-splash-arc {
+    0% { opacity: 0; transform: translate(0, 4px) scale(.3, .5) }
+    14% { opacity: 1 }
+    46% { opacity: 1; transform: translate(var(--apex-x), var(--apex-y)) scale(.84, 1.18) }
+    100% { opacity: 0; transform: translate(var(--land-x), var(--land-y)) scale(1.08, .76) }
+}
+
+/* Twelve pieces of a thrown fistful: out on a bearing, up over the hop, then
+   down onto the felt where each one lands flat (scaleY compressed = a disc seen
+   from above) and settles. */
+@keyframes reaction-chip-scatter {
+    0% { opacity: 0; transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.38) }
+    9% { opacity: 1 }
+    38% {
+        opacity: 1;
+        transform: translate(var(--chip-hop-x), var(--chip-hop-y)) rotate(var(--chip-rot1)) scale(1.06)
+    }
+    62% {
+        opacity: 1;
+        transform: translate(var(--chip-land-x), var(--chip-land-y)) rotate(var(--chip-rot1)) scale(1.06, .82)
+    }
+    70% {
+        opacity: 1;
+        transform: translate(var(--chip-land-x), var(--chip-land-y)) rotate(var(--chip-rot1)) scale(.98, 1)
+    }
+    86% {
+        opacity: 1;
+        transform: translate(var(--chip-land-x), var(--chip-land-y)) rotate(var(--chip-rot1)) scale(1)
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--chip-land-x), var(--chip-land-y)) rotate(var(--chip-rot1)) scale(.96)
+    }
 }
 
 @keyframes reaction-splat {
