@@ -486,6 +486,21 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   more after the hooks — that is what puts the winner's new badge on screen at the end of the hand
   instead of one commit late. See
   `docs/specs/2026-09-17-table-snapshot-divergence-and-highlight-winner.md`.
+  **That suppression is about the sibling's state, never about state `sync` itself creates.**
+  All three sweeps inside `sync` — `processPendingExitAutoFolds`, `processInlinePreselections`,
+  `removeEligiblePendingExits` — COMMIT, and a preselection rides in the persisted table
+  activity, so the instance that reloads on a ChangeNotifier signal is routinely not the one that
+  committed the action opening that player's turn. It is therefore the *reloading* instance whose
+  sweep fires the auto-action, under `publish=false`, with no other publisher anywhere: prod
+  2026-09-29, hand `01M3PX5FE66CJ101WY7E4Q9KDK`, versions 746 (the auto-preselect fold that ended
+  the hand) through 748 (its outcome-log commits) reached no client at all, so every seat sat
+  frozen on the river for the whole ~12s next-hand delay and the winner's trinca and its
+  117.000-chip payout only appeared with the NEXT hand's snapshot. `sync` now captures
+  `a.version` before the sweeps and re-enables the publish when they moved it — the same
+  reasoning covers a pending-exit auto-fold and a seat settled and removed by
+  `removeEligiblePendingExits`, both of which could otherwise go out silently. Never gate a
+  publish on the caller's intent alone when the callee can commit. See
+  `docs/specs/2026-09-29-silent-sweep-commit-and-stale-recap-buyin.md`.
 - **A shared `valkey.Client` head-of-line-blocks latency-critical PUBLISHes behind unrelated bulk
   traffic — give realtime signaling its own connection.** Fifth follow-up in the incident spec
   (2026-09-04): even with the two deadline bugs above fixed, the *first* broadcast carrying a

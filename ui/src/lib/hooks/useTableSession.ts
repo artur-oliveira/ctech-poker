@@ -17,7 +17,12 @@ const REMOVED_REASON_COPY: Record<string, string> = {
 };
 
 export type TableRemoval = { code?: string; amount?: number } | null;
-export type SessionRecap = { joinedAt: number; buyIn: number; finalStack: number };
+// sessionId is what lets SessionRecap ask the server for the authoritative
+// figures; the rest is the optimistic fallback rendered until that answers
+// (or forever, if it fails).
+export type SessionRecap = {
+  sessionId?: string; joinedAt: number; buyIn: number; finalStack: number
+};
 
 /** The critical path: the room, and whether the viewer already holds a seat.
  *
@@ -148,7 +153,15 @@ export function useTableRemoval({id, removed, terminalError, sessions, sessionsL
       const amount = removed.amount;
       const openSessionAtRemoval = sessions.find(session => session.table_id === id && session.ended_at === 0);
       pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
+      // buyin_amount here is whatever the sessions query last read, and it
+      // grows with every rebuy — including the auto-rebuy that fires between
+      // the losing hand and this very removal. A player who bought in for 1M,
+      // was auto-rebought to 2M total and cashed out 1M saw "resultado da
+      // sessão: 0" off that stale copy (prod, 2026-09-29). sessionId is
+      // therefore passed along so SessionRecap can replace these with the
+      // server's own numbers; they remain the fallback for a failed fetch.
       const recap = {
+        sessionId: openSessionAtRemoval?.sk,
         joinedAt: openSessionAtRemoval?.joined_at || Date.now(),
         buyIn: openSessionAtRemoval?.buyin_amount || 0,
         finalStack: amount

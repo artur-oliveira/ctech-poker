@@ -302,7 +302,9 @@ export default function TableGuide() {
           fim. Se a vez chegar até você antes disso, o servidor corre por você. <b>Cancelar saída</b> desfaz o pedido
           a qualquer momento enquanto a saída ainda estiver marcada, inclusive na sua vez.</span></li>
         <li><span><b>Resumo da sessão:</b> ao sair, um resumo mostra tempo na mesa, entrada, mãos jogadas, maior pote
-          ganho e o resultado. Ele fica na tela até você fechar; só então a mesa é liberada.</span></li>
+          ganho e o resultado. A <b>entrada</b> soma tudo o que você colocou na mesa naquela sentada, incluindo cada
+          rebuy e o auto rebuy: é contra ela que o resultado é calculado. Ele fica na tela até você fechar; só então
+          a mesa é liberada.</span></li>
         <li><span><b>Inatividade:</b> no último minuto antes da remoção, um aviso conta o tempo e oferece
           <b> Continuar na mesa</b>.</span></li>
       </GuideBullets></>

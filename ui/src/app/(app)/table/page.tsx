@@ -238,8 +238,8 @@ function TableContent() {
   // then the socket is already torn down and `rt.snapshot` gone.
   if (sessionRecap) return <>
     <main className="game-loading"><h1 className="sr-only">Resumo da sessão</h1></main>
-    <SessionRecap joinedAt={sessionRecap.joinedAt} buyIn={sessionRecap.buyIn}
-                  finalStack={sessionRecap.finalStack} tableId={id}
+    <SessionRecap sessionId={sessionRecap.sessionId} joinedAt={sessionRecap.joinedAt}
+                  buyIn={sessionRecap.buyIn} finalStack={sessionRecap.finalStack}
                   mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
                   onCloseAction={closeRecap}/>
   </>;

@@ -138,7 +138,10 @@ func (a *Actor) broadcastAll() { a.sync(true) }
 
 // syncWithoutPublish is broadcastAll minus the publish: the pending-exit and
 // preselection sweeps, the timer re-arming and the post-hand hooks all still
-// run, but nothing goes on the wire.
+// run, and nothing goes on the wire UNLESS a sweep itself committed. The
+// suppression is about not republishing a sibling's state; state this call
+// just created has no other publisher, so sync re-enables the publish when
+// the version moved (see the comment on the sweeps).
 //
 // ws.RedisRegistry.Broadcast (api-commons/ws) PUBLISHes to a Valkey channel
 // that EVERY instance is subscribed to, and each delivers to its own local
@@ -163,9 +166,28 @@ func (a *Actor) sync(publish bool) {
 	// not the interactive one: removeEligiblePendingExits settles a seat.
 	sweepCtx, cancel := context.WithTimeout(context.Background(), a.settlementBudget)
 	defer cancel()
+	// All three sweeps COMMIT. "The committing instance already published"
+	// only holds for the state the sibling committed — state produced right
+	// here belongs to this instance, and nobody else will ever put it on the
+	// wire. A sibling reacting to a ChangeNotifier signal is exactly where
+	// that bites: handleExternalChange calls syncWithoutPublish, so an inline
+	// preselection or pending-exit auto-fold applied from a forced reload
+	// (the preselection is persisted in table activity, so the instance that
+	// reloads is often not the one that committed the action opening that
+	// player's turn) advanced the hand — completing it, paying the pot —
+	// with publish=false and no broadcast from anyone. Production, 2026-09-29,
+	// hand 01M3PX5FE66CJ101WY7E4Q9KDK: versions 746 (auto-preselect fold that
+	// ended the hand) through 748 (its outcome log entries) never reached a
+	// single client, so every seat sat frozen on the river for the whole
+	// ~12s next-hand delay and the winner's trinca and 117.000-chip payout
+	// only appeared when the NEXT hand's snapshot arrived.
+	versionBeforeSweeps := a.version
 	a.processPendingExitAutoFolds(sweepCtx)
 	a.processInlinePreselections(sweepCtx)
 	a.removeEligiblePendingExits(sweepCtx)
+	if a.version != versionBeforeSweeps {
+		publish = true
+	}
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
 	grace := time.Duration(0)

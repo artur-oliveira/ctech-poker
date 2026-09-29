@@ -88,6 +88,12 @@ whenever a players store is wired) are all **fixed**; older docs that still list
   `SittingOut` sobrescrevendo o `Folded` no meio da mão, e o sit-out foldando quem não estava na vez —
   mais a classificação de `TransactionConflict` como conflito de versão, que é correção no
   `ctech-go-common`.
+  `2026-09-29-silent-sweep-commit-and-stale-recap-buyin.md` (**implementado**): a partir de um HAR
+  de 2026-09-29 cruzado com o `prod_poker_action_log` e os logs da instância — uma mão encerrada por
+  fold preselecionado que ninguém publicou (as varreduras dentro de `sync` commitam, e
+  `handleExternalChange` as rodava com `publish=false`, deixando a mesa congelada no river por ~12s
+  com o pote já pago), e o resumo da sessão calculando o resultado contra um `buyin_amount` em cache
+  anterior ao auto rebuy, o que mostrava "Resultado da sessão: 0" numa sentada que perdera 1M.
 - Top-level `OVERVIEW.md` (product/game rules), `ARCHITECTURE.md` (technical design), `PLAN.md` (build history),
   `README.md` (status). Untracked `future.md` / `future_analysis.md` are brainstorm/feasibility notes — much of their
   Fase 1–2 backlog has since shipped.

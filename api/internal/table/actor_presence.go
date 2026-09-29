@@ -121,8 +121,10 @@ func (a *Actor) handleRequestHandoff(c RequestHandoffCmd) error {
 // SetChangeNotifierForActor): a sibling process just committed for this
 // table, so this instance forces a fresh reload — reloading also re-arms
 // every timer via rearmTimersFromCache — and re-runs the per-broadcast
-// sweeps. It deliberately does NOT publish: the committing instance's own
-// publish is already fleet-wide (see syncWithoutPublish). Always
+// sweeps. It deliberately does NOT republish the sibling's state: that
+// instance's own publish is already fleet-wide (see syncWithoutPublish). It
+// DOES publish if one of those sweeps commits here — that state is this
+// instance's own and the sibling can never have sent it. Always
 // unconditional, unlike handleReconnect above: this only ever fires when
 // something genuinely changed, never on routine local traffic.
 func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) error {

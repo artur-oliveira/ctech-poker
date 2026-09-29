@@ -173,6 +173,8 @@ export async function getMatchupStats(opponentId: string) {
 }
 
 export interface PlayerSession {
+  // The session's sort key, and the id the recap endpoint takes.
+  sk: string;
   table_id: string;
   buyin_amount: number;
   cashout_amount: number;
@@ -254,6 +256,47 @@ export async function getHands({cursor, tableId, mode = 'sandbox'}: {
   return (await apiClient.get<Page<HandItem>>('/v1.0/players/me/hands', {
     params: {cursor, table_id: tableId, mode}, silentError: true
   })).data;
+}
+
+export interface SessionRecapData {
+  session_id: string;
+  table_id: string;
+  joined_at: number;
+  // 0 while the session is still open; duration_ms is then measured to now.
+  ended_at: number;
+  duration_ms: number;
+  buyin_amount: number;
+  cashout_amount: number;
+  // Only meaningful once ended_at !== 0 — an open session's row carries 0.
+  net_pnl: number;
+  hands_played: number;
+  hands_won: number;
+  biggest_win?: PublicHandSummary;
+  biggest_loss?: PublicHandSummary;
+  // The session had more hands than the server's scan ceiling, so the
+  // counters cover only the most recent ones.
+  truncated: boolean;
+}
+
+export interface PublicHandSummary {
+  hand_id: string;
+  table_id: string;
+  net_change: number;
+  ended_at: number;
+  board?: string[];
+  hole_cards?: string[];
+}
+
+// The authoritative numbers for one sitting, derived server-side from the
+// session row and that table's hands. Use this rather than reducing a cached
+// `getSessions` entry: `buyin_amount` grows with every rebuy (auto-rebuy
+// included), and a client holding a pre-rebuy copy reports a session that
+// lost nothing when it lost a whole buy-in.
+export async function getSessionRecap(sessionId: string, mode: WalletMode = 'sandbox') {
+  return (await apiClient.get<SessionRecapData>(
+    `/v1.0/players/me/sessions/${encodeURIComponent(sessionId)}/recap`,
+    {params: {mode}, silentError: true}
+  )).data;
 }
 
 export async function getHand(handId: string, mode: WalletMode = 'sandbox') {

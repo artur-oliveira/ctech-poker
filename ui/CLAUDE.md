@@ -133,6 +133,21 @@ off by default — do not build UI that assumes real money is on.
   the very commit that created it, and the hook's own unit tests could not see that (their `setQueryData` is an
   inert mock); the regression is pinned in the page's integration suite instead. See
   `docs/specs/2026-09-21-table-capture-four-fixes.md`.
+  **The recap's numbers come from the server, not from the cached sessions page.** A session's
+  `buyin_amount` grows with every rebuy — including the auto-rebuy that fires when a player busts
+  out, which is the very thing that makes them leave — so reducing `finalStack - cachedBuyIn`
+  reported a sitting that lost nothing when it had lost a whole buy-in (prod 2026-09-29: bought
+  in for 1M, auto-rebought to 2M total, cashed out 1M, shown as "Resultado da sessão: 0"). The
+  recap is latched once by `handledRemovalRef`, so the sessions refetch that lands seconds later
+  cannot correct it. `useTableRemoval` therefore passes the open session's `sk` through as
+  `SessionRecap.sessionId` and the component asks `getSessionRecap`; the props stay as the
+  optimistic first paint and as the fallback for a failed fetch. Which figure is authoritative
+  depends on the row: `net_pnl` is only written by `CloseSession` and the `removed` frame can
+  beat that settlement, so an open row is still reduced as `finalStack - recap.buyin_amount` and
+  only a closed one uses `net_pnl` (`sessionResult`, exported and unit-tested for exactly that).
+  The same call supplies `hands_played` and `biggest_win`, which is what let the component's own
+  3-page/150-hand `getHands` walk go away. See
+  `docs/specs/2026-09-29-silent-sweep-commit-and-stale-recap-buyin.md`.
   Showdown bookkeeping is in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
   cooldown in `lib/hooks/useTableOverlays.ts`, the action-bar derivation in `lib/tableActions.ts`,
   and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that

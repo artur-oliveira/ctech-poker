@@ -11,7 +11,7 @@ vi.mock('@/lib/notify', () => ({pushNotification: mocks.pushNotification}));
 
 const TABLE = 'table-1';
 const openSession: PlayerSession = {
-  table_id: TABLE, buyin_amount: 500, cashout_amount: 0, net_pnl: 0,
+  sk: 'session-1', table_id: TABLE, buyin_amount: 500, cashout_amount: 0, net_pnl: 0,
   joined_at: 1_700_000_000_000, ended_at: 0,
 };
 
@@ -46,7 +46,7 @@ describe('useTableRemoval', () => {
 
     rerender({removed, sessions: [openSession], sessionsLoading: false});
     await waitFor(() => expect(result.current.sessionRecap).toEqual({
-      joinedAt: openSession.joined_at, buyIn: 500, finalStack: 420,
+      sessionId: 'session-1', joinedAt: openSession.joined_at, buyIn: 500, finalStack: 420,
     }));
     expect(mocks.pushNotification).toHaveBeenCalledTimes(1);
     expect(client.getQueryData(['seated', TABLE])).toEqual({seated: false, stack: 0});
@@ -67,7 +67,10 @@ describe('useTableRemoval', () => {
     const removed: TableRemoval = {code: 'exit_requested', amount: 90};
     const {result} = renderRemoval({removed, sessions: [{...openSession, ended_at: 1}]});
 
-    await waitFor(() => expect(result.current.sessionRecap).toMatchObject({buyIn: 0, finalStack: 90}));
+    // No open session means no id to ask the recap endpoint about either;
+    // SessionRecap then has to render off these fallbacks alone.
+    await waitFor(() => expect(result.current.sessionRecap)
+      .toMatchObject({sessionId: undefined, buyIn: 0, finalStack: 90}));
   });
 
   test('an idle or disconnect kick notifies and returns to the lobby without a recap', () => {
