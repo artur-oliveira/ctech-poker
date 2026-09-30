@@ -238,6 +238,7 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 ### Neutral
 
 - **Night Ink** (colors.night-ink): the global room and base page canvas.
+- **Room image** (`--table-room-image`, `--table-room-image-portrait`): `/table/room-landscape.svg` and `/table/room-portrait.svg`, a dimly lit panelled cardroom (wood, warm pendant glow, bokeh, vignette) behind the table on `.game`, chosen by `@media (orientation: portrait)` and drawn `cover`. A translucent copy of the wine→ink gradient sits over it so the felt surround keeps the contrast the seat chrome was tuned against, and Night Ink is the fallback if the image never loads. Same-origin, so `img-src 'self'` already allows it; static SVG, no animation.
 - **Card Paper** (colors.card-paper): playing cards, light action buttons, and rare high-contrast material surfaces—not the default page background.
 - **Seat Surface** (colors.seat-surface): compact player identity and dense table modules.
 - **Control Surface** (colors.control-surface) and **Control Hover** (colors.control-hover): fields, dialogs, action controls, and their lifted interaction state.

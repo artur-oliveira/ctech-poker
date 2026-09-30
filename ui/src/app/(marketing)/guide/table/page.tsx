@@ -48,6 +48,7 @@ export default function TableGuide() {
       title: 'A mesa em cada tela',
       summary: 'A disposição muda com o formato da tela, não só o tamanho das coisas.',
       body: <><p>Em tela larga a mesa é um oval com os assentos na madeira ao redor do feltro e você embaixo.</p>
+        <p>Ao redor da mesa há uma sala de cassino ao entardecer, com paredes de madeira, luz quente e uma vinheta escura. Há uma imagem para tela deitada e outra para tela em pé, então o fundo preenche qualquer aparelho sem esticar.</p>
         <p>No <b>celular em pé</b> os adversários viram fichas de avatar na borda de uma cápsula e você sai do anel:
           vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Cada avatar do anel tem a
           própria pilha na sua coluna (embaixo dele, ou acima quando são as cartas que ficam embaixo), no mesmo

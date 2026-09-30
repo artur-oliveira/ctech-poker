@@ -664,9 +664,22 @@
     margin-top: var(--api-bar-h);
     min-height: calc(100dvh - var(--api-bar-h));
     overflow-x: clip;
-    background: radial-gradient(circle at 50% 50%, var(--table-room-wine), var(--table-room) 65%);
+    /* The room photo sits under a translucent copy of the old gradient: the
+       gradient stays the fallback if the image fails and keeps the felt's
+       surround at the contrast the seat chrome was tuned against. */
+    background:
+        radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--table-room-wine) 55%, transparent), color-mix(in srgb, var(--table-room) 70%, transparent) 70%),
+        var(--table-room-image) center / cover no-repeat,
+        var(--table-room);
     display: grid;
     grid-template-rows:auto minmax(320px, 1fr) auto
+}
+@media (orientation: portrait) {
+    .game {
+        background-image:
+            radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--table-room-wine) 55%, transparent), color-mix(in srgb, var(--table-room) 70%, transparent) 70%),
+            var(--table-room-image-portrait)
+    }
 }
 .game-chrome > header a, .game-chrome > header i {
     color: inherit;
