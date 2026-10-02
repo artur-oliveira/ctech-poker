@@ -77,7 +77,14 @@ export function DailyRewardPanel() {
 
   const claimed = Boolean(status?.claimed_today) || !ready;
   const todayReward = status?.days.find(day => day.today)?.amount ?? 0;
-  const streak = status?.current_streak ?? 0;
+  // A lost streak still carries its old count so the copy can name it, but it
+  // is no longer a streak the badge may show.
+  const lost = Boolean(status?.streak_lost);
+  const streak = lost ? 0 : status?.current_streak ?? 0;
+  const lostNote = lost
+    ? `Ofensiva de ${status?.current_streak} ${status?.current_streak === 1 ? 'dia' : 'dias'} interrompida. `
+    : '';
+  const coverNote = status?.protection_will_cover ? ' Sua proteção cobre o dia perdido.' : '';
 
   return <>
     <div className="store-reward" data-streak={streak > 0 ? 'live' : undefined}>
@@ -91,7 +98,7 @@ export function DailyRewardPanel() {
           ? 'Carregando sua trilha de recompensas…'
           : claimed
             ? `Dia ${status.cycle_day} de ${status.cycle_length} garantido. Próximo resgate em ${formatDuration(remainingMs)}.`
-            : `Dia ${status.cycle_day} de ${status.cycle_length} liberado: ${chips(todayReward)} fichas esperando por você.`}</p>
+            : `${lostNote}Dia ${status.cycle_day} de ${status.cycle_length} liberado: ${chips(todayReward)} fichas esperando por você.${coverNote}`}</p>
       </div>
       <Button type="button" variant={claimed ? 'outline' : 'default'} disabled={!status}
               onClick={() => setOpen(true)}>

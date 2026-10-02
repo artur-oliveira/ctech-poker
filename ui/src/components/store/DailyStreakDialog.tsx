@@ -17,6 +17,29 @@ function fullChips(amount: number): string {
   return amount.toLocaleString('pt-BR');
 }
 
+function dayCount(n: number): string {
+  return `${n} ${n === 1 ? 'dia' : 'dias'}`;
+}
+
+/** One sentence for the streak's real state: lost, carried by the protection,
+ *  or the standing rule. A lost streak names what was lost and why — the
+ *  protection covers exactly one missed day, which is the part players miss. */
+function streakRule(status: DailyRewardStatus): string {
+  if (status.streak_lost) {
+    const why = status.protection_available
+      ? 'faltaram dois dias ou mais, e a proteção só cobre um.'
+      : 'um dia ficou sem resgate e não havia proteção guardada.';
+    const kept = status.protection_available ? ' Sua proteção continua guardada.' : '';
+    return `Sua ofensiva de ${dayCount(status.current_streak)} foi interrompida: ${why} O resgate de hoje recomeça a trilha no dia 1.${kept}`;
+  }
+  if (status.protection_will_cover) {
+    return `Ontem ficou sem resgate, mas sua proteção cobre esse dia. Resgate hoje para manter a ofensiva de ${dayCount(status.current_streak)}; a proteção será usada.`;
+  }
+  return status.protection_available
+    ? 'Você tem uma proteção guardada: se perder um dia, ela segura a ofensiva por você. Ela volta a cada 7 dias seguidos.'
+    : 'Complete 7 dias seguidos para ganhar uma proteção que segura sua ofensiva no dia em que você não conseguir jogar.';
+}
+
 function dayState(day: DailyStreakDay, claimable: boolean): 'claimed' | 'today' | 'locked' {
   if (day.claimed) return 'claimed';
   if (day.today && claimable) return 'today';
@@ -95,11 +118,11 @@ export function DailyStreakDialog(props: DailyStreakDialogProps) {
       <dl className="streak-stats">
         <div className="streak-stat" data-tone="flame">
           <dt><Flame aria-hidden="true"/> Ofensiva atual</dt>
-          <dd>{status.current_streak} {status.current_streak === 1 ? 'dia' : 'dias'}</dd>
+          <dd>{dayCount(status.streak_lost ? 0 : status.current_streak)}</dd>
         </div>
         <div className="streak-stat">
           <dt><Trophy aria-hidden="true"/> Melhor ofensiva</dt>
-          <dd>{status.best_streak} {status.best_streak === 1 ? 'dia' : 'dias'}</dd>
+          <dd>{dayCount(status.best_streak)}</dd>
         </div>
         <div className="streak-stat" data-tone={status.protection_available ? 'shield' : undefined}>
           <dt>{status.protection_available ? <ShieldCheck aria-hidden="true"/> : <Shield aria-hidden="true"/>} Proteção</dt>
@@ -107,11 +130,7 @@ export function DailyStreakDialog(props: DailyStreakDialogProps) {
         </div>
       </dl>
 
-      <p className="streak-rule">
-        {status.protection_available
-          ? 'Você tem uma proteção guardada: se perder um dia, ela segura a ofensiva por você. Ela volta a cada 7 dias seguidos.'
-          : 'Complete 7 dias seguidos para ganhar uma proteção que segura sua ofensiva no dia em que você não conseguir jogar.'}
-      </p>
+      <p className="streak-rule">{streakRule(status)}</p>
 
       <ol className="streak-trail" aria-label={`Trilha de ${status.cycle_length} dias`}>
         {trail.map(day => <TrailCell key={day.day} day={day} claimable={claimable}/>)}

@@ -39,11 +39,12 @@ export default function StoreGuide() {
           <GuideCallout kind="info" title="Sempre reverifica a posse">Se um item premium do combo tiver sido estornado depois de salvo, aplicar o combo é recusado e nada muda. Nunca aplica um item que você não possui mais.</GuideCallout></>
       },
       {
-        id: 'diaria', title: 'Resgatar a recompensa diária', summary: 'Um resgate por ciclo, direto no seu saldo.',
+        id: 'diaria', title: 'Resgatar a recompensa diária', summary: 'Um resgate por dia, numa trilha de 30 dias.',
         body: <><GuideSteps><li><span>Um ponto dourado na Loja avisa quando a recompensa está pronta. Nada é resgatado automaticamente.</span></li>
-          <li><span>Use <b>Resgatar fichas grátis</b> na seção de fichas. O valor só é revelado no resgate.</span></li>
-          <li><span>Depois, o painel recua para uma linha com o valor recebido e o tempo até a próxima.</span></li></GuideSteps>
-          <p>Recarregar a página não antecipa o ciclo: a disponibilidade vem do serviço. Se a consulta falhar, o painel mantém uma nova tentativa. Sem fichas para continuar em uma mesa, a recompra também oferece esse resgate.</p></>
+          <li><span>Use <b>Abrir e resgatar</b> na <b>Ofensiva diária</b>. A trilha mostra o valor de cada dia; cada dia seguido vale mais, e o dia 30 paga o baú final.</span></li>
+          <li><span>Depois, o painel mostra o dia garantido e o tempo até o próximo resgate. O dia vira à meia-noite de Brasília.</span></li></GuideSteps>
+          <p>A cada 7 dias seguidos você ganha uma <b>proteção</b>, que cobre exatamente um dia sem resgate. Se faltar um dia sem proteção, ou dois dias ou mais mesmo com ela, a ofensiva é interrompida e o próximo resgate recomeça no dia 1; o painel avisa antes do resgate. Uma proteção não usada continua guardada.</p>
+          <p>Recarregar a página não antecipa o ciclo: a disponibilidade vem do serviço. Se o resgate falhar, ele continua disponível para uma nova tentativa. Sem fichas para continuar em uma mesa, a recompra também oferece esse resgate.</p></>
       },
       {
         id: 'pix', title: 'Comprar um pacote de fichas', summary: 'O pagamento adiciona fichas, nunca saldo sacável.',

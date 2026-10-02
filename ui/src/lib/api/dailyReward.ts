@@ -22,6 +22,10 @@ export interface DailyRewardStatus {
   protection_used_day?: string;
   claimed_today: boolean;
   streak_at_risk: boolean;
+  /** The next claim restarts at day 1; `current_streak` is the count lost. */
+  streak_lost?: boolean;
+  /** Exactly one day was missed and the stored protection absorbs it today. */
+  protection_will_cover?: boolean;
   days: DailyStreakDay[];
 }
 
