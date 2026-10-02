@@ -17,7 +17,7 @@ var ErrEmptyName = errors.New("player: name is empty")
 var ErrInvalidWalletMode = errors.New("player: wallet_mode must be sandbox or real")
 var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
 var ErrInvalidTableTheme = errors.New("player: table_theme must not be empty")
-var ErrInvalidBetPresetMode = errors.New("player: bet_preset_mode must be mixed, bb or pot")
+var ErrInvalidBetPresetMode = errors.New("player: bet_preset_mode must be bb or pot")
 var ErrCosmeticNotOwned = errors.New("player: cosmetic is premium and not owned")
 var ErrInvalidShowcase = errors.New("player: invalid showcase")
 var ErrInvalidShowcaseLayout = errors.New("player: invalid showcase layout")
@@ -366,6 +366,9 @@ func (s *Service) SetShowcaseLayout(ctx context.Context, userID string, layout S
 // server-owned, so an unknown one is rejected outright rather than stored.
 func (s *Service) SetBetPresetMode(ctx context.Context, userID, mode string) (*PlayerProfile, error) {
 	mode = strings.TrimSpace(mode)
+	if mode == BetPresetModeLegacyMixed {
+		mode = BetPresetModePot // older clients still offer the retired mode
+	}
 	if !IsValidBetPresetMode(mode) {
 		return nil, ErrInvalidBetPresetMode
 	}
