@@ -7,6 +7,19 @@ import (
 	"gopkg.aoctech.app/poker/cli/internal/proto"
 )
 
+func TestNarratorAnnouncesEachBoughtRabbitCardOnce(t *testing.T) {
+	n := NewNarrator("you")
+	n.OnSnapshot(&proto.TableSnapshot{Stage: "complete", HandId: "h1"})
+	lines := n.OnSnapshot(&proto.TableSnapshot{Stage: "complete", HandId: "h1", RabbitCards: map[int32]string{3: "Ah"}})
+	if len(lines) != 1 || !strings.Contains(lines[0], "carta 4") {
+		t.Fatalf("want one rabbit line for slot 3, got %q", lines)
+	}
+	lines = n.OnSnapshot(&proto.TableSnapshot{Stage: "complete", HandId: "h1", RabbitCards: map[int32]string{3: "Ah", 4: "2c"}})
+	if len(lines) != 1 || !strings.Contains(lines[0], "carta 5") {
+		t.Fatalf("only the newly bought card should be narrated, got %q", lines)
+	}
+}
+
 func TestNarratorStreetChange(t *testing.T) {
 	n := NewNarrator("you")
 	n.OnSnapshot(&proto.TableSnapshot{Stage: "preflop"})

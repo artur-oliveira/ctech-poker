@@ -162,7 +162,21 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		enabled := args[0] == "on"
 		return &proto.ClientMessage{Type: "set_run_it_twice", RunItTwice: &enabled}, ActNone, nil
 	case "/rabbit":
-		return &proto.ClientMessage{Type: "request_rabbit_hunt", ActionId: uuid.NewString()}, ActNone, nil
+		// One board card per command for the small blind (protocol 12);
+		// "all" buys every card still unbought, as the old /rabbit did.
+		if len(args) != 1 {
+			return nil, ActNone, fmt.Errorf("uso: /rabbit <1-5|all>")
+		}
+		m := &proto.ClientMessage{Type: "request_rabbit_hunt", ActionId: uuid.NewString()}
+		if args[0] != "all" {
+			n, err := strconv.Atoi(args[0])
+			if err != nil || n < 1 || n > 5 {
+				return nil, ActNone, fmt.Errorf("uso: /rabbit <1-5|all>")
+			}
+			slot := int32(n - 1)
+			m.BoardSlot = &slot
+		}
+		return m, ActNone, nil
 	case "/reqcards":
 		return &proto.ClientMessage{Type: "request_winner_cards", ActionId: uuid.NewString()}, ActNone, nil
 	case "/accept":

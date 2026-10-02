@@ -161,7 +161,7 @@ func TestParsePeekVariants(t *testing.T) {
 
 func TestParseAuxiliaryTableCommands(t *testing.T) {
 	cases := map[string]string{
-		"/rabbit":   "request_rabbit_hunt",
+		"/rabbit 4": "request_rabbit_hunt",
 		"/reqcards": "request_winner_cards",
 		"/accept":   "accept_winner_cards",
 		"/decline":  "decline_winner_cards",
@@ -172,6 +172,18 @@ func TestParseAuxiliaryTableCommands(t *testing.T) {
 		m, _, err := ParseTableCommand(line, turnView())
 		if err != nil || m == nil || m.Type != want || m.ActionId == "" {
 			t.Fatalf("%s: m=%+v err=%v", line, m, err)
+		}
+	}
+
+	if m, _, _ := ParseTableCommand("/rabbit 4", turnView()); m.BoardSlot == nil || *m.BoardSlot != 3 {
+		t.Fatalf("rabbit 4 must buy board slot 3: %+v", m)
+	}
+	if m, _, _ := ParseTableCommand("/rabbit all", turnView()); m.BoardSlot != nil {
+		t.Fatalf("rabbit all must carry no board_slot: %+v", m)
+	}
+	for _, bad := range []string{"/rabbit", "/rabbit 0", "/rabbit 6", "/rabbit x"} {
+		if _, _, err := ParseTableCommand(bad, turnView()); err == nil {
+			t.Fatalf("%s should error", bad)
 		}
 	}
 
