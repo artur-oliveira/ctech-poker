@@ -226,7 +226,27 @@ export interface TableSnapshot {
    * Viewer-scoped: present only for the winner being asked and the requester
    * waiting on the answer. Nobody else learns a request exists.
    */
-  pending_winner_cards?: WinnerCardsRequest | undefined;
+  pending_winner_cards?:
+    | WinnerCardsRequest
+    | undefined;
+  /**
+   * Protocol 12. The viewer's bought rabbit-hunt cards keyed by board slot
+   * (0-4); runout_cards keeps the same cards in slot order for older clients.
+   */
+  rabbit_cards: { [key: number]: string };
+  /**
+   * Per-card rabbit-hunt price (the small blind); present only while the
+   * hunt is on offer for this hand.
+   */
+  rabbit_hunt_fee: number;
+  /**
+   * Viewer-scoped open consent batch: the winner sees every request, a
+   * requester only their own, everyone else nothing. pending_winner_cards is
+   * its first entry, for clients older than protocol 12.
+   */
+  winner_cards_requests: WinnerCardsRequest[];
+  /** The winner declined (or let time out) a batch: no further requests this hand. */
+  winner_cards_closed: boolean;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -244,6 +264,11 @@ export interface TableSnapshot_UnrevealedCardHashesEntry {
   value: string;
 }
 
+export interface TableSnapshot_RabbitCardsEntry {
+  key: number;
+  value: string;
+}
+
 /**
  * WinnerCardsRequest is one outstanding paid request to reveal the sole
  * uncontested winner's mucked hole cards. The requester has already been
@@ -256,6 +281,7 @@ export interface WinnerCardsRequest {
   winner_id: string;
   fee: number;
   expires_at_unix_ms: number;
+  requester_avatar_url: string;
 }
 
 export interface RevealedSalt {
@@ -304,6 +330,11 @@ export interface ClientMessage {
    * player actions may advance it without invalidating the viewer's intent.
    */
   expected_stage: string;
+  /**
+   * Board slot (0-4) for request_rabbit_hunt / rabbit_hunt_verify_failed
+   * (protocol 12). Absent means every remaining card (legacy whole runout).
+   */
+  board_slot?: number | undefined;
 }
 
 /** ServerMessage is sent from the server to the client. */
@@ -2476,6 +2507,10 @@ function createBaseTableSnapshot(): TableSnapshot {
     board_two: [],
     board_split_at: 0,
     pending_winner_cards: undefined,
+    rabbit_cards: {},
+    rabbit_hunt_fee: 0,
+    winner_cards_requests: [],
+    winner_cards_closed: false,
   };
 }
 
@@ -2585,6 +2620,18 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.pending_winner_cards !== undefined) {
       WinnerCardsRequest.encode(message.pending_winner_cards, writer.uint32(282).fork()).join();
+    }
+    globalThis.Object.entries(message.rabbit_cards).forEach(([key, value]: [string, string]) => {
+      TableSnapshot_RabbitCardsEntry.encode({ key: key as any, value }, writer.uint32(290).fork()).join();
+    });
+    if (message.rabbit_hunt_fee !== 0) {
+      writer.uint32(296).int64(message.rabbit_hunt_fee);
+    }
+    for (const v of message.winner_cards_requests) {
+      WinnerCardsRequest.encode(v!, writer.uint32(306).fork()).join();
+    }
+    if (message.winner_cards_closed !== false) {
+      writer.uint32(312).bool(message.winner_cards_closed);
     }
     return writer;
   },
@@ -2891,6 +2938,41 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
             message.pending_winner_cards = WinnerCardsRequest.decode(reader, reader.uint32());
             continue;
           }
+          case 36: {
+            if (tag !== 290) {
+              break;
+            }
+
+            const entry36 = TableSnapshot_RabbitCardsEntry.decode(reader, reader.uint32());
+            if (entry36.value !== undefined) {
+              message.rabbit_cards[entry36.key] = entry36.value;
+            }
+            continue;
+          }
+          case 37: {
+            if (tag !== 296) {
+              break;
+            }
+
+            message.rabbit_hunt_fee = longToNumber(reader.int64());
+            continue;
+          }
+          case 38: {
+            if (tag !== 306) {
+              break;
+            }
+
+            message.winner_cards_requests.push(WinnerCardsRequest.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 39: {
+            if (tag !== 312) {
+              break;
+            }
+
+            message.winner_cards_closed = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3109,6 +3191,48 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
         : isSet(object.pending_winner_cards)
         ? WinnerCardsRequest.fromJSON(object.pending_winner_cards)
         : undefined,
+      rabbit_cards: isObject(object.rabbitCards)
+        ? (globalThis.Object.entries(object.rabbitCards) as [string, any][]).reduce(
+          (acc: { [key: number]: string }, [key, value]: [string, any]) => {
+            globalThis.Object.defineProperty(acc, globalThis.Number(key), {
+              value: globalThis.String(value),
+              enumerable: true,
+              configurable: true,
+              writable: true,
+            });
+            return acc;
+          },
+          {},
+        )
+        : isObject(object.rabbit_cards)
+        ? (globalThis.Object.entries(object.rabbit_cards) as [string, any][]).reduce(
+          (acc: { [key: number]: string }, [key, value]: [string, any]) => {
+            globalThis.Object.defineProperty(acc, globalThis.Number(key), {
+              value: globalThis.String(value),
+              enumerable: true,
+              configurable: true,
+              writable: true,
+            });
+            return acc;
+          },
+          {},
+        )
+        : {},
+      rabbit_hunt_fee: isSet(object.rabbitHuntFee)
+        ? globalThis.Number(object.rabbitHuntFee)
+        : isSet(object.rabbit_hunt_fee)
+        ? globalThis.Number(object.rabbit_hunt_fee)
+        : 0,
+      winner_cards_requests: globalThis.Array.isArray(object?.winnerCardsRequests)
+        ? object.winnerCardsRequests.map((e: any) => WinnerCardsRequest.fromJSON(e))
+        : globalThis.Array.isArray(object?.winner_cards_requests)
+        ? object.winner_cards_requests.map((e: any) => WinnerCardsRequest.fromJSON(e))
+        : [],
+      winner_cards_closed: isSet(object.winnerCardsClosed)
+        ? globalThis.Boolean(object.winnerCardsClosed)
+        : isSet(object.winner_cards_closed)
+        ? globalThis.Boolean(object.winner_cards_closed)
+        : false,
     };
   },
 
@@ -3237,6 +3361,24 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     if (message.pending_winner_cards !== undefined) {
       obj.pendingWinnerCards = WinnerCardsRequest.toJSON(message.pending_winner_cards);
     }
+    if (message.rabbit_cards) {
+      const entries = globalThis.Object.entries(message.rabbit_cards) as [string, string][];
+      if (entries.length > 0) {
+        obj.rabbitCards = {};
+        entries.forEach(([k, v]) => {
+          obj.rabbitCards[k] = v;
+        });
+      }
+    }
+    if (message.rabbit_hunt_fee !== 0) {
+      obj.rabbitHuntFee = Math.round(message.rabbit_hunt_fee);
+    }
+    if (message.winner_cards_requests?.length) {
+      obj.winnerCardsRequests = message.winner_cards_requests.map((e) => WinnerCardsRequest.toJSON(e));
+    }
+    if (message.winner_cards_closed !== false) {
+      obj.winnerCardsClosed = message.winner_cards_closed;
+    }
     return obj;
   },
 
@@ -3310,6 +3452,18 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.pending_winner_cards = (object.pending_winner_cards !== undefined && object.pending_winner_cards !== null)
       ? WinnerCardsRequest.fromPartial(object.pending_winner_cards)
       : undefined;
+    message.rabbit_cards = (globalThis.Object.entries(object.rabbit_cards ?? {}) as [string, string][]).reduce(
+      (acc: { [key: number]: string }, [key, value]: [string, string]) => {
+        if (value !== undefined) {
+          acc[globalThis.Number(key)] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    message.rabbit_hunt_fee = object.rabbit_hunt_fee ?? 0;
+    message.winner_cards_requests = object.winner_cards_requests?.map((e) => WinnerCardsRequest.fromPartial(e)) || [];
+    message.winner_cards_closed = object.winner_cards_closed ?? false;
     return message;
   },
 };
@@ -3579,8 +3733,102 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
   },
 };
 
+function createBaseTableSnapshot_RabbitCardsEntry(): TableSnapshot_RabbitCardsEntry {
+  return { key: 0, value: "" };
+}
+
+export const TableSnapshot_RabbitCardsEntry: MessageFns<TableSnapshot_RabbitCardsEntry> = {
+  encode(message: TableSnapshot_RabbitCardsEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== 0) {
+      writer.uint32(8).int32(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TableSnapshot_RabbitCardsEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTableSnapshot_RabbitCardsEntry();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.key = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.value = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): TableSnapshot_RabbitCardsEntry {
+    return {
+      key: isSet(object.key) ? globalThis.Number(object.key) : 0,
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: TableSnapshot_RabbitCardsEntry): unknown {
+    const obj: any = {};
+    if (message.key !== 0) {
+      obj.key = Math.round(message.key);
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TableSnapshot_RabbitCardsEntry>, I>>(base?: I): TableSnapshot_RabbitCardsEntry {
+    return TableSnapshot_RabbitCardsEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TableSnapshot_RabbitCardsEntry>, I>>(
+    object: I,
+  ): TableSnapshot_RabbitCardsEntry {
+    const message = createBaseTableSnapshot_RabbitCardsEntry();
+    message.key = object.key ?? 0;
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
 function createBaseWinnerCardsRequest(): WinnerCardsRequest {
-  return { requester_id: "", requester_name: "", winner_id: "", fee: 0, expires_at_unix_ms: 0 };
+  return {
+    requester_id: "",
+    requester_name: "",
+    winner_id: "",
+    fee: 0,
+    expires_at_unix_ms: 0,
+    requester_avatar_url: "",
+  };
 }
 
 export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
@@ -3599,6 +3847,9 @@ export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
     }
     if (message.expires_at_unix_ms !== 0) {
       writer.uint32(40).int64(message.expires_at_unix_ms);
+    }
+    if (message.requester_avatar_url !== "") {
+      writer.uint32(50).string(message.requester_avatar_url);
     }
     return writer;
   },
@@ -3656,6 +3907,14 @@ export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
             message.expires_at_unix_ms = longToNumber(reader.int64());
             continue;
           }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.requester_avatar_url = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3691,6 +3950,11 @@ export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
         : isSet(object.expires_at_unix_ms)
         ? globalThis.Number(object.expires_at_unix_ms)
         : 0,
+      requester_avatar_url: isSet(object.requesterAvatarUrl)
+        ? globalThis.String(object.requesterAvatarUrl)
+        : isSet(object.requester_avatar_url)
+        ? globalThis.String(object.requester_avatar_url)
+        : "",
     };
   },
 
@@ -3711,6 +3975,9 @@ export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
     if (message.expires_at_unix_ms !== 0) {
       obj.expiresAtUnixMs = Math.round(message.expires_at_unix_ms);
     }
+    if (message.requester_avatar_url !== "") {
+      obj.requesterAvatarUrl = message.requester_avatar_url;
+    }
     return obj;
   },
 
@@ -3724,6 +3991,7 @@ export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
     message.winner_id = object.winner_id ?? "";
     message.fee = object.fee ?? 0;
     message.expires_at_unix_ms = object.expires_at_unix_ms ?? 0;
+    message.requester_avatar_url = object.requester_avatar_url ?? "";
     return message;
   },
 };
@@ -3835,6 +4103,7 @@ function createBaseClientMessage(): ClientMessage {
     turnstile_token: "",
     run_it_twice: undefined,
     expected_stage: "",
+    board_slot: undefined,
   };
 }
 
@@ -3887,6 +4156,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     if (message.expected_stage !== "") {
       writer.uint32(130).string(message.expected_stage);
+    }
+    if (message.board_slot !== undefined) {
+      writer.uint32(136).int32(message.board_slot);
     }
     return writer;
   },
@@ -4032,6 +4304,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.expected_stage = reader.string();
             continue;
           }
+          case 17: {
+            if (tag !== 136) {
+              break;
+            }
+
+            message.board_slot = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -4102,6 +4382,11 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         : isSet(object.expected_stage)
         ? globalThis.String(object.expected_stage)
         : "",
+      board_slot: isSet(object.boardSlot)
+        ? globalThis.Number(object.boardSlot)
+        : isSet(object.board_slot)
+        ? globalThis.Number(object.board_slot)
+        : undefined,
     };
   },
 
@@ -4155,6 +4440,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     if (message.expected_stage !== "") {
       obj.expectedStage = message.expected_stage;
     }
+    if (message.board_slot !== undefined) {
+      obj.boardSlot = Math.round(message.board_slot);
+    }
     return obj;
   },
 
@@ -4179,6 +4467,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     message.turnstile_token = object.turnstile_token ?? "";
     message.run_it_twice = object.run_it_twice ?? undefined;
     message.expected_stage = object.expected_stage ?? "";
+    message.board_slot = object.board_slot ?? undefined;
     return message;
   },
 };

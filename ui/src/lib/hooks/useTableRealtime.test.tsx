@@ -353,7 +353,7 @@ describe('useTableRealtime', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     receive({type: 'state', snapshot: snapshot()});
     act(() => result.current.act('raise', 100));
-    act(() => result.current.requestRabbitHunt());
+    act(() => result.current.requestRabbitHunt(3));
 
     receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
     receive({type: 'error', code: 'invalid_action', action_id: 'action-2'});
@@ -493,11 +493,11 @@ describe('useTableRealtime', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
 
     act(() => {
-      expect(result.current.requestRabbitHunt()).toBe(true);
-      expect(result.current.requestRabbitHunt()).toBe(false);
+      expect(result.current.requestRabbitHunt(3)).toBe(true);
+      expect(result.current.requestRabbitHunt(3)).toBe(false);
     });
     expect(result.current.requestRabbitHuntPending).toBe(true);
-    expect(ws.send).toHaveBeenLastCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1'});
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1', board_slot: 3});
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       ws.send.mockClear();
@@ -505,7 +505,7 @@ describe('useTableRealtime', () => {
       expect(result.current.requestRabbitHuntPending).toBe(true);
       expect(result.current.actionError).toBeNull();
       act(() => vi.advanceTimersByTime(700 * 2 ** (attempt - 1)));
-      expect(ws.send).toHaveBeenCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1'});
+      expect(ws.send).toHaveBeenCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1', board_slot: 3});
     }
 
     receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
@@ -516,7 +516,7 @@ describe('useTableRealtime', () => {
   test('acknowledges a successful rabbit hunt request and unlocks it', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {
-      expect(result.current.requestRabbitHunt()).toBe(true);
+      expect(result.current.requestRabbitHunt(3)).toBe(true);
     });
     receive({type: 'action_ack', action_id: 'action-1'});
     expect(result.current.requestRabbitHuntPending).toBe(false);
@@ -586,9 +586,9 @@ describe('useTableRealtime', () => {
   test('reports a rabbit hunt verification failure as a fire-and-forget frame', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {
-      expect(result.current.reportRabbitHuntVerifyFailed()).toBe(true);
+      expect(result.current.reportRabbitHuntVerifyFailed(3)).toBe(true);
     });
-    expect(ws.send).toHaveBeenLastCalledWith({type: 'rabbit_hunt_verify_failed', action_id: 'action-1'});
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'rabbit_hunt_verify_failed', action_id: 'action-1', board_slot: 3});
   });
 
   test('automatically posts the big blind once for a pending entry', () => {

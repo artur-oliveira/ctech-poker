@@ -1,6 +1,6 @@
 'use client';
 import {
-  memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
+  memo, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore
 } from 'react';
 import {Board} from '@/components/table/Board';
 import {Seat, type SeatLayoutPosition} from '@/components/table/Seat';
@@ -10,9 +10,10 @@ import {PokerLogo} from '@/components/PokerLogo';
 import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown, winnerStandings} from '@/lib/tableOutcome';
 import type {PlayerNote} from '@/lib/api/playerNotes';
-import {RabbitHunt} from '@/components/table/RabbitHunt';
 import {ExitStatus} from '@/components/table/ExitStatus';
-import {WinnerCards} from '@/components/table/WinnerCards';
+import {WinnerCardsPrompt, WinnerCardsRequestControl} from '@/components/table/WinnerCards';
+import {useRabbitHunt} from '@/lib/hooks/useRabbitHunt';
+import {winnerCardsSeat} from '@/lib/winnerCards';
 import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 import {useEnteredKeys} from '@/lib/hooks/useEnteredKeys';
 
@@ -249,10 +250,10 @@ type Props = {
   revealPending?: boolean;
   onRevealCardAction?: (index: number) => void;
   onPeekCardsAction?: () => void;
-  rabbitHuntPending?: boolean;
   rabbitHuntFailCount?: number;
-  onRequestRabbitHuntAction?: () => void;
-  onRabbitHuntVerifyFailedAction?: () => void;
+  // Rabbit hunt, one board slot per purchase (protocol 12).
+  onRequestRabbitHuntAction?: (slot: number) => boolean | void;
+  onRabbitHuntVerifyFailedAction?: (slot: number) => void;
   viewerPendingExit?: boolean;
   onCancelExitAction?: () => void;
   winnerCardsPending?: boolean;
@@ -287,7 +288,6 @@ function TableStageImpl({
                              revealPending,
                              onRevealCardAction,
                              onPeekCardsAction,
-                             rabbitHuntPending,
                              rabbitHuntFailCount,
                              onRequestRabbitHuntAction,
                              onRabbitHuntVerifyFailedAction,
@@ -307,17 +307,16 @@ function TableStageImpl({
   const vertical = useVerticalStage();
   const compactLandscape = useCompactLandscapeStage();
   const capacity = tableCapacity(maxSeats);
-  const [outcomeLayer, setOutcomeLayer] = useState({key: outcome?.key, dismissed: false});
-  if (outcomeLayer.key !== outcome?.key) setOutcomeLayer({key: outcome?.key, dismissed: false});
-  const onOutcomeDismissedChange = useCallback((dismissed: boolean) => {
-    setOutcomeLayer(previous => previous.key === outcome?.key && previous.dismissed === dismissed ? previous :
-      {key: outcome?.key, dismissed});
-  }, [outcome?.key]);
   const seats = rotateSeats(snapshot.seats, viewer);
   // Recomputed only when the snapshot itself changes: `winnerStandings` builds
   // fresh objects, and a chat bubble or a reaction arriving would otherwise
   // hand every seat a new `winStanding` and defeat `memo(Seat)` (#230).
   const standings = useMemo(() => winnerStandings(snapshot), [snapshot]);
+  const rabbit = useRabbitHunt({
+    snapshot, viewer, failCount: rabbitHuntFailCount,
+    onBuy: onRequestRabbitHuntAction, onVerifyFailed: onRabbitHuntVerifyFailedAction
+  });
+  const paidReveal = useMemo(() => winnerCardsSeat(snapshot, viewer), [snapshot, viewer]);
   const departed = useDepartedSeats(snapshot.seats);
   const joined = useJoinedSeats(snapshot.seats);
   const departedNodes = (positioned: boolean) => departed.map(entry =>
@@ -332,6 +331,7 @@ function TableStageImpl({
     // every frame for a clock none of them draws.
     const isTurn = snapshot.current_player_id === seat.player_id;
     const showTiming = isTurn && connected;
+    const revealSeat = !leaving && paidReveal?.winnerId === seat.player_id ? paidReveal : null;
     return <Seat key={leaving ? `left:${seat.player_id}` : seat.player_id} seat={seat} index={index}
                  leaving={leaving}
                  joining={!leaving && joined.has(seat.player_id)}
@@ -363,11 +363,20 @@ function TableStageImpl({
                  isBigBlind={snapshot.big_blind_player_id === seat.player_id}
                  chatBubble={chatBubbles?.[seat.player_id]}
                  layoutPosition={layoutPosition}
+                 cardsControl={revealSeat && revealSeat.mode !== 'prompt'
+                   ? <WinnerCardsRequestControl state={revealSeat} winnerName={seat.name || 'o vencedor'}
+                                                fee={bigBlind} pending={winnerCardsPending}
+                                                onRequest={onRequestWinnerCardsAction}/>
+                   : undefined}
+                 seatPrompt={revealSeat?.mode === 'prompt'
+                   ? <WinnerCardsPrompt requests={revealSeat.requests} pending={winnerCardsPending}
+                                        onAnswer={onAnswerWinnerCardsAction}/>
+                   : undefined}
                  renderActionsMenu={seat.player_id !== viewer ? renderPlayerActionsAction : undefined}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
-                       rake={snapshot.rake} bigBlind={bigBlind}/>;
+                       rake={snapshot.rake} bigBlind={bigBlind} rabbit={rabbit}/>;
   const feltContent = <>
     <span key={`${snapshot.hand_id || 'waiting'}:${snapshot.stage}`} className="table-street-wash" aria-hidden="true"/>
     {announcement && snapshot.stage !== 'complete' && <div key={announcement} className="table-callout"
@@ -386,17 +395,8 @@ function TableStageImpl({
       {seats.map((seat, index) => seatNode(seat, index, seatLayoutPosition(index, seats.length)))}
       {departedNodes(true)}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
-                         onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
       <div className="table-overlay-stack">
-        <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                     pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
-                     onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
-                     offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
-        <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                    pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
-                    onRequestRabbitHuntAction={onRequestRabbitHuntAction}
-                    onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
         <ExitStatus pendingExit={Boolean(viewerPendingExit)}
                     isViewerTurn={snapshot.current_player_id === viewer}
                     onCancelAction={() => onCancelExitAction?.()}/>
@@ -411,17 +411,8 @@ function TableStageImpl({
 
   const overlayStack = <>
     <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
-                       onDismissedChangeAction={onOutcomeDismissedChange}
                        nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
     <div className="table-overlay-stack">
-      <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                   pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
-                   onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
-                   offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
-      <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
-                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
-                  onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
       <ExitStatus pendingExit={Boolean(viewerPendingExit)}
                   isViewerTurn={snapshot.current_player_id === viewer}
                   onCancelAction={() => onCancelExitAction?.()}/>

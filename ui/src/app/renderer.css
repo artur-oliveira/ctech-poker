@@ -963,19 +963,11 @@
     fill: var(--muted);
     font: 600 7px var(--font-mono)
 }
-.rabbit-hunt-cards .playing-card {
-    width: 34px
-}
 /* Signal Glow: reserved for a live, personally-timed state — the viewer's
    own turn, about to auto-fold — never the plain waiting pill. */
 .exit-status[data-urgent] {
     border-color: var(--gold);
     box-shadow: var(--shadow-soft), 0 0 0 1px var(--gold)
-}
-@media (max-width: 620px) {
-.rabbit-hunt-cards .playing-card {
-        width: 28px
-    }
 }
 .self-hud-empty {
     min-height: 180px;

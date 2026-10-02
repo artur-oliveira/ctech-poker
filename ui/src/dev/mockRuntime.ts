@@ -24,6 +24,8 @@ import type {
 } from '@/lib/api/table';
 import {DEFAULT_TURN_TIMEOUT_MS, NEXT_HAND_DELAY_MS} from '@/lib/gameTiming';
 import {MOCK_PLAYER_ID, type MockScenario} from '@/lib/mockConfig';
+import {mockPartialDeckProof} from '@/dev/mockRabbitProof';
+import {rabbitDeckIndex} from '@/lib/rabbitHunt';
 
 export {MOCK_PLAYER_ID, type MockScenario} from '@/lib/mockConfig';
 let mockPlayerNotes: PlayerNote[] = [{
@@ -1678,7 +1680,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       big_blind_player_id: MOCK_PLAYER_ID
     };
   }
-  if (scenario === 'winner_cards' || scenario === 'rabbit_hunt') {
+  if (scenario === 'winner_cards' || scenario === 'winner_cards_prompt' || scenario === 'rabbit_hunt') {
     const winnerID = scenario === 'winner_cards' ? 'bia_sp' : MOCK_PLAYER_ID;
     const resolvedSeats = fullHandSeats().map(seat => ({
       ...seat,
@@ -1689,7 +1691,8 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     }));
     return {
       stage: 'complete',
-      board: ['7H', '8C', 'QS'],
+      // The rabbit scene folds pre-flop so all five slots are for sale.
+      board: scenario === 'rabbit_hunt' ? [] : ['7H', '8C', 'QS'],
       seats: resolvedSeats,
       payouts: {[winnerID]: 425},
       winners: [winnerID],
@@ -1702,9 +1705,18 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       }],
       rake: 5,
       won_without_showdown: true,
+      // Only the commitment is public; each bought card arrives with its own
+      // partial-deck proof (request_rabbit_hunt below), never the seed.
       ...(scenario === 'rabbit_hunt' ? {
-        shuffle_server_seed_hex: mockHands[0].server_seed,
-        shuffle_commit_hash: mockHands[0].commit_hash
+        shuffle_commit_hash: mockHands[0].commit_hash,
+        rabbit_hunt_fee: 25
+      } : {}),
+      // Three opponents asked at once: one batch, one answer.
+      ...(scenario === 'winner_cards_prompt' ? {
+        winner_cards_requests: ['bia_sp', 'leo_rio', 'nina_recife', 'joao_floripa'].map(id => ({
+          requester_id: id, requester_name: resolvedSeats.find(seat => seat.player_id === id)?.name,
+          winner_id: MOCK_PLAYER_ID, fee: 50, expires_at_unix_ms: Date.now() + 8000
+        }))
       } : {}),
       dealer_player_id: 'caio_goiânia',
       small_blind_player_id: 'bia_sp',
@@ -1993,9 +2005,38 @@ export class MockTableService {
       return true;
     }
     if (value.type === 'request_rabbit_hunt') {
+      const slot = Number(value.board_slot);
+      const seed = mockHands[0].server_seed;
+      if (this.scenario !== 'rabbit_hunt' || !seed || !(slot >= this.snapshot.board.length && slot < 5) ||
+        this.snapshot.rabbit_cards?.[slot]) {
+        this.later(() => this.handlers.onMessage({
+          type: 'error', code: 'invalid_action', action_id: String(value.action_id || '')
+        }));
+        return true;
+      }
+      // Charge the small blind, then publish the bought card with a real
+      // partial-deck proof so the browser's verification runs for real.
+      const bought = [...Object.keys(this.snapshot.rabbit_cards ?? {}).map(Number), slot];
+      const dealt = this.snapshot.seats.filter(seat => seat.dealt_in).length;
+      this.snapshot = {
+        ...this.snapshot,
+        seats: this.snapshot.seats.map(seat => seat.player_id === MOCK_PLAYER_ID
+          ? {...seat, stack: Math.max(0, seat.stack - 25)} : seat)
+      };
       this.later(() => this.handlers.onMessage({
         type: 'action_ack', action_id: String(value.action_id || '')
       }));
+      void mockPartialDeckProof(seed, bought.map(boughtSlot => rabbitDeckIndex(dealt, boughtSlot))).then(proof => {
+        this.snapshot = {
+          ...this.snapshot,
+          root_commit_hash: proof.root,
+          revealed_card_salts: proof.revealed,
+          unrevealed_card_hashes: proof.unrevealed,
+          rabbit_cards: Object.fromEntries(bought.map(boughtSlot =>
+            [boughtSlot, proof.deck[rabbitDeckIndex(dealt, boughtSlot)].code]))
+        };
+        this.later(() => this.emitState(), 4);
+      });
       return true;
     }
     if (value.type === 'request_winner_cards') {
@@ -2014,10 +2055,10 @@ export class MockTableService {
         ...this.snapshot,
         seats: this.snapshot.seats.map(seat => seat.player_id === MOCK_PLAYER_ID
           ? {...seat, stack: Math.max(0, seat.stack - 50)} : seat),
-        pending_winner_cards: {
+        winner_cards_requests: [{
           requester_id: MOCK_PLAYER_ID, requester_name: 'Você',
           winner_id: winnerID, fee: 50, expires_at_unix_ms: Date.now() + 8000,
-        },
+        }],
       };
       this.later(() => this.handlers.onMessage({
         type: 'action_ack', action_id: String(value.action_id || '')
@@ -2026,10 +2067,10 @@ export class MockTableService {
       this.later(() => {
         // Only if the request is still outstanding — a real winner answering
         // first must win over the mock's auto-accept.
-        if (this.snapshot.pending_winner_cards?.winner_id !== winnerID) return;
+        if (this.snapshot.winner_cards_requests?.[0]?.winner_id !== winnerID) return;
         this.snapshot = {
           ...this.snapshot,
-          pending_winner_cards: undefined,
+          winner_cards_requests: undefined,
           seats: this.snapshot.seats.map(seat => seat.player_id === winnerID ? {
             ...seat,
             stack: seat.stack + 25,
@@ -2044,29 +2085,39 @@ export class MockTableService {
       return true;
     }
     if (value.type === 'accept_winner_cards' || value.type === 'decline_winner_cards') {
-      const request = this.snapshot.pending_winner_cards;
+      const batch = this.snapshot.winner_cards_requests ?? [];
+      const request = batch[0];
       if (!request) {
         this.later(() => this.handlers.onMessage({
           type: 'error', code: 'invalid_action', action_id: String(value.action_id || '')
         }));
         return true;
       }
+      // One answer settles the whole batch: accept pays the winner half of
+      // every fee, decline refunds every requester and closes the hand.
       const accepted = value.type === 'accept_winner_cards';
       const winnerCards = LOSS_REVEAL[request.winner_id] || ['back', 'back'];
+      const winnerShare = batch.reduce((sum, item) => sum + Math.floor(item.fee / 2), 0);
+      const total = batch.reduce((sum, item) => sum + item.fee, 0);
+      const refunds = new Map(batch.map(item => [item.requester_id, item.fee]));
+      // The winner's own view never sees their cards as "revealed to me" — they
+      // are theirs already; only the requesters' views flip them.
+      const revealToViewer = request.winner_id !== MOCK_PLAYER_ID;
       this.snapshot = {
         ...this.snapshot,
-        pending_winner_cards: undefined,
+        winner_cards_requests: undefined,
+        winner_cards_closed: !accepted,
         seats: this.snapshot.seats.map(seat => {
           if (accepted && seat.player_id === request.winner_id) {
-            return {...seat, stack: seat.stack + request.fee / 2, hole_cards: winnerCards,
-              hole_cards_revealed: [true, true], hand_category: 'pair'};
+            return {...seat, stack: seat.stack + winnerShare, ...(revealToViewer ? {hole_cards: winnerCards,
+              hole_cards_revealed: [true, true] as [boolean, boolean], hand_category: 'pair'} : {})};
           }
-          if (!accepted && seat.player_id === request.requester_id) {
-            return {...seat, stack: seat.stack + request.fee};
+          if (!accepted && refunds.has(seat.player_id)) {
+            return {...seat, stack: seat.stack + (refunds.get(seat.player_id) ?? 0)};
           }
           return seat;
         }),
-        rake: (this.snapshot.rake || 0) + (accepted ? request.fee - request.fee / 2 : 0),
+        rake: (this.snapshot.rake || 0) + (accepted ? total - winnerShare : 0),
       };
       this.later(() => this.handlers.onMessage({
         type: 'action_ack', action_id: String(value.action_id || '')
@@ -2593,7 +2644,7 @@ export class MockTableService {
     this.snapshot = {
       ...this.snapshot,
       snapshot_version: this.snapshotVersion,
-      protocol_version: 8,
+      protocol_version: 12,
       prospective_call_amount: prospectiveCallAmount,
       ...(fixedCallInvalid ? {action_preselection: undefined, action_preselection_amount: 0} : {}),
       seats: this.snapshot.seats.map(seat => ({

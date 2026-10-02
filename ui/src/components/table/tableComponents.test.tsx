@@ -374,14 +374,34 @@ describe('table presentation', () => {
     expect(disconnected.container.querySelector('.game-seat.is-turn .seat-turn-ring')).not.toBeInTheDocument();
   });
 
-  test('queues the paid winner-card offer behind the primary hand outcome', async () => {
+  test('the uncontested winner\'s face-down cards are the paid request control', async () => {
     useVerticalStage();
-    const snapshot = snapshotForScenario('winner_cards');
+    const onRequest = vi.fn();
+    const snapshot = {...snapshotForScenario('winner_cards'), protocol_version: 12};
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={6}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}
+      onRequestWinnerCardsAction={onRequest}/>);
+    const control = screen.getByRole('button', {name: /Pedir para ver as cartas de Bia por 50/});
+    expect(container.querySelector('[data-player-id="bia_sp"] .seat-cards')).toContainElement(control);
+    await userEvent.click(control);
+    expect(onRequest).toHaveBeenCalledOnce();
+  });
+
+  test('the winner answers the batch at their own seat', () => {
+    useVerticalStage();
+    const snapshot = {...snapshotForScenario('winner_cards_prompt'), protocol_version: 12};
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={6}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    const prompt = screen.getByRole('group', {name: 'Pedido para ver sua mão'});
+    expect(container.querySelector(`[data-player-id="${MOCK_PLAYER_ID}"]`)).toContainElement(prompt);
+    expect(screen.getByRole('alert')).toHaveTextContent(/Bia, Léo e mais 2 querem ver sua mão/);
+  });
+
+  test('a pre-flop fold offers all five board slots as rabbit-hunt cards', () => {
+    const snapshot = {...snapshotForScenario('rabbit_hunt'), protocol_version: 12};
     render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={6}
-      pot={0} bigBlind={50} nowMs={Date.now()} outcome={{key: 1, kind: 'fold'}} holdOutcomeOpen/>);
-    expect(screen.queryByRole('button', {name: /Pedir a mão/})).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', {name: 'Minimizar resultado'}));
-    expect(screen.getByRole('button', {name: /Pedir a mão/})).toBeInTheDocument();
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(screen.getAllByRole('button', {name: /\(rabbit hunt\) por 25/})).toHaveLength(5);
   });
 
   test('the next-hand countdown rides on the outcome badge once a personalized result exists', () => {

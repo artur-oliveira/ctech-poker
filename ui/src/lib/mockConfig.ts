@@ -31,6 +31,7 @@ export type MockScenario =
   | 'side_pot'
   | 'run_it_twice'
   | 'winner_cards'
+  | 'winner_cards_prompt'
   | 'rabbit_hunt'
   | 'rebuy'
   | 'reality_check'

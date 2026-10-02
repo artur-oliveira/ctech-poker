@@ -85,6 +85,7 @@ export interface WinnerCardsRequest {
   requester_name?: string;
   winner_id: string;
   winner_name?: string;
+  requester_avatar_url?: string;
   fee: number;
   expires_at_unix_ms: number;
 }
@@ -123,6 +124,15 @@ export interface TableSnapshot {
   pots?: PotView[];
   pot_results?: PotResultView[];
   pending_winner_cards?: WinnerCardsRequest;
+  // Protocol 12: the open consent batch as this viewer may see it (the winner
+  // gets every request, a requester only their own) and whether the winner
+  // already refused this hand.
+  winner_cards_requests?: WinnerCardsRequest[];
+  winner_cards_closed?: boolean;
+  // Protocol 12: the viewer's bought rabbit-hunt cards keyed by board slot,
+  // and the per-card price while the hunt is on offer.
+  rabbit_cards?: Record<number, string>;
+  rabbit_hunt_fee?: number;
   protocol_version?: number;
   hand_id?: string;
   shuffle_commit_hash?: string;
