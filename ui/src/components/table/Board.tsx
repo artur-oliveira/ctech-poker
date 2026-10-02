@@ -128,18 +128,21 @@ export function Board({cards, boardTwo, splitAt = 0, pot, pots, rake, bigBlind, 
   const chips = useChipFormat();
   const exact = useChipExact();
   const unit = useChipUnit();
+  const sidePots = pots && pots.length > 1 ? pots : null;
   return <div className="board">{pot > 0 && <span className="game-pot">
-    <ChipStack amount={pot} bigBlind={bigBlind} size="pot"/>
-    POTE <b key={pot} className="pot-value"
-            aria-label={`Pote de ${exact(pot)}${unit}`}>{chips(pot)}</b>{rake ?
-    <small title="Comissão da casa cobrada sobre o pote (rake)"
-           aria-label={`Comissão da casa: ${exact(rake)}${unit}`}>rake {chips(rake)}</small> : null}
-    {pots && pots.length > 1 && <span className="side-pots" aria-label="Divisão dos potes">
-      {pots.map((item, index) => <small key={`${index}-${item.amount}`}
-                                        aria-label={`${index === 0 ? 'Principal' : `Lateral ${index}`}: ${exact(item.amount)}${unit}`}>
-        {index === 0 ? 'Principal' : `Lateral ${index}`}: {chips(item.amount)}
-      </small>)}
-    </span>}</span>}
+    <span className="pot-main"><ChipStack amount={pot} bigBlind={bigBlind} size="pot"/>
+      POTE <b key={pot} className="pot-value"
+              aria-label={`Pote de ${exact(pot)}${unit}`}>{chips(pot)}</b></span>
+    {(rake || sidePots) ? <span className="pot-detail">{rake ?
+      <small title="Comissão da casa cobrada sobre o pote (rake)"
+             aria-label={`Comissão da casa: ${exact(rake)}${unit}`}>rake {chips(rake)}</small> : null}
+      {sidePots && <span className="side-pots" aria-label="Divisão dos potes">
+        {sidePots.map((item, index) => <small key={`${index}-${item.amount}`}
+                                              aria-label={`${index === 0 ? 'Principal' : `Lateral ${index}`}: ${exact(item.amount)}${unit}`}>
+          {index === 0 ? 'Principal' : `Lateral ${index}`}: {chips(item.amount)}
+        </small>)}
+      </span>}
+    </span> : null}</span>}
     {boardTwo?.length ? <div className="board-runouts" aria-label="Duas distribuições do board">
       <div className="board-runouts-heading">
         <Repeat2 aria-hidden="true"/>
