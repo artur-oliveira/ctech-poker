@@ -1,7 +1,5 @@
 import {describe, expect, test} from 'vitest';
-import {
-  ALL_TABLES, dayLabel, filterHands, groupHandsByDay, handTables, loadedTotals, NO_FILTER, shortTableId
-} from './handsHistory';
+import {dayLabel, groupHandsByDay, loadedTotals, shortTableId} from './handsHistory';
 import type {HandItem, HandOutcome} from '@/lib/api/player';
 
 // 2026-09-02T15:00:00Z, used as "now" everywhere so Hoje/Ontem are deterministic.
@@ -14,38 +12,6 @@ function hand(overrides: Partial<HandItem> = {}): HandItem {
     ended_at: NOW, ...overrides
   } as HandItem;
 }
-
-describe('hand-history filtering (#115)', () => {
-  test('the default filter is a no-op', () => {
-    const hands = [hand({hand_id: 'a'}), hand({hand_id: 'b', outcome: 'lost'})];
-    expect(filterHands(hands, NO_FILTER)).toEqual(hands);
-  });
-
-  test('narrows by outcome, by table, and by both at once', () => {
-    const hands = [
-      hand({hand_id: 'a', outcome: 'won', table_id: 't1'}),
-      hand({hand_id: 'b', outcome: 'lost', table_id: 't1'}),
-      hand({hand_id: 'c', outcome: 'won', table_id: 't2'})
-    ];
-    expect(filterHands(hands, {outcome: 'won', tableId: ALL_TABLES}).map(h => h.hand_id)).toEqual(['a', 'c']);
-    expect(filterHands(hands, {outcome: 'all', tableId: 't1'}).map(h => h.hand_id)).toEqual(['a', 'b']);
-    expect(filterHands(hands, {outcome: 'won', tableId: 't2'}).map(h => h.hand_id)).toEqual(['c']);
-    expect(filterHands(hands, {outcome: 'tied', tableId: 't1'})).toEqual([]);
-  });
-
-  test('offers only tables present in the loaded pages, busiest first', () => {
-    const hands = [
-      hand({hand_id: 'a', table_id: 'quiet'}),
-      hand({hand_id: 'b', table_id: 'busy'}),
-      hand({hand_id: 'c', table_id: 'busy'}),
-      hand({hand_id: 'd', table_id: 'also'})
-    ];
-    expect(handTables(hands)).toEqual([
-      {tableId: 'busy', count: 2}, {tableId: 'also', count: 1}, {tableId: 'quiet', count: 1}
-    ]);
-    expect(handTables([])).toEqual([]);
-  });
-});
 
 describe('shortTableId (#115)', () => {
   test('elides the middle, keeping head and tail so a "(count)" suffix stays visible', () => {

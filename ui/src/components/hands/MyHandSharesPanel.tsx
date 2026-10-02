@@ -1,6 +1,6 @@
 'use client';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Check, Clock3, Copy, HeartCrack, LoaderCircle, Link2, ShieldOff, Trophy} from 'lucide-react';
+import {Check, ChevronDown, Clock3, Copy, HeartCrack, LoaderCircle, Link2, ShieldOff, Trophy} from 'lucide-react';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -67,9 +67,15 @@ function ShareRow({share, onRevokeAction, revoking}: {
  * any device, with a Revogar per row. `revokeHandShare` existed but was only
  * reachable from `ShareHandDialog` reopened on the same hand in the same
  * browser, which left a regretted link circulating for its whole 1–30 day TTL.
+ *
+ * It sits above the infinite hand list, collapsed to one line with its live
+ * count: at the bottom of the page it was only reachable once the list had
+ * auto-loaded the player's entire history. The heading stays in the tree in
+ * every state; the toggle inside it is the WAI-ARIA accordion pattern.
  */
 export function MyHandSharesPanel() {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   const shares = useQuery({queryKey: HAND_SHARES_QUERY_KEY, queryFn: listMyHandShares});
   const revoke = useMutation({
     mutationFn: async (token: string) => {
@@ -85,39 +91,54 @@ export function MyHandSharesPanel() {
     }
   });
 
-  return <section className="hand-shares-panel" aria-labelledby="hand-shares-heading">
-    <header>
-      <h2 id="hand-shares-heading"><Link2 aria-hidden="true"/> Meus links compartilhados</h2>
+  const count = shares.data?.length ?? 0;
+  const status = shares.isLoading ? null
+    : shares.isError ? 'Não carregou'
+      : count === 0 ? 'Nenhum ativo'
+        : `${count} ${count === 1 ? 'ativo' : 'ativos'}`;
+
+  return <section className={`hand-shares-panel${open ? ' is-open' : ''}`} aria-labelledby="hand-shares-heading">
+    <h2 id="hand-shares-heading">
+      <button type="button" className="hand-shares-toggle" aria-expanded={open} aria-controls="hand-shares-body"
+              onClick={() => setOpen(current => !current)}>
+        <Link2 aria-hidden="true"/>
+        <span className="hand-shares-title">Meus links compartilhados</span>
+        {status && <span className={`hand-shares-count${count > 0 ? ' has-links' : ''}`}>{status}</span>}
+        <ChevronDown className="hand-shares-chevron" aria-hidden="true"/>
+      </button>
+    </h2>
+
+    <div id="hand-shares-body" className="hand-shares-body" hidden={!open}>
       <p>Cada link abre uma versão anonimizada de uma mão até expirar. Revogar desativa o endereço na hora.</p>
-    </header>
 
-    {shares.isLoading
-      ? <SkeletonList label="Carregando seus links compartilhados…" count={2} height={72}
-                      className="hand-shares-list"/>
-      : shares.isError
-        ? <div className="lobby-empty hands-state" role="alert">
-          <div>
-            <strong>Seus links não abriram desta vez</strong>
-            <p>Os links continuam ativos. Tente carregar a lista novamente.</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void shares.refetch()}>Tentar novamente</Button>
-        </div>
-        : !shares.data?.length
-          ? <div className="lobby-empty hands-state">
+      {shares.isLoading
+        ? <SkeletonList label="Carregando seus links compartilhados…" count={2} height={72}
+                        className="hand-shares-list"/>
+        : shares.isError
+          ? <div className="lobby-empty hands-state" role="alert">
             <div>
-              <strong>Nenhum link ativo</strong>
-              <p>Abra uma mão e use <b>Compartilhar</b> para criar um link com prazo. Ele aparece aqui até expirar.</p>
+              <strong>Seus links não abriram desta vez</strong>
+              <p>Os links continuam ativos. Tente carregar a lista novamente.</p>
             </div>
+            <Button variant="outline" size="sm" onClick={() => void shares.refetch()}>Tentar novamente</Button>
           </div>
-          : <ul className="hand-shares-list">
-            {shares.data.map(share => <ShareRow
-              key={share.token} share={share}
-              revoking={revoke.isPending && revoke.variables === share.token}
-              onRevokeAction={token => revoke.mutate(token)}/>)}
-          </ul>}
+          : !shares.data?.length
+            ? <div className="lobby-empty hands-state">
+              <div>
+                <strong>Nenhum link ativo</strong>
+                <p>Abra uma mão e use <b>Compartilhar</b> para criar um link com prazo. Ele aparece aqui até expirar.</p>
+              </div>
+            </div>
+            : <ul className="hand-shares-list">
+              {shares.data.map(share => <ShareRow
+                key={share.token} share={share}
+                revoking={revoke.isPending && revoke.variables === share.token}
+                onRevokeAction={token => revoke.mutate(token)}/>)}
+            </ul>}
 
-    {revoke.isError && <p className="form-error" role="alert">
-      Não foi possível revogar o link agora. Tente novamente em instantes.
-    </p>}
+      {revoke.isError && <p className="form-error" role="alert">
+        Não foi possível revogar o link agora. Tente novamente em instantes.
+      </p>}
+    </div>
   </section>;
 }

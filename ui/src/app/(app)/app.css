@@ -6438,120 +6438,66 @@ button.deck-grid-slot:hover {
     font-variant-numeric: tabular-nums
 }
 
-.hands-filters {
-    margin-bottom: 24px
-}
-
-/* Saved filters and collections (#347) share the .hands-filters block above. */
-.hands-saved-filters {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 12px
-}
-.hands-saved-filter {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px
-}
-.hands-saved-filter-remove {
-    display: inline-grid;
-    place-items: center;
-    width: 20px;
-    height: 20px;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--muted-rose);
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer
-}
-.hands-saved-filter-remove:hover,
-.hands-saved-filter-remove:focus-visible {
-    background: var(--surface-control);
-    color: var(--paper)
-}
-.hands-saved-filter-remove:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 1px
-}
-.hands-save-filter-form {
+/* The one lens left on the list (#347 collections): a single native select,
+   so the header stays one quiet line however many collections exist. It is
+   only rendered once the player has a collection. */
+.hands-view {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 8px
-}
-.hands-save-filter-form label {
-    font-size: var(--font-size-compact);
-    color: var(--muted)
-}
-.hands-save-filter-form input {
-    min-width: 0;
-    flex: 1 1 180px;
-    padding: 6px 10px;
-    border-radius: var(--rounded-sm);
-    border: 1px solid var(--control-border);
-    background: var(--surface-seat);
-    color: var(--paper);
+    justify-content: flex-end;
+    gap: 10px;
+    max-width: 900px;
+    margin: 0 auto 16px;
+    color: var(--text-secondary);
     font-size: var(--font-size-compact)
 }
-.hands-save-filter-form input:focus-visible {
+
+.hands-view-select {
+    position: relative;
+    display: inline-flex;
+    min-width: 0
+}
+
+.hands-view-select select {
+    min-width: 0;
+    max-width: min(32ch, 70vw);
+    min-height: 40px;
+    padding: 0 34px 0 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat);
+    color: var(--paper);
+    font: inherit;
+    text-overflow: ellipsis;
+    appearance: none;
+    cursor: pointer
+}
+
+.hands-view-select select:hover {
+    background: var(--surface-control)
+}
+
+.hands-view-select select:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px
 }
-.hands-saved-filters-empty {
-    margin: 4px 0 0;
-    color: var(--muted);
-    font-size: var(--font-size-compact)
+
+.hands-view-select svg {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    width: 16px;
+    height: 16px;
+    color: var(--muted-rose);
+    transform: translateY(-50%);
+    pointer-events: none
 }
 
-.hands-filters .filter-tabs {
-    margin-bottom: 8px
-}
-
-.hands-filters .filter-tabs:last-child {
-    margin-bottom: 0
-}
-
-/* The table filter grows by one chip per distinct table across every page
-   "Carregar mais mãos" loads — unlike the four fixed outcome chips, it has no
-   ceiling. Wrapped, that turns each load into a layout shift the player is
-   mid-scroll through. A fixed-height horizontal strip (same fade-scroll
-   pattern as .stake-options) absorbs any number of tables without ever
-   pushing the list below it. */
 @media (max-width: 600px) {
-    .hands-filters .filter-tabs-scroll {
-        flex-wrap: nowrap;
-        justify-content: flex-start;
-        overflow-x: auto;
-        padding: 4px 2px 10px;
-        scroll-snap-type: x proximity;
-        scroll-padding-inline: 2px;
-        scrollbar-color: var(--white-22) var(--surface-seat);
-        scrollbar-width: thin;
-        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
-        mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%)
-    }
-
-    .hands-filters .filter-tabs-scroll::-webkit-scrollbar {
-        height: 8px
-    }
-
-    .hands-filters .filter-tabs-scroll::-webkit-scrollbar-track {
-        background: var(--surface-seat);
-        border-radius: var(--rounded-pill)
-    }
-
-    .hands-filters .filter-tabs-scroll::-webkit-scrollbar-thumb {
-        background: var(--white-22);
-        border: 2px solid var(--surface-seat);
-        border-radius: var(--rounded-pill)
-    }
-
-    .hands-filters .filter-tabs-scroll .filter-tab {
-        flex: none;
-        scroll-snap-align: start
+    .hands-view-select,
+    .hands-view-select select {
+        flex: 1;
+        max-width: none
     }
 }
 
@@ -6617,40 +6563,98 @@ button.deck-grid-slot:hover {
 
 /* ── Meus links compartilhados (#96) ────────────────────────────────────── */
 
+/* Collapsed to one line above the list: at the foot of an infinite list it
+   was only reachable after every page of history had loaded. */
 .hand-shares-panel {
     max-width: 900px;
-    margin: 48px auto 0;
-    padding: 24px;
+    margin: 0 auto 24px;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-panel);
     background: var(--surface-seat)
 }
 
-.hand-shares-panel > header {
-    margin-bottom: 16px
+.hand-shares-panel h2 {
+    margin: 0;
+    font-size: var(--font-size-body);
+    font-weight: 600
 }
 
-.hand-shares-panel h2 {
+.hand-shares-toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 0;
-    font-size: var(--font-size-subtitle);
-    font-weight: 700;
-    color: var(--paper)
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px 16px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--paper);
+    font: inherit;
+    text-align: start;
+    cursor: pointer
 }
 
-.hand-shares-panel h2 svg {
-    width: 18px;
-    height: 18px;
+.hand-shares-toggle:hover {
+    background: var(--white-08)
+}
+
+.hand-shares-toggle:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.hand-shares-toggle > svg:first-child {
+    flex: none;
+    width: 16px;
+    height: 16px;
     color: var(--brand-bright)
 }
 
-.hand-shares-panel > header p {
+.hand-shares-title {
+    flex: 1;
+    min-width: 0
+}
+
+.hand-shares-count {
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap
+}
+
+.hand-shares-count.has-links {
+    color: var(--text-secondary)
+}
+
+.hand-shares-chevron {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--muted-rose);
+    transition: transform 200ms var(--ease-out-quart)
+}
+
+.hand-shares-panel.is-open .hand-shares-chevron {
+    transform: rotate(180deg)
+}
+
+.hand-shares-body {
+    padding: 4px 16px 16px
+}
+
+.hand-shares-body > p {
     max-width: 68ch;
-    margin: 6px 0 0;
+    margin: 0 0 12px;
     color: var(--text-secondary);
     font-size: var(--font-size-body)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hand-shares-chevron {
+        transition: none
+    }
 }
 
 .hand-shares-list {
@@ -6744,10 +6748,6 @@ button.deck-grid-slot:hover {
 }
 
 @media (max-width: 720px) {
-    .hand-shares-panel {
-        padding: 16px
-    }
-
     .hand-share-row {
         grid-template-columns: auto minmax(0, 1fr);
         row-gap: 10px
@@ -6881,16 +6881,6 @@ button.deck-grid-slot:hover {
         animation: none
     }
 }
-
-/* Table-filter chips carry a head…tail table id (#115); this is only a safety
-   clip so an unexpectedly long label can't push the chip row past the shell. */
-.hands-filters .filter-tab {
-    max-width: min(28ch, 70vw);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap
-}
-
 
 /* Daily streak trail (#293). The dialog is wider than the 448px default
    because the 30-day trail is the content, not a detail beside it. */

@@ -1,26 +1,9 @@
-// Client-side shaping of the loaded hand-history pages (#115): outcome/table
-// filters, day grouping and the "carregadas" roll-up. All pure, all over the
-// pages already in the react-query cache — filtering must not cost a refetch,
-// which is the whole point of the acceptance criterion "filter to só vitórias
-// without a full reload".
-import type {HandItem, HandOutcome} from '@/lib/api/player';
-
-export type OutcomeFilter = 'all' | HandOutcome;
-
-export const ALL_TABLES = 'all';
-
-export interface HandsFilter {
-  outcome: OutcomeFilter;
-  tableId: string;
-}
-
-export const NO_FILTER: HandsFilter = {outcome: 'all', tableId: ALL_TABLES};
-
-export function filterHands(hands: HandItem[], filter: HandsFilter): HandItem[] {
-  return hands.filter(hand =>
-    (filter.outcome === 'all' || hand.outcome === filter.outcome) &&
-    (filter.tableId === ALL_TABLES || hand.table_id === filter.tableId));
-}
+// Client-side shaping of the loaded hand-history pages (#115): day grouping
+// and the "nesta lista" roll-up. All pure, all over the pages already in the
+// react-query cache. The outcome/table filters that used to live here were
+// removed: they could only ever filter the pages fetched so far, so their
+// counts and results misled anyone with more history than one page.
+import type {HandItem} from '@/lib/api/player';
 
 export interface LoadedTotals {
   total: number;
@@ -47,24 +30,9 @@ export function loadedTotals(hands: HandItem[]): LoadedTotals | null {
   return {total: hands.length, netSum, wins, ties, losses, winRate: Math.round((wins / hands.length) * 100)};
 }
 
-export interface TableOption {
-  tableId: string;
-  count: number;
-}
-
-/** The tables present in the loaded pages, busiest first, so the filter chips
- * only ever offer a table the player can actually see rows for. */
-export function handTables(hands: HandItem[]): TableOption[] {
-  const counts = new Map<string, number>();
-  for (const hand of hands) counts.set(hand.table_id, (counts.get(hand.table_id) ?? 0) + 1);
-  return [...counts.entries()]
-    .map(([tableId, count]) => ({tableId, count}))
-    .sort((a, b) => b.count - a.count || a.tableId.localeCompare(b.tableId));
-}
-
 /** A table id is a 26-char ULID that names nothing a player memorizes, yet the
  * head and tail together are enough to tell two tables apart. Ellipsis-in-the-
- * middle keeps the count suffix visible where a CSS trailing clip would eat it. */
+ * middle keeps both ends readable where a CSS trailing clip would eat the tail. */
 export function shortTableId(tableId: string, edge = 4): string {
   if (tableId.length <= edge * 2 + 1) return tableId;
   return `${tableId.slice(0, edge)}…${tableId.slice(-edge)}`;
