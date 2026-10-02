@@ -60,7 +60,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 11 || converted.IdleRemovalUnixMs != 123456 ||
+	if converted.ProtocolVersion != TableProtocolVersion || converted.IdleRemovalUnixMs != 123456 ||
 		converted.Seats[0].TimeBankMs != 27000 || converted.Seats[0].HandScore != 4321 || len(converted.PotResults) != 1 ||
 		!converted.Seats[0].GetRunItTwice() || converted.PotResults[0].Runout != 1 ||
 		len(converted.BoardTwo) != 2 || converted.BoardSplitAt != 3 ||
@@ -73,14 +73,22 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	}
 }
 
-func TestConvertSnapshotCarriesThePendingWinnerCardsRequest(t *testing.T) {
-	snap := hand.Snapshot{PendingWinnerCards: &hand.WinnerCardsRequestView{
-		RequesterID: "p1", RequesterName: "Ana", WinnerID: "p2", Fee: 40, ExpiresAtUnixMs: 1700,
+func TestConvertSnapshotCarriesTheWinnerCardsBatch(t *testing.T) {
+	snap := hand.Snapshot{WinnerCardsClosed: true, WinnerCardsRequests: []hand.WinnerCardsRequestView{
+		{RequesterID: "p1", RequesterName: "Ana", RequesterAvatarURL: "a.png", WinnerID: "p2", Fee: 40, ExpiresAtUnixMs: 1700},
+		{RequesterID: "p3", WinnerID: "p2", Fee: 40, ExpiresAtUnixMs: 1700},
 	}}
-	got := ConvertSnapshot(snap).GetPendingWinnerCards()
+	converted := ConvertSnapshot(snap)
+	if len(converted.WinnerCardsRequests) != 2 || converted.WinnerCardsRequests[0].GetRequesterAvatarUrl() != "a.png" ||
+		!converted.WinnerCardsClosed {
+		t.Fatalf("winner cards batch lost during conversion: %+v", converted)
+	}
+	// Pre-protocol-12 clients only read pending_winner_cards: it carries the
+	// batch's first entry.
+	got := converted.GetPendingWinnerCards()
 	if got == nil || got.GetRequesterId() != "p1" || got.GetRequesterName() != "Ana" ||
 		got.GetWinnerId() != "p2" || got.GetFee() != 40 || got.GetExpiresAtUnixMs() != 1700 {
-		t.Fatalf("pending winner cards request lost during conversion: %+v", got)
+		t.Fatalf("legacy pending winner cards request lost during conversion: %+v", got)
 	}
 	if ConvertSnapshot(hand.Snapshot{}).GetPendingWinnerCards() != nil {
 		t.Fatal("a snapshot with no pending request must not fabricate one")
@@ -109,11 +117,13 @@ func TestConvertSnapshotPreservesPartialDeckProof(t *testing.T) {
 		},
 		UnrevealedCardHashes: map[int]string{6: "hash"},
 		RunoutCards:          []string{"As"},
+		RabbitCards:          map[int]string{3: "As"},
+		RabbitHuntFee:        10,
 	})
 	if converted.RootCommitHash != "root" ||
 		converted.RevealedCardSalts[5].Card != "As" ||
 		converted.UnrevealedCardHashes[6] != "hash" ||
-		len(converted.RunoutCards) != 1 {
+		len(converted.RunoutCards) != 1 || converted.RabbitCards[3] != "As" || converted.RabbitHuntFee != 10 {
 		t.Fatalf("partial proof lost during protobuf conversion: %+v", converted)
 	}
 }

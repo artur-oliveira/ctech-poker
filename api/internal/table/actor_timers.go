@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -316,20 +317,21 @@ func (a *Actor) retryNextHand(err error) error {
 	return err
 }
 
-// armWinnerCardsTimer (re-)arms the consent-window expiry for a pending
-// paid-reveal request. Idempotent per requester (at most one request exists
-// per hand) and driven off the request's persisted ExpiresAt, so a reload on
+// armWinnerCardsTimer (re-)arms the consent-window expiry for the open
+// paid-reveal batch. Idempotent per deadline (requests joining a batch share
+// its ExpiresAt) and driven off the batch's persisted ExpiresAt, so a reload on
 // any node resumes the same deadline rather than restarting it — without
-// this, an actor handoff mid-request would strand the requester's fee.
-func (a *Actor) armWinnerCardsTimer(req *hand.WinnerCardsRequest) {
-	if req == nil {
+// this, an actor handoff mid-request would strand the requesters' fees.
+func (a *Actor) armWinnerCardsTimer(batch []hand.WinnerCardsRequest) {
+	if len(batch) == 0 {
 		if a.winnerCardsTimer != nil {
 			a.winnerCardsTimer.Stop()
 		}
 		a.winnerCardsArmedFor = ""
 		return
 	}
-	key := a.handID + "#" + req.RequesterID
+	req := batch[0]
+	key := a.handID + "#" + strconv.FormatInt(req.ExpiresAt, 10)
 	if key == a.winnerCardsArmedFor {
 		return
 	}

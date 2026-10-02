@@ -859,7 +859,9 @@ func TestRevealHoleCardsRejectsPlayerNotDealtIntoTheHand(t *testing.T) {
 	}
 }
 
-func TestRequestRabbitHuntChargesBigBlindAndGatesViewFor(t *testing.T) {
+func boardSlotPtr(slot int) *int { return &slot }
+
+func TestRequestRabbitHuntChargesSmallBlindPerCardAndRevealsOnlyThatSlot(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
 	table := NewTable([]*Player{p1, p2}, 10, 20)
@@ -875,26 +877,70 @@ func TestRequestRabbitHuntChargesBigBlindAndGatesViewFor(t *testing.T) {
 	if err := table.Act(toAct, betting.ActionFold, 0); err != nil {
 		t.Fatalf("%s folds: %v", toAct, err)
 	}
+	if fee := table.ViewFor(winnerID).RabbitHuntFee; fee != 10 {
+		t.Fatalf("expected the per-card price (small blind 10) on offer, got %d", fee)
+	}
 
 	before := winner.Stack
-	fee, err := table.RequestRabbitHunt(winnerID)
+	fee, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(1))
 	if err != nil {
 		t.Fatalf("RequestRabbitHunt: %v", err)
 	}
-	if fee != 20 {
-		t.Fatalf("expected the big blind (20) charged, got %d", fee)
-	}
-	if winner.Stack != before-20 {
-		t.Fatalf("expected stack debited by the fee, got %d want %d", winner.Stack, before-20)
+	if fee != 10 || winner.Stack != before-10 {
+		t.Fatalf("expected one small blind charged, fee=%d stack=%d", fee, winner.Stack)
 	}
 
 	paidView := table.ViewFor(winnerID)
-	if len(paidView.RunoutCards) == 0 {
-		t.Fatal("expected the payer's own view to reveal the runout")
+	if len(paidView.RabbitCards) != 1 || paidView.RabbitCards[1] == "" {
+		t.Fatalf("expected exactly the bought slot revealed, got %v", paidView.RabbitCards)
 	}
-	unpaidView := table.ViewFor(toAct)
-	if len(unpaidView.RunoutCards) != 0 {
+	if len(paidView.RunoutCards) != 1 || paidView.RunoutCards[0] != paidView.RabbitCards[1] {
+		t.Fatalf("legacy runout must carry only the bought card, got %v", paidView.RunoutCards)
+	}
+	if paidView.ShuffleServerSeedHex != "" {
+		t.Fatal("the seed would reveal every unbought card; it must never be sent")
+	}
+	holeTotal := 4
+	for slot := range 5 {
+		_, hashed := paidView.UnrevealedCardHashes[boardSlotDeckIndex(holeTotal, slot)]
+		_, salted := paidView.RevealedCardSalts[boardSlotDeckIndex(holeTotal, slot)]
+		if slot == 1 && (!salted || hashed) {
+			t.Fatalf("bought slot 1 must be revealed with its salt")
+		}
+		if slot != 1 && (salted || !hashed) {
+			t.Fatalf("unbought slot %d must stay a committed hash", slot)
+		}
+	}
+	if view := table.ViewFor(toAct); len(view.RunoutCards) != 0 || len(view.RabbitCards) != 0 {
 		t.Fatal("expected a non-paying viewer's view to stay masked")
+	}
+
+	if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(4)); err != nil {
+		t.Fatalf("second card: %v", err)
+	}
+	if got := table.ViewFor(winnerID).RabbitCards; len(got) != 2 || got[4] == "" {
+		t.Fatalf("expected slots 1 and 4 revealed, got %v", got)
+	}
+}
+
+func TestRequestRabbitHuntRejectsDealtAndOutOfRangeSlots(t *testing.T) {
+	table, _, winnerID, _, winner := winnerCardsSetup(t, "sandbox", 20)
+	before := winner.Stack
+	for _, slot := range []int{-1, 5} {
+		if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(slot)); err == nil {
+			t.Fatalf("expected slot %d to be rejected", slot)
+		}
+	}
+	table.board = append([]deck.Card(nil), table.shuffle.Cards[5:8]...)
+	if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(2)); err == nil {
+		t.Fatal("expected a dealt slot to be rejected")
+	}
+	if winner.Stack != before {
+		t.Fatal("rejected slots must not charge")
+	}
+	fee, err := table.RequestRabbitHunt(winnerID, nil)
+	if err != nil || fee != 20 {
+		t.Fatalf("legacy whole-runout request must buy the two undealt slots: fee=%d err=%v", fee, err)
 	}
 }
 
@@ -1166,11 +1212,17 @@ func TestRequestRabbitHuntRejectsDoublePayment(t *testing.T) {
 	}
 	_ = table.Act(toAct, betting.ActionFold, 0)
 
-	if _, err := table.RequestRabbitHunt(winnerID); err != nil {
+	if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(0)); err != nil {
 		t.Fatalf("first RequestRabbitHunt: %v", err)
 	}
-	if _, err := table.RequestRabbitHunt(winnerID); err == nil {
-		t.Fatal("expected the second RequestRabbitHunt this hand to be rejected")
+	if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(0)); err == nil {
+		t.Fatal("expected buying the same slot twice this hand to be rejected")
+	}
+	if _, err := table.RequestRabbitHunt(winnerID, nil); err != nil {
+		t.Fatalf("buying the rest: %v", err)
+	}
+	if _, err := table.RequestRabbitHunt(winnerID, nil); err == nil {
+		t.Fatal("expected a whole-runout request with nothing left to buy to be rejected")
 	}
 }
 
@@ -1186,12 +1238,12 @@ func TestRequestRabbitHuntRejectsInsufficientStack(t *testing.T) {
 		winnerID, winner = "p2", p2
 	}
 	_ = table.Act(toAct, betting.ActionFold, 0)
-	winner.Stack = 10
+	winner.Stack = 5
 
-	if _, err := table.RequestRabbitHunt(winnerID); err == nil {
+	if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(0)); err == nil {
 		t.Fatal("expected an insufficient-stack rejection")
 	}
-	if winner.Stack != 10 {
+	if winner.Stack != 5 {
 		t.Fatalf("expected no charge on rejection, stack changed to %d", winner.Stack)
 	}
 }
@@ -1209,8 +1261,11 @@ func TestRequestRabbitHuntRejectsRealMoneyTables(t *testing.T) {
 	}
 	_ = table.Act(toAct, betting.ActionFold, 0)
 
-	if _, err := table.RequestRabbitHunt(winnerID); err == nil {
+	if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(0)); err == nil {
 		t.Fatal("expected a real-money table to reject the rabbit hunt request")
+	}
+	if table.ViewFor(winnerID).RabbitHuntFee != 0 {
+		t.Fatal("a real-money table must not offer the rabbit hunt")
 	}
 }
 
@@ -1228,20 +1283,28 @@ func TestRefundRabbitHuntCreditsBackAndRemasksView(t *testing.T) {
 	_ = table.Act(toAct, betting.ActionFold, 0)
 
 	before := winner.Stack
-	if _, err := table.RequestRabbitHunt(winnerID); err != nil {
-		t.Fatalf("RequestRabbitHunt: %v", err)
+	for _, slot := range []int{0, 3} {
+		if _, err := table.RequestRabbitHunt(winnerID, boardSlotPtr(slot)); err != nil {
+			t.Fatalf("RequestRabbitHunt(%d): %v", slot, err)
+		}
 	}
-	if err := table.RefundRabbitHunt(winnerID); err != nil {
+	if err := table.RefundRabbitHunt(winnerID, boardSlotPtr(3)); err != nil {
 		t.Fatalf("RefundRabbitHunt: %v", err)
 	}
-	if winner.Stack != before {
-		t.Fatalf("expected the fee refunded, stack = %d want %d", winner.Stack, before)
+	if winner.Stack != before-10 {
+		t.Fatalf("expected only slot 3's fee refunded, stack = %d want %d", winner.Stack, before-10)
 	}
-	if len(table.ViewFor(winnerID).RunoutCards) != 0 {
-		t.Fatal("expected the refunded viewer's view to be masked again")
+	if got := table.ViewFor(winnerID).RabbitCards; len(got) != 1 || got[0] == "" {
+		t.Fatalf("expected only the refunded slot masked again, got %v", got)
 	}
-	if err := table.RefundRabbitHunt(winnerID); err == nil {
-		t.Fatal("expected a second refund with nothing paid to be rejected")
+	if err := table.RefundRabbitHunt(winnerID, boardSlotPtr(3)); err == nil {
+		t.Fatal("expected a second refund of the same card to be rejected")
+	}
+	if err := table.RefundRabbitHunt(winnerID, nil); err != nil {
+		t.Fatalf("legacy refund-all: %v", err)
+	}
+	if winner.Stack != before || len(table.ViewFor(winnerID).RunoutCards) != 0 {
+		t.Fatalf("expected every fee refunded and the view masked, stack=%d", winner.Stack)
 	}
 }
 
@@ -1984,5 +2047,147 @@ func TestDealtIntoCurrentHandForActorMatchesInternalCheck(t *testing.T) {
 	}
 	if table.DealtIntoCurrentHandForActor("nobody") {
 		t.Fatal("expected an unseated id to report false")
+	}
+}
+
+// threeWayWinnerCardsSetup folds two of three players so the third wins
+// uncontested and both folders may ask to see the winner's cards.
+func threeWayWinnerCardsSetup(t *testing.T) (table *Table, first, second, winnerID string, players map[string]*Player) {
+	t.Helper()
+	players = map[string]*Player{
+		"p1": {ID: "p1", Stack: 1000, Ready: true},
+		"p2": {ID: "p2", Stack: 1000, Ready: true},
+		"p3": {ID: "p3", Stack: 1000, Ready: true},
+	}
+	table = NewTable([]*Player{players["p1"], players["p2"], players["p3"]}, 10, 20)
+	table.ConfigureRake("sandbox")
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	first = table.playerToActForTest()
+	_ = table.Act(first, betting.ActionFold, 0)
+	second = table.playerToActForTest()
+	_ = table.Act(second, betting.ActionFold, 0)
+	winnerID = table.LastOutcomeForActor().Winners[0]
+	return table, first, second, winnerID, players
+}
+
+func TestWinnerCardsRequestsBatchUnderOneDeadlineAndAcceptRevealsToEveryRequester(t *testing.T) {
+	table, first, second, winnerID, players := threeWayWinnerCardsSetup(t)
+	now := time.Unix(1_700_000_000, 0)
+	winnerBefore, rakeBefore := players[winnerID].Stack, table.RakeCollected()
+	if _, err := table.RequestWinnerCards(first, now); err != nil {
+		t.Fatalf("first request: %v", err)
+	}
+	if _, err := table.RequestWinnerCards(second, now.Add(5*time.Second)); err != nil {
+		t.Fatalf("second request must join the open batch: %v", err)
+	}
+	batch := table.PendingWinnerCards()
+	if len(batch) != 2 || batch[1].ExpiresAt != batch[0].ExpiresAt {
+		t.Fatalf("a joining request must share the batch deadline, got %+v", batch)
+	}
+
+	winnerView := table.ViewFor(winnerID)
+	if len(winnerView.WinnerCardsRequests) != 2 {
+		t.Fatalf("the winner must see the whole batch, got %+v", winnerView.WinnerCardsRequests)
+	}
+	for _, requesterID := range []string{first, second} {
+		got := table.ViewFor(requesterID).WinnerCardsRequests
+		if len(got) != 1 || got[0].RequesterID != requesterID {
+			t.Fatalf("%s must see only their own request, got %+v", requesterID, got)
+		}
+	}
+
+	if err := table.AcceptWinnerCards(winnerID, now.Add(6*time.Second)); err != nil {
+		t.Fatalf("AcceptWinnerCards: %v", err)
+	}
+	if players[winnerID].Stack != winnerBefore+20 || table.RakeCollected() != rakeBefore+20 {
+		t.Fatalf("each fee must split: winner=%d rake=%d", players[winnerID].Stack, table.RakeCollected())
+	}
+	for _, requesterID := range []string{first, second} {
+		if !winnerCardsVisible(table.ViewFor(requesterID), winnerID) {
+			t.Fatalf("%s should see the winner's hand after the batch is accepted", requesterID)
+		}
+	}
+	if table.ViewFor(winnerID).WinnerCardsClosed {
+		t.Fatal("an accepted batch must not close the hand to late requesters")
+	}
+}
+
+func TestWinnerCardsLateRequesterOpensAFreshBatchAfterAnAccept(t *testing.T) {
+	table, first, second, winnerID, _ := threeWayWinnerCardsSetup(t)
+	now := time.Unix(1_700_000_000, 0)
+	_, _ = table.RequestWinnerCards(first, now)
+	if err := table.AcceptWinnerCards(winnerID, now); err != nil {
+		t.Fatalf("AcceptWinnerCards: %v", err)
+	}
+	later := now.Add(3 * time.Second)
+	if _, err := table.RequestWinnerCards(second, later); err != nil {
+		t.Fatalf("late request: %v", err)
+	}
+	batch := table.PendingWinnerCards()
+	if len(batch) != 1 || batch[0].ExpiresAt != later.Add(WinnerCardsConsentWindow).UnixMilli() {
+		t.Fatalf("a late request must open a fresh consent window, got %+v", batch)
+	}
+	if winnerCardsVisible(table.ViewFor(second), winnerID) {
+		t.Fatal("the late requester must wait for their own consent")
+	}
+}
+
+func TestWinnerCardsDeclineRefundsTheWholeBatchAndClosesTheHand(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		resolve func(table *Table, winnerID string, now time.Time)
+	}{
+		{name: "declined", resolve: func(table *Table, winnerID string, _ time.Time) { _ = table.DeclineWinnerCards(winnerID) }},
+		{name: "expired", resolve: func(table *Table, _ string, now time.Time) {
+			table.ExpireWinnerCards(now.Add(WinnerCardsConsentWindow))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			table, first, second, winnerID, players := threeWayWinnerCardsSetup(t)
+			now := time.Unix(1_700_000_000, 0)
+			firstBefore, secondBefore := players[first].Stack, players[second].Stack
+			_, _ = table.RequestWinnerCards(first, now)
+			_, _ = table.RequestWinnerCards(second, now)
+			tc.resolve(table, winnerID, now)
+			if players[first].Stack != firstBefore || players[second].Stack != secondBefore {
+				t.Fatal("every requester in the batch must be refunded")
+			}
+			if !table.ViewFor(first).WinnerCardsClosed || !table.WinnerCardsClosed() {
+				t.Fatal("a refused batch must close the hand to further requests")
+			}
+		})
+	}
+}
+
+func TestWinnerCardsClosedRejectsANewRequesterAndStartHandReopens(t *testing.T) {
+	players := []*Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+		{ID: "p3", Stack: 1000, Ready: true},
+		{ID: "p4", Stack: 1000, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.ConfigureRake("sandbox")
+	_ = table.StartHand()
+	var folders []string
+	for range 3 {
+		id := table.playerToActForTest()
+		folders = append(folders, id)
+		_ = table.Act(id, betting.ActionFold, 0)
+	}
+	winnerID := table.LastOutcomeForActor().Winners[0]
+	now := time.Unix(1_700_000_000, 0)
+	_, _ = table.RequestWinnerCards(folders[0], now)
+	_ = table.DeclineWinnerCards(winnerID)
+	if _, err := table.RequestWinnerCards(folders[1], now); err == nil {
+		t.Fatal("after a decline no one may ask again this hand")
+	}
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if table.WinnerCardsClosed() {
+		t.Fatal("the next hand must start open again")
 	}
 }
