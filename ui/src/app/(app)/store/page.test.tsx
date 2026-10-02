@@ -171,6 +171,46 @@ describe('store page', () => {
     expect(mocks.setQueryData).toHaveBeenCalledWith(['dailyReward', 'cooldown'], claimed);
   });
 
+  // A streak the next claim restarts is already gone: the panel must say so
+  // instead of still showing the old count as if it were only at risk.
+  test('tells the player a lost streak restarts at day 1', async () => {
+    mocks.queryState['dailyReward.cooldown'] = queryState(streakStatus({
+      current_streak: 18, cycle_day: 1, streak_at_risk: false, streak_lost: true, protection_available: true,
+    }));
+    const {container} = render(<Store/>);
+    expect(screen.getByText(/Ofensiva de 18 dias interrompida\. Dia 1 de 30 liberado/)).toBeInTheDocument();
+    expect(container.querySelector('.store-reward-count')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Abrir e resgatar'}));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('0 dias')).toBeInTheDocument();
+    expect(within(dialog).getByText(/faltaram dois dias ou mais, e a proteção só cobre um/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Sua proteção continua guardada/)).toBeInTheDocument();
+  });
+
+  test('explains a lost streak without a protection', async () => {
+    mocks.queryState['dailyReward.cooldown'] = queryState(streakStatus({
+      current_streak: 5, cycle_day: 1, streak_at_risk: false, streak_lost: true,
+    }));
+    render(<Store/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Abrir e resgatar'}));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/um dia ficou sem resgate e não havia proteção guardada/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Sua proteção continua guardada/)).toBeNull();
+  });
+
+  test('tells the player the protection covers the missed day', async () => {
+    mocks.queryState['dailyReward.cooldown'] = queryState(streakStatus({
+      current_streak: 8, cycle_day: 9, protection_available: true, protection_will_cover: true,
+    }));
+    render(<Store/>);
+    expect(screen.getByText(/Sua proteção cobre o dia perdido\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Abrir e resgatar'}));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Ontem ficou sem resgate, mas sua proteção cobre esse dia/)).toBeInTheDocument();
+    expect(within(dialog).getByText('8 dias')).toBeInTheDocument();
+  });
+
   test('renders the SKU grid and purchase history without navigation', () => {
     render(<Store/>);
 

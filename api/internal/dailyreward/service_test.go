@@ -1,8 +1,11 @@
 package dailyreward
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 )
@@ -31,6 +34,10 @@ func (f *fakeSpinStore) Claim(_ context.Context, playerID, day string, amount in
 	}
 	f.streaks[playerID] = streak
 	return record, nil
+}
+
+func (f *fakeSpinStore) Get(_ context.Context, playerID, day string) (DailyRewardRecord, error) {
+	return f.records[playerID+"#"+day], nil
 }
 
 func (f *fakeSpinStore) LoadStreak(_ context.Context, playerID string) (StreakRecord, error) {
@@ -115,16 +122,19 @@ func TestPendingSpinRetriesSamePrizeAndIdempotencyKey(t *testing.T) {
 	}
 }
 
-func TestCompletedSpinReturnsStoredPrizeWithoutCreditingAgain(t *testing.T) {
+// A second claim on an already-paid day pays nothing: amount 0 is the
+// handler's "already claimed today" contract, so Spin can be called
+// unconditionally and still reach the retry path of a pending claim.
+func TestCompletedSpinPaysNothingAndDoesNotCreditAgain(t *testing.T) {
 	store := &fakeSpinStore{streaks: map[string]StreakRecord{"p1": veteran(2, "2026-07-18")}}
 	wallet := &fakeCredit{}
 	svc := fixedService(wallet, store)
 	if _, _, err := svc.Spin(context.Background(), "p1"); err != nil {
 		t.Fatal(err)
 	}
-	amount, _, err := svc.Spin(context.Background(), "p1")
-	if err != nil || amount != RewardFor(3) || len(wallet.amounts) != 1 {
-		t.Fatalf("amount=%d credits=%d err=%v", amount, len(wallet.amounts), err)
+	amount, remaining, err := svc.Spin(context.Background(), "p1")
+	if err != nil || amount != 0 || remaining <= 0 || len(wallet.amounts) != 1 {
+		t.Fatalf("amount=%d remaining=%d credits=%d err=%v", amount, remaining, len(wallet.amounts), err)
 	}
 }
 
@@ -235,5 +245,89 @@ func TestStatusRendersPendingTodayAndKeepsCooldownField(t *testing.T) {
 	}
 	if !after.Days[3].Claimed || !after.Days[3].Today {
 		t.Fatalf("claimed slot wrong: %+v", after.Days[3])
+	}
+}
+
+// A claim whose wallet credit failed advanced the streak but paid nothing, so
+// Status must keep offering it (the client hides the claim button on
+// claimed_today) on the same trail slot — not advance it a second time.
+func TestStatusOffersAnUnpaidClaimAgain(t *testing.T) {
+	store := &fakeSpinStore{streaks: map[string]StreakRecord{"p1": veteran(3, "2026-07-18")}}
+	wallet := &fakeCredit{fail: true}
+	svc := fixedService(wallet, store)
+	if _, _, err := svc.Spin(context.Background(), "p1"); err == nil {
+		t.Fatal("expected wallet failure")
+	}
+	got, err := svc.Status(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ClaimedToday || got.RemainingTimeSeconds != 0 || got.CycleDay != 4 || got.Days[3].Claimed || !got.Days[3].Today {
+		t.Fatalf("unpaid claim status: claimed=%v remaining=%d cycleDay=%d slot=%+v", got.ClaimedToday, got.RemainingTimeSeconds, got.CycleDay, got.Days[3])
+	}
+	if got.StreakAtRisk || got.StreakLost {
+		t.Fatalf("streak already advanced today cannot be at risk/lost: %+v", got)
+	}
+}
+
+// Status must tell an at-risk streak (still saveable today) apart from one the
+// next claim will reset: showing a dead streak as "at risk" is how a player
+// believes a missed day was covered when it was not.
+func TestStatusSeparatesAtRiskFromLostStreak(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		start      StreakRecord
+		wantRisk   bool
+		wantLost   bool
+		wantCovers bool
+	}{
+		{"claimed yesterday is at risk", veteran(5, "2026-07-18"), true, false, false},
+		{"one missed day with protection is covered", StreakRecord{CurrentStreak: 8, TotalClaims: 8, LastClaimDay: "2026-07-17", ProtectionAvailable: true}, true, false, true},
+		{"one missed day without protection is lost", veteran(8, "2026-07-17"), false, true, false},
+		{"two missed days are lost even with protection", StreakRecord{CurrentStreak: 8, TotalClaims: 8, LastClaimDay: "2026-07-16", ProtectionAvailable: true}, false, true, false},
+		{"never claimed is neither", StreakRecord{}, false, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeSpinStore{streaks: map[string]StreakRecord{"p1": tc.start}}
+			got, err := fixedService(&fakeCredit{}, store).Status(context.Background(), "p1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.StreakAtRisk != tc.wantRisk || got.StreakLost != tc.wantLost || got.ProtectionWillCover != tc.wantCovers {
+				t.Fatalf("at_risk=%v lost=%v covers=%v, want %v %v %v", got.StreakAtRisk, got.StreakLost, got.ProtectionWillCover, tc.wantRisk, tc.wantLost, tc.wantCovers)
+			}
+		})
+	}
+}
+
+// Every claim leaves exactly one structured line with the before/after streak
+// state, so "I missed one day and lost everything" can be answered from logs.
+func TestSpinLogsOneLinePerClaim(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	defer slog.SetDefault(prev)
+
+	store := &fakeSpinStore{streaks: map[string]StreakRecord{"p1": veteran(8, "2026-07-17")}}
+	if _, _, err := fixedService(&fakeCredit{}, store).Spin(context.Background(), "p1"); err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+	if len(lines) != 1 {
+		t.Fatalf("want 1 log line, got %d: %s", len(lines), buf.String())
+	}
+	var entry map[string]any
+	if err := json.Unmarshal(lines[0], &entry); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"msg": "daily reward claimed", "level": "INFO", "player": "p1", "day": "2026-07-19",
+		"prev_streak": 8.0, "last_claim_day": "2026-07-17", "gap": 2.0, "protection_available": false,
+		"protection_used": false, "new_streak": 1.0, "reset": true, "amount": float64(RewardFor(1)), "retry": false,
+	}
+	for k, v := range want {
+		if entry[k] != v {
+			t.Errorf("%s=%v want %v (line %s)", k, entry[k], v, lines[0])
+		}
 	}
 }
