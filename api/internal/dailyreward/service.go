@@ -3,6 +3,7 @@ package dailyreward
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -29,6 +30,8 @@ type spinStore interface {
 	Claim(ctx context.Context, playerID, day string, proposed int64, streak StreakRecord, now time.Time) (DailyRewardRecord, error)
 	Complete(context.Context, string, string, time.Time) error
 	LoadStreak(context.Context, string) (StreakRecord, error)
+	// Get reads one day's claim; the zero record when there is none.
+	Get(context.Context, string, string) (DailyRewardRecord, error)
 }
 
 type Service struct {
@@ -62,10 +65,17 @@ type Status struct {
 	ProtectionAvailable  bool   `json:"protection_available"`
 	ProtectionUsedDay    string `json:"protection_used_day,omitempty"`
 	ClaimedToday         bool   `json:"claimed_today"`
-	// StreakAtRisk is true when the player still holds a streak but has not
-	// claimed today — the state the client warns about.
-	StreakAtRisk bool          `json:"streak_at_risk"`
-	Days         []CalendarDay `json:"days"`
+	// StreakAtRisk is true when the player holds a streak that today's claim
+	// still continues — the state the client warns about. CurrentStreak is the
+	// last claimed value either way, so read it together with StreakLost.
+	StreakAtRisk bool `json:"streak_at_risk"`
+	// StreakLost is true when the next claim restarts at day 1: one missed day
+	// with no protection left, or two or more missed days.
+	StreakLost bool `json:"streak_lost"`
+	// ProtectionWillCover is true when exactly one day was missed and the
+	// stored protection will absorb it on today's claim.
+	ProtectionWillCover bool          `json:"protection_will_cover"`
+	Days                []CalendarDay `json:"days"`
 }
 
 func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, error) {
@@ -83,8 +93,9 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 	// or completion failed. Recomputing the streak would advance it twice, so
 	// the stored record is passed through untouched; Claim's create-only
 	// condition aborts the whole transaction anyway.
+	retry := stored.LastClaimDay == day
 	next := stored
-	if stored.LastClaimDay != day {
+	if !retry {
 		next = advance(stored, day)
 	}
 	proposed := awardFor(next)
@@ -93,9 +104,20 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 	if err != nil {
 		return 0, 0, fmt.Errorf("dailyreward: claim spin: %w", err)
 	}
+	// Already paid today: nothing new is credited, and 0 is the caller's
+	// "already claimed" signal. Not logged — it is not a claim.
 	if record.Status == StatusCompleted {
-		return record.Amount, 0, nil
+		return 0, s.remTime(), nil
 	}
+	gap := dayGap(stored.LastClaimDay, day)
+	slog.Info("daily reward claimed",
+		"player", playerID, "day", day,
+		"prev_streak", stored.CurrentStreak, "last_claim_day", stored.LastClaimDay, "gap", gap,
+		"protection_available", stored.ProtectionAvailable,
+		"protection_used", !retry && gap == 2 && stored.ProtectionAvailable,
+		"new_streak", next.CurrentStreak,
+		"reset", !retry && stored.CurrentStreak > 0 && next.CurrentStreak == 1,
+		"amount", record.Amount, "retry", retry)
 
 	idemKey := fmt.Sprintf("%s#daily_reward#%s", playerID, day)
 	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "daily_reward"); err != nil {
@@ -137,14 +159,27 @@ func (s *Service) Status(ctx context.Context, playerID string) (Status, error) {
 		return Status{}, fmt.Errorf("dailyreward: load streak: %w", err)
 	}
 
-	claimedToday := stored.LastClaimDay == day
+	// advancedToday means the streak row already counts today; claimedToday
+	// additionally needs the credit to have landed. An advanced-but-pending
+	// claim (wallet failure) stays claimable so the client can retry it.
+	advancedToday := stored.LastClaimDay == day
+	claimedToday := advancedToday
+	if advancedToday {
+		record, err := s.store.Get(ctx, playerID, day)
+		if err != nil {
+			return Status{}, fmt.Errorf("dailyreward: load claim: %w", err)
+		}
+		claimedToday = record.Status == StatusCompleted
+	}
 	// The trail always shows the cycle the NEXT claim lands on, so an unclaimed
 	// day is rendered as the pending slot rather than as yesterday's position.
 	shown := stored
-	if !claimedToday {
+	if !advancedToday {
 		shown = advance(stored, day)
 	}
 	cycleDay := CycleDayFor(shown.CurrentStreak)
+	// A held streak that advance would restart is already gone, not at risk.
+	lost := !advancedToday && stored.CurrentStreak > 0 && shown.CurrentStreak == 1
 
 	status := Status{
 		RemainingTimeSeconds: 0,
@@ -156,7 +191,9 @@ func (s *Service) Status(ctx context.Context, playerID string) (Status, error) {
 		ProtectionAvailable:  stored.ProtectionAvailable,
 		ProtectionUsedDay:    stored.ProtectionUsedDay,
 		ClaimedToday:         claimedToday,
-		StreakAtRisk:         !claimedToday && stored.CurrentStreak > 0,
+		StreakAtRisk:         !advancedToday && stored.CurrentStreak > 0 && !lost,
+		StreakLost:           lost,
+		ProtectionWillCover:  !advancedToday && stored.ProtectionAvailable && dayGap(stored.LastClaimDay, day) == 2,
 		Days:                 make([]CalendarDay, 0, CycleLength),
 	}
 	if claimedToday {

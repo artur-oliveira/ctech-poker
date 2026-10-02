@@ -18,22 +18,19 @@ func RegisterDailyReward(router fiber.Router, auth fiber.Handler, svc *dailyrewa
 // spin claims today's slot on the streak trail. The response keeps `amount`
 // and `remaining_time_seconds` exactly where they were and adds the refreshed
 // streak calendar, so a client that only reads the cooldown is unaffected.
+//
+// Spin runs unconditionally: Status's claimed_today only means the streak row
+// advanced, not that the wallet credit landed, so gating on it made a claim
+// whose credit failed unretryable. Spin itself returns 0 for a paid day.
 func (h *dailyRewardHandlers) spin(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
+	amount, _, err := h.svc.Spin(c.Context(), userID)
+	if err != nil {
+		return walletOrInternalProblem(err, "spin failed", c).Send(c)
+	}
 	status, err := h.svc.Status(c.Context(), userID)
 	if err != nil {
 		return problem.InternalServer("spin failed", c, err).Send(c)
-	}
-	amount := int64(0)
-	if !status.ClaimedToday {
-		won, _, spinErr := h.svc.Spin(c.Context(), userID)
-		if spinErr != nil {
-			return walletOrInternalProblem(spinErr, "spin failed", c).Send(c)
-		}
-		amount = won
-		if status, err = h.svc.Status(c.Context(), userID); err != nil {
-			return problem.InternalServer("spin failed", c, err).Send(c)
-		}
 	}
 	return c.JSON(spinResponse{Amount: amount, Status: status})
 }
