@@ -18,12 +18,11 @@ import {type BetPresetMode, betPresetMode, getMe, updateMe} from '@/lib/api/play
 import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {PREMIUM_FELT_IDS, TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
 
-// #341. "Mista" is the server default and the only one that changes with the
-// street, so it names the behaviour rather than the setting.
+// #341. Pot fractions are the server default on every street; big blinds are
+// an opt-in.
 const BET_PRESET_OPTIONS: { value: BetPresetMode; label: string }[] = [
-  {value: 'mixed', label: 'Mista (padrão)'},
-  {value: 'bb', label: 'Big blind'},
-  {value: 'pot', label: 'Pote'}
+  {value: 'pot', label: 'Pote (padrão)'},
+  {value: 'bb', label: 'Big blind'}
 ];
 
 const REALITY_OPTIONS = [
@@ -136,8 +135,8 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
                 <SelectItem key={option.value} value={option.value} label={option.label}>{option.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <small className="table-preference-hint">Mista abre em big blinds no pré-flop e passa a frações do pote
-            depois. {save.isError && <b role="alert">Não foi possível salvar. Tente de novo.</b>}</small>
+          <small className="table-preference-hint">Pote sugere frações do pote em todas as rodadas; Big blind,
+            múltiplos do big blind. {save.isError && <b role="alert">Não foi possível salvar. Tente de novo.</b>}</small>
         </div>
         <div className="table-preference-toggle">
           <span><AudioLines aria-hidden="true"/><span><Label id="sound-effects-label">Sons da mesa</Label>
