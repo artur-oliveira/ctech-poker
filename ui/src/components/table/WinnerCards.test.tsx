@@ -1,12 +1,13 @@
 import {render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
-import type {TableSnapshot} from '@/lib/api/table';
-import {WinnerCards} from './WinnerCards';
+import type {TableSnapshot, WinnerCardsRequest} from '@/lib/api/table';
+import {winnerCardsSeat} from '@/lib/winnerCards';
+import {WinnerCardsPrompt, WinnerCardsRequestControl} from './WinnerCards';
 
 function snapshot(overrides: Partial<TableSnapshot> = {}): TableSnapshot {
   return {
-    stage: 'complete', won_without_showdown: true, winners: ['winner'], board: [],
+    stage: 'complete', won_without_showdown: true, winners: ['winner'], board: [], protocol_version: 12,
     seats: [
       {player_id: 'viewer', stack: 1000, state: 'folded', contributed: 0, dealt_in: true},
       {player_id: 'winner', name: 'Bia', stack: 1000, state: 'active', contributed: 0, dealt_in: true,
@@ -16,80 +17,79 @@ function snapshot(overrides: Partial<TableSnapshot> = {}): TableSnapshot {
   };
 }
 
-function request(overrides: Partial<NonNullable<TableSnapshot['pending_winner_cards']>> = {}) {
+function request(overrides: Partial<WinnerCardsRequest> = {}): WinnerCardsRequest {
   return {
     requester_id: 'viewer', requester_name: 'Ana', winner_id: 'winner', fee: 50,
     expires_at_unix_ms: 1_000_000 + 8_000, ...overrides,
   };
 }
 
-describe('WinnerCards', () => {
-  beforeEach(() => vi.useFakeTimers({shouldAdvanceTime: true}));
+describe('winnerCardsSeat', () => {
+  test('offers the winner\'s cards to a dealt-in opponent', () => {
+    expect(winnerCardsSeat(snapshot(), 'viewer')).toEqual({winnerId: 'winner', mode: 'offer'});
+  });
+  test.each([
+    {protocol_version: 11},
+    {won_without_showdown: false},
+    {winner_cards_closed: true},
+    {winners: ['winner', 'viewer']},
+  ] satisfies Partial<TableSnapshot>[])('offers nothing when %o', overrides => {
+    expect(winnerCardsSeat(snapshot(overrides), 'viewer')).toBeNull();
+  });
+  test('offers nothing once the winner\'s cards are face up', () => {
+    const shown = snapshot();
+    shown.seats[1] = {...shown.seats[1], hole_cards: ['AH', 'KD']};
+    expect(winnerCardsSeat(shown, 'viewer')).toBeNull();
+  });
+  test('shows the requester their own wait, and the winner the whole batch', () => {
+    const own = request();
+    expect(winnerCardsSeat(snapshot({winner_cards_requests: [own]}), 'viewer'))
+      .toEqual({winnerId: 'winner', mode: 'waiting', request: own});
+    const batch = [own, request({requester_id: 'c', requester_name: 'Caio'})];
+    expect(winnerCardsSeat(snapshot({winner_cards_requests: batch}), 'winner'))
+      .toEqual({winnerId: 'winner', mode: 'prompt', requests: batch});
+    expect(winnerCardsSeat(snapshot(), 'winner')).toBeNull();
+  });
+});
+
+describe('WinnerCards controls', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({shouldAdvanceTime: true});
+    vi.setSystemTime(new Date(1_000_000));
+  });
   afterEach(() => vi.useRealTimers());
 
-  test('shows the winner name and big-blind price, then requests the reveal', async () => {
+  test('the winner\'s cards are the request button, priced in its accessible name', async () => {
     const onRequest = vi.fn();
-    render(<WinnerCards snapshot={snapshot()} viewer="viewer" bigBlind={50} onRequestWinnerCardsAction={onRequest}/>);
-    await userEvent.click(screen.getByRole('button', {name: /Pedir a mão de Bia por 50 fichas/}));
+    render(<WinnerCardsRequestControl state={{winnerId: 'winner', mode: 'offer'}} winnerName="Bia" fee={50}
+                                      onRequest={onRequest}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Pedir para ver as cartas de Bia por 50/}));
     expect(onRequest).toHaveBeenCalledOnce();
   });
 
-  test('asks the winner to consent, naming the requester, the fee and the deadline', async () => {
+  test('a requester waits on the cards with the countdown and the refund promise', () => {
+    render(<WinnerCardsRequestControl state={{winnerId: 'winner', mode: 'waiting', request: request()}}
+                                      winnerName="Bia" fee={50}/>);
+    expect(screen.getByRole('status', {name: /Aguardando Bia responder, 8s.*50/})).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  test('the winner answers the whole batch once: names, +N, half of every fee', async () => {
     const onAnswer = vi.fn();
-    vi.setSystemTime(new Date(1_000_000));
-    render(<WinnerCards viewer="winner" bigBlind={50} onAnswerWinnerCardsAction={onAnswer}
-      snapshot={snapshot({pending_winner_cards: request()})}/>);
-
-    expect(screen.getByText(/Ana quer pagar 50 fichas para ver sua mão/)).toBeInTheDocument();
-    expect(screen.getByText(/8s para responder/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', {name: /Mostrar/}));
-    expect(onAnswer).toHaveBeenCalledWith(true);
+    const requests = ['Ana', 'Bruno', 'Caio', 'Duda'].map((name, index) =>
+      request({requester_id: `p${index}`, requester_name: name}));
+    render(<WinnerCardsPrompt requests={requests} onAnswer={onAnswer}/>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Ana, Bruno e mais 2 querem ver sua mão');
+    expect(screen.getByText('+1')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Você recebe 100/)).toBeInTheDocument();
+    expect(screen.getByText('8s')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /Recusar/}));
-    expect(onAnswer).toHaveBeenCalledWith(false);
+    await userEvent.click(screen.getByRole('button', {name: /Mostrar/}));
+    expect(onAnswer.mock.calls).toEqual([[false], [true]]);
   });
 
-  test('shows the requester a wait state with the refund promise instead of the buy button', () => {
-    vi.setSystemTime(new Date(1_000_000));
-    render(<WinnerCards snapshot={snapshot({pending_winner_cards: request()})} viewer="viewer" bigBlind={50}/>);
-    expect(screen.getByText('Aguardando resposta…')).toBeInTheDocument();
-    expect(screen.getByText(/a cobrança de 50 fichas volta para você/)).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-  });
-
-  test('disables both answers while one is in flight', () => {
-    render(<WinnerCards snapshot={snapshot({pending_winner_cards: request()})} viewer="winner" bigBlind={50} pending/>);
-    for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
-  });
-
-  test('falls back to a neutral requester label when the name is missing', () => {
-    render(<WinnerCards viewer="winner" bigBlind={50}
-      snapshot={snapshot({pending_winner_cards: request({requester_name: ''})})}/>);
-    expect(screen.getByText(/Um jogador quer pagar/)).toBeInTheDocument();
-  });
-
-  test.each([
-    {viewer: 'winner'},
-    {snapshot: snapshot({seats: [
-      {player_id: 'viewer', stack: 1000, state: 'pending_entry', contributed: 0, dealt_in: false},
-      {player_id: 'winner', name: 'Bia', stack: 1000, state: 'active', contributed: 0, dealt_in: true,
-        hole_cards: ['back', 'back']},
-    ]})},
-    {snapshot: snapshot({seats: [
-      {player_id: 'viewer', stack: 1000, state: 'folded', contributed: 0, dealt_in: true},
-      {player_id: 'winner', name: 'Bia', stack: 1000, state: 'active', contributed: 0, dealt_in: true, hole_cards: ['Ah', 'Kd']},
-    ]})},
-  ])('stays hidden when a purchase is not meaningful', ({viewer = 'viewer', snapshot: value = snapshot()}) => {
-    const {container} = render(<WinnerCards snapshot={value} viewer={viewer} bigBlind={50}/>);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  test('stays locked after a rejected request until a revealed snapshot arrives', () => {
-    const {rerender} = render(<WinnerCards snapshot={snapshot()} viewer="viewer" bigBlind={50}/>);
-    expect(screen.getByRole('button')).toBeInTheDocument();
-    rerender(<WinnerCards snapshot={snapshot({seats: [
-      {player_id: 'viewer', stack: 950, state: 'folded', contributed: 0, dealt_in: true},
-      {player_id: 'winner', name: 'Bia', stack: 1010, state: 'active', contributed: 0, dealt_in: true, hole_cards: ['Ah', 'Kd']},
-    ]})} viewer="viewer" bigBlind={50}/>);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  test('a single requester is named on their own', () => {
+    render(<WinnerCardsPrompt requests={[request()]}/>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Ana quer ver sua mão');
   });
 });

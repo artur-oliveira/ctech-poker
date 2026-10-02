@@ -27,6 +27,7 @@ const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'side_pot', label: 'Showdown · pote lateral (2 vencedores)'},
   {value: 'run_it_twice', label: 'Showdown · rodar duas vezes'},
   {value: 'winner_cards', label: 'Resultado · pagar para ver a mão'},
+  {value: 'winner_cards_prompt', label: 'Resultado · pedidos para ver sua mão'},
   {value: 'rabbit_hunt', label: 'Resultado · rabbit hunt'},
   {value: 'rebuy', label: 'Saldo zerado · recompra'},
   {value: 'reality_check', label: 'Sessão longa · pausa consciente'},

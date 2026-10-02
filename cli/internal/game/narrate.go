@@ -22,6 +22,11 @@ type Narrator struct {
 	names     map[string]string
 
 	winners []string // newest last
+
+	// rabbitHand/rabbitSeen remember which bought rabbit-hunt cards were
+	// already narrated this hand, since they arrive one purchase at a time.
+	rabbitHand string
+	rabbitSeen map[int32]bool
 }
 
 // NewNarrator starts a narrator for viewer youID. Card rendering follows
@@ -86,6 +91,8 @@ func (n *Narrator) OnSnapshot(s *proto.TableSnapshot) []string {
 		}
 	}
 
+	out = append(out, n.rabbitLines(s)...)
+
 	// Snapshot the new state.
 	n.haveStage = true
 	n.stage = stage
@@ -94,6 +101,25 @@ func (n *Narrator) OnSnapshot(s *proto.TableSnapshot) []string {
 	for _, seat := range s.Seats {
 		n.contrib[seat.PlayerId] = seat.Contributed
 		n.folded[seat.PlayerId] = seat.State == "folded"
+	}
+	return out
+}
+
+func (n *Narrator) rabbitLines(s *proto.TableSnapshot) []string {
+	if s.HandId != n.rabbitHand {
+		n.rabbitHand, n.rabbitSeen = s.HandId, map[int32]bool{}
+	}
+	slots := make([]int32, 0, len(s.RabbitCards))
+	for slot := range s.RabbitCards {
+		if !n.rabbitSeen[slot] {
+			slots = append(slots, slot)
+		}
+	}
+	sort.Slice(slots, func(i, j int) bool { return slots[i] < slots[j] })
+	out := make([]string, 0, len(slots))
+	for _, slot := range slots {
+		n.rabbitSeen[slot] = true
+		out = append(out, fmt.Sprintf("  rabbit (carta %d): %s", slot+1, FormatCards([]string{s.RabbitCards[slot]}, n.mode)))
 	}
 	return out
 }

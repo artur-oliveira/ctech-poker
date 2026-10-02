@@ -83,7 +83,7 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
   'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
-  'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
+  'winner_cards', 'winner_cards_prompt', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout'
 ]);
 
@@ -396,7 +396,6 @@ function TableContent() {
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
                   onRevealCardAction={rt.showCards}
                   onPeekCardsAction={rt.peekCards}
-                  rabbitHuntPending={rt.requestRabbitHuntPending}
                   rabbitHuntFailCount={rt.requestRabbitHuntFailCount}
                   onRequestRabbitHuntAction={rt.requestRabbitHunt}
                   onRabbitHuntVerifyFailedAction={rt.reportRabbitHuntVerifyFailed}

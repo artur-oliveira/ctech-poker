@@ -69,8 +69,11 @@ const (
 // add the line here saying what changed; the gates above are what a mixed
 // fleet during a rolling deploy actually reads. Recorded history starts where
 // it was first written down: 10 was the run-it-twice board split
-// (docs/plans/2026-07-29-run-it-twice.md), 11 is current.
-const TableProtocolVersion = 11
+// (docs/plans/2026-07-29-run-it-twice.md), 11 the one before this, and 12 the
+// per-card rabbit hunt (board_slot, rabbit_cards, rabbit_hunt_fee) plus the
+// batched winner-cards consent (winner_cards_requests, winner_cards_closed)
+// — docs/specs/2026-10-01-paid-reveals-on-table.md.
+const TableProtocolVersion = 12
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
@@ -650,7 +653,7 @@ func RegisterTableWS(
 				case "request_rabbit_hunt":
 					ensureActionID()
 					r := make(chan error, 1)
-					if err := dispatch(table.RequestRabbitHuntCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+					if err := dispatch(table.RequestRabbitHuntCmd{PlayerID: playerID, ActionID: m.ActionId, Slot: boardSlot(m.BoardSlot), Reply: r}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
@@ -706,7 +709,7 @@ func RegisterTableWS(
 				case "rabbit_hunt_verify_failed":
 					ensureActionID()
 					r := make(chan error, 1)
-					if err := dispatch(table.RabbitHuntVerifyFailedCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+					if err := dispatch(table.RabbitHuntVerifyFailedCmd{PlayerID: playerID, ActionID: m.ActionId, Slot: boardSlot(m.BoardSlot), Reply: r}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
@@ -1128,11 +1131,24 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		protoUnrevealedHashes[int32(idx)] = hashHex
 	}
 
-	var protoWinnerCards *pokerproto.WinnerCardsRequest
-	if req := snap.PendingWinnerCards; req != nil {
-		protoWinnerCards = &pokerproto.WinnerCardsRequest{
-			RequesterId: req.RequesterID, RequesterName: req.RequesterName,
+	protoWinnerCardsRequests := make([]*pokerproto.WinnerCardsRequest, len(snap.WinnerCardsRequests))
+	for i, req := range snap.WinnerCardsRequests {
+		protoWinnerCardsRequests[i] = &pokerproto.WinnerCardsRequest{
+			RequesterId: req.RequesterID, RequesterName: req.RequesterName, RequesterAvatarUrl: req.RequesterAvatarURL,
 			WinnerId: req.WinnerID, Fee: req.Fee, ExpiresAtUnixMs: req.ExpiresAtUnixMs,
+		}
+	}
+	// pending_winner_cards is the batch's first visible entry, so a client
+	// older than protocol 12 still sees (and can answer) the prompt.
+	var protoWinnerCards *pokerproto.WinnerCardsRequest
+	if len(protoWinnerCardsRequests) > 0 {
+		protoWinnerCards = protoWinnerCardsRequests[0]
+	}
+	var protoRabbitCards map[int32]string
+	if len(snap.RabbitCards) > 0 {
+		protoRabbitCards = make(map[int32]string, len(snap.RabbitCards))
+		for slot, card := range snap.RabbitCards {
+			protoRabbitCards[int32(slot)] = card
 		}
 	}
 
@@ -1172,6 +1188,10 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		BoardTwo:                 snap.BoardTwo,
 		BoardSplitAt:             int32(snap.BoardSplitAt),
 		PendingWinnerCards:       protoWinnerCards,
+		RabbitCards:              protoRabbitCards,
+		RabbitHuntFee:            snap.RabbitHuntFee,
+		WinnerCardsRequests:      protoWinnerCardsRequests,
+		WinnerCardsClosed:        snap.WinnerCardsClosed,
 	}
 }
 
@@ -1205,4 +1225,14 @@ func ConvertRoom(r roomstore.Room) *pokerproto.Room {
 		CreatedAt:            r.CreatedAt,
 		RunItTwiceEnabled:    r.RunItTwiceEnabled,
 	}
+}
+
+// boardSlot is the optional board_slot of a rabbit-hunt frame as the engine
+// takes it: nil when absent (a pre-protocol-12 whole-runout request).
+func boardSlot(raw *int32) *int {
+	if raw == nil {
+		return nil
+	}
+	slot := int(*raw)
+	return &slot
 }

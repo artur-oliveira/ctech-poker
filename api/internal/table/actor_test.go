@@ -5,6 +5,7 @@ package table
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -309,14 +310,14 @@ func TestRequestRabbitHuntCmdRevealsOnlyToPayer(t *testing.T) {
 		t.Fatalf("fold: %v", err)
 	}
 
-	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Slot: slotPtr(2), Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("RequestRabbitHuntCmd: %v", err)
 	}
 
 	stored, _ = store.LoadTable(ctx, tableID)
 	table := hand.NewTableFromState(stored.State)
-	if len(table.ViewFor(winnerID).RunoutCards) == 0 {
-		t.Fatal("expected the payer's own view to reveal the runout")
+	if got := table.ViewFor(winnerID).RabbitCards; len(got) != 1 || got[2] == "" {
+		t.Fatalf("expected the payer's own view to reveal only the bought slot, got %v", got)
 	}
 	if len(table.ViewFor(toAct).RunoutCards) != 0 {
 		t.Fatal("expected the non-paying viewer's view to stay masked")
@@ -511,13 +512,26 @@ func TestRequestRabbitHuntCmdRejectsDoublePaymentSameHand(t *testing.T) {
 	}
 	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)})
 
-	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Slot: slotPtr(0), Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("first RequestRabbitHuntCmd: %v", err)
 	}
-	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a3", Reply: make(chan error, 1)}); err == nil {
-		t.Fatal("expected the second, distinctly-actioned request this hand to be rejected")
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a3", Slot: slotPtr(0), Reply: make(chan error, 1)}); err == nil {
+		t.Fatal("expected the same slot, distinctly-actioned, to be rejected")
+	}
+	stored, _ = store.LoadTable(ctx, tableID)
+	charged := stackForView(t, hand.NewTableFromState(stored.State).ViewFor(winnerID), winnerID)
+	// A resubmitted frame (same action_id) must not charge a second time.
+	_ = a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Slot: slotPtr(1), Reply: make(chan error, 1)})
+	stored, _ = store.LoadTable(ctx, tableID)
+	if got := stackForView(t, hand.NewTableFromState(stored.State).ViewFor(winnerID), winnerID); got != charged {
+		t.Fatalf("a duplicate action_id must not charge again, stack %d want %d", got, charged)
+	}
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a4", Slot: slotPtr(1), Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("a different slot must still be buyable: %v", err)
 	}
 }
+
+func slotPtr(slot int) *int { return &slot }
 
 func TestRabbitHuntVerifyFailedCmdRefundsAndRemasks(t *testing.T) {
 	db := testClient(t)
@@ -535,8 +549,10 @@ func TestRabbitHuntVerifyFailedCmdRefundsAndRemasks(t *testing.T) {
 		winnerID = "p2"
 	}
 	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)})
-	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
-		t.Fatalf("RequestRabbitHuntCmd: %v", err)
+	for i, slot := range []int{0, 1} {
+		if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: fmt.Sprintf("buy-%d", i), Slot: slotPtr(slot), Reply: make(chan error, 1)}); err != nil {
+			t.Fatalf("RequestRabbitHuntCmd(%d): %v", slot, err)
+		}
 	}
 
 	stored, _ = store.LoadTable(ctx, tableID)
@@ -547,7 +563,7 @@ func TestRabbitHuntVerifyFailedCmdRefundsAndRemasks(t *testing.T) {
 		}
 	}
 
-	if err := a.Dispatch(RabbitHuntVerifyFailedCmd{PlayerID: winnerID, ActionID: "a3", Reply: make(chan error, 1)}); err != nil {
+	if err := a.Dispatch(RabbitHuntVerifyFailedCmd{PlayerID: winnerID, ActionID: "a3", Slot: slotPtr(1), Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("RabbitHuntVerifyFailedCmd: %v", err)
 	}
 
@@ -555,12 +571,12 @@ func TestRabbitHuntVerifyFailedCmdRefundsAndRemasks(t *testing.T) {
 	table := hand.NewTableFromState(stored.State)
 	view := table.ViewFor(winnerID)
 	for _, s := range view.Seats {
-		if s.PlayerID == winnerID && s.Stack != chargedStack+20 {
-			t.Fatalf("expected the fee refunded, stack = %d want %d", s.Stack, chargedStack+20)
+		if s.PlayerID == winnerID && s.Stack != chargedStack+10 {
+			t.Fatalf("expected only the failed card refunded, stack = %d want %d", s.Stack, chargedStack+10)
 		}
 	}
-	if len(view.RunoutCards) != 0 {
-		t.Fatal("expected the refunded viewer's view to be masked again")
+	if len(view.RabbitCards) != 1 || view.RabbitCards[0] == "" {
+		t.Fatalf("expected only the refunded card masked again, got %v", view.RabbitCards)
 	}
 }
 
@@ -922,6 +938,58 @@ func TestPendingExitAutoFoldsOnTurnArrival(t *testing.T) {
 	for _, p := range stored.State.Players {
 		if p.ID == waiting {
 			t.Fatalf("expected %s to have been auto-folded and then swept off once the next hand started, still found: %+v", waiting, p)
+		}
+	}
+}
+
+// Two folders ask for the same uncontested winner's cards: both join one
+// consent batch (one timer, one prompt) and one accept reveals to both.
+func TestWinnerCardsBatchThroughTheActor(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	ctx := context.Background()
+
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true}, {ID: "p2", Stack: 1000, Ready: true}, {ID: "p3", Stack: 1000, Ready: true},
+	}, 10, 20)
+	seed.ConfigureRake("sandbox")
+	if err := seed.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	first := seed.CurrentPlayerIDForActor()
+	_ = seed.Act(first, betting.ActionFold, 0)
+	second := seed.CurrentPlayerIDForActor()
+	_ = seed.Act(second, betting.ActionFold, 0)
+	winnerID := seed.LastOutcomeForActor().Winners[0]
+	tableID := uniqueTableID(t)
+	if err := store.SeedTable(ctx, tableID, seed.ExportState()); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
+	runCtx, cancel := context.WithCancel(ctx)
+	go a.Run(runCtx)
+	stopActor(t, a, cancel)
+
+	for i, requesterID := range []string{first, second} {
+		if err := a.Dispatch(RequestWinnerCardsCmd{PlayerID: requesterID, ActionID: fmt.Sprintf("ask-%d", i), Reply: make(chan error, 1)}); err != nil {
+			t.Fatalf("RequestWinnerCardsCmd(%s): %v", requesterID, err)
+		}
+	}
+	stored, _ := store.LoadTable(ctx, tableID)
+	if got := hand.NewTableFromState(stored.State).ViewFor(winnerID).WinnerCardsRequests; len(got) != 2 {
+		t.Fatalf("the winner should be asked once for both requesters, got %+v", got)
+	}
+	if err := a.Dispatch(AcceptWinnerCardsCmd{PlayerID: winnerID, ActionID: "yes", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("AcceptWinnerCardsCmd: %v", err)
+	}
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	for _, requesterID := range []string{first, second} {
+		for _, seat := range table.ViewFor(requesterID).Seats {
+			if seat.PlayerID == winnerID && (len(seat.HoleCards) != 2 || seat.HoleCards[0] == "back") {
+				t.Fatalf("%s should see the winner's cards after the batch is accepted", requesterID)
+			}
 		}
 	}
 }

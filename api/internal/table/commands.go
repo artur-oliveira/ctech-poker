@@ -142,11 +142,13 @@ func (c SetRunItTwiceCmd) reply() chan error { return c.Reply }
 
 func (c ShowCardsCmd) reply() chan error { return c.Reply }
 
-// RequestRabbitHuntCmd charges the player the table's big blind to reveal
-// the rabbit-hunt runout for the just-completed hand.
+// RequestRabbitHuntCmd charges the player the table's small blind to reveal
+// one undealt board slot of the just-completed hand. A nil Slot (clients
+// older than protocol 12) buys every slot still unbought.
 type RequestRabbitHuntCmd struct {
 	PlayerID string
 	ActionID string
+	Slot     *int
 	Reply    chan error
 }
 
@@ -215,10 +217,12 @@ type expireWinnerCardsCmd struct {
 func (c expireWinnerCardsCmd) reply() chan error { return c.Reply }
 
 // RabbitHuntVerifyFailedCmd refunds a RequestRabbitHuntCmd charge when the
-// client couldn't locally verify the revealed runout.
+// client couldn't locally verify a revealed card. Slot names the card; nil
+// (clients older than protocol 12) refunds every card bought this hand.
 type RabbitHuntVerifyFailedCmd struct {
 	PlayerID string
 	ActionID string
+	Slot     *int
 	Reply    chan error
 }
 

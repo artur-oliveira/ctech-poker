@@ -139,7 +139,9 @@ function SeatImpl({
                        renderActionsMenu,
                        layoutPosition,
                        leaving = false,
-                       joining = false
+                       joining = false,
+                       cardsControl,
+                       seatPrompt
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -203,6 +205,13 @@ function SeatImpl({
   // does exactly that whenever the page's rendering loop has not begun
   // ticking. See `.game-seat[data-seat-joining]` in (app)/table/table.css.
   joining?: boolean;
+  // Paid winner-cards consent (WinnerCards.tsx): cardsControl is laid over
+  // this seat's face-down cards (the request button / the wait), seatPrompt
+  // anchors the winner's own answer to their seat. Only the one seat a
+  // post-hand reveal concerns ever receives either, so memo still skips the
+  // other eight.
+  cardsControl?: ReactNode;
+  seatPrompt?: ReactNode;
 }) {
   const cards = seat.hole_cards;
   // Only a hole card that turned face-up since the previous render plays the
@@ -373,7 +382,8 @@ function SeatImpl({
                           peeked={peeked[i]}
                           onPeekToggle={peekGated ? () => togglePeek(i as 0 | 1) : undefined}
                           shortcutKey={peekGated ? String(i + 1) : undefined}/>;
-    })}</div>
+    })}{cardsControl}</div>
+    {seatPrompt}
     {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{
         '--rot': `${rot}deg`,

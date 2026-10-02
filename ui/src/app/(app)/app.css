@@ -504,54 +504,6 @@
     pointer-events: auto;
     max-width: 100%
 }
-.rabbit-hunt {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--white-13);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--surface-control) 92%, transparent);
-    box-shadow: var(--shadow-soft);
-    backdrop-filter: blur(12px)
-}
-.rabbit-hunt button {
-    all: unset;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-height: 44px;
-    cursor: pointer
-}
-.rabbit-hunt button:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 4px;
-    border-radius: 999px
-}
-.rabbit-hunt svg {
-    flex: 0 0 auto;
-    width: 19px;
-    color: var(--gold)
-}
-.rabbit-hunt button span,
-.rabbit-hunt-label {
-    display: flex;
-    flex-direction: column;
-    white-space: nowrap
-}
-.rabbit-hunt b,
-.rabbit-hunt-label {
-    color: var(--on-brand);
-    font-size: 12px
-}
-.rabbit-hunt small {
-    color: var(--muted);
-    font-size: 10px
-}
-.rabbit-hunt-cards {
-    display: flex;
-    gap: 4px
-}
 .exit-status {
     display: flex;
     align-items: center;
@@ -607,21 +559,267 @@
 .winner-cards button span { display: flex; flex-direction: column; white-space: nowrap }
 .winner-cards b { color: var(--on-brand); font-size: 12px }
 .winner-cards small { color: var(--muted); font-size: 10px }
-.winner-cards p { all: unset; display: flex; align-items: center; gap: 9px }
-.winner-cards-waiting svg { animation: winner-cards-wait 1.6s ease-in-out infinite }
+/* Paid reveals on the table itself (docs/specs/2026-10-01-paid-reveals-on-table.md).
+   Rabbit hunt: each undealt board slot is its own small-blind purchase, and
+   every state of that purchase is drawn inside the slot. */
+.board-slot.rabbit-slot {
+    border-style: solid;
+    border-color: var(--gold-33);
+    background: color-mix(in srgb, var(--gold) 6%, transparent);
+    color: var(--gold-pale);
+    transition: border-color 160ms var(--ease-out-quart), background-color 160ms var(--ease-out-quart)
+}
+.board-slot.rabbit-slot::after {
+    content: none
+}
+.rabbit-slot > svg {
+    width: min(20px, 34%);
+    height: auto
+}
+.rabbit-slot > small {
+    position: absolute;
+    inset: auto 0 8%;
+    color: var(--felt-text-muted);
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    text-align: center
+}
+/* The compact stages shrink the slot below the word's width: the icon (one
+   shape per state) and the failed tint carry it there, the name stays in the
+   slot's accessible label. */
+.stage-v .rabbit-slot > small,
+.stage-h .rabbit-slot > small {
+    display: none
+}
+.rabbit-slot > button {
+    all: unset;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    color: var(--gold);
+    cursor: pointer
+}
+.rabbit-slot > button svg {
+    width: min(22px, 38%);
+    height: auto;
+    transition: transform 160ms var(--ease-out-quart)
+}
+.rabbit-slot > button b {
+    color: var(--gold-pale);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.board-slot.rabbit-slot:has(> button:hover) {
+    border-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 14%, transparent)
+}
+.rabbit-slot > button:hover svg {
+    transform: translateY(-2px)
+}
+.rabbit-slot > button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px
+}
+.rabbit-slot[data-state='pending'] > svg,
+.rabbit-slot[data-state='verifying'] > svg {
+    animation: paid-reveal-wait 1.6s var(--ease-out-quart) infinite
+}
+.board-slot.rabbit-slot[data-state='failed'] {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--danger-soft) 55%, transparent);
+    background: none;
+    color: var(--danger-soft)
+}
+/* A bought card is what WOULD have come — never the real board — so it keeps
+   a dashed gold halo and a rabbit mark instead of sitting flush like a dealt
+   card. */
+.board-slot.rabbit-slot[data-state='revealed'] {
+    border: 0;
+    background: none;
+    outline: 1px dashed var(--gold-33);
+    outline-offset: 0
+}
+.rabbit-slot[data-state='revealed'] > .playing-card {
+    width: 100%;
+    height: 100%
+}
+.rabbit-slot-badge {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    z-index: 1;
+    display: grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border: 1px solid var(--gold-33);
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    color: var(--gold)
+}
+.rabbit-slot-badge svg {
+    width: 11px;
+    height: 11px
+}
+@keyframes paid-reveal-wait {
+    0%, 100% { opacity: 1 }
+    50% { opacity: .45 }
+}
+
+/* Winner's cards: the requester clicks the uncontested winner's face-down
+   cards; the price hangs under them and the wait replaces it in place. */
+.seat-cards:has(> .winner-cards-request) {
+    position: relative
+}
+/* The control is the strip's last child now, so the second card keeps the
+   flush edge it normally gets from :last-child and the overlay spans both. */
+.seat-cards > .playing-card:has(+ .winner-cards-request) {
+    margin-right: 0
+}
+.winner-cards-request {
+    all: unset;
+    box-sizing: border-box;
+    position: absolute;
+    inset: -3px;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    border-radius: var(--rounded-xs);
+    cursor: pointer
+}
+.winner-cards-request:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.seat-cards:has(> .winner-cards-request[data-state='offer']:hover) > .playing-card {
+    filter: brightness(1.14)
+}
+.winner-cards-price {
+    position: absolute;
+    bottom: -9px;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px 1px 5px;
+    border: 1px solid var(--gold-33);
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    color: var(--gold-pale);
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    transition: border-color 160ms var(--ease-out-quart)
+}
+.winner-cards-price svg {
+    width: 11px;
+    height: 11px;
+    color: var(--gold)
+}
+.winner-cards-request:hover .winner-cards-price {
+    border-color: var(--gold)
+}
+.winner-cards-request[data-state='waiting'] {
+    gap: 1px;
+    align-content: center;
+    background: color-mix(in srgb, var(--overlay-night) 62%, transparent);
+    color: var(--gold-pale);
+    cursor: default
+}
+.winner-cards-request[data-state='waiting'] svg {
+    width: 15px;
+    height: 15px;
+    animation: winner-cards-wait 1.6s ease-in-out infinite
+}
+.winner-cards-request[data-state='waiting'] b {
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
 @keyframes winner-cards-wait {
     0%, 100% { transform: none }
     50% { transform: rotate(180deg) }
 }
-@media (prefers-reduced-motion: reduce) {
-.winner-cards-waiting svg { animation: none }
+
+/* The winner's one answer for the whole batch, anchored above their seat.
+   Its entrance is transform-only: it never starts invisible. */
+.winner-cards-prompt {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    z-index: 7;
+    display: grid;
+    gap: 10px;
+    width: max-content;
+    max-width: min(300px, 86vw);
+    padding: 10px 12px;
+    border: 1px solid var(--gold-33);
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    box-shadow: var(--shadow-seat);
+    transform: translateX(-50%);
+    animation: winner-cards-prompt-in 220ms var(--ease-out-quart)
 }
-.winner-cards-prompt { display: flex; flex-direction: column; gap: 8px; align-items: stretch }
-.winner-cards-prompt p { flex-direction: column; align-items: flex-start; gap: 2px }
-.winner-cards-prompt b, .winner-cards-prompt small { white-space: normal }
-.winner-cards-answers { display: flex; gap: 8px; justify-content: flex-end }
+@keyframes winner-cards-prompt-in {
+    from { transform: translate(-50%, 6px) }
+}
+/* Lift the answering seat over its neighbours, and over the hand-outcome
+   banner it would otherwise sit under on the compact stages, while the
+   prompt is open: the answer has an 8-second clock, the banner does not. */
+.game-seat:has(> .winner-cards-prompt) {
+    z-index: calc(var(--z-notice) + 1)
+}
+.winner-cards-head {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+.winner-cards-askers {
+    display: flex;
+    flex: 0 0 auto;
+    padding-left: 8px
+}
+.winner-cards-askers > * {
+    width: 28px;
+    height: 28px;
+    margin-left: -8px;
+    border: 2px solid var(--surface-control);
+    border-radius: var(--rounded-pill)
+}
+.winner-cards-more {
+    display: grid;
+    place-items: center;
+    background: var(--white-13);
+    color: var(--on-brand);
+    font: 600 var(--font-size-tiny) var(--font-mono)
+}
+.winner-cards-head p {
+    display: grid;
+    gap: 2px;
+    margin: 0
+}
+.winner-cards-head b {
+    color: var(--on-brand);
+    font-size: var(--font-size-compact);
+    text-wrap: pretty
+}
+.winner-cards-head small {
+    color: var(--muted);
+    font-size: var(--font-size-tiny)
+}
+.winner-cards-seconds {
+    color: var(--gold-pale);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+.winner-cards-answers { display: flex; gap: 8px }
 .winner-cards-answers button {
     all: unset;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -632,9 +830,12 @@
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-control);
     color: var(--on-brand);
-    font-size: 12px;
-    cursor: pointer
+    font-size: var(--font-size-compact);
+    cursor: pointer;
+    transition: background-color 160ms var(--ease-out-quart), border-color 160ms var(--ease-out-quart)
 }
+.winner-cards-answers button svg { width: 15px; height: 15px }
+.winner-cards-answers button:hover:not(:disabled) { background: var(--white-08) }
 .winner-cards-answers button:disabled { cursor: wait; opacity: .65 }
 .winner-cards-answers button:focus-visible {
     outline: 2px solid var(--focus-ring);
@@ -644,6 +845,18 @@
     border-color: var(--gold);
     background: color-mix(in srgb, var(--gold) 18%, transparent)
 }
+.winner-cards-answers .winner-cards-accept:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--gold) 28%, transparent)
+}
+@media (prefers-reduced-motion: reduce) {
+.rabbit-slot > svg,
+.rabbit-slot > button svg,
+.winner-cards-request[data-state='waiting'] svg,
+.winner-cards-prompt {
+        animation: none;
+        transition: none
+    }
+}
 .stage-v .table-overlay-stack {
     bottom: 7%
 }
@@ -651,9 +864,6 @@
 .table-overlay-stack {
         bottom: 6%;
         gap: 6px
-    }
-.rabbit-hunt {
-        padding: 7px 9px
     }
 .winner-cards { padding: 7px 9px }
 }

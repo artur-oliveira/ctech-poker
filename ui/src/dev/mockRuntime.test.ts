@@ -6,7 +6,7 @@ const scenarios: MockScenario[] = [
   'full_hand', 'heads_up', 'layout_3', 'layout_4', 'layout_5', 'six_max', 'layout_7', 'layout_8', 'nine_max',
   'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
-  'run_it_twice', 'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
+  'run_it_twice', 'winner_cards', 'winner_cards_prompt', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout', 'complete_loss',
   'complete_tie', 'fold_win', 'complete',
 ];
@@ -171,8 +171,14 @@ describe('mock table state contract', () => {
 
     const rabbit = snapshotForScenario('rabbit_hunt');
     expect(rabbit).toMatchObject({stage: 'complete', won_without_showdown: true, winners: [MOCK_PLAYER_ID]});
-    expect(rabbit.shuffle_server_seed_hex).toBeTruthy();
+    // Only the commitment is public; the seed would reveal every unbought card.
+    expect(rabbit.shuffle_server_seed_hex).toBeUndefined();
     expect(rabbit.shuffle_commit_hash).toBeTruthy();
+    expect(rabbit.rabbit_hunt_fee).toBeGreaterThan(0);
+
+    const prompt = snapshotForScenario('winner_cards_prompt');
+    expect(prompt.winners).toEqual([MOCK_PLAYER_ID]);
+    expect(prompt.winner_cards_requests?.length).toBeGreaterThan(3);
   });
 
   test('rebuy starts the viewer busted and sitting out', () => {
@@ -263,7 +269,7 @@ describe('mock realtime service contract', () => {
     rabbit.service.connect();
     vi.runAllTimers();
     rabbit.messages.length = 0;
-    rabbit.service.send({type: 'request_rabbit_hunt', action_id: 'rabbit-1'});
+    rabbit.service.send({type: 'request_rabbit_hunt', action_id: 'rabbit-1', board_slot: 3});
     vi.runAllTimers();
     expect(rabbit.messages).toContainEqual(expect.objectContaining({type: 'action_ack', action_id: 'rabbit-1'}));
 
@@ -299,7 +305,7 @@ describe('mock realtime service contract', () => {
     vi.advanceTimersByTime(30);
     const pendingState = messages.filter(message => message.type === 'state').at(-1)
       ?.snapshot as ReturnType<typeof snapshotForScenario>;
-    expect(pendingState.pending_winner_cards).toMatchObject({winner_id: 'bia_sp', fee: 50});
+    expect(pendingState.winner_cards_requests).toMatchObject([{winner_id: 'bia_sp', fee: 50}]);
     expect(pendingState.seats.find(seat => seat.player_id === 'bia_sp')?.hole_cards_revealed).toEqual([false, false]);
     expect(stackOf()).toBe(before - 50);
 
@@ -308,7 +314,8 @@ describe('mock realtime service contract', () => {
     expect(messages).toContainEqual(expect.objectContaining({type: 'action_ack', action_id: 'winner-2'}));
     const declined = messages.filter(message => message.type === 'state').at(-1)
       ?.snapshot as ReturnType<typeof snapshotForScenario>;
-    expect(declined.pending_winner_cards).toBeUndefined();
+    expect(declined.winner_cards_requests).toBeUndefined();
+    expect(declined.winner_cards_closed).toBe(true);
     expect(declined.seats.find(seat => seat.player_id === 'bia_sp')?.hole_cards_revealed).toEqual([false, false]);
     expect(stackOf()).toBe(before);
     service.close();

@@ -473,7 +473,7 @@ func TestViewForOmitsServerSeedWhenWonWithoutShowdown(t *testing.T) {
 	if len(table.ViewFor("p1").RunoutCards) != 0 {
 		t.Fatal("expected the rabbit hunt runout masked before payment")
 	}
-	if _, err := table.RequestRabbitHunt("p1"); err != nil {
+	if _, err := table.RequestRabbitHunt("p1", nil); err != nil {
 		t.Fatalf("RequestRabbitHunt: %v", err)
 	}
 	view := table.ViewFor("p1")

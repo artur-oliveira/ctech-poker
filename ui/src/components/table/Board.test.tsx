@@ -1,4 +1,5 @@
 import {render, screen} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import {Board} from './Board';
 
@@ -14,6 +15,31 @@ describe('Board', () => {
     expect(container.querySelector('.board-slot.is-next')).toHaveAttribute('data-suit', '♦');
   });
   
+  test('readies all three flop slots on an empty board, one slot after that', () => {
+    const {container, rerender} = render(<Board cards={[]} pot={0}/>);
+    expect([...container.querySelectorAll('.board-slot.is-next')].map(slot => slot.getAttribute('data-suit')))
+      .toEqual(['♠', '♥', '♣']);
+    rerender(<Board cards={['Ah', 'Kd', 'Qc', '2s']} pot={0}/>);
+    expect(container.querySelectorAll('.board-slot.is-next')).toHaveLength(1);
+  });
+
+  test('turns each undealt slot into its own rabbit-hunt purchase with every state on the slot', async () => {
+    const onBuy = vi.fn();
+    render(<Board cards={[]} pot={0} rabbit={{
+      fee: 10, onBuy, slots: {
+        0: {status: 'revealed', card: 'As'}, 1: {status: 'verifying'}, 2: {status: 'pending'},
+        3: {status: 'failed'}, 4: {status: 'offer'},
+      }
+    }}/>);
+    expect(screen.getByRole('img', {name: /Carta comunitária: ás de espadas/i})).toBeInTheDocument();
+    expect(screen.getByRole('status', {name: /Verificando a 2ª carta do flop/})).toBeInTheDocument();
+    expect(screen.getByRole('status', {name: /Comprando a 3ª carta do flop/})).toBeInTheDocument();
+    expect(screen.getByRole('status', {name: /Não foi possível verificar o turn. Taxa devolvida/})).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Ver o river \(rabbit hunt\) por 10/}));
+    expect(onBuy).toHaveBeenCalledWith(4);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
   test('renders the shared prefix once and labels both divergent runouts', () => {
     render(<Board cards={['Ah', 'Kd', 'Qc', '2s', '3h']} boardTwo={['4c', '5d']}
                   splitAt={3} pot={100}/>);

@@ -705,11 +705,10 @@ describe('table page integration', () => {
     realtime({snapshot: snapshot({stage: 'complete', won_without_showdown: true})});
     render(<TablePage/>);
     expect(mocks.stageProps?.bigBlind).toBeGreaterThan(0);
-    act(() => (mocks.stageProps?.onRequestRabbitHuntAction as () => void)());
-    expect(mocks.realtime.requestRabbitHunt).toHaveBeenCalledOnce();
-    act(() => (mocks.stageProps?.onRabbitHuntVerifyFailedAction as () => void)());
-    expect(mocks.realtime.reportRabbitHuntVerifyFailed).toHaveBeenCalledOnce();
-    expect(mocks.stageProps?.rabbitHuntPending).toBe(false);
+    act(() => (mocks.stageProps?.onRequestRabbitHuntAction as (slot: number) => void)(4));
+    expect(mocks.realtime.requestRabbitHunt).toHaveBeenCalledWith(4);
+    act(() => (mocks.stageProps?.onRabbitHuntVerifyFailedAction as (slot: number) => void)(4));
+    expect(mocks.realtime.reportRabbitHuntVerifyFailed).toHaveBeenCalledWith(4);
   });
 
   test('wires the winner-card request into TableStage', () => {

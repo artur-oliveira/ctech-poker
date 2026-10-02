@@ -41,34 +41,50 @@ type Snapshot struct {
 	RevealedCardSalts        map[int]RevealedSaltView `json:"revealed_card_salts,omitempty"`
 	UnrevealedCardHashes     map[int]string           `json:"unrevealed_card_hashes,omitempty"`
 	RunoutCards              []string                 `json:"runout_cards,omitempty"`
-	SmallBlindPlayerID       string                   `json:"small_blind_player_id,omitempty"`
-	BigBlindPlayerID         string                   `json:"big_blind_player_id,omitempty"`
-	DealerPlayerID           string                   `json:"dealer_player_id,omitempty"`
-	SnapshotVersion          uint64                   `json:"snapshot_version,omitempty"`
-	Pots                     []PotView                `json:"pots,omitempty"`
-	PotResults               []PotResultView          `json:"pot_results,omitempty"`
-	HandID                   string                   `json:"hand_id,omitempty"`
-	ChatMessages             []ChatMessageView        `json:"chat_messages,omitempty"`
-	Reactions                []ReactionView           `json:"reactions,omitempty"`
-	ActionPreselection       string                   `json:"action_preselection,omitempty"`
-	ActionPreselectionAmount int64                    `json:"action_preselection_amount,omitempty"`
-	ProspectiveCallAmount    int64                    `json:"prospective_call_amount,omitempty"`
-	// PendingWinnerCards is the outstanding paid-reveal request, sent only to
-	// the two players it concerns — the winner, who has to answer it, and the
-	// requester, who is waiting. Everyone else must not learn that someone
-	// tried to buy a look at a mucked hand.
+	// RabbitCards is the viewer's bought rabbit-hunt cards keyed by board
+	// slot (0-4) — RunoutCards in slot order cannot say which slot a card
+	// belongs to once the cards are bought one at a time.
+	RabbitCards map[int]string `json:"rabbit_cards,omitempty"`
+	// RabbitHuntFee is the per-card rabbit-hunt price (the small blind),
+	// present only while the hunt is on offer: a complete hand won without
+	// showdown with an unfinished board, on a sandbox table.
+	RabbitHuntFee            int64             `json:"rabbit_hunt_fee,omitempty"`
+	SmallBlindPlayerID       string            `json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID         string            `json:"big_blind_player_id,omitempty"`
+	DealerPlayerID           string            `json:"dealer_player_id,omitempty"`
+	SnapshotVersion          uint64            `json:"snapshot_version,omitempty"`
+	Pots                     []PotView         `json:"pots,omitempty"`
+	PotResults               []PotResultView   `json:"pot_results,omitempty"`
+	HandID                   string            `json:"hand_id,omitempty"`
+	ChatMessages             []ChatMessageView `json:"chat_messages,omitempty"`
+	Reactions                []ReactionView    `json:"reactions,omitempty"`
+	ActionPreselection       string            `json:"action_preselection,omitempty"`
+	ActionPreselectionAmount int64             `json:"action_preselection_amount,omitempty"`
+	ProspectiveCallAmount    int64             `json:"prospective_call_amount,omitempty"`
+	// WinnerCardsRequests is the open consent batch as this viewer may see
+	// it: the winner gets every request (they answer them all at once), a
+	// requester gets only their own, and everyone else gets nothing — nobody
+	// learns who else tried to buy a look at a mucked hand.
+	WinnerCardsRequests []WinnerCardsRequestView `json:"winner_cards_requests,omitempty"`
+	// PendingWinnerCards is the first of WinnerCardsRequests, kept for
+	// clients older than protocol 12, which only know a single request.
 	PendingWinnerCards *WinnerCardsRequestView `json:"pending_winner_cards,omitempty"`
+	// WinnerCardsClosed: a batch was declined or timed out, so the winner's
+	// cards can no longer be requested this hand.
+	WinnerCardsClosed bool `json:"winner_cards_closed,omitempty"`
 }
 
 // WinnerCardsRequestView is the viewer-scoped projection of
 // WinnerCardsRequest. RequesterName is resolved here so the prompt can name
 // who is asking without the client holding a seat lookup.
 type WinnerCardsRequestView struct {
-	RequesterID     string `json:"requester_id"`
-	RequesterName   string `json:"requester_name,omitempty"`
-	WinnerID        string `json:"winner_id"`
-	Fee             int64  `json:"fee"`
-	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
+	RequesterID   string `json:"requester_id"`
+	RequesterName string `json:"requester_name,omitempty"`
+	// RequesterAvatarURL lets the winner's prompt show who is asking.
+	RequesterAvatarURL string `json:"requester_avatar_url,omitempty"`
+	WinnerID           string `json:"winner_id"`
+	Fee                int64  `json:"fee"`
+	ExpiresAtUnixMs    int64  `json:"expires_at_unix_ms"`
 }
 
 type RevealedSaltView struct {
@@ -357,15 +373,26 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		Pots:                  t.potViews(),
 		PotResults:            potResults,
 	}
-	if req := t.pendingWinnerCards; req != nil && (viewerID == req.WinnerID || viewerID == req.RequesterID) {
+	for _, req := range t.pendingWinnerCards {
+		if viewerID != req.WinnerID && viewerID != req.RequesterID {
+			continue
+		}
 		view := WinnerCardsRequestView{
 			RequesterID: req.RequesterID, WinnerID: req.WinnerID,
 			Fee: req.Fee, ExpiresAtUnixMs: req.ExpiresAt,
 		}
 		if requester := t.playerByID(req.RequesterID); requester != nil {
 			view.RequesterName = requester.Name
+			view.RequesterAvatarURL = requester.AvatarURL
 		}
-		out.PendingWinnerCards = &view
+		out.WinnerCardsRequests = append(out.WinnerCardsRequests, view)
+	}
+	if len(out.WinnerCardsRequests) > 0 {
+		out.PendingWinnerCards = &out.WinnerCardsRequests[0]
+	}
+	out.WinnerCardsClosed = t.winnerCardsClosed
+	if t.stage == Complete && wonWithoutShowdown && len(t.board) < 5 {
+		out.RabbitHuntFee = t.RabbitHuntCardFee()
 	}
 	if len(t.handOrder) >= 2 {
 		sb, bb := t.blindSeats(t.handOrder)
@@ -378,12 +405,18 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		rootCommit := deck.RootCommitHash(t.shuffle.ServerSeed, t.shuffle.Cards)
 		out.RootCommitHash = hex.EncodeToString(rootCommit[:])
 
-		if t.stage == Complete && (!wonWithoutShowdown || t.rabbitHuntPaid[viewerID]) {
-			proof, runout := t.fairnessProofFor(viewerID, wonWithoutShowdown)
+		// A hand won without showdown publishes its proof only to a viewer
+		// who bought at least one rabbit card, and that proof reveals only
+		// the bought slots: fairnessProofFor never emits the seed while a
+		// fold stays hidden, so an unbought card stays a committed hash.
+		rabbitSlots := t.rabbitHuntSlots[viewerID]
+		if t.stage == Complete && (!wonWithoutShowdown || rabbitSlots != 0) {
+			proof, runout, rabbitCards := t.fairnessProofFor(viewerID, wonWithoutShowdown, rabbitSlots)
 			out.ShuffleServerSeedHex = proof.ServerSeedHex
 			out.RevealedCardSalts = proof.RevealedCardSalts
 			out.UnrevealedCardHashes = proof.UnrevealedCardHashes
 			out.RunoutCards = runout
+			out.RabbitCards = rabbitCards
 		}
 	}
 	return out
@@ -393,11 +426,13 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 // hand. The full seed only comes out when nothing stays hidden (a real showdown
 // with no folded hand); otherwise the viewer gets card+salt reveals for the
 // positions they may see plus the committed hash of every position they may
-// not, which still rebuilds RootCommitHash without leaking mucked cards. Second
-// return is the rabbit-hunt runout (missing community cards) if any.
+// not, which still rebuilds RootCommitHash without leaking mucked cards.
+// rabbitSlots (bit i = board slot i) names the undealt board slots to reveal
+// as a rabbit hunt; every other undealt slot stays a hash. The second return
+// is those cards in slot order, the third the same cards keyed by slot.
 //
 // Callers must hold t.stage == Complete and t.shuffle != nil.
-func (t *Table) fairnessProofFor(viewerID string, wonWithoutShowdown bool) (FairnessProof, []string) {
+func (t *Table) fairnessProofFor(viewerID string, wonWithoutShowdown bool, rabbitSlots uint8) (FairnessProof, []string, map[int]string) {
 	showFinalCards := !wonWithoutShowdown
 	hasUnrevealedFold := wonWithoutShowdown
 	for _, p := range t.handOrder {
@@ -415,6 +450,7 @@ func (t *Table) fairnessProofFor(viewerID string, wonWithoutShowdown bool) (Fair
 		proof.ServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
 	}
 	var runout []string
+	var rabbitCards map[int]string
 
 	numActive := len(t.handOrder)
 	holeTotal := numActive * 2
@@ -422,28 +458,23 @@ func (t *Table) fairnessProofFor(viewerID string, wonWithoutShowdown bool) (Fair
 	if numActive > 0 {
 		dealerIdx = t.dealerIndexWithin(t.handOrder)
 	}
-	rabbitIndices := make(map[int]bool)
-	if wonWithoutShowdown && len(t.board) < 5 {
-		// Hole cards are followed by a burn+flop, burn+turn and
-		// burn+river. Reveal only missing community-card positions;
-		// burns and private cards remain committed hashes.
-		flopStart := holeTotal + 1
-		if len(t.board) < 3 {
-			for i := range 3 {
-				rabbitIndices[flopStart+i] = true
+	// rabbitIndices maps a deck position to the board slot it would have
+	// filled. Hole cards are followed by a burn+flop, burn+turn and
+	// burn+river; only bought, never-dealt community positions are revealed,
+	// burns and private cards remain committed hashes.
+	rabbitIndices := make(map[int]int)
+	if wonWithoutShowdown {
+		for slot := len(t.board); slot < 5; slot++ {
+			if rabbitSlots&(1<<slot) != 0 {
+				rabbitIndices[boardSlotDeckIndex(holeTotal, slot)] = slot
 			}
-		}
-		if len(t.board) < 4 {
-			rabbitIndices[holeTotal+5] = true
-		}
-		if len(t.board) < 5 {
-			rabbitIndices[holeTotal+7] = true
 		}
 	}
 
 	for i, c := range t.shuffle.Cards {
 		cCode := cardCode(c)
-		isRevealed := rabbitIndices[i]
+		rabbitSlot, isRabbit := rabbitIndices[i]
+		isRevealed := isRabbit
 
 		if numActive > 0 && i < holeTotal {
 			pass := i / numActive
@@ -463,15 +494,33 @@ func (t *Table) fairnessProofFor(viewerID string, wonWithoutShowdown bool) (Fair
 				Card:    cCode,
 				SaltHex: hex.EncodeToString(salt[:]),
 			}
-			if rabbitIndices[i] {
+			if isRabbit {
 				runout = append(runout, cCode)
+				if rabbitCards == nil {
+					rabbitCards = make(map[int]string)
+				}
+				rabbitCards[rabbitSlot] = cCode
 			}
 		} else {
 			h := deck.CardHash(t.shuffle.ServerSeed, i, c)
 			proof.UnrevealedCardHashes[i] = hex.EncodeToString(h[:])
 		}
 	}
-	return proof, runout
+	return proof, runout, rabbitCards
+}
+
+// boardSlotDeckIndex is the shuffled-deck position board slot (0-4) is dealt
+// from: past every hole card, the flop follows one burn, the turn and the
+// river one burn each.
+func boardSlotDeckIndex(holeTotal, slot int) int {
+	switch {
+	case slot < 3:
+		return holeTotal + 1 + slot
+	case slot == 3:
+		return holeTotal + 5
+	default:
+		return holeTotal + 7
+	}
 }
 
 // FairnessProofsForActor returns one fairness proof per dealt-in participant of
@@ -486,7 +535,9 @@ func (t *Table) FairnessProofsForActor() map[string]FairnessProof {
 	wonWithoutShowdown := t.lastOutcome != nil && t.lastOutcome.WonWithoutShowdown
 	out := make(map[string]FairnessProof, len(t.handOrder))
 	for _, p := range t.handOrder {
-		proof, _ := t.fairnessProofFor(p.ID, wonWithoutShowdown)
+		// History keeps its pre-per-card shape: every undealt slot. See the
+		// paid-reveals spec's "match history" note.
+		proof, _, _ := t.fairnessProofFor(p.ID, wonWithoutShowdown, 0b11111)
 		out[p.ID] = proof
 	}
 	return out

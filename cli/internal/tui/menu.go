@@ -364,7 +364,7 @@ var tableCommandSpecs = []commandSpec{
 	{Name: "/peek", Args: "[all|1|2]", Desc: "Mostra/esconde suas cartas", Hotkey: "k"},
 	{Name: "/showcards", Args: "[all|1|2]", Desc: "Mostra suas cartas no showdown"},
 	{Name: "/rit", Args: "<on|off>", Desc: "Liga/desliga run it twice"},
-	{Name: "/rabbit", Desc: "Pede rabbit hunt após todos correrem"},
+	{Name: "/rabbit", Args: "<1-5|all>", Desc: "Compra uma carta do rabbit hunt (small blind cada)"},
 	{Name: "/reqcards", Desc: "Paga pra ver a mão vencedora muckada"},
 	{Name: "/accept", Desc: "Aceita mostrar sua mão vencedora"},
 	{Name: "/decline", Desc: "Recusa mostrar sua mão vencedora"},

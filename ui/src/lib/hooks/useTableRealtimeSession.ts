@@ -727,13 +727,15 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       showCardsTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       return ok;
     },
-    requestRabbitHunt: () => {
+    // One undealt board slot per request (protocol 12): each card is bought
+    // and charged on its own, so the slot rides on the frame.
+    requestRabbitHunt: (boardSlot: number) => {
       if (requestRabbitHuntLockRef.current) return false;
       const actionId = crypto.randomUUID();
       requestRabbitHuntLockRef.current = true;
       requestRabbitHuntActionRef.current = actionId;
       setRequestRabbitHuntPending(true);
-      const ok = emitAux(actionId, {type: 'request_rabbit_hunt', action_id: actionId});
+      const ok = emitAux(actionId, {type: 'request_rabbit_hunt', action_id: actionId, board_slot: boardSlot});
       if (!ok) {
         finishAuxiliaryCommand(actionId);
         return false;
@@ -795,10 +797,12 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       );
       return ok;
     },
-    // Fire-and-forget: RabbitHunt.tsx already shows its own "taxa devolvida"
-    // message locally the moment verification fails, independent of the
-    // server's response, so nothing in the UI waits on this ack.
-    reportRabbitHuntVerifyFailed: () => emit({type: 'rabbit_hunt_verify_failed', action_id: crypto.randomUUID()}),
+    // Fire-and-forget: the board slot already shows its own "taxa devolvida"
+    // state the moment verification fails, independent of the server's
+    // response, so nothing in the UI waits on this ack. Refunds that one card.
+    reportRabbitHuntVerifyFailed: (boardSlot: number) => emit({
+      type: 'rabbit_hunt_verify_failed', action_id: crypto.randomUUID(), board_slot: boardSlot
+    }),
     keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
     // Fire-and-forget, once per hand: lets achievements.Service tell a
     // genuinely blind all-in/win from one the client just never reported.

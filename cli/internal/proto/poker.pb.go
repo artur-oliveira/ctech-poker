@@ -1004,8 +1004,20 @@ type TableSnapshot struct {
 	// Viewer-scoped: present only for the winner being asked and the requester
 	// waiting on the answer. Nobody else learns a request exists.
 	PendingWinnerCards *WinnerCardsRequest `protobuf:"bytes,35,opt,name=pending_winner_cards,json=pendingWinnerCards,proto3" json:"pending_winner_cards,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Protocol 12. The viewer's bought rabbit-hunt cards keyed by board slot
+	// (0-4); runout_cards keeps the same cards in slot order for older clients.
+	RabbitCards map[int32]string `protobuf:"bytes,36,rep,name=rabbit_cards,json=rabbitCards,proto3" json:"rabbit_cards,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Per-card rabbit-hunt price (the small blind); present only while the
+	// hunt is on offer for this hand.
+	RabbitHuntFee int64 `protobuf:"varint,37,opt,name=rabbit_hunt_fee,json=rabbitHuntFee,proto3" json:"rabbit_hunt_fee,omitempty"`
+	// Viewer-scoped open consent batch: the winner sees every request, a
+	// requester only their own, everyone else nothing. pending_winner_cards is
+	// its first entry, for clients older than protocol 12.
+	WinnerCardsRequests []*WinnerCardsRequest `protobuf:"bytes,38,rep,name=winner_cards_requests,json=winnerCardsRequests,proto3" json:"winner_cards_requests,omitempty"`
+	// The winner declined (or let time out) a batch: no further requests this hand.
+	WinnerCardsClosed bool `protobuf:"varint,39,opt,name=winner_cards_closed,json=winnerCardsClosed,proto3" json:"winner_cards_closed,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TableSnapshot) Reset() {
@@ -1283,19 +1295,48 @@ func (x *TableSnapshot) GetPendingWinnerCards() *WinnerCardsRequest {
 	return nil
 }
 
+func (x *TableSnapshot) GetRabbitCards() map[int32]string {
+	if x != nil {
+		return x.RabbitCards
+	}
+	return nil
+}
+
+func (x *TableSnapshot) GetRabbitHuntFee() int64 {
+	if x != nil {
+		return x.RabbitHuntFee
+	}
+	return 0
+}
+
+func (x *TableSnapshot) GetWinnerCardsRequests() []*WinnerCardsRequest {
+	if x != nil {
+		return x.WinnerCardsRequests
+	}
+	return nil
+}
+
+func (x *TableSnapshot) GetWinnerCardsClosed() bool {
+	if x != nil {
+		return x.WinnerCardsClosed
+	}
+	return false
+}
+
 // WinnerCardsRequest is one outstanding paid request to reveal the sole
 // uncontested winner's mucked hole cards. The requester has already been
 // charged; the winner has until expires_at_unix_ms to accept or decline, and
 // a decline or timeout refunds in full.
 type WinnerCardsRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	RequesterId     string                 `protobuf:"bytes,1,opt,name=requester_id,json=requesterId,proto3" json:"requester_id,omitempty"`
-	RequesterName   string                 `protobuf:"bytes,2,opt,name=requester_name,json=requesterName,proto3" json:"requester_name,omitempty"`
-	WinnerId        string                 `protobuf:"bytes,3,opt,name=winner_id,json=winnerId,proto3" json:"winner_id,omitempty"`
-	Fee             int64                  `protobuf:"varint,4,opt,name=fee,proto3" json:"fee,omitempty"`
-	ExpiresAtUnixMs int64                  `protobuf:"varint,5,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	RequesterId        string                 `protobuf:"bytes,1,opt,name=requester_id,json=requesterId,proto3" json:"requester_id,omitempty"`
+	RequesterName      string                 `protobuf:"bytes,2,opt,name=requester_name,json=requesterName,proto3" json:"requester_name,omitempty"`
+	WinnerId           string                 `protobuf:"bytes,3,opt,name=winner_id,json=winnerId,proto3" json:"winner_id,omitempty"`
+	Fee                int64                  `protobuf:"varint,4,opt,name=fee,proto3" json:"fee,omitempty"`
+	ExpiresAtUnixMs    int64                  `protobuf:"varint,5,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`
+	RequesterAvatarUrl string                 `protobuf:"bytes,6,opt,name=requester_avatar_url,json=requesterAvatarUrl,proto3" json:"requester_avatar_url,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *WinnerCardsRequest) Reset() {
@@ -1361,6 +1402,13 @@ func (x *WinnerCardsRequest) GetExpiresAtUnixMs() int64 {
 		return x.ExpiresAtUnixMs
 	}
 	return 0
+}
+
+func (x *WinnerCardsRequest) GetRequesterAvatarUrl() string {
+	if x != nil {
+		return x.RequesterAvatarUrl
+	}
+	return ""
 }
 
 type RevealedSalt struct {
@@ -1438,6 +1486,9 @@ type ClientMessage struct {
 	// do not require an exact snapshot version: chat, reactions and unrelated
 	// player actions may advance it without invalidating the viewer's intent.
 	ExpectedStage string `protobuf:"bytes,16,opt,name=expected_stage,json=expectedStage,proto3" json:"expected_stage,omitempty"`
+	// Board slot (0-4) for request_rabbit_hunt / rabbit_hunt_verify_failed
+	// (protocol 12). Absent means every remaining card (legacy whole runout).
+	BoardSlot     *int32 `protobuf:"varint,17,opt,name=board_slot,json=boardSlot,proto3,oneof" json:"board_slot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1582,6 +1633,13 @@ func (x *ClientMessage) GetExpectedStage() string {
 		return x.ExpectedStage
 	}
 	return ""
+}
+
+func (x *ClientMessage) GetBoardSlot() int32 {
+	if x != nil && x.BoardSlot != nil {
+		return *x.BoardSlot
+	}
+	return 0
 }
 
 // ServerMessage is sent from the server to the client.
@@ -2083,7 +2141,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x10target_player_id\x18\x04 \x01(\tR\x0etargetPlayerId\x12\x1c\n" +
 	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xfd\x0e\n" +
+	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xae\x11\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -2122,7 +2180,11 @@ const file_poker_proto_rawDesc = "" +
 	"\frunout_cards\x18  \x03(\tR\vrunoutCards\x12\x1b\n" +
 	"\tboard_two\x18! \x03(\tR\bboardTwo\x12$\n" +
 	"\x0eboard_split_at\x18\" \x01(\x05R\fboardSplitAt\x12K\n" +
-	"\x14pending_winner_cards\x18# \x01(\v2\x19.poker.WinnerCardsRequestR\x12pendingWinnerCards\x1a:\n" +
+	"\x14pending_winner_cards\x18# \x01(\v2\x19.poker.WinnerCardsRequestR\x12pendingWinnerCards\x12H\n" +
+	"\frabbit_cards\x18$ \x03(\v2%.poker.TableSnapshot.RabbitCardsEntryR\vrabbitCards\x12&\n" +
+	"\x0frabbit_hunt_fee\x18% \x01(\x03R\rrabbitHuntFee\x12M\n" +
+	"\x15winner_cards_requests\x18& \x03(\v2\x19.poker.WinnerCardsRequestR\x13winnerCardsRequests\x12.\n" +
+	"\x13winner_cards_closed\x18' \x01(\bR\x11winnerCardsClosed\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aY\n" +
@@ -2131,16 +2193,20 @@ const file_poker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x13.poker.RevealedSaltR\x05value:\x028\x01\x1aG\n" +
 	"\x19UnrevealedCardHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xba\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a>\n" +
+	"\x10RabbitCardsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\x01\n" +
 	"\x12WinnerCardsRequest\x12!\n" +
 	"\frequester_id\x18\x01 \x01(\tR\vrequesterId\x12%\n" +
 	"\x0erequester_name\x18\x02 \x01(\tR\rrequesterName\x12\x1b\n" +
 	"\twinner_id\x18\x03 \x01(\tR\bwinnerId\x12\x10\n" +
 	"\x03fee\x18\x04 \x01(\x03R\x03fee\x12+\n" +
-	"\x12expires_at_unix_ms\x18\x05 \x01(\x03R\x0fexpiresAtUnixMs\"=\n" +
+	"\x12expires_at_unix_ms\x18\x05 \x01(\x03R\x0fexpiresAtUnixMs\x120\n" +
+	"\x14requester_avatar_url\x18\x06 \x01(\tR\x12requesterAvatarUrl\"=\n" +
 	"\fRevealedSalt\x12\x12\n" +
 	"\x04card\x18\x01 \x01(\tR\x04card\x12\x19\n" +
-	"\bsalt_hex\x18\x02 \x01(\tR\asaltHex\"\xc1\x04\n" +
+	"\bsalt_hex\x18\x02 \x01(\tR\asaltHex\"\xf4\x04\n" +
 	"\rClientMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
@@ -2162,9 +2228,12 @@ const file_poker_proto_rawDesc = "" +
 	"\x0fturnstile_token\x18\x0e \x01(\tR\x0eturnstileToken\x12%\n" +
 	"\frun_it_twice\x18\x0f \x01(\bH\x01R\n" +
 	"runItTwice\x88\x01\x01\x12%\n" +
-	"\x0eexpected_stage\x18\x10 \x01(\tR\rexpectedStageB\r\n" +
+	"\x0eexpected_stage\x18\x10 \x01(\tR\rexpectedStage\x12\"\n" +
+	"\n" +
+	"board_slot\x18\x11 \x01(\x05H\x02R\tboardSlot\x88\x01\x01B\r\n" +
 	"\v_card_indexB\x0f\n" +
-	"\r_run_it_twice\"\x9e\x05\n" +
+	"\r_run_it_twiceB\r\n" +
+	"\v_board_slot\"\x9e\x05\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +
@@ -2220,7 +2289,7 @@ func file_poker_proto_rawDescGZIP() []byte {
 	return file_poker_proto_rawDescData
 }
 
-var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_poker_proto_goTypes = []any{
 	(*Card)(nil),               // 0: poker.Card
 	(*Seat)(nil),               // 1: poker.Seat
@@ -2242,6 +2311,7 @@ var file_poker_proto_goTypes = []any{
 	nil,                        // 17: poker.TableSnapshot.PayoutsEntry
 	nil,                        // 18: poker.TableSnapshot.RevealedCardSaltsEntry
 	nil,                        // 19: poker.TableSnapshot.UnrevealedCardHashesEntry
+	nil,                        // 20: poker.TableSnapshot.RabbitCardsEntry
 }
 var file_poker_proto_depIdxs = []int32{
 	2,  // 0: poker.Room.blind_escalation:type_name -> poker.BlindEscalation
@@ -2256,16 +2326,18 @@ var file_poker_proto_depIdxs = []int32{
 	18, // 9: poker.TableSnapshot.revealed_card_salts:type_name -> poker.TableSnapshot.RevealedCardSaltsEntry
 	19, // 10: poker.TableSnapshot.unrevealed_card_hashes:type_name -> poker.TableSnapshot.UnrevealedCardHashesEntry
 	10, // 11: poker.TableSnapshot.pending_winner_cards:type_name -> poker.WinnerCardsRequest
-	9,  // 12: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
-	3,  // 13: poker.ServerMessage.room:type_name -> poker.Room
-	15, // 14: poker.ServerMessage.social_event:type_name -> poker.SocialEvent
-	14, // 15: poker.SocialEvent.presence:type_name -> poker.PlayerPresence
-	11, // 16: poker.TableSnapshot.RevealedCardSaltsEntry.value:type_name -> poker.RevealedSalt
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	20, // 12: poker.TableSnapshot.rabbit_cards:type_name -> poker.TableSnapshot.RabbitCardsEntry
+	10, // 13: poker.TableSnapshot.winner_cards_requests:type_name -> poker.WinnerCardsRequest
+	9,  // 14: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
+	3,  // 15: poker.ServerMessage.room:type_name -> poker.Room
+	15, // 16: poker.ServerMessage.social_event:type_name -> poker.SocialEvent
+	14, // 17: poker.SocialEvent.presence:type_name -> poker.PlayerPresence
+	11, // 18: poker.TableSnapshot.RevealedCardSaltsEntry.value:type_name -> poker.RevealedSalt
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_poker_proto_init() }
@@ -2282,7 +2354,7 @@ func file_poker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_poker_proto_rawDesc), len(file_poker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

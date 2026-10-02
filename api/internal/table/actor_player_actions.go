@@ -135,7 +135,7 @@ func (a *Actor) handleRequestRabbitHunt(ctx context.Context, c RequestRabbitHunt
 	changed := false
 	apply := func() error {
 		return a.mutate(func() error {
-			if _, err := a.cached.RequestRabbitHunt(c.PlayerID); err != nil {
+			if _, err := a.cached.RequestRabbitHunt(c.PlayerID, c.Slot); err != nil {
 				return err
 			}
 			changed = true
@@ -352,7 +352,7 @@ func (a *Actor) handleRabbitHuntVerifyFailed(ctx context.Context, c RabbitHuntVe
 	changed := false
 	apply := func() error {
 		return a.mutate(func() error {
-			if err := a.cached.RefundRabbitHunt(c.PlayerID); err != nil {
+			if err := a.cached.RefundRabbitHunt(c.PlayerID, c.Slot); err != nil {
 				return err
 			}
 			changed = true

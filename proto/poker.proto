@@ -172,6 +172,18 @@ message TableSnapshot {
   // Viewer-scoped: present only for the winner being asked and the requester
   // waiting on the answer. Nobody else learns a request exists.
   WinnerCardsRequest pending_winner_cards = 35;
+  // Protocol 12. The viewer's bought rabbit-hunt cards keyed by board slot
+  // (0-4); runout_cards keeps the same cards in slot order for older clients.
+  map<int32, string> rabbit_cards = 36;
+  // Per-card rabbit-hunt price (the small blind); present only while the
+  // hunt is on offer for this hand.
+  int64 rabbit_hunt_fee = 37;
+  // Viewer-scoped open consent batch: the winner sees every request, a
+  // requester only their own, everyone else nothing. pending_winner_cards is
+  // its first entry, for clients older than protocol 12.
+  repeated WinnerCardsRequest winner_cards_requests = 38;
+  // The winner declined (or let time out) a batch: no further requests this hand.
+  bool winner_cards_closed = 39;
 }
 
 // WinnerCardsRequest is one outstanding paid request to reveal the sole
@@ -184,6 +196,7 @@ message WinnerCardsRequest {
   string winner_id = 3;
   int64 fee = 4;
   int64 expires_at_unix_ms = 5;
+  string requester_avatar_url = 6;
 }
 
 message RevealedSalt {
@@ -216,6 +229,9 @@ message ClientMessage {
   // do not require an exact snapshot version: chat, reactions and unrelated
   // player actions may advance it without invalidating the viewer's intent.
   string expected_stage = 16;
+  // Board slot (0-4) for request_rabbit_hunt / rabbit_hunt_verify_failed
+  // (protocol 12). Absent means every remaining card (legacy whole runout).
+  optional int32 board_slot = 17;
 }
 
 // ServerMessage is sent from the server to the client.

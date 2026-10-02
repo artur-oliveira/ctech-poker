@@ -17,41 +17,54 @@ import (
 // regardless of how long a table has been played (well under DynamoDB's
 // 400KB item limit even at a full 9-max table).
 type State struct {
-	Players         []*Player
-	SmallBlind      int64
-	BigBlind        int64
-	DealerSeat      int
-	DealerDrawn     bool
-	Stage           Stage
-	Board           []deck.Card
-	BoardTwo        []deck.Card
-	BoardSplitAt    int
-	RunItTwice      bool
-	RunoutPhase     int
-	Shuffle         *deck.ShuffleResult
-	NextCard        int
-	Round           *betting.Round
-	RoundIdx        map[string]int
-	RoundBaseline   map[string]int64
-	Payouts         map[string]int64
-	RakeBPS         int64
-	RakeCollected   int64
-	CurrencyMode    string
-	HandOrder       []*Player
-	SeenActionIDs   map[string]bool
-	ReadyToPost     map[string]bool
-	OwesBigBlind    map[string]bool
-	LastOutcome     *HandOutcome
-	WasEverAllIn    map[string]bool
-	RabbitHuntPaid  map[string]bool
+	Players       []*Player
+	SmallBlind    int64
+	BigBlind      int64
+	DealerSeat    int
+	DealerDrawn   bool
+	Stage         Stage
+	Board         []deck.Card
+	BoardTwo      []deck.Card
+	BoardSplitAt  int
+	RunItTwice    bool
+	RunoutPhase   int
+	Shuffle       *deck.ShuffleResult
+	NextCard      int
+	Round         *betting.Round
+	RoundIdx      map[string]int
+	RoundBaseline map[string]int64
+	Payouts       map[string]int64
+	RakeBPS       int64
+	RakeCollected int64
+	CurrencyMode  string
+	HandOrder     []*Player
+	SeenActionIDs map[string]bool
+	ReadyToPost   map[string]bool
+	OwesBigBlind  map[string]bool
+	LastOutcome   *HandOutcome
+	WasEverAllIn  map[string]bool
+	// RabbitHuntPaid is the pre-per-card encoding (one flag bought the whole
+	// runout). Read-only: NewTableFromState converts it to RabbitHuntSlots so
+	// a hand persisted by an older instance keeps its purchase; ExportState
+	// never writes it again.
+	RabbitHuntPaid map[string]bool `json:",omitempty" dynamodbav:",omitempty"`
+	// RabbitHuntSlots is the per-card purchase bitmask (bit i = board slot i).
+	RabbitHuntSlots map[string]uint8 `json:"rabbit_hunt_slots,omitempty" dynamodbav:"rabbit_hunt_slots,omitempty"`
 	WinnerCardsPaid map[string]bool
 	// WinnerCardsAsked is the one-request-per-hand-per-player guard; see
 	// Table.winnerCardsAsked for why it is not WinnerCardsPaid.
 	WinnerCardsAsked map[string]bool
-	// PendingWinnerCards survives a reload so a request outlives the instance
-	// that armed its expiry timer — the same self-healing property
+	// PendingWinnerCards is the pre-batch encoding (at most one request).
+	// Read-only, like RabbitHuntPaid: converted into PendingWinnerCardsBatch
+	// on load, never written again.
+	PendingWinnerCards *WinnerCardsRequest `json:",omitempty" dynamodbav:",omitempty"`
+	// PendingWinnerCardsBatch survives a reload so a batch outlives the
+	// instance that armed its expiry timer — the same self-healing property
 	// rearmTimersFromCache gives every other post-hand timer.
-	PendingWinnerCards *WinnerCardsRequest
+	PendingWinnerCardsBatch []WinnerCardsRequest `json:"pending_winner_cards_batch,omitempty" dynamodbav:"pending_winner_cards_batch,omitempty"`
+	// WinnerCardsClosed: the winner declined (or let time out) a batch this
+	// hand, so no further request is accepted until the next deal.
+	WinnerCardsClosed bool `json:"winner_cards_closed,omitempty" dynamodbav:"winner_cards_closed,omitempty"`
 	// Variant and ShortShuffle carry the #296 short-deck variant across a
 	// reload. Both are omitempty so a standard table's persisted State is
 	// unchanged (zero Variant, nil ShortShuffle write nothing).
@@ -62,38 +75,39 @@ type State struct {
 // ExportState captures every field this Table carries, for durable storage.
 func (t *Table) ExportState() State {
 	return State{
-		Players:            t.players,
-		SmallBlind:         t.smallBlind,
-		BigBlind:           t.bigBlind,
-		DealerSeat:         t.dealerSeat,
-		DealerDrawn:        t.dealerDrawn,
-		Stage:              t.stage,
-		Board:              t.board,
-		BoardTwo:           t.boardTwo,
-		BoardSplitAt:       t.boardSplitAt,
-		RunItTwice:         t.runItTwice,
-		RunoutPhase:        t.runoutPhase,
-		Shuffle:            t.shuffle,
-		NextCard:           t.nextCard,
-		Round:              t.round,
-		RoundIdx:           t.roundIdx,
-		RoundBaseline:      t.roundBaseline,
-		Payouts:            t.payouts,
-		RakeBPS:            t.rakeBPS,
-		RakeCollected:      t.rakeCollected,
-		CurrencyMode:       t.currencyMode,
-		HandOrder:          t.handOrder,
-		SeenActionIDs:      t.seenActionIDs,
-		ReadyToPost:        t.readyToPost,
-		OwesBigBlind:       t.owesBigBlind,
-		LastOutcome:        t.lastOutcome,
-		WasEverAllIn:       t.wasEverAllIn,
-		RabbitHuntPaid:     t.rabbitHuntPaid,
-		WinnerCardsPaid:    t.winnerCardsPaid,
-		WinnerCardsAsked:   t.winnerCardsAsked,
-		PendingWinnerCards: t.pendingWinnerCards,
-		Variant:            t.variant,
-		ShortShuffle:       t.shortShuffle,
+		Players:                 t.players,
+		SmallBlind:              t.smallBlind,
+		BigBlind:                t.bigBlind,
+		DealerSeat:              t.dealerSeat,
+		DealerDrawn:             t.dealerDrawn,
+		Stage:                   t.stage,
+		Board:                   t.board,
+		BoardTwo:                t.boardTwo,
+		BoardSplitAt:            t.boardSplitAt,
+		RunItTwice:              t.runItTwice,
+		RunoutPhase:             t.runoutPhase,
+		Shuffle:                 t.shuffle,
+		NextCard:                t.nextCard,
+		Round:                   t.round,
+		RoundIdx:                t.roundIdx,
+		RoundBaseline:           t.roundBaseline,
+		Payouts:                 t.payouts,
+		RakeBPS:                 t.rakeBPS,
+		RakeCollected:           t.rakeCollected,
+		CurrencyMode:            t.currencyMode,
+		HandOrder:               t.handOrder,
+		SeenActionIDs:           t.seenActionIDs,
+		ReadyToPost:             t.readyToPost,
+		OwesBigBlind:            t.owesBigBlind,
+		LastOutcome:             t.lastOutcome,
+		WasEverAllIn:            t.wasEverAllIn,
+		RabbitHuntSlots:         t.rabbitHuntSlots,
+		WinnerCardsPaid:         t.winnerCardsPaid,
+		WinnerCardsAsked:        t.winnerCardsAsked,
+		PendingWinnerCardsBatch: t.pendingWinnerCards,
+		WinnerCardsClosed:       t.winnerCardsClosed,
+		Variant:                 t.variant,
+		ShortShuffle:            t.shortShuffle,
 	}
 }
 
@@ -165,11 +179,39 @@ func NewTableFromState(s State) *Table {
 		owesBigBlind:       s.OwesBigBlind,
 		lastOutcome:        s.LastOutcome,
 		wasEverAllIn:       s.WasEverAllIn,
-		rabbitHuntPaid:     s.RabbitHuntPaid,
+		rabbitHuntSlots:    legacyRabbitHuntSlots(s),
 		winnerCardsPaid:    s.WinnerCardsPaid,
 		winnerCardsAsked:   s.WinnerCardsAsked,
-		pendingWinnerCards: s.PendingWinnerCards,
+		pendingWinnerCards: legacyWinnerCardsBatch(s),
+		winnerCardsClosed:  s.WinnerCardsClosed,
 	}
+}
+
+// legacyRabbitHuntSlots folds a pre-per-card RabbitHuntPaid flag (which bought
+// every undealt card) into the slot bitmask.
+func legacyRabbitHuntSlots(s State) map[string]uint8 {
+	slots := s.RabbitHuntSlots
+	for playerID, paid := range s.RabbitHuntPaid {
+		if !paid {
+			continue
+		}
+		if slots == nil {
+			slots = make(map[string]uint8)
+		}
+		for slot := len(s.Board); slot < 5; slot++ {
+			slots[playerID] |= 1 << slot
+		}
+	}
+	return slots
+}
+
+// legacyWinnerCardsBatch turns a pre-batch single pending request into a
+// one-entry batch so its fee is still refunded or settled.
+func legacyWinnerCardsBatch(s State) []WinnerCardsRequest {
+	if len(s.PendingWinnerCardsBatch) == 0 && s.PendingWinnerCards != nil {
+		return []WinnerCardsRequest{*s.PendingWinnerCards}
+	}
+	return s.PendingWinnerCardsBatch
 }
 
 // ActIdempotent applies action only if actionID hasn't been seen for this
