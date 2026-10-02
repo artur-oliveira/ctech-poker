@@ -1,4 +1,4 @@
-import {render, screen, waitFor} from '@testing-library/react';
+import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
@@ -24,6 +24,14 @@ const share = (overrides: Partial<HandShareSummary> = {}): HandShareSummary => (
   created_at: Date.now() - 3600_000, expires_at: Date.now() + 6 * 24 * 3600_000, ...overrides,
 });
 
+// The panel sits collapsed above the hand list; every test below is about
+// its contents, so they open it first, exactly as a player would.
+function renderOpen() {
+  const view = render(<MyHandSharesPanel/>, {wrapper});
+  fireEvent.click(screen.getByRole('button', {name: /Meus links compartilhados/}));
+  return view;
+}
+
 describe('MyHandSharesPanel (#96)', () => {
   beforeEach(() => {
     listMyHandShares.mockReset();
@@ -36,7 +44,7 @@ describe('MyHandSharesPanel (#96)', () => {
       share({token: 'tok-brag', kind: 'brag', outcome: 'won', net_change: 1200}),
       share({token: 'tok-bad', kind: 'bad_beat', outcome: 'lost', net_change: -800}),
     ]);
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
 
     expect(await screen.findByText('Brag')).toBeInTheDocument();
     expect(screen.getByText('Bad beat')).toBeInTheDocument();
@@ -53,7 +61,7 @@ describe('MyHandSharesPanel (#96)', () => {
       .mockResolvedValueOnce([share({token: 'tok-keep'}), share({token: 'tok-bad', kind: 'bad_beat'})])
       .mockResolvedValue([share({token: 'tok-keep'})]);
     revokeHandShare.mockResolvedValue(undefined);
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
 
     const rows = await screen.findAllByRole('listitem');
     expect(rows).toHaveLength(2);
@@ -73,7 +81,7 @@ describe('MyHandSharesPanel (#96)', () => {
     setPersistedHandShare('hand-9', {token: 'tok-1', expiresAt: Date.now() + 60_000});
     listMyHandShares.mockResolvedValue([share()]);
     revokeHandShare.mockRejectedValue(new Error('boom'));
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
 
     await user.click(await screen.findByRole('button', {name: 'Revogar'}));
 
@@ -82,9 +90,25 @@ describe('MyHandSharesPanel (#96)', () => {
     expect(getPersistedHandShare('hand-9')?.token).toBe('tok-1');
   });
 
+  test('starts collapsed to one line that still names the live count', async () => {
+    listMyHandShares.mockResolvedValue([share({token: 'a'}), share({token: 'b'})]);
+    render(<MyHandSharesPanel/>, {wrapper});
+
+    const heading = screen.getByRole('heading', {level: 2, name: /Meus links compartilhados/});
+    const toggle = screen.getByRole('button', {name: /Meus links compartilhados/});
+    expect(heading).toContainElement(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(await screen.findByText('2 ativos')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Revogar'})).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getAllByRole('button', {name: 'Revogar'})).toHaveLength(2);
+  });
+
   test('teaches the feature when the player has no links yet', async () => {
     listMyHandShares.mockResolvedValue([]);
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
     expect(await screen.findByText('Nenhum link ativo')).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: 'Revogar'})).not.toBeInTheDocument();
   });
@@ -92,7 +116,7 @@ describe('MyHandSharesPanel (#96)', () => {
   test('a failed listing is recoverable and does not claim the links are gone', async () => {
     const user = userEvent.setup();
     listMyHandShares.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([share()]);
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
 
     expect(await screen.findByText('Seus links não abriram desta vez')).toBeInTheDocument();
     await user.click(screen.getByRole('button', {name: 'Tentar novamente'}));
@@ -104,7 +128,7 @@ describe('MyHandSharesPanel (#96)', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {writeText}});
     listMyHandShares.mockResolvedValue([share({token: 'token with spaces'})]);
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
 
     await user.click(await screen.findByRole('button', {name: 'Copiar link'}));
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/share?id=token%20with%20spaces`);
@@ -115,7 +139,7 @@ describe('MyHandSharesPanel (#96)', () => {
     const user = userEvent.setup();
     Object.defineProperty(navigator, 'clipboard', {configurable: true, value: undefined});
     listMyHandShares.mockResolvedValue([share()]);
-    render(<MyHandSharesPanel/>, {wrapper});
+    renderOpen();
 
     await user.click(await screen.findByRole('button', {name: 'Copiar link'}));
     expect(screen.getByRole('button', {name: 'Copiar link'})).toBeInTheDocument();

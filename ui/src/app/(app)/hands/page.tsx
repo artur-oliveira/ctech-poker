@@ -1,14 +1,13 @@
 'use client';
 import React, {memo, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
-import {useInfiniteQuery, useQuery, useQueryClient} from '@tanstack/react-query';
+import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
 import {measureElement, useWindowVirtualizer} from '@tanstack/react-virtual';
 import {
   AlertCircle,
   ArrowRight,
-  BookmarkPlus,
+  ChevronDown,
   ChevronRight,
-  FolderHeart,
   History,
   Infinity as InfinityIcon,
   LockKeyhole,
@@ -16,10 +15,7 @@ import {
 } from 'lucide-react';
 import type {HandItem, WalletMode} from '@/lib/api/player';
 import {getHands, handEndedAtMs} from '@/lib/api/player';
-import {
-  getSavedHandFilters, HAND_COLLECTIONS_KEY, listHandCollections, SAVED_HAND_FILTERS_KEY,
-  saveSavedHandFilters, type SavedHandFilter
-} from '@/lib/api/handMeta';
+import {HAND_COLLECTIONS_KEY, listHandCollections} from '@/lib/api/handMeta';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -30,19 +26,17 @@ import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
-import {FilterGroup} from '@/components/FilterGroup';
 import {MyHandSharesPanel} from '@/components/hands/MyHandSharesPanel';
 import {LEADERBOARD_STALE_MS, myRank, myRankKey} from '@/lib/api/gamification';
-import {
-  ALL_TABLES, filterHands, groupHandsByDay, handTables, type HandsFilter, type HandsRow, loadedTotals,
-  NO_FILTER, type OutcomeFilter, shortTableId
-} from '@/lib/handsHistory';
+import {groupHandsByDay, type HandsRow, loadedTotals, shortTableId} from '@/lib/handsHistory';
 
 // The virtual "Marcadas para revisar" collection materializes #349's
 // review-marker toggle here, per that issue's own dependency note — it is
 // not a name a player can type themselves, so it gets a sentinel value
 // distinct from any real collection name.
 const REVIEW_COLLECTION = '__review__';
+// The "no collection" view: every loaded hand, auto-loading as you scroll.
+const ALL_HANDS = '';
 
 function formatDate(endedAtMs: number) {
   return new Date(handEndedAtMs(endedAtMs)).toLocaleString('pt-BR', {
@@ -196,15 +190,13 @@ export default function HandsHistory() {
     [history.data]
   );
 
-  const [filter, setFilter] = useState<HandsFilter>(NO_FILTER);
-  const queryClient = useQueryClient();
-
-  // #347: "Filtros" (outcome/table, ad-hoc or saved) and "Coleções" (hands
-  // marked individually, from /hands or /hands/history — the same
-  // review-marker/collections record #349 writes) are two different lenses
-  // over the same loaded pages, never combined.
-  const [activeTab, setActiveTab] = useState<'filters' | 'collections'>('filters');
-  const savedFilters = useQuery({queryKey: SAVED_HAND_FILTERS_KEY, queryFn: getSavedHandFilters});
+  // #347 collections (hands filed individually, from /hands/history — the
+  // same review-marker/collections record #349 writes) are the one lens left
+  // on this list. They are server data, so the set of names is honest; which
+  // of their hands show still depends on the pages loaded, and the empty
+  // state says so. The outcome/table filters and saved filters were removed:
+  // they only ever filtered the loaded pages, so "Todas (50)" and an empty
+  // "Só vitórias" misled anyone with more than one page of history.
   const collections = useQuery({queryKey: HAND_COLLECTIONS_KEY, queryFn: listHandCollections});
   const collectionNames = useMemo(() => {
     const names = new Set<string>();
@@ -215,15 +207,12 @@ export default function HandsHistory() {
     }
     return [...(hasReview ? [REVIEW_COLLECTION] : []), ...[...names].sort()];
   }, [collections.data]);
-  const [activeCollection, setActiveCollection] = useState<string | null>(null);
-  // Derived during render rather than a useEffect: opening the tab (or the
-  // first page of collections arriving) should pick a default synchronously,
-  // not one render late.
-  if (activeTab === 'collections' && !activeCollection && collectionNames.length) {
-    setActiveCollection(collectionNames[0]);
-  }
+  const [view, setView] = useState(ALL_HANDS);
+  // A collection that stopped existing (its last hand was unfiled elsewhere)
+  // falls back to the whole list rather than an empty view nobody can name.
+  const activeCollection = collectionNames.includes(view) ? view : ALL_HANDS;
   const collectionHandIds = useMemo(() => {
-    if (!activeCollection) return null;
+    if (activeCollection === ALL_HANDS) return null;
     const ids = new Set<string>();
     for (const meta of collections.data ?? []) {
       if (activeCollection === REVIEW_COLLECTION ? meta.review_marked : meta.collections?.includes(activeCollection)) {
@@ -233,43 +222,11 @@ export default function HandsHistory() {
     return ids;
   }, [collections.data, activeCollection]);
 
-  const [savingFilterName, setSavingFilterName] = useState('');
-  const [savingFilter, setSavingFilter] = useState(false);
-  const [filterSaveError, setFilterSaveError] = useState<string | null>(null);
-  async function saveCurrentFilter() {
-    const name = savingFilterName.trim();
-    if (!name) return;
-    setSavingFilter(true);
-    setFilterSaveError(null);
-    try {
-      const next: SavedHandFilter[] = [
-        ...(savedFilters.data ?? []).filter(saved => saved.name !== name),
-        {name, outcome: filter.outcome, table_id: filter.tableId},
-      ];
-      const updated = await saveSavedHandFilters(next);
-      queryClient.setQueryData(SAVED_HAND_FILTERS_KEY, updated);
-      setSavingFilterName('');
-    } catch {
-      setFilterSaveError('Não foi possível salvar o filtro. Tente novamente.');
-    } finally {
-      setSavingFilter(false);
-    }
-  }
-  async function deleteSavedFilter(name: string) {
-    try {
-      const updated = await saveSavedHandFilters((savedFilters.data ?? []).filter(saved => saved.name !== name));
-      queryClient.setQueryData(SAVED_HAND_FILTERS_KEY, updated);
-    } catch {
-      // Leave the list as-is; the player can retry the same removal.
-    }
-  }
-
-  const visible = useMemo(() => {
-    if (activeTab === 'collections') return collectionHandIds ? hands.filter(h => collectionHandIds.has(h.hand_id)) : [];
-    return filterHands(hands, filter);
-  }, [hands, filter, activeTab, collectionHandIds]);
+  const visible = useMemo(
+    () => collectionHandIds ? hands.filter(h => collectionHandIds.has(h.hand_id)) : hands,
+    [hands, collectionHandIds]
+  );
   const rows = useMemo(() => groupHandsByDay(visible), [visible]);
-  const tables = useMemo(() => handTables(hands), [hands]);
   const stats = useMemo(() => loadedTotals(visible), [visible]);
 
   // Lifetime W/L comes from the leaderboard's own counters, the only totals
@@ -279,13 +236,13 @@ export default function HandsHistory() {
 
   const fetchNextPage = history.fetchNextPage;
 
-  // Auto-load only makes sense on the unfiltered list. Under a filter (or the
-  // Coleções tab, always a restrictive subset) the visible list stays short
-  // no matter how many pages arrive, so the sentinel never leaves the
-  // viewport and every appended page immediately triggers the next one — the
-  // whole history downloaded in one cascade. Filtered lists keep the
-  // explicit "Carregar mais mãos" button instead.
-  const autoLoad = activeTab === 'filters' && filter.outcome === 'all' && filter.tableId === ALL_TABLES;
+  // Auto-load only makes sense on the whole list. Under a collection (always
+  // a restrictive subset) the visible list stays short no matter how many
+  // pages arrive, so the sentinel never leaves the viewport and every
+  // appended page immediately triggers the next one — the whole history
+  // downloaded in one cascade. A collection keeps the explicit
+  // "Carregar mais mãos" button instead.
+  const autoLoad = activeCollection === ALL_HANDS;
 
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -328,7 +285,7 @@ export default function HandsHistory() {
             </div>
           </div>
           {/* The bar above only ever describes the pages already loaded (and
-              the active filter). This strip is the honest lifetime number, so
+              the chosen collection). This strip is the honest lifetime number, so
               a heavy player is not left reading "carregadas" as their record. */}
           {lifetime.data?.ranked && lifetime.data.entry && <p className="hands-lifetime" role="note">
             <InfinityIcon aria-hidden="true"/>
@@ -339,87 +296,21 @@ export default function HandsHistory() {
         </div>
       )}
 
-      {!history.isLoading && !history.isError && hands.length > 0 && <div className="hands-filters">
-        <FilterGroup
-          label="Modo de visualização"
-          value={activeTab}
-          options={[
-            {value: 'filters', label: 'Filtros'},
-            {value: 'collections', label: 'Coleções'},
-          ] as const}
-          onChangeAction={setActiveTab}
-        />
-        {activeTab === 'filters' ? <>
-          <FilterGroup
-            label="Filtro por resultado"
-            value={filter.outcome}
-            options={[
-              {value: 'all', label: `Todas (${hands.length})`},
-              {value: 'won', label: 'Só vitórias'},
-              {value: 'lost', label: 'Só derrotas'},
-              {value: 'tied', label: 'Só empates'}
-            ] as const}
-            onChangeAction={(outcome: OutcomeFilter) => setFilter(current => ({...current, outcome}))}
-          />
-          {tables.length > 1 && <FilterGroup
-            label="Filtro por mesa"
-            className="filter-tabs-scroll"
-            value={filter.tableId}
-            options={[
-              {value: ALL_TABLES, label: 'Todas as mesas'},
-              ...tables.map(table => ({
-                value: table.tableId,
-                // Head+tail of the id so the "(count)" suffix stays visible; a CSS
-                // trailing clip would eat it. Full id in the tooltip.
-                label: `Mesa ${shortTableId(table.tableId)} (${table.count})`,
-                title: table.tableId
-              }))
-            ]}
-            onChangeAction={(tableId: string) => setFilter(current => ({...current, tableId}))}
-          />}
-          <div className="hands-saved-filters">
-            {(savedFilters.data ?? []).length > 0
-              ? <div className="filter-tabs filter-tabs-scroll" role="group" aria-label="Filtros salvos">
-                {(savedFilters.data ?? []).map(saved => <span key={saved.name} className="hands-saved-filter">
-                  <button type="button" className="filter-tab"
-                          onClick={() => setFilter({outcome: saved.outcome as OutcomeFilter, tableId: saved.table_id})}>
-                    {saved.name}
-                  </button>
-                  <button type="button" className="hands-saved-filter-remove" aria-label={`Remover filtro ${saved.name}`}
-                          onClick={() => void deleteSavedFilter(saved.name)}>×</button>
-                </span>)}
-              </div>
-              : <p className="hands-saved-filters-empty">Nenhum filtro salvo ainda.</p>}
-            <form className="hands-save-filter-form"
-                  onSubmit={e => {
-                    e.preventDefault();
-                    void saveCurrentFilter();
-                  }}>
-              <label htmlFor="new-saved-filter-name">Salvar filtro atual como</label>
-              <input id="new-saved-filter-name" value={savingFilterName} maxLength={40}
-                     placeholder="Ex.: Minhas bad beats"
-                     onChange={e => setSavingFilterName(e.target.value)}/>
-              <Button type="submit" variant="outline" size="sm" disabled={savingFilter || !savingFilterName.trim()}>
-                <BookmarkPlus aria-hidden="true"/> Salvar
-              </Button>
-            </form>
-            {filterSaveError && <p className="form-error" role="alert">{filterSaveError}</p>}
-          </div>
-        </> : (
-          collectionNames.length === 0
-            ? <p className="hands-saved-filters-empty">
-              Nenhuma coleção ainda. Marque uma mão como &quot;para revisar&quot; ou adicione-a a uma coleção pelo
-              detalhe da mão.
-            </p>
-            : <div className="filter-tabs filter-tabs-scroll" role="group" aria-label="Coleções">
-              {collectionNames.map(name => <button key={name} type="button"
-                                                    className={`filter-tab${activeCollection === name ? ' active' : ''}`}
-                                                    aria-pressed={activeCollection === name}
-                                                    onClick={() => setActiveCollection(name)}>
-                <FolderHeart aria-hidden="true"/> {name === REVIEW_COLLECTION ? 'Marcadas para revisar' : name}
-              </button>)}
-            </div>
-        )}
+      {/* Above the list on purpose: below it, the panel was only reachable
+          after the infinite scroll had fetched the player's entire history. */}
+      <MyHandSharesPanel/>
+
+      {!history.isLoading && !history.isError && collectionNames.length > 0 && <div className="hands-view">
+        <label htmlFor="hands-view-select">Mostrar</label>
+        <span className="hands-view-select">
+          <select id="hands-view-select" value={activeCollection} onChange={e => setView(e.target.value)}>
+            <option value={ALL_HANDS}>Todas as mãos</option>
+            {collectionNames.map(name => <option key={name} value={name}>
+              {name === REVIEW_COLLECTION ? 'Marcadas para revisar' : name}
+            </option>)}
+          </select>
+          <ChevronDown aria-hidden="true"/>
+        </span>
       </div>}
 
       {history.isLoading ?
@@ -449,19 +340,17 @@ export default function HandsHistory() {
             </div> :
             !visible.length ? <div className="lobby-empty hands-state">
               <div>
-                <strong>{activeTab === 'collections' ? 'Esta coleção está vazia' : 'Nenhuma mão com esse filtro'}</strong>
-                <p>As {hands.length} mãos carregadas continuam aqui.
-                  {activeTab === 'collections'
-                    ? ' Marque uma mão nesta lista ou no detalhe da mão para adicioná-la aqui.'
-                    : ' Solte o filtro para vê-las de novo.'}</p>
+                <strong>Nenhuma mão desta coleção por aqui ainda</strong>
+                <p>{history.hasNextPage
+                  ? `Entre as ${hands.length} mãos mais recentes não há nenhuma desta coleção. Carregue mais para procurar nas anteriores.`
+                  : 'Abra uma mão e use o detalhe dela para adicioná-la a esta coleção.'}</p>
               </div>
-              {activeTab === 'filters' &&
-                  <Button variant="outline" size="sm" onClick={() => setFilter(NO_FILTER)}>Limpar filtros</Button>}
+              <Button variant="outline" size="sm" onClick={() => setView(ALL_HANDS)}>Ver todas as mãos</Button>
             </div> : (
               <VirtualHandsList rows={rows} mode={mode}/>
             )}
 
-      {history.hasNextPage && !history.isLoading && !history.isError && visible.length > 0 && (
+      {history.hasNextPage && !history.isLoading && !history.isError && hands.length > 0 && (
         <div className="hands-more" ref={sentinel}>
           <Button variant="outline" size="sm" disabled={history.isFetchingNextPage}
                   onClick={() => void history.fetchNextPage()}>
@@ -471,8 +360,6 @@ export default function HandsHistory() {
                 role="status" aria-label={history.isFetchingNextPage ? 'Carregando mais mãos' : ''}/>
         </div>
       )}
-
-      <MyHandSharesPanel/>
     </AppPageBody>
   </AppPage></TermsGate>;
 }
