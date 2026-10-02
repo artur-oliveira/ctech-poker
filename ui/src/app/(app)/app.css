@@ -1049,17 +1049,28 @@
    read as oversized against the 68px board and the ~11px seat text right
    beside it; --font-size-title (24px) still makes it the largest number on
    the play surface while sitting in proportion. The word "POTE" stays a quiet
-   mono marker. Baseline-aligned rather than centre-aligned so the label sits
-   on the number's own line rather than floating at its middle. */
+   mono marker, baseline-aligned so it sits on the number's own line.
+   Everything secondary (rake, the main/side pot split) is a second, centred
+   line under that readout rather than more items on its row: on the row they
+   were baseline-aligned to a 24px figure, so a stacked side-pot list hung off
+   its first line and the whole group read as top-aligned and lopsided. As a
+   wrapping line of its own it never pushes the figure off the board's centre
+   and folds onto two lines on a narrow felt instead of overflowing it. */
 .game-pot {
     font: 700 var(--font-size-tiny) var(--font-mono);
     letter-spacing: .16em;
     color: var(--felt-text-muted);
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    margin-bottom: 14px
+}
+.game-pot .pot-main {
+    display: flex;
     align-items: baseline;
     justify-content: center;
-    gap: 7px;
-    margin-bottom: 14px
+    gap: 7px
 }
 .game-pot .chip-stack {
     align-self: center
@@ -1070,18 +1081,28 @@
     letter-spacing: -.01em;
     line-height: 1
 }
-.game-pot small {
-    margin-left: 10px;
-    color: var(--felt-text-muted)
+/* width: 0 + min-width: 100% keeps the detail line out of the readout's
+   intrinsic width: it wraps to whatever the figure and the board already
+   span instead of widening the board group past the cards on a phone. The
+   split list joins the same wrapping line as the rake (display: contents), so
+   a narrow felt breaks between entries, never inside one. */
+.game-pot .pot-detail {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 10px;
+    width: 0;
+    min-width: 100%;
+    letter-spacing: 0
 }
 .game-pot .side-pots {
-    display: grid;
-    gap: 2px;
-    letter-spacing: 0;
-    text-align: left
+    display: contents
 }
-.game-pot .side-pots small {
-    margin: 0
+.game-pot .pot-detail small {
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--felt-text-muted);
+    white-space: nowrap
 }
 .board-runouts-heading {
     display: flex;

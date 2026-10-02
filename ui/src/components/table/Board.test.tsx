@@ -25,4 +25,21 @@ describe('Board', () => {
     expect(screen.getAllByRole('img', {name: /Carta comunitária/})).toHaveLength(7);
     expect(screen.getAllByLabelText(/Carta comunitária: ás de copas/i)).toHaveLength(1);
   });
+  test('stacks rake and the pot split on a secondary line under the pot figure', () => {
+    const {container} = render(<Board cards={[]} pot={1500} rake={30}
+                                      pots={[{amount: 1200, eligible_player_ids: []},
+                                        {amount: 300, eligible_player_ids: []}]}/>);
+    const main = container.querySelector('.game-pot > .pot-main');
+    const detail = container.querySelector('.game-pot > .pot-detail');
+    expect(main).toContainElement(screen.getByLabelText('Pote de 1.500 fichas'));
+    expect(detail).toContainElement(screen.getByLabelText('Comissão da casa: 30 fichas'));
+    expect(detail).toContainElement(screen.getByLabelText('Divisão dos potes'));
+    expect(screen.getByLabelText('Principal: 1.200 fichas')).toHaveTextContent('Principal: 1.200');
+    expect(screen.getByLabelText('Lateral 1: 300 fichas')).toHaveTextContent('Lateral 1: 300');
+  });
+
+  test('omits the secondary line when there is neither rake nor a side pot', () => {
+    const {container} = render(<Board cards={[]} pot={100} pots={[{amount: 100, eligible_player_ids: []}]}/>);
+    expect(container.querySelector('.pot-detail')).not.toBeInTheDocument();
+  });
 });
