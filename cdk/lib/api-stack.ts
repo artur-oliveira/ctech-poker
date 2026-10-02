@@ -13,7 +13,6 @@ import {Construct} from 'constructs';
 import {Ec2ScriptRunner, Environment, HaproxyEc2Service, SSM as CtechSSM} from '@aoctech/cdk';
 import {addHandPipelineBudgetAlarm} from './alarms';
 import {
-  API_ASG_SPOT_INSTANCE_TYPES,
   API_CURRENT_ARTIFACT_KEY,
   API_MEMORY_METRIC_NAMESPACE,
   API_MEMORY_PRESSURE_LOG_MESSAGE,
@@ -203,6 +202,8 @@ export class PokerApiStack extends cdk.Stack {
     // deploy time, so editing a shared script changes this user data, versions
     // the launch template and triggers an instance refresh.
     const userData = ec2.UserData.forLinux();
+    // Version the launch template so the migration also replaces existing Spot hosts.
+    userData.addCommands('# EC2 capacity: t4g.nano On-Demand');
     let scripts: Ec2ScriptRunner | undefined;
 
     if (isAlpine) {
@@ -446,18 +447,14 @@ export class PokerApiStack extends cdk.Stack {
       logRemovalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       asgName: this.asgName,
       minCapacity: minimumApiCapacity(environment),
-      // +1 over min: gives CapacityRebalance headroom to launch the
-      // replacement before terminating the spot-interrupted instance instead
-      // of waiting for it to go down first.
+      // Allow one extra instance during replacement or scaling.
       maxCapacity: minimumApiCapacity(environment) + 1,
       // The ASG runs only inside a narrow daytime window: up at 11:55 and down
       // at 13:15 America/Sao_Paulo. Outside it the service is off — inbound
       // webhooks fail and nothing is reachable. Deliberate for a development
       // environment on a single t4g.nano.
       // schedule: {enableCron: '55 11 * * *', disableCron: '15 13 * * *'},
-      spot: {
-        instanceTypes: API_ASG_SPOT_INSTANCE_TYPES.map((type) => new ec2.InstanceType(type)),
-      }
+      onDemand: true,
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);

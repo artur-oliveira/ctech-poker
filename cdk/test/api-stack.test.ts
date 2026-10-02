@@ -120,7 +120,7 @@ test('hand-pipeline duration budget alarm exists only when prod + cloudwatchAlar
   });
 });
 
-test('ASG spreads across multiple AZs and diversifies spot instance types (#35)', () => {
+test('ASG spreads nano On-Demand capacity across multiple AZs', () => {
   const template = Template.fromStack(synthStack());
   // The dummy VPC ec2.Vpc.fromLookup falls back to (no cdk.context.json
   // cache entry for this vpc-id/account/region combination) carries subnets
@@ -132,18 +132,12 @@ test('ASG spreads across multiple AZs and diversifies spot instance types (#35)'
   const [asg] = Object.values(asgResources) as any[];
   expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
 
-  // A correlated spot-reclaim event for a single instance type/pool must not
-  // be able to zero the whole ASG: at least 3 equivalent Graviton burstable
-  // types are offered, so price-capacity-optimized has somewhere else to
-  // bid. Every override carries no WeightedCapacity, so it defaults to 1 —
-  // launching any of these three types still costs exactly one unit of ASG
-  // capacity (minCapacity/maxCapacity are unaffected).
-  const overrides = asg.Properties.MixedInstancesPolicy.LaunchTemplate.Overrides;
-  expect(overrides.length).toBeGreaterThanOrEqual(2);
-  expect(overrides.every((o: any) => o.WeightedCapacity === undefined)).toBe(true);
-  expect(overrides.map((o: any) => o.InstanceType)).toEqual(
-    expect.arrayContaining(['t4g.nano', 't4g.micro',]),
-  );
+  expect(asg.Properties.MixedInstancesPolicy).toBeUndefined();
+  expect(asg.Properties.LaunchTemplate).toBeDefined();
+  expect(asg.Properties.CapacityRebalance).toBe(false);
+  template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+    LaunchTemplateData: {InstanceType: 't4g.nano'},
+  });
 });
 
 test('user data only fetches and runs the shared ctech-cdk scripts', () => {
