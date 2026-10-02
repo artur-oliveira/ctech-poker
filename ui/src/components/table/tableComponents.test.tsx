@@ -41,8 +41,7 @@ function renderActionBar(overrides: Partial<React.ComponentProps<typeof ActionBa
     timeBankMs: 30_000,
     voiceCommands: false,
     shortcutsEnabled: true,
-    betPresetMode: 'mixed',
-    stage: 'pre_flop',
+    betPresetMode: 'pot',
     bigBlind: 100,
     ...overrides,
   };

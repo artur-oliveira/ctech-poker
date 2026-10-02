@@ -28,38 +28,29 @@ const server = [
   {label: 'Máx', value: 4000},
 ];
 
-test('mixed opens in big blinds pre-flop and sizes against the pot afterwards', () => {
-  const preflop = stageBetPresets({
-    mode: 'mixed', stage: 'pre_flop', bigBlind: 100, serverPresets: server,
-    minRaise: 100, maxRaise: 4000, raiseStep: 25,
-  });
-  assert.deepEqual(preflop, [
-    {label: 'BB', value: 100}, {label: '2BB', value: 200},
-    {label: '3BB', value: 300}, {label: 'All in', value: 4000},
-  ]);
-
-  const flop = stageBetPresets({
-    mode: 'mixed', stage: 'flop', bigBlind: 100, serverPresets: server,
+test('pot sizes against the server raise-to figures, snapped to the step', () => {
+  const pot = stageBetPresets({
+    mode: 'pot', bigBlind: 100, serverPresets: server,
     minRaise: 100, maxRaise: 4000, raiseStep: 25,
   });
   // 220 snaps to the 25 grid.
-  assert.deepEqual(flop.map(preset => preset.label), ['1/3', '1/2', '2/3', 'All in']);
-  assert.equal(flop[0].value, 225);
+  assert.deepEqual(pot.map(preset => preset.label), ['1/3', '1/2', '2/3', 'All in']);
+  assert.equal(pot[0].value, 225);
 });
 
-test('bb and pot ignore the street entirely', () => {
-  const options = {bigBlind: 100, serverPresets: server, minRaise: 100, maxRaise: 4000, raiseStep: 25} as const;
-  assert.deepEqual(
-    stageBetPresets({...options, mode: 'bb', stage: 'river'}).map(preset => preset.label),
-    ['BB', '2BB', '3BB', 'All in']);
-  assert.deepEqual(
-    stageBetPresets({...options, mode: 'pot', stage: 'pre_flop'}).map(preset => preset.label),
-    ['1/3', '1/2', '2/3', 'All in']);
+test('bb is big blind multiples', () => {
+  assert.deepEqual(stageBetPresets({
+    mode: 'bb', bigBlind: 100, serverPresets: server,
+    minRaise: 100, maxRaise: 4000, raiseStep: 25,
+  }), [
+    {label: 'BB', value: 100}, {label: '2BB', value: 200},
+    {label: '3BB', value: 300}, {label: 'All in', value: 4000},
+  ]);
 });
 
 test('a fraction the server did not price is dropped, never shown below a smaller one', () => {
   const presets = stageBetPresets({
-    mode: 'pot', stage: 'flop', bigBlind: 100,
+    mode: 'pot', bigBlind: 100,
     serverPresets: [{label: 'Mín', value: 100}, {label: '½ pote', value: 175}],
     minRaise: 100, maxRaise: 4000, raiseStep: 25,
   });
@@ -68,21 +59,21 @@ test('a fraction the server did not price is dropped, never shown below a smalle
 
 test('a short stack collapses onto All in instead of a fraction that means everything', () => {
   assert.deepEqual(stageBetPresets({
-    mode: 'pot', stage: 'flop', bigBlind: 100, serverPresets: server,
+    mode: 'pot', bigBlind: 100, serverPresets: server,
     minRaise: 150, maxRaise: 150, raiseStep: 25,
   }), [{label: 'All in', value: 150}]);
 });
 
 test('no legal raise, no presets', () => {
   assert.deepEqual(stageBetPresets({
-    mode: 'mixed', stage: 'flop', bigBlind: 100, serverPresets: server,
+    mode: 'pot', bigBlind: 100, serverPresets: server,
     minRaise: 400, maxRaise: 0, raiseStep: 25,
   }), []);
 });
 
 test('a zero big blind and a zero step cannot divide by zero', () => {
   assert.deepEqual(stageBetPresets({
-    mode: 'bb', stage: 'flop', bigBlind: 0, serverPresets: server,
+    mode: 'bb', bigBlind: 0, serverPresets: server,
     minRaise: 10, maxRaise: 4000, raiseStep: 0,
   }).map(preset => preset.value), [10, 4000]);
 });

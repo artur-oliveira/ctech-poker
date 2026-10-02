@@ -21,22 +21,27 @@ const DefaultDeckVariant = "four-color"
 const DefaultTableTheme = "classic"
 
 // Bet-preset modes decide what the table's quick-bet buttons are sized
-// against. "mixed" is the default and the only value an absent preference
+// against. "pot" is the default and the only value an absent preference
 // reads back as — the server normalizes, so the client needs no fallback.
 const (
-	BetPresetModeMixed = "mixed" // pre-flop in big blinds, post-flop in pot fractions
-	BetPresetModeBB    = "bb"    // always big-blind based
-	BetPresetModePot   = "pot"   // always pot based
+	BetPresetModeBB  = "bb"  // always big-blind based (opt-in)
+	BetPresetModePot = "pot" // always pot based (default)
 )
 
-const DefaultBetPresetMode = BetPresetModeMixed
+// BetPresetModeLegacyMixed is the retired default (pre-flop in big blinds,
+// post-flop in pot fractions). It is no longer stored: a write of it is
+// mapped to pot so older clients keep working, and a profile that still
+// holds it reads back as pot.
+const BetPresetModeLegacyMixed = "mixed"
 
-// IsValidBetPresetMode reports whether mode is one of the three accepted
+const DefaultBetPresetMode = BetPresetModePot
+
+// IsValidBetPresetMode reports whether mode is one of the two accepted
 // values. Empty is not valid on write — an absent JSON key is how a caller
 // says "don't touch this"; the profile getter is what defaults it.
 func IsValidBetPresetMode(mode string) bool {
 	switch mode {
-	case BetPresetModeMixed, BetPresetModeBB, BetPresetModePot:
+	case BetPresetModeBB, BetPresetModePot:
 		return true
 	}
 	return false
@@ -136,7 +141,7 @@ func (p *PlayerProfile) EffectiveTableTheme() string {
 }
 
 // EffectiveBetPresetMode defaults an unset (or unrecognised, e.g. written by
-// an older build) preference to mixed, same rationale as
+// an older build, including the retired "mixed") preference to pot, same rationale as
 // EffectiveDeckVariant.
 func (p *PlayerProfile) EffectiveBetPresetMode() string {
 	if p == nil || !IsValidBetPresetMode(p.BetPresetMode) {

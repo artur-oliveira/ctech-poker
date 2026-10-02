@@ -404,7 +404,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 	if req.BetPresetMode != nil {
 		if _, err := h.players.SetBetPresetMode(c.Context(), userID, *req.BetPresetMode); err != nil {
 			if errors.Is(err, player.ErrInvalidBetPresetMode) {
-				return problem.BadRequest("bet_preset_mode must be one of mixed, bb, pot").Send(c)
+				return problem.BadRequest("bet_preset_mode must be one of bb, pot").Send(c)
 			}
 			return problem.InternalServer("failed to update bet preset mode", c, err).Send(c)
 		}

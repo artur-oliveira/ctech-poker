@@ -7,12 +7,13 @@ import type {TableThemeId} from '../tablePreferences';
 export type WalletMode = 'sandbox' | 'real';
 
 /** What the table's quick-bet presets are sized against (#341). The server
- * normalizes an unset or unrecognised value to 'mixed' on read; the client
+ * normalizes an unset or unrecognised value (including the retired 'mixed')
+ * to 'pot' on read; the client
  * still defaults defensively, because an older server answers with no field
  * at all. */
-export type BetPresetMode = 'mixed' | 'bb' | 'pot';
-export const DEFAULT_BET_PRESET_MODE: BetPresetMode = 'mixed';
-export const BET_PRESET_MODES: BetPresetMode[] = ['mixed', 'bb', 'pot'];
+export type BetPresetMode = 'bb' | 'pot';
+export const DEFAULT_BET_PRESET_MODE: BetPresetMode = 'pot';
+export const BET_PRESET_MODES: BetPresetMode[] = ['pot', 'bb'];
 
 /** Guards a profile value that may be absent (older server) or a string the
  * client does not know (newer server). */

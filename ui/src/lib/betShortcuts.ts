@@ -35,11 +35,9 @@ export function betShortcutAmount(
   return undefined;
 }
 
-/** The stage-aware quick-bet row (#341). Which set shows is a player
- * preference (`bet_preset_mode`): 'bb' is always big-blind multiples, 'pot' is
- * always pot fractions, and 'mixed' — the default — follows how the street is
- * actually talked about, opening in big blinds pre-flop and sizing against the
- * pot from the flop on.
+/** The quick-bet row (#341). Which set shows is a player preference
+ * (`bet_preset_mode`): 'pot' — the default — is pot fractions on every street,
+ * and 'bb' is an opt-in for big-blind multiples on every street.
  *
  * Pot fractions are the server's own raise-to figures (`legal_actions`), never
  * `pot * fraction`: a pot-size raise has to absorb the outstanding call, and
@@ -52,9 +50,8 @@ export function betShortcutAmount(
  * dropped keeping the LAST holder of each value: a short stack squeezes several
  * fractions onto the same all-in total, and the button left standing must be
  * the one that says All in, not a ⅓ that silently means "everything". */
-export function stageBetPresets({mode, stage, bigBlind, serverPresets, minRaise, maxRaise, raiseStep}: {
+export function stageBetPresets({mode, bigBlind, serverPresets, minRaise, maxRaise, raiseStep}: {
   mode: BetPresetMode;
-  stage: string;
   bigBlind: number;
   serverPresets: { label: string; value: number }[];
   minRaise: number;
@@ -63,8 +60,7 @@ export function stageBetPresets({mode, stage, bigBlind, serverPresets, minRaise,
 }): { label: string; value: number }[] {
   if (maxRaise < minRaise) return [];
   const clamp = (value: number) => clampSnapRaise(value, minRaise, maxRaise, raiseStep);
-  const useBigBlind = mode === 'bb' || (mode === 'mixed' && stage === 'pre_flop');
-  const base = useBigBlind
+  const base = mode === 'bb'
     ? BB_PRESETS.map(({label, multiple}) => ({label, value: clamp(multiple * Math.max(1, bigBlind))}))
     // A bigger fraction must never cost less than a smaller one. An older
     // server (or the dev mock) omits some of the raise-to fields, and

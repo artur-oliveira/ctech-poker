@@ -240,23 +240,24 @@ describe('TablePreferencesDialog bet presets (#341)', () => {
     listCosmeticPurchases.mockResolvedValue([]);
   });
 
-  test('offers the three modes and persists the chosen one through updateMe', async () => {
+  test('offers the two modes and persists the chosen one through updateMe', async () => {
     getMe.mockResolvedValue(player({bet_preset_mode: 'bb'}));
     updateMe.mockResolvedValue(player({bet_preset_mode: 'pot'}));
     renderDialog();
     await screen.findByText('Presets de aposta');
-    for (const label of ['Mista (padrão)', 'Big blind', 'Pote']) {
+    for (const label of ['Pote (padrão)', 'Big blind']) {
       expect(screen.getByRole('button', {name: label})).toBeInTheDocument();
     }
-    await userEvent.click(screen.getByRole('button', {name: 'Pote'}));
+    expect(screen.queryByRole('button', {name: /Mista/})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Pote (padrão)'}));
     expect(updateMe).toHaveBeenCalledWith({bet_preset_mode: 'pot'}, expect.anything());
   });
 
-  test('an unknown stored mode falls back to the mixed default instead of blanking the control', async () => {
-    getMe.mockResolvedValue(player({bet_preset_mode: 'roulette' as never}));
+  test.each(['roulette', 'mixed'])('a stored %s mode falls back to the pot default instead of blanking the control', async mode => {
+    getMe.mockResolvedValue(player({bet_preset_mode: mode as never}));
     renderDialog();
     expect(await screen.findByText('Presets de aposta')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Mista (padrão)'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Pote (padrão)'})).toBeInTheDocument();
   });
 
   test('a rejected save reports itself instead of silently reverting', async () => {

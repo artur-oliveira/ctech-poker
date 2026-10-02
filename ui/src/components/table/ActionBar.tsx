@@ -49,9 +49,8 @@ type Props = {
   voiceCommands: boolean;
   shortcutsEnabled: boolean;
   // Sizing inputs for the quick-bet row: which set the player asked for, and
-  // the street/blind it is sized against. See `stageBetPresets`.
+  // the big blind a 'bb' set is sized against. See `stageBetPresets`.
   betPresetMode: BetPresetMode;
-  stage: string;
   bigBlind: number;
 }
 
@@ -367,7 +366,7 @@ function PreselectionControls({
  * resets to the street minimum on every new decision without an effect. */
 function RaiseControl({
                         minRaise, maxRaise, raiseStep, presets, disabled, pending, onRaise, onExpandedChange,
-                        shortcutsEnabled, betPresetMode, stage, bigBlind
+                        shortcutsEnabled, betPresetMode, bigBlind
                       }: {
   minRaise: number; maxRaise: number; raiseStep: number; disabled: boolean; pending: boolean;
   presets: { label: string; value: number }[];
@@ -375,7 +374,6 @@ function RaiseControl({
   onExpandedChange: (expanded: boolean) => void;
   shortcutsEnabled: boolean;
   betPresetMode: BetPresetMode;
-  stage: string;
   bigBlind: number;
 }) {
   const [amount, setAmount] = useState(minRaise);
@@ -392,7 +390,7 @@ function RaiseControl({
   // Already snapped and clamped by `stageBetPresets`, so a pick can never be
   // the silent clamp the old server-preset row had to signal.
   const quickPresets = stageBetPresets({
-    mode: betPresetMode, stage, bigBlind, serverPresets: presets, minRaise, maxRaise, raiseStep
+    mode: betPresetMode, bigBlind, serverPresets: presets, minRaise, maxRaise, raiseStep
   });
 
   const hold = useHoldRepeat();
@@ -545,7 +543,6 @@ export function ActionBar({
                             voiceCommands,
                             shortcutsEnabled,
                             betPresetMode,
-                            stage,
                             bigBlind
                           }: Props) {
   const chips = useChipFormat();
@@ -647,7 +644,7 @@ export function ActionBar({
                       disabled={unavailable || !available.raise} presets={raisePresets}
                       pending={pending === 'raise'} onRaise={onRaise} onExpandedChange={setRaiseSizing}
                       shortcutsEnabled={shortcutsEnabled} betPresetMode={betPresetMode}
-                      stage={stage} bigBlind={bigBlind}/>}
+                      bigBlind={bigBlind}/>}
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"

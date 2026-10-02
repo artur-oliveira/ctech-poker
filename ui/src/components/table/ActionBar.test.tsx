@@ -34,8 +34,7 @@ function renderActionBar(overrides: Partial<React.ComponentProps<typeof ActionBa
     timeBankMs: 30_000,
     voiceCommands: false,
     shortcutsEnabled: true,
-    betPresetMode: 'mixed',
-    stage: 'pre_flop',
+    betPresetMode: 'pot',
     bigBlind: 100,
     ...overrides,
   };
@@ -55,7 +54,7 @@ afterEach(() => {
 
 describe('ActionBar raise controls', () => {
   test('jumps the amount to a preset and keeps the raise button in sync', async () => {
-    renderActionBar();
+    renderActionBar({betPresetMode: 'bb'});
     await userEvent.click(screen.getByRole('button', {name: '2BB: aumentar para 200'}));
     expect(slider()).toHaveValue('200');
     expect(slider()).toHaveAttribute('aria-valuetext', 'Total 200 fichas');
@@ -433,48 +432,35 @@ describe('ActionBar keyboard shortcuts toggle', () => {
   });
 });
 
-describe('ActionBar stage-aware bet presets (#341)', () => {
+describe('ActionBar bet presets (#341)', () => {
   const potPresets = [
     {label: 'Mín', value: 150}, {label: '⅓ pote', value: 220}, {label: '½ pote', value: 250},
     {label: '⅔ pote', value: 300}, {label: 'Pote', value: 400}, {label: 'Máx', value: 1000},
   ];
 
-  test('mixed opens in big blinds pre-flop', () => {
-    renderActionBar({betPresetMode: 'mixed', stage: 'pre_flop'});
-    for (const label of ['BB', '2BB', '3BB', 'All in']) {
-      expect(screen.getByRole('button', {name: new RegExp(`^${label}: `)})).toBeInTheDocument();
-    }
-    expect(screen.queryByRole('button', {name: /^1\/2: /})).not.toBeInTheDocument();
-  });
-
-  test('mixed sizes against the pot from the flop on, using the server raise-to figures', async () => {
-    renderActionBar({betPresetMode: 'mixed', stage: 'flop', raisePresets: potPresets});
+  test('pot sizes against the pot using the server raise-to figures', async () => {
+    renderActionBar({betPresetMode: 'pot', raisePresets: potPresets});
     expect(screen.getByRole('button', {name: '1/3: aumentar para 225'})).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: '2/3: aumentar para 300'}));
     expect(slider()).toHaveValue('300');
-    expect(screen.queryByRole('button', {name: /^2BB: /})).not.toBeInTheDocument();
-  });
-
-  test('bb keeps big blinds on every street', () => {
-    renderActionBar({betPresetMode: 'bb', stage: 'river', raisePresets: potPresets});
-    expect(screen.getByRole('button', {name: '3BB: aumentar para 300'})).toBeInTheDocument();
-  });
-
-  test('pot keeps pot fractions pre-flop', () => {
-    renderActionBar({betPresetMode: 'pot', stage: 'pre_flop', raisePresets: potPresets});
-    expect(screen.getByRole('button', {name: '1/2: aumentar para 250'})).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /^BB: /})).not.toBeInTheDocument();
+  });
+
+  test('bb is big blind multiples', () => {
+    renderActionBar({betPresetMode: 'bb', raisePresets: potPresets});
+    expect(screen.getByRole('button', {name: '3BB: aumentar para 300'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /^1\/2: /})).not.toBeInTheDocument();
   });
 
   test('a preset below the minimum clamps up to it instead of disappearing', async () => {
     // BB = 100 against a 150 minimum.
-    renderActionBar({betPresetMode: 'mixed', stage: 'pre_flop'});
+    renderActionBar({betPresetMode: 'bb'});
     await userEvent.click(screen.getByRole('button', {name: 'BB: aumentar para 150'}));
     expect(slider()).toHaveValue('150');
   });
 
   test('a short stack collapses the row onto All in rather than a fraction that lies', () => {
-    renderActionBar({betPresetMode: 'pot', stage: 'flop', minRaise: 150, maxRaise: 150, raisePresets: potPresets});
+    renderActionBar({betPresetMode: 'pot', minRaise: 150, maxRaise: 150, raisePresets: potPresets});
     expect(screen.getByRole('button', {name: 'All in: aumentar para 150'})).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /^1\/3: /})).not.toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /^1\/2: /})).not.toBeInTheDocument();
@@ -493,8 +479,8 @@ function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof Act
     actionKey: 'hand-1:pre_flop', isTurn: true, connected: true, pending: null, error: null,
     onDismissErrorAction: vi.fn(), canPreselect: false, supportsCallPreselection: false, selectionScope: '',
     preselection: null, preselectionAmount: 0, prospectiveCallAmount: 0, onPreselectAction: vi.fn(() => true),
-    timeBankMs: 30_000, voiceCommands: false, shortcutsEnabled: true, betPresetMode: 'mixed',
-    stage: 'pre_flop', bigBlind: 100, ...overrides,
+    timeBankMs: 30_000, voiceCommands: false, shortcutsEnabled: true, betPresetMode: 'pot',
+    bigBlind: 100, ...overrides,
   } as React.ComponentProps<typeof ActionBar>;
 }
 

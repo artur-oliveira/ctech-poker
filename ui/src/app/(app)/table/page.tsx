@@ -429,7 +429,6 @@ function TableContent() {
         voiceCommands={preferences.voiceCommands}
         shortcutsEnabled={preferences.keyboardShortcuts}
         betPresetMode={betPresetMode(profile?.bet_preset_mode)}
-        stage={s.stage}
         bigBlind={bigBlind}
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}

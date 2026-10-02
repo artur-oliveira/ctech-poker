@@ -420,13 +420,13 @@ func TestSetBetPresetMode(t *testing.T) {
 	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
 	svc := NewService(store)
 
-	// Unset reads back as mixed — the server normalizes so the client has no
+	// Unset reads back as pot — the server normalizes so the client has no
 	// fallback logic of its own.
-	if got := store.profile.EffectiveBetPresetMode(); got != BetPresetModeMixed {
-		t.Fatalf("EffectiveBetPresetMode on an unset profile = %q, want %q", got, BetPresetModeMixed)
+	if got := store.profile.EffectiveBetPresetMode(); got != BetPresetModePot {
+		t.Fatalf("EffectiveBetPresetMode on an unset profile = %q, want %q", got, BetPresetModePot)
 	}
 
-	for _, mode := range []string{BetPresetModeMixed, BetPresetModeBB, BetPresetModePot} {
+	for _, mode := range []string{BetPresetModeBB, BetPresetModePot} {
 		profile, err := svc.SetBetPresetMode(context.Background(), "u1", mode)
 		if err != nil {
 			t.Fatalf("SetBetPresetMode(%q): %v", mode, err)
@@ -436,21 +436,35 @@ func TestSetBetPresetMode(t *testing.T) {
 		}
 	}
 
+	// The retired "mixed" mode is still accepted from older clients, but is
+	// stored as pot.
+	store.profile.BetPresetMode = BetPresetModeBB
+	profile, err := svc.SetBetPresetMode(context.Background(), "u1", BetPresetModeLegacyMixed)
+	if err != nil {
+		t.Fatalf("SetBetPresetMode(mixed): %v", err)
+	}
+	if profile.BetPresetMode != BetPresetModePot {
+		t.Fatalf("BetPresetMode after a mixed write = %q, want %q", profile.BetPresetMode, BetPresetModePot)
+	}
+
+	store.profile.BetPresetMode = BetPresetModeBB
 	for _, bad := range []string{"", "   ", "MIXED", "big-blind", "potato"} {
 		if _, err := svc.SetBetPresetMode(context.Background(), "u1", bad); !errors.Is(err, ErrInvalidBetPresetMode) {
 			t.Fatalf("SetBetPresetMode(%q) = %v, want ErrInvalidBetPresetMode", bad, err)
 		}
 	}
 	// A rejected write leaves the previous value alone.
-	if store.profile.BetPresetMode != BetPresetModePot {
-		t.Fatalf("BetPresetMode = %q after rejections, want %q", store.profile.BetPresetMode, BetPresetModePot)
+	if store.profile.BetPresetMode != BetPresetModeBB {
+		t.Fatalf("BetPresetMode = %q after rejections, want %q", store.profile.BetPresetMode, BetPresetModeBB)
 	}
 
-	// A value written by an older build that is no longer valid still reads
-	// back as the default rather than leaking through.
-	store.profile.BetPresetMode = "gone"
-	if got := store.profile.EffectiveBetPresetMode(); got != BetPresetModeMixed {
-		t.Fatalf("EffectiveBetPresetMode on an unknown value = %q, want %q", got, BetPresetModeMixed)
+	// A value written by an older build that is no longer valid — including
+	// a stored "mixed" — reads back as the default rather than leaking through.
+	for _, stale := range []string{"gone", BetPresetModeLegacyMixed} {
+		store.profile.BetPresetMode = stale
+		if got := store.profile.EffectiveBetPresetMode(); got != BetPresetModePot {
+			t.Fatalf("EffectiveBetPresetMode on %q = %q, want %q", stale, got, BetPresetModePot)
+		}
 	}
 }
 

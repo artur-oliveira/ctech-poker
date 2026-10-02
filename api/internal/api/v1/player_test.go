@@ -967,22 +967,23 @@ func TestUpdateMeBetPresetMode(t *testing.T) {
 	store := &fakePlayerStore{}
 	app := newApp(store)
 
-	// Absent preference is normalized to "mixed" on read.
+	// Absent preference is normalized to "pot" on read.
 	resp := post(app, `{}`)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
-	if got := decodeMode(resp); got != "mixed" {
-		t.Fatalf("bet_preset_mode = %q, want %q", got, "mixed")
+	if got := decodeMode(resp); got != "pot" {
+		t.Fatalf("bet_preset_mode = %q, want %q", got, "pot")
 	}
 
-	for _, mode := range []string{"bb", "pot", "mixed"} {
-		resp := post(app, `{"bet_preset_mode":"`+mode+`"}`)
+	// The retired "mixed" is accepted from older clients and stored as pot.
+	for _, tc := range []struct{ send, want string }{{"pot", "pot"}, {"mixed", "pot"}, {"bb", "bb"}} {
+		resp := post(app, `{"bet_preset_mode":"`+tc.send+`"}`)
 		if resp.StatusCode != fiber.StatusOK {
-			t.Fatalf("status = %d for %q", resp.StatusCode, mode)
+			t.Fatalf("status = %d for %q", resp.StatusCode, tc.send)
 		}
-		if got := decodeMode(resp); got != mode {
-			t.Fatalf("bet_preset_mode = %q, want %q", got, mode)
+		if got := decodeMode(resp); got != tc.want {
+			t.Fatalf("bet_preset_mode = %q for %q, want %q", got, tc.send, tc.want)
 		}
 	}
 
@@ -990,7 +991,7 @@ func TestUpdateMeBetPresetMode(t *testing.T) {
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 for an unknown bet_preset_mode", resp.StatusCode)
 	}
-	if store.profile.BetPresetMode != "mixed" {
-		t.Fatalf("BetPresetMode = %q after a rejected write, want the previous %q", store.profile.BetPresetMode, "mixed")
+	if store.profile.BetPresetMode != "bb" {
+		t.Fatalf("BetPresetMode = %q after a rejected write, want the previous %q", store.profile.BetPresetMode, "bb")
 	}
 }
