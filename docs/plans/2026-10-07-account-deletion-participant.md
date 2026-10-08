@@ -11,7 +11,7 @@
 - ack the result to ctech-account.
 
 **Architecture:**
-- `gopkg.aoctech.app/api-commons` v1.13.1 provides the contract.
+- `gopkg.aoctech.app/api-commons` v1.14.0 provides the contract.
   - `erasure.Store` keeps the lock/tombstone in `{env}_poker_erasure_state`.
   - `erasure.Consumer` runs the SQS loop and lock handling.
   - `erasure.AckClient` posts the acks.
@@ -34,7 +34,7 @@ The wire contract is fixed by ctech-account `docs/plans/2026-10-07-account-delet
 ## Global Constraints
 
 - Branch `feat/account-deletion-participant` from `main`. Conventional Commits. **No `Co-Authored-By` or any Claude/Anthropic attribution** in commits or PRs.
-- `gopkg.aoctech.app/api-commons` **v1.13.1** (poker pins v1.11.0 today).
+- `gopkg.aoctech.app/api-commons` **v1.14.0** (poker pins v1.11.0 today).
 - Service id: `poker`. Every name below is literal.
   - Eligibility:
     - Route: `GET /v1.0/internal/erasure/eligibility/:sub`.
@@ -43,7 +43,8 @@ The wire contract is fixed by ctech-account `docs/plans/2026-10-07-account-delet
     - Any failure is a `503`, never "eligible".
   - Ack:
     - `POST {CTECH_URL}/v1.0/internal/erasure/ack`, body `erasure.Ack`.
-    - Client-credentials token from `{CTECH_URL}/v1.0/token`, scope `internal:account:erasure-ack`, using poker's existing confidential client `POKER_CLIENT_ID` / `POKER_CLIENT_SECRET`.
+    - Client-credentials token from `{CTECH_URL}/v1.0/token`, scope `internal:account:erasure-ack`, using a **dedicated** confidential client: `ERASURE_ACK_CLIENT_ID` / `ERASURE_ACK_CLIENT_SECRET`, from SSM `/ctech/{env}/poker/erasure-ack-client-id` and `/ctech/{env}/poker/erasure-ack-client-secret`. It is **not** `POKER_CLIENT_ID`.
+  - Lock fan-out: `erasure.Consumer.OnLock` (api-commons v1.14.0) force-closes every open socket of the locked sub on every instance, both table sockets (seated or spectating) and gateway sockets. It goes through the `ws.Registry` key `erasure-lock#<sub>`. The connect-time check stays.
   - SNS topic `{env}-account-user-erasure`. Its ARN is in SSM `/ctech/{env}/account/erasure-topic-arn`.
     - Subscribe queue `{env}-poker-user-erasure` (DLQ `{env}-poker-user-erasure-dlq`, `maxReceiveCount` 5).
     - Raw message delivery on.
@@ -58,7 +59,7 @@ The wire contract is fixed by ctech-account `docs/plans/2026-10-07-account-delet
 - Reports filed by or against the user are retained anonymized for **1 year** (`ttl` capped at `now + 365 d`).
 - After every Go task, run from `api/`: `go vet ./... && go vet -tags integration ./... && go test ./...`. All must be green (`api/CLAUDE.md`: vet the integration tag after any signature change).
 - Integration tests need DynamoDB Local: `docker compose -f api/docker-compose.test.yml up -d` (port 8555).
-- Mandatory documentation policy (root, `api/`, `cdk/` CLAUDE.md): every behavior/config/infra change is documented in the same branch (Task 10).
+- Mandatory documentation policy (root, `api/`, `cdk/` CLAUDE.md): every behavior/config/infra change is documented in the same branch (Task 11).
 
 ## Rulings
 
@@ -68,8 +69,10 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
   - Every participant shares the AWS account, and poker's table names all carry `poker_` (`cdk/lib/dynamodb-stack.ts`).
   - The existing IAM wildcard `{env}_poker*` covers it.
   - *Cost:* a rename (nobody outside poker reads it).
-- **R2 Acks use poker's existing confidential client** (`POKER_CLIENT_ID`). The operator grants it `internal:account:erasure-ack` and lists that client id in account's `ERASURE_PARTICIPANTS`.
-  - *Cost:* one client carries both wallet and ack scopes. Splitting later means two new SSM params.
+- **R2 (decided by the user 2026-10-08) Acks use a dedicated confidential client.**
+  - Config: `ERASURE_ACK_CLIENT_ID` / `ERASURE_ACK_CLIENT_SECRET`, from SSM `/ctech/{env}/poker/erasure-ack-client-id` and `-secret`.
+  - The operator creates the client in ctech-account, grants it only `internal:account:erasure-ack`, and lists its id as poker's `client_id` in account's `ERASURE_PARTICIPANTS`.
+  - Both values are required in prod.
 - **R3 Every non-GET route verifies with `VerifyClaimsStrict`**, not only money routes. If the revocation list is unreachable, the route fails closed with `503`.
   - Valkey is already mandatory in prod (ws registry), so a Valkey outage already breaks writes.
   - *Cost:* none beyond that.
@@ -78,10 +81,12 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
   - On a store error, writes return `503` and reads fail open.
   - *Cost:* one strongly consistent `GetItem` per authenticated request (~1 RRU).
 - **R5 A locked user may still `POST /v1.0/rooms/:id/leave`.** Money only flows back to the player on that path.
-- **R6 WebSockets check the lock at connect only (fail closed).** Sockets already open at lock time are not cut.
-  - Joining, buying and every money path are HTTP and blocked. Seated users are blocked by eligibility.
-  - *Cost:* a spectator socket opened before the lock can still chat. Those rows land on hands the user did not play, so the purge does not see them, and the S3 archive keeps them.
-- **R7 The user's own rows are erased, not anonymized**, where only the user could ever read them:
+- **R6 (decided by the user 2026-10-08) Sockets open at lock time are force-closed, and connect is still checked (fail closed).**
+  - The consumer's `OnLock` hook (api-commons v1.14.0) fires when a `user.locked`, or the synthetic lock applied on `user.erase`, moves the sub to locked. No-op redeliveries do not fire it.
+  - The hook broadcasts on `ws.Registry` key `erasure-lock#<sub>`. Valkey pub/sub fans that out to every instance.
+  - Every table socket (seated or spectating) and every gateway socket registers a closer under that key at connect. The closer closes the socket, and the gateway's read loop then runs its normal cleanup.
+  - *Cost if a broadcast is lost* (Valkey blip): the socket lives until it disconnects. The connect-time check and the HTTP lock still hold.
+- **R7 (legal approved 2026-10-08) The user's own rows are erased, not anonymized**, where only the user could ever read them:
   - their own `poker_player_hands` partition;
   - `poker_player_matchups`, which is readable only with both real ids, and re-keying would swap the pair's low/high sides.
 
@@ -89,7 +94,7 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
   - *Cost:* if legal reads "anonymize" literally, head-to-head aggregates must be re-keyed instead (side swap logic in `matchup`).
 - **R8 One pseudonym per purge *run*.** A crash plus redelivery can give the user two pseudonyms across hands, never two inside one row.
   - *Cost:* minor inconsistency in others' histories after a crash.
-- **R9 Report retention** (inventory says `TODO`):
+- **R9 (legal approved 2026-10-08) Report retention** (the inventory said `TODO`):
   - reports filed by or against the user are kept anonymized for 1 year;
   - text the erased user wrote is dropped: `details` on reports they filed, and `evidence_message` (their copied chat) on reports against them.
   - *Cost:* needs legal sign-off (open question 1).
@@ -102,7 +107,7 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
   - events the user caused in inboxes of people who are not friends: TTL 90 d.
   - free text written by *other* players that mentions the user's name.
   - *Cost:* residual opaque ids for at most the TTL. Names inside others' free text survive.
-- **R12 The eligibility route lives under `/v1.0`.** Account's `ERASURE_PARTICIPANTS` entry for poker is `{"service":"poker","url":"https://poker-api[-env].aoctech.app/v1.0","audience":"<poker SERVICE_AUDIENCE>","client_id":"<POKER_CLIENT_ID>"}`.
+- **R12 The eligibility route lives under `/v1.0`.** Account's `ERASURE_PARTICIPANTS` entry for poker is `{"service":"poker","url":"https://poker-api[-env].aoctech.app/v1.0","audience":"<poker SERVICE_AUDIENCE>","client_id":"<ERASURE_ACK_CLIENT_ID>"}`. ctech-account's prod `SELF_CLIENT_ID` is `accounts` with no override (confirmed 2026-10-08), so `ERASURE_ACCOUNT_CLIENT_ID` keeps its default.
 - **R13 No tournament blocker.** No tournament concept exists in code (grep: none). "Chips held in a game":
   - a seat at a real-money table is covered by `poker.seated_at_table`;
   - an unresolved settlement still holding wallet holds becomes `poker.chips_held`.
@@ -149,7 +154,7 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
 
 ---
 
-### Task 1: api-commons v1.13.1, revocation, strict writes
+### Task 1: api-commons v1.14.0, revocation, strict writes
 
 **Files:**
 - Modify: `api/go.mod`, `api/go.sum`
@@ -158,15 +163,15 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
 - Test: `api/internal/api/v1/auth_test.go`
 
 **Interfaces:**
-- Consumes: `jwtverify.Verifier.WithRevocation(cache.Backend) *Verifier`, `VerifyClaimsStrict`, `jwtverify.Revoke`, `jwtverify.ErrRevocationUnavailable` (api-commons v1.13.1).
+- Consumes: `jwtverify.Verifier.WithRevocation(cache.Backend) *Verifier`, `VerifyClaimsStrict`, `jwtverify.Revoke`, `jwtverify.ErrRevocationUnavailable` (api-commons v1.14.0).
 - Produces: `func unavailable(detail string) *problem.Problem` in package `v1` (a 503 problem), used by Tasks 2–3.
 
 - [ ] **Step 1: Upgrade the dependency**
 
 ```bash
-cd api && go get gopkg.aoctech.app/api-commons@v1.13.1 && go mod tidy && go build ./...
+cd api && go get gopkg.aoctech.app/api-commons@v1.14.0 && go mod tidy && go build ./...
 ```
-Expected: no output from `go build`. (v1.12–v1.13 only add `erasure`, `jwtverify` revocation and an optional `ws.Publisher`, with no breaking change.)
+Expected: no output from `go build`. (v1.12–v1.14 only add `erasure` (incl. `Consumer.OnLock`, v1.14.0), `jwtverify` revocation and an optional `ws.Publisher`, with no breaking change. v1.14.0 is released by a separate ctech-go-common plan: this task is blocked until the tag exists — `go list -m gopkg.aoctech.app/api-commons@v1.14.0` must resolve.)
 
 - [ ] **Step 2: Write the failing test** — append to `api/internal/api/v1/auth_test.go` and add `"context"` and `"errors"` to its imports:
 
@@ -281,7 +286,7 @@ Expected: `ok  	gopkg.aoctech.app/poker/api/internal/api/v1`, with vet silent.
 
 ```bash
 git add api/go.mod api/go.sum api/internal/app/app.go api/internal/api/v1/auth.go api/internal/api/v1/auth_test.go
-git commit -m "feat(api): api-commons v1.13.1, JWT revocation, strict verify on writes"
+git commit -m "feat(api): api-commons v1.14.0, JWT revocation, strict verify on writes"
 ```
 
 ---
@@ -1870,7 +1875,7 @@ Because of the `type item = ...` alias, the `map[string]types.AttributeValue` si
 - [ ] **Step 7: Run the tests**
 
 Run: `cd api && go vet ./internal/userpurge/ && go test ./internal/userpurge/ -count=1`
-Expected: `ok`. The inventory test passes: all 36 CDK tables are classified, and `poker_erasure_state` is pre-classified for Task 9. `go vet` may report unused helpers only as lint, not as vet errors; they are used in Tasks 6–7.
+Expected: `ok`. The inventory test passes: all 36 CDK tables are classified, and `poker_erasure_state` is pre-classified for Task 10. `go vet` may report unused helpers only as lint, not as vet errors; they are used in Tasks 6–7.
 
 - [ ] **Step 8: Commit**
 
@@ -2849,7 +2854,7 @@ git commit -m "feat(api): purge erases the user's own rows, social graph, report
   - `oauth2client.New(httpClient, cache, tokenURL, clientID, clientSecret, scope string)`;
   - `userpurge.NewPurger`, `newErasureStore`, `newEligibility`.
 - Produces:
-  - `config.Config.ErasureQueueURL` (`ERASURE_QUEUE_URL`) and `config.Config.ActionLogArchiveBucket` (`ACTION_LOG_ARCHIVE_BUCKET`), both required in prod;
+  - `config.Config.ErasureQueueURL` (`ERASURE_QUEUE_URL`), `config.Config.ActionLogArchiveBucket` (`ACTION_LOG_ARCHIVE_BUCKET`), `config.Config.ErasureAckClientID` (`ERASURE_ACK_CLIENT_ID`) and `config.Config.ErasureAckClientSecret` (`ERASURE_ACK_CLIENT_SECRET`), all required in prod (the ack client is dedicated, ruling R2);
   - `func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Client, c cache.Backend, store *erasure.Store, elig *userpurge.Eligibility) error`.
 
 - [ ] **Step 1: Write the failing test** — append to `api/internal/config/config_test.go`, adding `"strings"` to its imports if absent:
@@ -2870,6 +2875,11 @@ func TestLoadRequiresErasureWiringInProd(t *testing.T) {
 		t.Fatalf("want ACTION_LOG_ARCHIVE_BUCKET error, got %v", err)
 	}
 	t.Setenv("ACTION_LOG_ARCHIVE_BUCKET", "poker-action-log-archive-prod")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "ERASURE_ACK_CLIENT_ID") {
+		t.Fatalf("want ERASURE_ACK_CLIENT_ID error, got %v", err)
+	}
+	t.Setenv("ERASURE_ACK_CLIENT_ID", "poker-erasure")
+	t.Setenv("ERASURE_ACK_CLIENT_SECRET", "secret")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("complete prod config rejected: %v", err)
@@ -2893,6 +2903,12 @@ Expected: FAIL with `want ERASURE_QUEUE_URL error, got <nil>`.
 	// rewrites. Both come from /etc/app-static.env (cdk/lib/api-stack.ts).
 	ErasureQueueURL        string `env:"ERASURE_QUEUE_URL"`
 	ActionLogArchiveBucket string `env:"ACTION_LOG_ARCHIVE_BUCKET"`
+	// ErasureAckClientID/Secret are poker's dedicated confidential client for
+	// acks to ctech-account (scope internal:account:erasure-ack only). Kept
+	// apart from POKER_CLIENT_ID so the wallet credentials never carry it.
+	// From SSM /ctech/<env>/poker/erasure-ack-client-{id,secret}.
+	ErasureAckClientID     string `env:"ERASURE_ACK_CLIENT_ID"`
+	ErasureAckClientSecret string `env:"ERASURE_ACK_CLIENT_SECRET"`
 ```
 
 In `Load()`, before the `if cfg.CtechJWKSURL == "" ...` block, add:
@@ -2903,6 +2919,9 @@ In `Load()`, before the `if cfg.CtechJWKSURL == "" ...` block, add:
 	}
 	if cfg.ActionLogArchiveBucket == "" && cfg.Env == "prod" {
 		return nil, fmt.Errorf("config: ACTION_LOG_ARCHIVE_BUCKET must be set in production — the purge must anonymize the action-log archive")
+	}
+	if (cfg.ErasureAckClientID == "" || cfg.ErasureAckClientSecret == "") && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: ERASURE_ACK_CLIENT_ID and ERASURE_ACK_CLIENT_SECRET must be set in production — without them no erasure is ever acked")
 	}
 ```
 
@@ -2948,7 +2967,8 @@ import (
 const (
 	// erasureService is poker's participant id in erasure messages and the SNS filter.
 	erasureService = "poker"
-	// erasureAckScope is granted by an operator to POKER_CLIENT_ID in ctech-account.
+	// erasureAckScope is the only scope of poker's dedicated ack client
+	// (ERASURE_ACK_CLIENT_ID), granted by an operator in ctech-account.
 	erasureAckScope = "internal:account:erasure-ack"
 )
 
@@ -2992,7 +3012,7 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 	}, elig.Blockers)
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	account := strings.TrimRight(cfg.CtechURL, "/")
-	tokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.PokerClientID, cfg.PokerClientSecret, erasureAckScope)
+	tokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.ErasureAckClientID, cfg.ErasureAckClientSecret, erasureAckScope)
 	acks := erasure.NewAckClient(httpClient, account+"/v1.0/internal/erasure/ack", tokens)
 	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks)
 
@@ -3037,7 +3057,185 @@ git commit -m "feat(api): run the account-deletion consumer and ack to ctech-acc
 
 ---
 
-### Task 9: Infrastructure
+### Task 9: Force-close open sockets on lock
+
+**Files:**
+- Create: `api/internal/api/v1/erasurews.go`, `api/internal/api/v1/erasurews_test.go`
+- Modify: `api/internal/api/v1/tablews.go`, `api/internal/app/erasure.go`
+
+**Interfaces:**
+- Consumes:
+  - `(*erasure.Consumer).OnLock(fn func(ctx context.Context, sub string)) *erasure.Consumer` (api-commons v1.14.0). It is called when a `user.locked`, or the synthetic lock applied on `user.erase`, changes the sub's state to locked. It is not called on no-op redeliveries.
+  - `ws.Registry` (`Register`, `Unregister`, `Broadcast`).
+  - `startErasureConsumer` (Task 8).
+- Produces:
+  - `func CloseLockedSockets(reg ws.Registry) func(ctx context.Context, sub string)` in package `v1`;
+  - `watchErasureLock(reg ws.Registry, sub, connID string, conn io.Closer) func()`;
+  - `startErasureConsumer` gains a `reg ws.Registry` parameter.
+
+**Why the registry:** the consumer runs on whichever replica SQS hands the message to, but the user's sockets can be on any instance.
+- `ws.Registry` (Valkey pub/sub) already fans `Broadcast` out to every instance.
+- Each socket registers a closer under `erasure-lock#<sub>`. One broadcast closes all of them.
+- A closed `*fws.Conn` makes the gateway's read loop return. Its existing defers then run the normal disconnect: unregister, presence close, `table.DisconnectCmd`.
+
+Table sockets cover seated players and spectators alike: every viewer registers `tableID#playerID`, and the closer is registered in the same block. The connect-time `wsLocked` check (Task 2) stays.
+
+- [ ] **Step 1: Write the failing test** — `api/internal/api/v1/erasurews_test.go`:
+
+```go
+package v1
+
+import (
+	"context"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"gopkg.aoctech.app/api-commons/ws"
+)
+
+type fakeCloser struct{ closed atomic.Bool }
+
+func (f *fakeCloser) Close() error {
+	f.closed.Store(true)
+	return nil
+}
+
+// A lock closes every socket of that player (table + gateway), and only those.
+func TestCloseLockedSocketsClosesOnlyThatPlayersSockets(t *testing.T) {
+	reg := ws.NewMemoryRegistry()
+	table, gateway, other, gone := &fakeCloser{}, &fakeCloser{}, &fakeCloser{}, &fakeCloser{}
+	defer watchErasureLock(reg, "u1", "table-conn", table)()
+	defer watchErasureLock(reg, "u1", "gateway-conn", gateway)()
+	defer watchErasureLock(reg, "u2", "other-conn", other)()
+	watchErasureLock(reg, "u1", "closed-conn", gone)() // disconnected before the lock: unregistered
+
+	CloseLockedSockets(reg)(context.Background(), "u1")
+
+	deadline := time.Now().Add(time.Second)
+	for !(table.closed.Load() && gateway.closed.Load()) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !table.closed.Load() || !gateway.closed.Load() {
+		t.Fatal("every socket of the locked player must be closed")
+	}
+	if other.closed.Load() {
+		t.Fatal("another player's socket was closed")
+	}
+	if gone.closed.Load() {
+		t.Fatal("an unregistered socket was touched")
+	}
+}
+```
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Run: `cd api && go test ./internal/api/v1/ -run TestCloseLockedSockets -count=1`
+Expected: FAIL with `undefined: watchErasureLock`.
+
+- [ ] **Step 3: Implement** — `api/internal/api/v1/erasurews.go`:
+
+```go
+package v1
+
+import (
+	"context"
+	"io"
+
+	"gopkg.aoctech.app/api-commons/ws"
+)
+
+// erasureLockKey is the ws.Registry key every socket of a player also listens
+// on. A broadcast there reaches the player's sockets on every instance
+// (Valkey pub/sub fan-out), which is what lets the replica that consumed the
+// lock close sockets held by its siblings (plan ruling R6).
+func erasureLockKey(sub string) string { return "erasure-lock#" + sub }
+
+// lockCloser is the ws.Conn registered under erasureLockKey: anything
+// broadcast there closes its socket. The gateway's read loop then fails and
+// runs its usual cleanup (unregister, presence, table disconnect).
+type lockCloser struct{ conn io.Closer }
+
+func (l lockCloser) WriteMessage(int, []byte) error { return l.conn.Close() }
+
+// watchErasureLock registers conn to be closed when sub is locked and
+// returns the matching unregister.
+func watchErasureLock(reg ws.Registry, sub, connID string, conn io.Closer) func() {
+	key := erasureLockKey(sub)
+	reg.Register(key, connID, lockCloser{conn: conn})
+	return func() { reg.Unregister(key, connID) }
+}
+
+// CloseLockedSockets is the erasure.Consumer OnLock hook: it closes every
+// table socket (seated or spectating) and gateway socket of sub, fleet-wide.
+func CloseLockedSockets(reg ws.Registry) func(ctx context.Context, sub string) {
+	return func(ctx context.Context, sub string) {
+		reg.Broadcast(ctx, erasureLockKey(sub), []byte("account_locked"))
+	}
+}
+```
+
+In `tablews.go`, `RegisterTableWS`, replace:
+
+```go
+			wsdrain.TrackByID(connID, safeConn)
+			defer wsdrain.UntrackByID(connID)
+```
+
+with:
+
+```go
+			wsdrain.TrackByID(connID, safeConn)
+			defer wsdrain.UntrackByID(connID)
+			// Account deletion: closed fleet-wide when the player is locked.
+			defer watchErasureLock(reg, playerID, connID, conn)()
+```
+
+In `RegisterGeneralWS`, replace (the block Task 2 left):
+
+```go
+			connID := uuid.New().String()
+```
+
+with:
+
+```go
+			connID := uuid.New().String()
+			// Account deletion: closed fleet-wide when the player is locked.
+			defer watchErasureLock(reg, playerID, connID, conn)()
+```
+
+Only one `connID := uuid.New().String()` sits in `RegisterGeneralWS`; the table WS one is followed by the `wsdrain.TrackByID` comment, so edit by context.
+
+In `api/internal/app/erasure.go`:
+- add the import `"gopkg.aoctech.app/api-commons/ws"`;
+- add the parameter `reg ws.Registry` to `startErasureConsumer`, after `elig *userpurge.Eligibility`;
+- replace `consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks)` with:
+
+```go
+	// OnLock fires only when a message really moves the sub to locked (not on
+	// redeliveries); it closes the user's sockets on every instance (R6).
+	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks).
+		OnLock(v1.CloseLockedSockets(reg))
+```
+
+Fx already provides `ws.Registry` (`newWsRegistry`), so the invoke needs no other change.
+
+- [ ] **Step 4: Run the tests**
+
+Run: `cd api && go vet ./... && go vet -tags integration ./... && go test ./internal/api/v1/ ./internal/app/ -count=1`
+Expected: `ok` for both packages.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add api/internal/api/v1/erasurews.go api/internal/api/v1/erasurews_test.go api/internal/api/v1/tablews.go api/internal/app/erasure.go
+git commit -m "feat(api): close a locked user's sockets fleet-wide on the erasure lock"
+```
+
+---
+
+### Task 10: Infrastructure
 
 **Files:**
 - Modify: `cdk/lib/constants.ts`, `cdk/lib/dynamodb-stack.ts`, `cdk/lib/api-stack.ts`, `cdk/lib/archiver-stack.ts`
@@ -3233,7 +3431,7 @@ Do **not** commit the generated `cdk/lib/*.js` / `*.d.ts` files unless the repo 
 
 ---
 
-### Task 10: Documentation
+### Task 11: Documentation
 
 **Files:**
 - Modify: `api/README.md`, `api/CLAUDE.md`, `cdk/CLAUDE.md`, `docs/README.md`
@@ -3360,7 +3558,7 @@ git commit -m "docs: account deletion participant (config, auth, purge, runbook)
 
   If account changes either, poker's endpoint returns 403 or its acks fail into the DLQ.
 - **ctech-account ui:** must translate the four `poker.*` blocker codes.
-- **ctech-go-common:** consumed at v1.13.1, unchanged. Its README "Account erasure" still says filter scope `MessageBody` and scope `account:erasure:ack`; account's phase 3 plan (Task 8) owns that fix. The `erasure.AckClient` doc comment has the same stale scope name.
+- **ctech-go-common:** consumed at v1.14.0, unchanged. Its README "Account erasure" still says filter scope `MessageBody` and scope `account:erasure:ack`; account's phase 3 plan (Task 8) owns that fix. The `erasure.AckClient` doc comment has the same stale scope name.
 - **ctech-wallet:** none directly. Poker's money trail stays in the wallet ledger (D5). A product purchase dropped by the webhook during a deletion stays paid in the wallet, so support refunds it (R15).
 - **ctech-dfe, ctech-billing:** none. The same participant pattern applies; `userpurge`'s anonymizer and the `BlockedFunc` choke-point approach are candidates for `ctech-go-common/erasure` if a second service needs them.
 - **Shared Valkey:** read-only use of DB 0 revocation keys (one GET per verification). Shared Valkey latency now also gates poker writes (R3).
