@@ -33,7 +33,7 @@ func TestIdempotentMovementRetriesTransientFailure(t *testing.T) {
 		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 	client.retryDelay = func(time.Duration) {}
 
-	if err := client.Credit(t.Context(), "user-1", 100, "stable-key", "test"); err != nil {
+	if err := client.Credit(t.Context(), "user-1", 100, "stable-key", "test", "Descricao de teste"); err != nil {
 		t.Fatalf("credit after retry: %v", err)
 	}
 	if attempts.Load() != 3 {
@@ -56,7 +56,7 @@ func TestMovementWithoutIdempotencyKeyDoesNotRetry(t *testing.T) {
 	client := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL,
 		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 
-	if err := client.Debit(t.Context(), "user-1", 100, "", "test"); err == nil {
+	if err := client.Debit(t.Context(), "user-1", 100, "", "test", "Descricao de teste"); err == nil {
 		t.Fatal("expected transient wallet failure")
 	}
 	if attempts.Load() != 1 {
@@ -107,7 +107,7 @@ func TestCreditSendsExpectedRequestBody(t *testing.T) {
 	defer authSrv.Close()
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-	if err := c.Credit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin"); err != nil {
+	if err := c.Credit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin", "Recompensa de teste"); err != nil {
 		t.Fatalf("credit: %v", err)
 	}
 	if gotPath != "/v1.0/internal/wallet/sandbox/credit" {
@@ -115,6 +115,9 @@ func TestCreditSendsExpectedRequestBody(t *testing.T) {
 	}
 	if gotBody.UserID != "user-1" || gotBody.Amount != 500 || gotBody.IdempotencyKey != "room-1#user-1#buyin-1" {
 		t.Fatalf("unexpected request body: %+v", gotBody)
+	}
+	if gotBody.Description != "Recompensa de teste" {
+		t.Fatalf("description on the wire = %q", gotBody.Description)
 	}
 }
 
@@ -126,7 +129,7 @@ func TestDebitSendsExpectedRequestBody(t *testing.T) {
 	defer authSrv.Close()
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-	if err := c.Debit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin"); err != nil {
+	if err := c.Debit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin", "Compra de teste"); err != nil {
 		t.Fatalf("debit: %v", err)
 	}
 	if gotPath != "/v1.0/internal/wallet/sandbox/debit" {
@@ -151,7 +154,7 @@ func TestCreditPassesThroughWalletProblemJSON(t *testing.T) {
 	defer srv.Close()
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward")
+	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward", "Recompensa diária")
 
 	var werr *Error
 	if !errors.As(err, &werr) {
@@ -196,7 +199,7 @@ func TestCreditFallsBackToGenericErrorOnNonProblemBody(t *testing.T) {
 	defer srv.Close()
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward")
+	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward", "Recompensa diária")
 
 	var werr *Error
 	if errors.As(err, &werr) {
@@ -223,7 +226,7 @@ func TestDebitRealSendsExpectedRequestBody(t *testing.T) {
 	defer authSrv.Close()
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-	if err := c.DebitReal(t.Context(), "user-1", 100, "room-1#user-1#buyinfee#n1", "poker_table_fee"); err != nil {
+	if err := c.DebitReal(t.Context(), "user-1", 100, "room-1#user-1#buyinfee#n1", "poker_table_fee", "Taxa de entrada, mesa #t1"); err != nil {
 		t.Fatalf("DebitReal: %v", err)
 	}
 	if gotPath != "/v1.0/internal/wallet/real/debit" {
@@ -231,5 +234,8 @@ func TestDebitRealSendsExpectedRequestBody(t *testing.T) {
 	}
 	if gotBody.UserID != "user-1" || gotBody.Amount != 100 || gotBody.Reason != "poker_table_fee" {
 		t.Fatalf("unexpected request body: %+v", gotBody)
+	}
+	if gotBody.Description != "Taxa de entrada, mesa #t1" {
+		t.Fatalf("description on the wire = %q", gotBody.Description)
 	}
 }

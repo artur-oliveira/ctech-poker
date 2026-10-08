@@ -183,7 +183,7 @@ type fakeWallet struct {
 	failDebit, failCredit bool
 }
 
-func (f *fakeWallet) Debit(_ context.Context, _ string, amount int64, key, _ string) error {
+func (f *fakeWallet) Debit(_ context.Context, _ string, amount int64, key, _, description string) error {
 	f.debits = append(f.debits, amount)
 	f.debitKeys = append(f.debitKeys, key)
 	if f.failDebit {
@@ -192,7 +192,7 @@ func (f *fakeWallet) Debit(_ context.Context, _ string, amount int64, key, _ str
 	return nil
 }
 
-func (f *fakeWallet) Credit(_ context.Context, _ string, amount int64, key, _ string) error {
+func (f *fakeWallet) Credit(_ context.Context, _ string, amount int64, key, _, description string) error {
 	f.credits = append(f.credits, amount)
 	f.creditKeys = append(f.creditKeys, key)
 	if f.failCredit {

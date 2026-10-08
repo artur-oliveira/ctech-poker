@@ -17,8 +17,11 @@ type DailyRewardRecord struct {
 	Status string
 }
 
+// walletDescription is the statement text of the daily reward credit.
+const walletDescription = "Recompensa diária"
+
 type credit interface {
-	Credit(context.Context, string, int64, string, string) error
+	Credit(context.Context, string, int64, string, string, string) error
 }
 
 // spinStore persists the selected prize before the external wallet call. A
@@ -120,7 +123,7 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 		"amount", record.Amount, "retry", retry)
 
 	idemKey := fmt.Sprintf("%s#daily_reward#%s", playerID, day)
-	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "daily_reward"); err != nil {
+	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "daily_reward", walletDescription); err != nil {
 		return 0, 0, err
 	}
 	if err := s.store.Complete(ctx, playerID, day, now); err != nil {

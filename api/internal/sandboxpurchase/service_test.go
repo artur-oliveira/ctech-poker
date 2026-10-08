@@ -67,7 +67,7 @@ type fakeWallet struct {
 func (f *fakeWallet) ListSandboxSKUs(context.Context) ([]walletclient.SandboxSKU, error) {
 	return f.skus, nil
 }
-func (f *fakeWallet) PurchaseSandbox(_ context.Context, _ string, _ string, idemKey string) (*walletclient.SandboxPurchase, error) {
+func (f *fakeWallet) PurchaseSandbox(_ context.Context, _ string, _ string, idemKey, _ string) (*walletclient.SandboxPurchase, error) {
 	f.purchaseCalls++
 	f.lastIdemKey = idemKey
 	if f.purchaseErr != nil {
