@@ -32,6 +32,8 @@ type fakeWallet struct {
 	cashouts   []cashoutCall
 	balances   map[string]int64 // playerID -> sandbox balance, for the auto-rebuy tests
 	failCredit error            // when set, Credit/CashoutGame return this instead of succeeding
+	// descriptions records the statement text of every Debit and Credit, in order.
+	descriptions []string
 }
 type call struct {
 	userID string
@@ -66,14 +68,16 @@ func (s failingPendingStore) Get(context.Context, string) (*reconcile.PendingCas
 	return nil, s.err
 }
 
-func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
+func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _, description string) error {
 	if f.failCredit != nil {
 		return f.failCredit
 	}
+	f.descriptions = append(f.descriptions, description)
 	f.credits = append(f.credits, call{userID, amount, key})
 	return nil
 }
-func (f *fakeWallet) Debit(_ context.Context, userID string, amount int64, key, _ string) error {
+func (f *fakeWallet) Debit(_ context.Context, userID string, amount int64, key, _, description string) error {
+	f.descriptions = append(f.descriptions, description)
 	f.debits = append(f.debits, call{userID, amount, key})
 	return nil
 }
@@ -85,11 +89,11 @@ func (f *fakeWallet) HoldGame(_ context.Context, userID string, amount int64, ta
 func (f *fakeWallet) ReleaseHold(_ context.Context, holdID string) error {
 	return nil
 }
-func (f *fakeWallet) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, key, reason string) error {
+func (f *fakeWallet) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, key, reason, description string) error {
 	f.cashouts = append(f.cashouts, cashoutCall{userID, amount, tableRef, holdIDs, key, reason})
 	return nil
 }
-func (f *fakeWallet) DebitReal(_ context.Context, userID string, amount int64, key, _ string) error {
+func (f *fakeWallet) DebitReal(_ context.Context, userID string, amount int64, key, _, description string) error {
 	f.feeDebits = append(f.feeDebits, call{userID, amount, key})
 	return nil
 }
@@ -138,6 +142,9 @@ func TestBuyInDebitsThenSeats(t *testing.T) {
 	if len(wallet.debits) != 1 || wallet.debits[0].amount != 400 {
 		t.Fatalf("expected one 400-chip debit, got %+v", wallet.debits)
 	}
+	if len(wallet.descriptions) != 1 || wallet.descriptions[0] != "Mesa #room-1: buy-in" {
+		t.Fatalf("buy-in description = %v", wallet.descriptions)
+	}
 	found := false
 	for _, s := range actor.TableForTest().ViewFor("user-1").Seats {
 		if s.PlayerID == "user-1" && s.Stack == 400 {
@@ -160,7 +167,7 @@ type raceWallet struct {
 	release      chan struct{}
 }
 
-func (f *raceWallet) Debit(ctx context.Context, userID string, amount int64, key, reason string) error {
+func (f *raceWallet) Debit(ctx context.Context, userID string, amount int64, key, reason, description string) error {
 	f.mu.Lock()
 	f.debitN++
 	first := f.debitN == 1
@@ -356,6 +363,9 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 	}
 	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
 		t.Fatalf("expected one 400-chip credit, got %+v", wallet.credits)
+	}
+	if got := wallet.descriptions[len(wallet.descriptions)-1]; got != "Mesa #room-2: saída com fichas" {
+		t.Fatalf("cash-out description = %q", got)
 	}
 }
 

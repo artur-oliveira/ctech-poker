@@ -28,13 +28,21 @@ import (
 
 // walletMover is the subset of *walletclient.Client this service needs —
 // narrowed to an interface so tests can fake it without a live HTTP server.
+// Statement text of each wallet leg, formatted with the table (room) id.
+const (
+	descriptionBuyInFormat       = "Mesa #%s: buy-in"
+	descriptionBuyInRefundFormat = "Mesa #%s: estorno de buy-in"
+	descriptionEntryFeeFormat    = "Mesa #%s: taxa de entrada"
+	descriptionCashoutFormat     = "Mesa #%s: saída com fichas"
+)
+
 type walletMover interface {
-	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
-	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
+	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 	HoldGame(ctx context.Context, userID string, amount int64, tableRef, idempotencyKey, reason string) (string, error)
 	ReleaseHold(ctx context.Context, holdID string) error
-	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
-	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason, description string) error
+	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 	Balances(ctx context.Context, userID string) (*walletclient.Balances, error)
 }
 
@@ -276,7 +284,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 			return fmt.Errorf("buyin: hold: %w", err)
 		}
 	} else {
-		if err := mover.Debit(ctx, playerID, amount, key, "poker_buyin"); err != nil {
+		if err := mover.Debit(ctx, playerID, amount, key, "poker_buyin", fmt.Sprintf(descriptionBuyInFormat, roomID)); err != nil {
 			return fmt.Errorf("buyin: debit: %w", err)
 		}
 	}
@@ -304,7 +312,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 			// in roomID, playerID and the nonce (itself playerID when idemKey is
 			// empty), so it is globally unique per refund while a genuine retry of
 			// the SAME failed buy-in still reproduces it and dedupes.
-			if refundErr := mover.Credit(ctx, playerID, amount, key+":refund", "poker_buyin_refund"); refundErr != nil {
+			if refundErr := mover.Credit(ctx, playerID, amount, key+":refund", "poker_buyin_refund", fmt.Sprintf(descriptionBuyInRefundFormat, roomID)); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND refund failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
 		}
@@ -491,7 +499,7 @@ func (s *Service) payEntryFee(ctx context.Context, playerID string, e entitlemen
 	}); err != nil {
 		return fmt.Errorf("buyin: persist fee recovery intent: %w", err)
 	}
-	if err := s.game.DebitReal(ctx, playerID, e.FeeCents, feeKey, "poker_table_fee"); err != nil {
+	if err := s.game.DebitReal(ctx, playerID, e.FeeCents, feeKey, "poker_table_fee", fmt.Sprintf(descriptionEntryFeeFormat, e.OriginTableID)); err != nil {
 		slog.Error("ALARM: poker table-entry fee charge failed before seating; reconciliation will retry", "player", playerID, "room", e.OriginTableID, "amount", e.FeeCents, "err", err)
 		return fmt.Errorf("buyin: table fee charge failed, reconciliation will retry: %w", err)
 	}
@@ -882,12 +890,12 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 		if mover == s.game {
 			if holdID == "" {
 				walletErr = fmt.Errorf("buyin: no hold ID found for player %s", playerID)
-			} else if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout"); err != nil {
+			} else if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout", fmt.Sprintf(descriptionCashoutFormat, roomID)); err != nil {
 				slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 					"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
 				walletErr = fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 			}
-		} else if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
+		} else if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout", fmt.Sprintf(descriptionCashoutFormat, roomID)); err != nil {
 			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 				"player", playerID, "room", roomID, "amount", stack, "err", err)
 			walletErr = fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)

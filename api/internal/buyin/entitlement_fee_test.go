@@ -22,16 +22,16 @@ type feeWallet struct {
 	failNext bool
 }
 
-func (w *feeWallet) Credit(context.Context, string, int64, string, string) error { return nil }
-func (w *feeWallet) Debit(context.Context, string, int64, string, string) error  { return nil }
+func (w *feeWallet) Credit(context.Context, string, int64, string, string, string) error { return nil }
+func (w *feeWallet) Debit(context.Context, string, int64, string, string, string) error  { return nil }
 func (w *feeWallet) HoldGame(context.Context, string, int64, string, string, string) (string, error) {
 	return "h1", nil
 }
 func (w *feeWallet) ReleaseHold(context.Context, string) error { return nil }
-func (w *feeWallet) CashoutGame(context.Context, string, int64, string, []string, string, string) error {
+func (w *feeWallet) CashoutGame(context.Context, string, int64, string, []string, string, string, string) error {
 	return nil
 }
-func (w *feeWallet) DebitReal(_ context.Context, _ string, _ int64, key, _ string) error {
+func (w *feeWallet) DebitReal(_ context.Context, _ string, _ int64, key, _, description string) error {
 	if w.failNext {
 		w.failNext = false
 		return errors.New("wallet unavailable")
@@ -52,7 +52,9 @@ func (w *feeWallet) Balances(context.Context, string) (*walletclient.Balances, e
 
 // memPending is reconcile.PendingStore's in-memory stand-in: Record is
 // immutable-first-write and MarkResolved is monotonic, like the real one.
-type memPending struct{ rows map[string]*reconcile.PendingCashout }
+type memPending struct {
+	rows map[string]*reconcile.PendingCashout
+}
 
 func newMemPending() *memPending { return &memPending{rows: map[string]*reconcile.PendingCashout{}} }
 

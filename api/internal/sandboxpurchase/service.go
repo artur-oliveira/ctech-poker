@@ -18,9 +18,12 @@ var ErrNotFound = errors.New("sandboxpurchase: not found")
 // player may purchase at most once — see Service.Create.
 const WelcomePackSKU = "welcome_pack"
 
+// purchaseDescriptionFormat is the statement text of a chip-pack sale (the SKU id).
+const purchaseDescriptionFormat = "Compra de fichas (%s)"
+
 type wallet interface {
 	ListSandboxSKUs(ctx context.Context) ([]walletclient.SandboxSKU, error)
-	PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey string) (*walletclient.SandboxPurchase, error)
+	PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey, description string) (*walletclient.SandboxPurchase, error)
 	GetSandboxPurchase(ctx context.Context, purchaseID string) (*walletclient.SandboxPurchase, error)
 	RefundSandboxPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*walletclient.SandboxPurchase, error)
 }
@@ -134,7 +137,7 @@ func (s *Service) Create(ctx context.Context, playerID, sku, promoCode, idemKey 
 		return Record{}, fmt.Errorf("sandboxpurchase: unknown sku %q", effectiveSKU)
 	}
 
-	purchase, err := s.wallet.PurchaseSandbox(ctx, playerID, effectiveSKU, idemKey)
+	purchase, err := s.wallet.PurchaseSandbox(ctx, playerID, effectiveSKU, idemKey, fmt.Sprintf(purchaseDescriptionFormat, effectiveSKU))
 	if err != nil {
 		releaseClaim()
 		return Record{}, err

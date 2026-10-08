@@ -67,15 +67,17 @@ func (f *fakePendingLister) RecordFailedAttempt(_ context.Context, e reconcile.P
 
 type stubErrGameCredit struct{ err error }
 
-func (s stubErrGameCredit) CashoutGame(context.Context, string, int64, string, []string, string, string) error {
+func (s stubErrGameCredit) CashoutGame(context.Context, string, int64, string, []string, string, string, string) error {
 	return s.err
 }
 
 type fakeGameCredit struct {
-	cashouts []reconcile.PendingCashout
+	descriptions []string
+	cashouts     []reconcile.PendingCashout
 }
 
-func (f *fakeGameCredit) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error {
+func (f *fakeGameCredit) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason, description string) error {
+	f.descriptions = append(f.descriptions, description)
 	f.cashouts = append(f.cashouts, reconcile.PendingCashout{
 		PlayerID:       userID,
 		Amount:         amount,
@@ -90,7 +92,7 @@ type fakeSandboxCredit struct {
 	credits []reconcile.PendingCashout
 }
 
-func (f *fakeSandboxCredit) Credit(_ context.Context, userID string, amount int64, idempotencyKey, reason string) error {
+func (f *fakeSandboxCredit) Credit(_ context.Context, userID string, amount int64, idempotencyKey, reason, description string) error {
 	f.credits = append(f.credits, reconcile.PendingCashout{
 		PlayerID:       userID,
 		Amount:         amount,
@@ -103,7 +105,7 @@ type fakeFeeDebiter struct {
 	debits []reconcile.PendingCashout
 }
 
-func (f *fakeFeeDebiter) DebitReal(_ context.Context, userID string, amount int64, idempotencyKey, reason string) error {
+func (f *fakeFeeDebiter) DebitReal(_ context.Context, userID string, amount int64, idempotencyKey, reason, description string) error {
 	f.debits = append(f.debits, reconcile.PendingCashout{PlayerID: userID, Amount: amount, IdempotencyKey: idempotencyKey})
 	return nil
 }
@@ -127,6 +129,9 @@ func TestRunResolvesUnresolvedCashouts(t *testing.T) {
 	}
 	if len(game.cashouts) != 1 || game.cashouts[0].PlayerID != "user-1" {
 		t.Fatalf("expected 1 real cashout, got %+v", game.cashouts)
+	}
+	if len(game.descriptions) != 1 || game.descriptions[0] != "Mesa #room-1: saída com fichas (conciliada)" {
+		t.Fatalf("reconciled cashout description = %v", game.descriptions)
 	}
 	if len(sandbox.credits) != 1 || sandbox.credits[0].PlayerID != "user-2" {
 		t.Fatalf("expected 1 sandbox credit, got %+v", sandbox.credits)

@@ -21,7 +21,7 @@ type fakeSandboxWallet struct {
 func (f *fakeSandboxWallet) ListSandboxSKUs(context.Context) ([]walletclient.SandboxSKU, error) {
 	return f.skus, nil
 }
-func (f *fakeSandboxWallet) PurchaseSandbox(context.Context, string, string, string) (*walletclient.SandboxPurchase, error) {
+func (f *fakeSandboxWallet) PurchaseSandbox(context.Context, string, string, string, string) (*walletclient.SandboxPurchase, error) {
 	return f.purchase, nil
 }
 func (f *fakeSandboxWallet) GetSandboxPurchase(context.Context, string) (*walletclient.SandboxPurchase, error) {

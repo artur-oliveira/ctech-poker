@@ -33,13 +33,20 @@ var (
 
 const productPurchasePrefix = "prdp"
 
+// Statement text of each wallet leg, formatted with the cosmetic kind and item id.
+const (
+	descriptionBuyRealFormat = "Compra de cosmético %s: %s"
+	descriptionBuyFormat     = "Cosmético %s: %s"
+	descriptionRefundFormat  = "Estorno do cosmético %s: %s"
+)
+
 type wallet interface {
 	ListProductSKUs(ctx context.Context) ([]walletclient.ProductSKU, error)
-	PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey string) (*walletclient.ProductPurchase, error)
+	PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey, description string) (*walletclient.ProductPurchase, error)
 	GetProductPurchase(ctx context.Context, purchaseID string) (*walletclient.ProductPurchase, error)
 	RefundProductPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*walletclient.ProductPurchase, error)
-	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
-	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
 // CatalogEntry merges cosmetics.catalog's premium flag/fichas price with
@@ -225,7 +232,7 @@ func (s *Service) CreateReal(ctx context.Context, playerID string, kind cosmetic
 		idemKey, requestKey = reservation.IdemKey, reservation.RequestKey
 	}
 
-	purchase, err := s.wallet.PurchaseProduct(ctx, playerID, sku, idemKey)
+	purchase, err := s.wallet.PurchaseProduct(ctx, playerID, sku, idemKey, fmt.Sprintf(descriptionBuyRealFormat, kind, itemID))
 	if err != nil {
 		if definitiveWalletRejection(err) {
 			if cancelErr := s.entitlements.CancelReservation(ctx, playerID, kind, itemID, requestKey); cancelErr != nil {
@@ -429,7 +436,7 @@ func (s *Service) CreateSandbox(ctx context.Context, playerID string, kind cosme
 		idemKey, requestKey, _ = rec.IdemKey, existingEnt.RequestKey, rec.PurchaseID
 		priceFichas = rec.PriceFichas
 	}
-	if err := s.wallet.Debit(ctx, playerID, priceFichas, idemKey, "cosmetic_purchase:"+string(kind)+":"+itemID); err != nil {
+	if err := s.wallet.Debit(ctx, playerID, priceFichas, idemKey, "cosmetic_purchase:"+string(kind)+":"+itemID, fmt.Sprintf(descriptionBuyFormat, kind, itemID)); err != nil {
 		if definitiveWalletRejection(err) {
 			if cancelErr := s.store.CancelSandboxReservation(ctx, s.entitlements, rec, requestKey); cancelErr != nil {
 				return Record{}, errors.Join(err, cancelErr)
@@ -548,7 +555,7 @@ func (s *Service) Refund(ctx context.Context, playerID, purchaseID, _ string) (R
 			return Record{}, errors.New("cosmeticpurchase: wallet did not confirm the PIX refund")
 		}
 	case methodFichas:
-		if err := s.wallet.Credit(ctx, playerID, rec.PriceFichas, refundKey, "cosmetic_refund:"+string(kind)+":"+rec.ItemID); err != nil {
+		if err := s.wallet.Credit(ctx, playerID, rec.PriceFichas, refundKey, "cosmetic_refund:"+string(kind)+":"+rec.ItemID, fmt.Sprintf(descriptionRefundFormat, kind, rec.ItemID)); err != nil {
 			return Record{}, err
 		}
 	default:
@@ -653,7 +660,7 @@ func (s *Service) Refresh(ctx context.Context, playerID, purchaseID string) (Rec
 	}
 	if rec.Method == methodFichas && rec.Status == statusProcessing {
 		requestKey := purchaseRequestKey(playerID, cosmetics.Kind(rec.Kind), rec.ItemID, methodFichas, rec.IdemKey)
-		if err := s.wallet.Debit(ctx, playerID, rec.PriceFichas, rec.IdemKey, "cosmetic_purchase:"+rec.Kind+":"+rec.ItemID); err != nil {
+		if err := s.wallet.Debit(ctx, playerID, rec.PriceFichas, rec.IdemKey, "cosmetic_purchase:"+rec.Kind+":"+rec.ItemID, fmt.Sprintf(descriptionBuyFormat, rec.Kind, rec.ItemID)); err != nil {
 			if definitiveWalletRejection(err) {
 				if cancelErr := s.store.CancelSandboxReservation(ctx, s.entitlements, *rec, requestKey); cancelErr != nil {
 					return Record{}, errors.Join(err, cancelErr)
