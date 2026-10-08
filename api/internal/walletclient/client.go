@@ -105,6 +105,9 @@ type MovementRequest struct {
 	Amount         int64  `json:"amount"`
 	IdempotencyKey string `json:"idempotency_key"`
 	Reason         string `json:"reason"`
+	// Description is the human sentence on the player's statement ("Mesa #abc, saída").
+	// Display metadata; ctech-wallet requires it on every money movement.
+	Description string `json:"description"`
 }
 
 type Client struct {
@@ -372,12 +375,12 @@ func readResponseBody(ctx context.Context, body io.Reader) []byte {
 	return raw
 }
 
-func (c *Client) Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
-	return c.movement(ctx, c.base+pathSandboxCredit, c.creditTokens, userID, amount, idempotencyKey, reason)
+func (c *Client) Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error {
+	return c.movement(ctx, c.base+pathSandboxCredit, c.creditTokens, userID, amount, idempotencyKey, reason, description)
 }
 
-func (c *Client) Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
-	return c.movement(ctx, c.base+pathSandboxDebit, c.debitTokens, userID, amount, idempotencyKey, reason)
+func (c *Client) Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error {
+	return c.movement(ctx, c.base+pathSandboxDebit, c.debitTokens, userID, amount, idempotencyKey, reason, description)
 }
 
 // DebitReal charges a fixed amount directly against the player's real
@@ -388,8 +391,8 @@ func (c *Client) Debit(ctx context.Context, userID string, amount int64, idempot
 // needs the internal:wallet:debit-real scope granted in ctech-account before
 // this can succeed in any real environment (see this plan's Global Constraints
 // — a cross-repo/config blocker, not a code gap here).
-func (c *Client) DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
-	return c.movement(ctx, c.base+pathRealDebit, c.debitRealTokens, userID, amount, idempotencyKey, reason)
+func (c *Client) DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error {
+	return c.movement(ctx, c.base+pathRealDebit, c.debitRealTokens, userID, amount, idempotencyKey, reason, description)
 }
 
 // HoldGame reserves funds in the ring-fenced game wallet.
@@ -460,7 +463,7 @@ func (c *Client) ReleaseHold(ctx context.Context, holdID string) error {
 // CashoutGame settles a reservation in the ring-fenced game wallet.
 // holdIDs is the list of hold IDs to settle (wallet requires array).
 // tableRef is an opaque caller-supplied session identifier.
-func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error {
+func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason, description string) error {
 	token, err := c.gameCashoutTokens.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("walletclient: token: %w", err)
@@ -471,6 +474,7 @@ func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, t
 		"table_ref":       tableRef,
 		"hold_ids":        holdIDs,
 		"idempotency_key": idempotencyKey,
+		"description":     description,
 	})
 	if err != nil {
 		return fmt.Errorf("walletclient: encode: %w", err)
@@ -557,17 +561,17 @@ func (c *Client) Balances(ctx context.Context, userID string) (*Balances, error)
 	return &b, nil
 }
 
-func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) error {
-	_, err := c.movementWithResponse(ctx, url, tokens, userID, amount, idempotencyKey, reason)
+func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason, description string) error {
+	_, err := c.movementWithResponse(ctx, url, tokens, userID, amount, idempotencyKey, reason, description)
 	return err
 }
 
-func (c *Client) movementWithResponse(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) (string, error) {
+func (c *Client) movementWithResponse(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason, description string) (string, error) {
 	token, err := tokens.Get(ctx)
 	if err != nil {
 		return "", fmt.Errorf("walletclient: token: %w", err)
 	}
-	body, err := json.Marshal(MovementRequest{UserID: userID, Amount: amount, IdempotencyKey: idempotencyKey, Reason: reason})
+	body, err := json.Marshal(MovementRequest{UserID: userID, Amount: amount, IdempotencyKey: idempotencyKey, Reason: reason, Description: description})
 	if err != nil {
 		return "", fmt.Errorf("walletclient: encode: %w", err)
 	}
@@ -658,7 +662,7 @@ func (c *Client) ListSandboxSKUs(ctx context.Context) ([]SandboxSKU, error) {
 }
 
 // PurchaseSandbox opens a direct PIX→sandbox-credits sale on userID's behalf.
-func (c *Client) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey string) (*SandboxPurchase, error) {
+func (c *Client) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey, description string) (*SandboxPurchase, error) {
 	token, err := c.sandboxPurchaseTokens.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: token: %w", err)
@@ -667,6 +671,7 @@ func (c *Client) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKe
 		"user_id":         userID,
 		"sku":             sku,
 		"idempotency_key": idempotencyKey,
+		"description":     description,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: encode: %w", err)
@@ -818,7 +823,7 @@ func (c *Client) ListProductSKUs(ctx context.Context) ([]ProductSKU, error) {
 }
 
 // PurchaseProduct opens a direct PIX product sale on userID's behalf.
-func (c *Client) PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey string) (*ProductPurchase, error) {
+func (c *Client) PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey, description string) (*ProductPurchase, error) {
 	token, err := c.productPurchaseTokens.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: token: %w", err)
@@ -827,6 +832,7 @@ func (c *Client) PurchaseProduct(ctx context.Context, userID, sku, idempotencyKe
 		"user_id":         userID,
 		"sku":             sku,
 		"idempotency_key": idempotencyKey,
+		"description":     description,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: encode: %w", err)
