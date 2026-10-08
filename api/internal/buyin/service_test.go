@@ -176,7 +176,7 @@ func (f *raceWallet) Debit(ctx context.Context, userID string, amount int64, key
 		close(f.firstStarted)
 		<-f.release
 	}
-	return f.fakeWallet.Debit(ctx, userID, amount, key, reason)
+	return f.fakeWallet.Debit(ctx, userID, amount, key, reason, description)
 }
 
 // TestBuyInRefundsLoserOfConcurrentSeatRace guards against the money-loss bug
