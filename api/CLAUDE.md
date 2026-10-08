@@ -1118,3 +1118,12 @@ There are NO exceptions.
 
 Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business
 rules, or developer workflow MUST include the corresponding documentation update in the same change.
+
+## Wallet descriptions (required)
+
+Every wallet movement carries a human-readable `description` ("Mesa #abc: buy-in", "Recompensa diária") in addition
+to the machine-readable `reason`. `ctech-wallet` rejects an empty one with `400` once its `REQUIRE_DESCRIPTION` flag
+is on (`ctech-wallet/docs/specs/2026-08-29-transaction-description.md`). The text is display metadata only: it never
+enters an idempotency key, and holds (`HoldGame`/`ReleaseHold`) take none. Each package keeps its texts as named
+constants next to the call (`descriptionBuyInFormat`, ...); `walletclient.Credit/Debit/DebitReal/CashoutGame/
+PurchaseSandbox/PurchaseProduct` take `description` as their last argument. No personal data in descriptions.

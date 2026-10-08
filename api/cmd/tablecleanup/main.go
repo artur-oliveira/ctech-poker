@@ -31,6 +31,9 @@ import (
 // is a much slower signal;
 const staleCutoff = 15 * time.Minute
 
+// descriptionStaleRefundFormat is the statement text of a stale-table refund.
+const descriptionStaleRefundFormat = "Mesa #%s: devolução de mesa encerrada"
+
 // queryBatchLimit bounds how many stale tables one invocation processes.
 // Any remainder is picked up on the next scheduled run since last_action_at
 // does not change for a still-stale table between runs.
@@ -47,14 +50,14 @@ type roomLookup interface {
 }
 
 type sandboxCredit interface {
-	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
 // gameCashout settles a seated player's real-money stack against the
 // ring-fenced game wallet, releasing the buy-in hold(s) that back it.
 // Mirrors buyin.Service's walletMover.CashoutGame subset.
 type gameCashout interface {
-	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
+	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason, description string) error
 }
 
 // pendingRecorder is the subset of *reconcile.PendingStore this job needs to
@@ -124,7 +127,7 @@ func refundSandboxAndArchive(ctx context.Context, stale staleQuerier, rooms room
 			continue
 		}
 		key := fmt.Sprintf("%s#%s#stale_archive_refund", st.TableID, p.ID)
-		if err := wallet.Credit(ctx, p.ID, p.Stack, key, "poker_stale_table_refund"); err != nil {
+		if err := wallet.Credit(ctx, p.ID, p.Stack, key, "poker_stale_table_refund", fmt.Sprintf(descriptionStaleRefundFormat, st.TableID)); err != nil {
 			slog.Error("ALARM: tablecleanup refund failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
 			refundFailed = true
 			continue
@@ -171,7 +174,7 @@ func settleRealMoneyAndArchive(ctx context.Context, stale staleQuerier, rooms ro
 			recordFailed = true
 			continue
 		}
-		if err := game.CashoutGame(ctx, p.ID, p.Stack, st.TableID, holdIDs, key, "poker_stale_table_refund"); err != nil {
+		if err := game.CashoutGame(ctx, p.ID, p.Stack, st.TableID, holdIDs, key, "poker_stale_table_refund", fmt.Sprintf(descriptionStaleRefundFormat, st.TableID)); err != nil {
 			slog.Error("tablecleanup: real-money cash-out failed after seat sweep, reconcile sweep will retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "hold_ids", holdIDs, "err", err)
 			continue
 		}

@@ -50,7 +50,7 @@ type fakeSandboxCredit struct {
 	}
 }
 
-func (f *fakeSandboxCredit) Credit(_ context.Context, userID string, amount int64, _, _ string) error {
+func (f *fakeSandboxCredit) Credit(_ context.Context, userID string, amount int64, _, _, _ string) error {
 	f.credits = append(f.credits, struct {
 		userID string
 		amount int64
@@ -65,10 +65,12 @@ type fakeGameCashout struct {
 		tableRef string
 		holdIDs  []string
 	}
-	failFor map[string]error
+	descriptions []string
+	failFor      map[string]error
 }
 
-func (f *fakeGameCashout) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, _, _ string) error {
+func (f *fakeGameCashout) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, _, _, description string) error {
+	f.descriptions = append(f.descriptions, description)
 	if f.failFor != nil {
 		if err := f.failFor[userID]; err != nil {
 			return err
@@ -161,6 +163,9 @@ func TestRunSettlesRealMoneyPlayersAndArchives(t *testing.T) {
 	}
 	if len(game.cashouts) != 1 || game.cashouts[0].userID != "player-2" || game.cashouts[0].amount != 500 || game.cashouts[0].holdIDs[0] != "hold-abc" {
 		t.Fatalf("expected the game-wallet hold to be cashed out, got %+v", game.cashouts)
+	}
+	if len(game.descriptions) != 1 || game.descriptions[0] != "Mesa #table-2: devolução de mesa encerrada" {
+		t.Fatalf("stale-table cashout description = %v", game.descriptions)
 	}
 	if len(pending.resolved) != 1 {
 		t.Fatalf("expected the recovery row to be marked resolved after a successful cash-out, got %v", pending.resolved)

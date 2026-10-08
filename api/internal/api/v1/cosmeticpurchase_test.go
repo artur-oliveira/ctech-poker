@@ -30,7 +30,7 @@ func allCosmeticProductSKUs() []walletclient.ProductSKU {
 func (f *fakeCosmeticWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
 	return f.skus, nil
 }
-func (f *fakeCosmeticWallet) PurchaseProduct(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
+func (f *fakeCosmeticWallet) PurchaseProduct(context.Context, string, string, string, string) (*walletclient.ProductPurchase, error) {
 	return nil, nil
 }
 func (f *fakeCosmeticWallet) GetProductPurchase(context.Context, string) (*walletclient.ProductPurchase, error) {
@@ -39,8 +39,12 @@ func (f *fakeCosmeticWallet) GetProductPurchase(context.Context, string) (*walle
 func (f *fakeCosmeticWallet) RefundProductPurchase(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
 	return nil, nil
 }
-func (f *fakeCosmeticWallet) Debit(context.Context, string, int64, string, string) error  { return nil }
-func (f *fakeCosmeticWallet) Credit(context.Context, string, int64, string, string) error { return nil }
+func (f *fakeCosmeticWallet) Debit(context.Context, string, int64, string, string, string) error {
+	return nil
+}
+func (f *fakeCosmeticWallet) Credit(context.Context, string, int64, string, string, string) error {
+	return nil
+}
 
 func newCosmeticPurchaseApp(svc *cosmeticpurchase.Service) *fiber.App {
 	app := fiber.New()

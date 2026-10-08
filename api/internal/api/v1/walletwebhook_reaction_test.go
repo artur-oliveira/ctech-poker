@@ -65,7 +65,7 @@ type fakeReactionWebhookWallet struct {
 func (f *fakeReactionWebhookWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
 	return nil, nil
 }
-func (f *fakeReactionWebhookWallet) PurchaseProduct(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
+func (f *fakeReactionWebhookWallet) PurchaseProduct(context.Context, string, string, string, string) (*walletclient.ProductPurchase, error) {
 	return f.createResult, nil
 }
 
@@ -105,10 +105,10 @@ func (f *fakeReactionWebhookWallet) GetProductPurchase(context.Context, string) 
 func (f *fakeReactionWebhookWallet) RefundProductPurchase(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
 	return nil, nil
 }
-func (f *fakeReactionWebhookWallet) Debit(context.Context, string, int64, string, string) error {
+func (f *fakeReactionWebhookWallet) Debit(context.Context, string, int64, string, string, string) error {
 	return nil
 }
-func (f *fakeReactionWebhookWallet) Credit(context.Context, string, int64, string, string) error {
+func (f *fakeReactionWebhookWallet) Credit(context.Context, string, int64, string, string, string) error {
 	return nil
 }
 

@@ -55,14 +55,14 @@ func TestPurchaseSandbox(t *testing.T) {
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 
-	p, err := c.PurchaseSandbox(t.Context(), "user-1", "pack_100", "k1")
+	p, err := c.PurchaseSandbox(t.Context(), "user-1", "pack_100", "k1", "Compra de fichas (pack_100)")
 	if err != nil {
 		t.Fatalf("PurchaseSandbox: %v", err)
 	}
 	if p.PurchaseID != "sbxp#poker#user-1#k1" || p.Amount != 100 || p.CreditsGranted != 1000 || p.Status != "pending" {
 		t.Fatalf("unexpected purchase: %+v", p)
 	}
-	if gotBody["user_id"] != "user-1" || gotBody["sku"] != "pack_100" || gotBody["idempotency_key"] != "k1" {
+	if gotBody["user_id"] != "user-1" || gotBody["sku"] != "pack_100" || gotBody["idempotency_key"] != "k1" || gotBody["description"] != "Compra de fichas (pack_100)" {
 		t.Fatalf("unexpected request body: %+v", gotBody)
 	}
 }

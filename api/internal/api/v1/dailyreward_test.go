@@ -15,7 +15,7 @@ import (
 
 type fakeDailyWallet struct{ fail bool }
 
-func (f *fakeDailyWallet) Credit(context.Context, string, int64, string, string) error {
+func (f *fakeDailyWallet) Credit(context.Context, string, int64, string, string, string) error {
 	if f.fail {
 		return errors.New("wallet unavailable")
 	}

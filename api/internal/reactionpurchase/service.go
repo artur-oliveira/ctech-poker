@@ -33,13 +33,20 @@ var (
 
 const productPurchasePrefix = "prdp"
 
+// Statement text of each wallet leg, formatted with the reaction id.
+const (
+	descriptionBuyRealFormat = "Compra de reação: %s"
+	descriptionBuyFormat     = "Reação: %s"
+	descriptionRefundFormat  = "Estorno da reação: %s"
+)
+
 type wallet interface {
 	ListProductSKUs(ctx context.Context) ([]walletclient.ProductSKU, error)
-	PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey string) (*walletclient.ProductPurchase, error)
+	PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey, description string) (*walletclient.ProductPurchase, error)
 	GetProductPurchase(ctx context.Context, purchaseID string) (*walletclient.ProductPurchase, error)
 	RefundProductPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*walletclient.ProductPurchase, error)
-	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
-	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
 // CatalogEntry merges reactions.catalog's premium flag/fichas price with
@@ -210,7 +217,7 @@ func (s *Service) CreateReal(ctx context.Context, playerID, reactionID, idemKey 
 		idemKey, requestKey = reservation.IdemKey, reservation.RequestKey
 	}
 
-	purchase, err := s.wallet.PurchaseProduct(ctx, playerID, sku, idemKey)
+	purchase, err := s.wallet.PurchaseProduct(ctx, playerID, sku, idemKey, fmt.Sprintf(descriptionBuyRealFormat, reactionID))
 	if err != nil {
 		if definitiveWalletRejection(err) {
 			if cancelErr := s.entitlements.CancelReservation(ctx, playerID, reactionID, requestKey); cancelErr != nil {
@@ -415,7 +422,7 @@ func (s *Service) CreateSandbox(ctx context.Context, playerID, reactionID, idemK
 		idemKey, requestKey, _ = rec.IdemKey, existingEnt.RequestKey, rec.PurchaseID
 		priceFichas = rec.PriceFichas
 	}
-	if err := s.wallet.Debit(ctx, playerID, priceFichas, idemKey, "reaction_purchase:"+reactionID); err != nil {
+	if err := s.wallet.Debit(ctx, playerID, priceFichas, idemKey, "reaction_purchase:"+reactionID, fmt.Sprintf(descriptionBuyFormat, reactionID)); err != nil {
 		if definitiveWalletRejection(err) {
 			if cancelErr := s.store.CancelSandboxReservation(ctx, s.entitlements, rec, requestKey); cancelErr != nil {
 				return Record{}, errors.Join(err, cancelErr)
@@ -517,7 +524,7 @@ func (s *Service) Refund(ctx context.Context, playerID, purchaseID, _ string) (R
 			return Record{}, errors.New("reactionpurchase: wallet did not confirm the PIX refund")
 		}
 	case methodFichas:
-		if err := s.wallet.Credit(ctx, playerID, rec.PriceFichas, refundKey, "reaction_refund:"+rec.ReactionID); err != nil {
+		if err := s.wallet.Credit(ctx, playerID, rec.PriceFichas, refundKey, "reaction_refund:"+rec.ReactionID, fmt.Sprintf(descriptionRefundFormat, rec.ReactionID)); err != nil {
 			return Record{}, err
 		}
 	default:
@@ -602,7 +609,7 @@ func (s *Service) Refresh(ctx context.Context, playerID, purchaseID string) (Rec
 	}
 	if rec.Method == methodFichas && rec.Status == statusProcessing {
 		requestKey := purchaseRequestKey(playerID, rec.ReactionID, methodFichas, rec.IdemKey)
-		if err := s.wallet.Debit(ctx, playerID, rec.PriceFichas, rec.IdemKey, "reaction_purchase:"+rec.ReactionID); err != nil {
+		if err := s.wallet.Debit(ctx, playerID, rec.PriceFichas, rec.IdemKey, "reaction_purchase:"+rec.ReactionID, fmt.Sprintf(descriptionBuyFormat, rec.ReactionID)); err != nil {
 			if definitiveWalletRejection(err) {
 				if cancelErr := s.store.CancelSandboxReservation(ctx, s.entitlements, *rec, requestKey); cancelErr != nil {
 					return Record{}, errors.Join(err, cancelErr)

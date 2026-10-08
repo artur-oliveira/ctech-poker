@@ -9,13 +9,17 @@ import (
 // mirrors dailyreward's `credit` interface so tests use a fake, not a real
 // HTTP client.
 type wallet interface {
-	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
-	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
 const (
 	reasonDebit  = "hand_reveal_history"
 	reasonCredit = "hand_reveal_history_payout"
+
+	// Statement text of each leg, formatted with the hand id.
+	descriptionDebitFormat  = "Revelação de mão #%s"
+	descriptionCreditFormat = "Parte da revelação de mão #%s"
 )
 
 type Service struct {
@@ -48,11 +52,11 @@ func (s *Service) PayForReveal(ctx context.Context, buyerID, winnerID, handID st
 		return nil
 	}
 	debitKey := handID + "#" + buyerID + "#debit"
-	if err := s.wallet.Debit(ctx, buyerID, fee, debitKey, reasonDebit); err != nil {
+	if err := s.wallet.Debit(ctx, buyerID, fee, debitKey, reasonDebit, fmt.Sprintf(descriptionDebitFormat, handID)); err != nil {
 		return err
 	}
 	creditKey := handID + "#" + buyerID + "#credit"
-	if err := s.wallet.Credit(ctx, winnerID, fee/2, creditKey, reasonCredit); err != nil {
+	if err := s.wallet.Credit(ctx, winnerID, fee/2, creditKey, reasonCredit, fmt.Sprintf(descriptionCreditFormat, handID)); err != nil {
 		return err
 	}
 	return s.payments.CompletePayment(ctx, handID, buyerID)

@@ -28,7 +28,7 @@ func allReactionProductSKUs() []walletclient.ProductSKU {
 func (f *fakeReactionWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
 	return f.skus, nil
 }
-func (f *fakeReactionWallet) PurchaseProduct(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
+func (f *fakeReactionWallet) PurchaseProduct(context.Context, string, string, string, string) (*walletclient.ProductPurchase, error) {
 	return nil, nil
 }
 func (f *fakeReactionWallet) GetProductPurchase(context.Context, string) (*walletclient.ProductPurchase, error) {
@@ -37,8 +37,12 @@ func (f *fakeReactionWallet) GetProductPurchase(context.Context, string) (*walle
 func (f *fakeReactionWallet) RefundProductPurchase(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
 	return nil, nil
 }
-func (f *fakeReactionWallet) Debit(context.Context, string, int64, string, string) error  { return nil }
-func (f *fakeReactionWallet) Credit(context.Context, string, int64, string, string) error { return nil }
+func (f *fakeReactionWallet) Debit(context.Context, string, int64, string, string, string) error {
+	return nil
+}
+func (f *fakeReactionWallet) Credit(context.Context, string, int64, string, string, string) error {
+	return nil
+}
 
 func newReactionPurchaseApp(svc *reactionpurchase.Service) *fiber.App {
 	app := fiber.New()

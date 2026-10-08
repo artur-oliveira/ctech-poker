@@ -29,14 +29,14 @@ func TestPurchaseProductRoundTrip(t *testing.T) {
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 
-	p, err := c.PurchaseProduct(t.Context(), "user-1", "poker_reaction_cold", "idem-1")
+	p, err := c.PurchaseProduct(t.Context(), "user-1", "poker_reaction_cold", "idem-1", "Reação: Frio")
 	if err != nil {
 		t.Fatalf("PurchaseProduct: %v", err)
 	}
 	if p.PurchaseID != "prdp-1" || p.Amount != 100 {
 		t.Fatalf("unexpected purchase: %+v", p)
 	}
-	if gotBody["user_id"] != "user-1" || gotBody["sku"] != "poker_reaction_cold" || gotBody["idempotency_key"] != "idem-1" {
+	if gotBody["user_id"] != "user-1" || gotBody["sku"] != "poker_reaction_cold" || gotBody["idempotency_key"] != "idem-1" || gotBody["description"] != "Reação: Frio" {
 		t.Fatalf("unexpected request body: %+v", gotBody)
 	}
 }

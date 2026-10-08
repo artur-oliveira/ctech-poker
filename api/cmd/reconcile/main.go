@@ -24,6 +24,12 @@ import (
 
 const gracePeriod = 2 * time.Minute
 
+// Statement text of the reconciled legs, formatted with the table id.
+const (
+	descriptionEntryFeeFormat = "Mesa #%s: taxa de entrada (conciliada)"
+	descriptionCashoutFormat  = "Mesa #%s: saída com fichas (conciliada)"
+)
+
 var timeNow = time.Now
 
 type pendingLister interface {
@@ -33,15 +39,15 @@ type pendingLister interface {
 }
 
 type gameCredit interface {
-	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
+	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason, description string) error
 }
 
 type sandboxCredit interface {
-	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
 type feeDebiter interface {
-	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
 func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sandboxCredit, fee feeDebiter) error {
@@ -59,7 +65,7 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 		var opErr error
 		switch e.Kind {
 		case reconcile.KindFeeDebit:
-			opErr = fee.DebitReal(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_table_fee_reconcile")
+			opErr = fee.DebitReal(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_table_fee_reconcile", fmt.Sprintf(descriptionEntryFeeFormat, e.TableRef))
 		default:
 			switch e.CurrencyMode {
 			case "real":
@@ -67,10 +73,10 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 				if tableRef == "" {
 					tableRef = "unknown"
 				}
-				opErr = game.CashoutGame(ctx, e.PlayerID, e.Amount, tableRef, e.HoldIDs, e.IdempotencyKey, "poker_cashout_reconcile")
+				opErr = game.CashoutGame(ctx, e.PlayerID, e.Amount, tableRef, e.HoldIDs, e.IdempotencyKey, "poker_cashout_reconcile", fmt.Sprintf(descriptionCashoutFormat, tableRef))
 			default:
 				if sandbox != nil {
-					opErr = sandbox.Credit(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_cashout_reconcile")
+					opErr = sandbox.Credit(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_cashout_reconcile", fmt.Sprintf(descriptionCashoutFormat, e.TableRef))
 				}
 			}
 		}

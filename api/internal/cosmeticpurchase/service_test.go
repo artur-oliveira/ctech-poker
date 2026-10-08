@@ -40,7 +40,7 @@ func allCosmeticSKUs() []walletclient.ProductSKU {
 func (f *fakeWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
 	return f.skus, nil
 }
-func (f *fakeWallet) PurchaseProduct(_ context.Context, _, _, key string) (*walletclient.ProductPurchase, error) {
+func (f *fakeWallet) PurchaseProduct(_ context.Context, _, _, key, _ string) (*walletclient.ProductPurchase, error) {
 	f.purchaseKeys = append(f.purchaseKeys, key)
 	return f.purchase, f.purchaseErr
 }
@@ -52,12 +52,12 @@ func (f *fakeWallet) RefundProductPurchase(_ context.Context, _, _ string, key s
 	f.refundKeys = append(f.refundKeys, key)
 	return &walletclient.ProductPurchase{Status: "refunded"}, nil
 }
-func (f *fakeWallet) Debit(_ context.Context, _ string, _ int64, key, _ string) error {
+func (f *fakeWallet) Debit(_ context.Context, _ string, _ int64, key, _, description string) error {
 	f.debits++
 	f.debitKeys = append(f.debitKeys, key)
 	return f.debitErr
 }
-func (f *fakeWallet) Credit(_ context.Context, _ string, _ int64, key, _ string) error {
+func (f *fakeWallet) Credit(_ context.Context, _ string, _ int64, key, _, description string) error {
 	f.credits++
 	f.creditKeys = append(f.creditKeys, key)
 	return f.creditErr

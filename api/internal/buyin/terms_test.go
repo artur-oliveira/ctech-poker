@@ -12,8 +12,8 @@ import (
 
 type gateWallet struct{ debits int }
 
-func (w *gateWallet) Credit(context.Context, string, int64, string, string) error { return nil }
-func (w *gateWallet) Debit(context.Context, string, int64, string, string) error {
+func (w *gateWallet) Credit(context.Context, string, int64, string, string, string) error { return nil }
+func (w *gateWallet) Debit(context.Context, string, int64, string, string, string) error {
 	w.debits++
 	return nil
 }
@@ -21,10 +21,12 @@ func (w *gateWallet) HoldGame(context.Context, string, int64, string, string, st
 	return "h1", nil
 }
 func (w *gateWallet) ReleaseHold(context.Context, string) error { return nil }
-func (w *gateWallet) CashoutGame(context.Context, string, int64, string, []string, string, string) error {
+func (w *gateWallet) CashoutGame(context.Context, string, int64, string, []string, string, string, string) error {
 	return nil
 }
-func (w *gateWallet) DebitReal(context.Context, string, int64, string, string) error { return nil }
+func (w *gateWallet) DebitReal(context.Context, string, int64, string, string, string) error {
+	return nil
+}
 func (w *gateWallet) Balances(context.Context, string) (*walletclient.Balances, error) {
 	return &walletclient.Balances{}, nil
 }

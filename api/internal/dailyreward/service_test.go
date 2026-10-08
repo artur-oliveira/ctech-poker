@@ -57,13 +57,15 @@ func (f *fakeSpinStore) Complete(_ context.Context, playerID, day string, _ time
 }
 
 type fakeCredit struct {
-	amounts []int64
-	keys    []string
-	fail    bool
+	descriptions []string
+	amounts      []int64
+	keys         []string
+	fail         bool
 }
 
-func (f *fakeCredit) Credit(_ context.Context, _ string, amount int64, key, _ string) error {
+func (f *fakeCredit) Credit(_ context.Context, _ string, amount int64, key, _, description string) error {
 	f.amounts = append(f.amounts, amount)
+	f.descriptions = append(f.descriptions, description)
 	f.keys = append(f.keys, key)
 	if f.fail {
 		return errors.New("wallet unavailable")
@@ -99,6 +101,9 @@ func TestSpinPersistsThenCreditsAndCompletes(t *testing.T) {
 	}
 	if got := store.streaks["p1"].CurrentStreak; got != 3 {
 		t.Fatalf("streak did not advance: %d", got)
+	}
+	if len(wallet.descriptions) != 1 || wallet.descriptions[0] != "Recompensa diária" {
+		t.Fatalf("wallet description = %v, want the statement text", wallet.descriptions)
 	}
 }
 
