@@ -19,7 +19,8 @@
 - Poker adds three pieces:
   - the lock check at its choke points: `authMiddleware`, both WebSocket gateways, and the wallet webhook;
   - an eligibility endpoint;
-  - a new package `internal/userpurge` whose `Purger.Purge` is the consumer's `PurgeFunc`. It implements the data inventory §7.
+  - a new package `internal/userpurge` whose `Purger.Purge` is the consumer's `PurgeFunc`. It implements the data inventory §7;
+  - an `OnLock` hook that force-closes the locked user's open sockets on every instance through `ws.Registry`.
 - Infra: one table, one queue + DLQ subscribed to the account topic, and IAM, all in the existing CDK stacks.
 
 **Tech Stack:** Go 1.27, Fiber v3, uber-fx, DynamoDB (aws-sdk-go-v2), S3, SQS, Valkey, AWS CDK (TypeScript, jest).
@@ -139,6 +140,7 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
 | `api/internal/api/v1/walletwebhook.go` | drop purchases of locked/erased users |
 | `api/internal/api/v1/router.go` | thread `blocked` through |
 | `api/internal/api/v1/erasure.go` | eligibility endpoint |
+| `api/internal/api/v1/erasurews.go` | force-close a locked user's sockets fleet-wide (`OnLock` hook) |
 | `api/internal/userpurge/eligibility.go` | blockers |
 | `api/internal/userpurge/anonymize.go` | pseudonymization of DynamoDB items and archive JSON lines |
 | `api/internal/userpurge/inventory.go` | table names + treatment per table |
@@ -3247,7 +3249,8 @@ git commit -m "feat(api): close a locked user's sockets fleet-wide on the erasur
   - `SSM_ACCOUNT(env).erasureTopicArn`;
   - table `{env}_poker_erasure_state`;
   - queue `{env}-poker-user-erasure` and DLQ `{env}-poker-user-erasure-dlq`;
-  - env lines `ERASURE_QUEUE_URL=` and `ACTION_LOG_ARCHIVE_BUCKET=` in `/etc/app-static.env`.
+  - env lines `ERASURE_QUEUE_URL=` and `ACTION_LOG_ARCHIVE_BUCKET=` in `/etc/app-static.env`;
+  - `SSM_POKER(env).erasureAckClientId` / `.erasureAckClientSecret`, and `ERASURE_ACK_CLIENT_ID` / `ERASURE_ACK_CLIENT_SECRET` in `ssmEnvArgs` (dedicated ack client, ruling R2).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3291,6 +3294,8 @@ test('subscribes a poker queue to the account user-erasure topic (account deleti
   const text = userDataText(template);
   expect(text).toContain('ERASURE_QUEUE_URL=');
   expect(text).toContain('ACTION_LOG_ARCHIVE_BUCKET=poker-action-log-archive-dev');
+  expect(text).toContain('ERASURE_ACK_CLIENT_ID=/ctech/dev/poker/erasure-ack-client-id');
+  expect(text).toContain('ERASURE_ACK_CLIENT_SECRET=/ctech/dev/poker/erasure-ack-client-secret');
 });
 
 test('erasure DLQ alarm exists only when prod + cloudwatchAlarmsEnabled', () => {
@@ -3308,6 +3313,14 @@ Expected: FAIL. The count is `Expected 37 but got 36`, and the queue tests fail 
 
 `cdk/lib/constants.ts`:
 - add to `SSM_ACCOUNT` the entry `erasureTopicArn: \`/ctech/${env}/account/erasure-topic-arn\`,` (published by ctech-account's iam-stack);
+- add to `SSM_POKER` (operator-provisioned, like `clientId` / `clientSecret`):
+
+```ts
+  // Dedicated confidential client for account-deletion acks to ctech-account
+  // (scope internal:account:erasure-ack only), kept apart from the wallet M2M client.
+  erasureAckClientId: `/ctech/${env}/poker/erasure-ack-client-id`,
+  erasureAckClientSecret: `/ctech/${env}/poker/erasure-ack-client-secret`,
+```
 - below `SSM_ACCOUNT`, add:
 
 ```ts
@@ -3373,6 +3386,13 @@ export const actionLogArchiveBucketName = (env: Environment) => `poker-action-lo
         `arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/up/*`,
       ],
     }));
+    // The dedicated ack client's credentials, read at service start (ruling R2).
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [poker.erasureAckClientId, poker.erasureAckClientSecret].map(
+        (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
+      ),
+    }));
     // ...and rewrites the action-log archive of every hand the user played.
     const archiveBucket = actionLogArchiveBucketName(environment);
     instanceRole.addToPolicy(new iam.PolicyStatement({
@@ -3410,6 +3430,13 @@ export const actionLogArchiveBucketName = (env: Environment) => `poker-action-lo
     }
 ```
 
+- in `ssmEnvArgs`, after `` `AVATAR_BASE_URL=${avatarBaseUrlParam}`, ``, add:
+
+```ts
+      `ERASURE_ACK_CLIENT_ID=${poker.erasureAckClientId}`,
+      `ERASURE_ACK_CLIENT_SECRET=${poker.erasureAckClientSecret}`,
+```
+
 (The table needs no new IAM: the existing `table/${environment}_poker*` wildcard covers it.)
 
 - [ ] **Step 4: Run the tests**
@@ -3445,6 +3472,7 @@ In "Configuration (environment variables)", add three rows to the table:
 | `ERASURE_QUEUE_URL` *                             | —                                 | poker's SQS queue on ctech-account's `{env}-account-user-erasure` topic; empty disables the deletion consumer (dev only) |
 | `ACTION_LOG_ARCHIVE_BUCKET` *                     | —                                 | action-log S3 archive the deletion purge rewrites; empty skips that step (dev only)                                  |
 | `ERASURE_ACCOUNT_CLIENT_ID`                       | `accounts`                        | ctech-account's own client id (`SELF_CLIENT_ID`): the only `azp` allowed on the eligibility endpoint                |
+| `ERASURE_ACK_CLIENT_ID` / `ERASURE_ACK_CLIENT_SECRET` * | —                           | dedicated confidential client for erasure acks (`internal:account:erasure-ack` only), SSM `/ctech/<env>/poker/erasure-ack-client-{id,secret}` |
 ```
 
 In "Authentication & authorization", add these bullets:
@@ -3474,8 +3502,10 @@ plan `docs/plans/2026-10-07-account-deletion-participant.md`).
   `poker.pending_fee_debit`.
 - The consumer (`internal/app/erasure.go`, api-commons `erasure.Consumer`) reads `ERASURE_QUEUE_URL`, applies
   lock/unlock to `{env}_poker_erasure_state`, runs `userpurge.Purger.Purge` on `user.erase`, then acks
-  `POST {CTECH_URL}/v1.0/internal/erasure/ack` with `POKER_CLIENT_ID`'s client-credentials token
-  (scope `internal:account:erasure-ack`).
+  `POST {CTECH_URL}/v1.0/internal/erasure/ack` with the dedicated `ERASURE_ACK_CLIENT_ID`'s client-credentials
+  token (scope `internal:account:erasure-ack`). When a message locks the user, its `OnLock` hook broadcasts on
+  `ws.Registry` key `erasure-lock#<sub>` and every instance closes that user's table and gateway sockets
+  (`api/v1/erasurews.go`).
 - What the purge does per table is `internal/userpurge/inventory.go`. A new `poker_*` table fails
   `TestInventoryClassifiesEveryTable` until it is classified there and handled in `Purge`.
 - Others' hand histories keep the erased player as a random pseudonym (`anon_…`, never stored next to the sub),
@@ -3510,9 +3540,11 @@ plan `docs/plans/2026-10-07-account-deletion-participant.md`).
 
 ## One-time enablement (per environment)
 1. Deploy ctech-account's stack first (it creates `<env>-account-user-erasure` and its SSM ARN), then poker's.
-2. In ctech-account, grant poker's confidential client (`POKER_CLIENT_ID`) the scope `internal:account:erasure-ack`.
+2. In ctech-account, create a dedicated confidential client for poker's acks, grant it only
+   `internal:account:erasure-ack`, and store its id/secret in SSM `/ctech/<env>/poker/erasure-ack-client-id` and
+   `/ctech/<env>/poker/erasure-ack-client-secret` (SecureString). Instance refresh to load them.
 3. Add poker to ctech-account's `/ctech-account/<env>/erasure-participants` JSON:
-   `{"service":"poker","url":"https://poker-api[-<env>].aoctech.app/v1.0","audience":"<poker SERVICE_AUDIENCE>","client_id":"<POKER_CLIENT_ID>"}`.
+   `{"service":"poker","url":"https://poker-api[-<env>].aoctech.app/v1.0","audience":"<poker SERVICE_AUDIENCE>","client_id":"<ERASURE_ACK_CLIENT_ID>"}`.
 4. Check poker's `ERASURE_ACCOUNT_CLIENT_ID` equals ctech-account's `SELF_CLIENT_ID` (default `accounts`).
 
 ## DLQ alarm (`<env>-poker-user-erasure-dlq-depth`)
@@ -3548,7 +3580,7 @@ git commit -m "docs: account deletion participant (config, auth, purge, runbook)
 ## Cross-project impact
 
 - **ctech-account (api, cdk):** no code change, but enabling poker needs operator steps on the account side:
-  - grant `internal:account:erasure-ack` to `POKER_CLIENT_ID`;
+  - create poker's dedicated ack client and grant it `internal:account:erasure-ack` (R2);
   - add poker to `ERASURE_PARTICIPANTS`, using poker's `/v1.0` base URL and its `SERVICE_AUDIENCE` as `audience`;
   - deploy account's stack before poker's (the SSM topic ARN must exist at poker deploy time).
 
@@ -3558,14 +3590,16 @@ git commit -m "docs: account deletion participant (config, auth, purge, runbook)
 
   If account changes either, poker's endpoint returns 403 or its acks fail into the DLQ.
 - **ctech-account ui:** must translate the four `poker.*` blocker codes.
-- **ctech-go-common:** consumed at v1.14.0, unchanged. Its README "Account erasure" still says filter scope `MessageBody` and scope `account:erasure:ack`; account's phase 3 plan (Task 8) owns that fix. The `erasure.AckClient` doc comment has the same stale scope name.
+- **ctech-go-common:** poker needs **v1.14.0**, which adds `erasure.Consumer.OnLock` (separate go-common plan). Task 1 is blocked until that tag exists. Its README "Account erasure" still says filter scope `MessageBody` and scope `account:erasure:ack`; account's phase 3 plan (Task 8) owns that fix. The `erasure.AckClient` doc comment has the same stale scope name.
 - **ctech-wallet:** none directly. Poker's money trail stays in the wallet ledger (D5). A product purchase dropped by the webhook during a deletion stays paid in the wallet, so support refunds it (R15).
 - **ctech-dfe, ctech-billing:** none. The same participant pattern applies; `userpurge`'s anonymizer and the `BlockedFunc` choke-point approach are candidates for `ctech-go-common/erasure` if a second service needs them.
 - **Shared Valkey:** read-only use of DB 0 revocation keys (one GET per verification). Shared Valkey latency now also gates poker writes (R3).
 
-## Open questions for the user
+## Decisions (user, 2026-10-08)
 
-1. Legal sign-off on: report retention of 1 year anonymized (R9); erasing instead of anonymizing the user's own hand rows and the matchups (R7).
-2. Is `accounts` the prod value of ctech-account's `SELF_CLIENT_ID` (default of `ERASURE_ACCOUNT_CLIENT_ID`)?
-3. Reuse `POKER_CLIENT_ID` for acks (R2), or provision a dedicated confidential client?
-4. Should WebSockets already open at lock time be force-closed (needs a lock hook the go-common consumer does not expose today) (R6)?
+1. Legal approves the 1-year anonymized report retention (R9). Legal also approves erasing, rather than anonymizing, the user's own hand rows and the matchups (R7).
+2. ctech-account's prod `SELF_CLIENT_ID` is `accounts`, with no override (R12).
+3. Acks use a dedicated confidential client: `ERASURE_ACK_CLIENT_ID` / `_SECRET` from SSM (R2, Tasks 8 and 10).
+4. Sockets already open at lock time are force-closed through the v1.14.0 `OnLock` hook (R6, Task 9). The connect-time check stays.
+
+No open questions remain.
