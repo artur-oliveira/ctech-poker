@@ -93,7 +93,10 @@ jobs:
 
       - name: Staticcheck
         working-directory: api
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+        # v0.8.1 (latest tag) cannot read go1.27.2 export data ("export data
+        # version 5 is greater than maximum supported version 4"); pinned to
+        # the first master commit that can. Move back to a tag once one ships.
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45 ./...
 
       - name: Vulnerability scan
         working-directory: api
