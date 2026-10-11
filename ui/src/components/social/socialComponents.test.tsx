@@ -80,6 +80,15 @@ describe('PeopleList', () => {
     expect(screen.getByText('Compartilhe seu código')).toBeInTheDocument();
   });
 
+  test('an empty page with more to read offers to load more instead of the empty state', async () => {
+    const loadMore = vi.fn();
+    renderWithClient(<PeopleList variant="friends" items={[]} actions={actionState()} emptyTitle="Sem amigos"
+                                 hasNext onMoreAction={loadMore}/>);
+    expect(screen.queryByText('Sem amigos')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Carregar mais'}));
+    expect(loadMore).toHaveBeenCalled();
+  });
+
   test('answers an incoming request from the row itself', async () => {
     const actions = actionState();
     renderWithClient(<PeopleList variant="incoming" items={[player({relationship: 'incoming'})]} actions={actions}

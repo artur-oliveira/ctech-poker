@@ -440,6 +440,10 @@ func (s *Store) findActionByFilter(ctx context.Context, tableID, handID, actionI
 		result, err := s.log.Query(ctx, dynamo.QueryOpts{
 			PK: tableID + "#" + handID, ScanIndexForward: true, ExclusiveStartKey: startKey,
 			FilterField: "action_id", FilterValue: actionID,
+			// One DynamoDB call per iteration, as before api-commons v1.16.0:
+			// action_id is unique, so filling a 100-match page would read the
+			// rest of the hand after the match. This loop follows the cursor.
+			MaxPages: 1,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("tablestore: find action: %w", err)

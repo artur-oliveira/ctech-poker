@@ -81,21 +81,34 @@ func TestListFindsEdgesPastTheFirstPage(t *testing.T) {
 		t.Fatalf("blocked page = %v, want %v", got, blocked)
 	}
 
-	// Paging friends one at a time visits each exactly once.
-	var got []string
-	var start map[string]types.AttributeValue
-	for range 100 {
-		page, cursor, err := store.List(ctx, "me", RelationshipFriend, false, 1, start)
-		if err != nil {
-			t.Fatal(err)
+	// Paging visits each friend exactly once — at limit 1 through empty pages
+	// with a cursor (the read budget runs out among the muted rows), at limit 2
+	// through a call that reads more friends than the page still needs, whose
+	// cursor is then the last returned edge's key.
+	for _, limit := range []int{1, 2} {
+		var got []string
+		var start map[string]types.AttributeValue
+		done := false
+		for range 100 {
+			page, cursor, err := store.List(ctx, "me", RelationshipFriend, false, limit, start)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(page) > limit {
+				t.Fatalf("limit %d: page of %d", limit, len(page))
+			}
+			got = append(got, others(page)...)
+			if cursor == nil {
+				done = true
+				break
+			}
+			start = cursor
 		}
-		got = append(got, others(page)...)
-		if cursor == nil {
-			break
+		if !done {
+			t.Fatalf("limit %d: the cursor never ended", limit)
 		}
-		start = cursor
-	}
-	if !slices.Equal(got, friends) {
-		t.Fatalf("paged friends = %v, want %v", got, friends)
+		if !slices.Equal(got, friends) {
+			t.Fatalf("limit %d: paged friends = %v, want %v", limit, got, friends)
+		}
 	}
 }

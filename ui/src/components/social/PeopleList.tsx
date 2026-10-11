@@ -53,7 +53,9 @@ export function PeopleList({
       <RotateCw aria-hidden="true"/> Tentar novamente
     </Button>}
   </div>;
-  if (!items.length) return <div className="people-empty">
+  // A page can come back empty with more to read (the server's per-request
+  // read budget ran out before a match), so empty only means empty at the end.
+  if (!items.length && !(hasNext && onMoreAction)) return <div className="people-empty">
     <p>{emptyTitle}</p>
     {emptyHint && <small>{emptyHint}</small>}
   </div>;
