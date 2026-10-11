@@ -262,7 +262,12 @@ func (s *Store) List(ctx context.Context, ownerPlayerID string, relationship Rel
 		input.FilterExpression = aws.String(filter)
 		input.ExpressionAttributeNames = names
 	}
-	out, err := s.base.QueryRaw(ctx, input)
+	// relationship/blocked are filters, applied after DynamoDB has counted
+	// Limit rows, and the partition mixes friends, requests, mutes and blocks:
+	// one QueryRaw call returned an empty page whenever the first Limit rows
+	// were something else. QueryRawFiltered keeps reading until the page is
+	// full (within its read budget) and returns a cursor that skips nothing.
+	out, err := s.base.QueryRawFiltered(ctx, input, 0)
 	if err != nil {
 		return nil, nil, fmt.Errorf("social: list edges: %w", err)
 	}
