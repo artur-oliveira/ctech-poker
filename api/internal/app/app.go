@@ -152,6 +152,7 @@ var Module = fx.Options(
 	fx.Invoke(validateWalletScopes),
 	fx.Invoke(registerRoutesWithSocialRuntime),
 	fx.Invoke(registerErasureRoutes),
+	fx.Invoke(startErasureConsumer),
 	fx.Invoke(startServer),
 )
 

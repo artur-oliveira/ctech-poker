@@ -1,10 +1,23 @@
 package app
 
 import (
+	"context"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gofiber/fiber/v3"
+	"go.uber.org/fx"
+	"gopkg.aoctech.app/api-commons/awsconfig"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
+	"gopkg.aoctech.app/api-commons/oauth2client"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
@@ -14,6 +27,14 @@ import (
 
 // Account-deletion saga participant wiring
 // (docs/plans/2026-10-07-account-deletion-participant.md).
+
+const (
+	// erasureService is poker's participant id in erasure messages and the SNS filter.
+	erasureService = "poker"
+	// erasureAckScope is the only scope of poker's dedicated ack client
+	// (ERASURE_ACK_CLIENT_ID), granted by an operator in ctech-account.
+	erasureAckScope = "internal:account:erasure-ack"
+)
 
 // newErasureStore binds {env}_poker_erasure_state. The poker_ segment keeps it
 // from colliding with another participant's state table in the same AWS
@@ -28,4 +49,57 @@ func newEligibility(sessions *sessionlog.Store, pending *reconcile.PendingStore)
 
 func registerErasureRoutes(app *fiber.App, cfg *config.Config, verifier *jwtverify.Verifier, elig *userpurge.Eligibility) {
 	v1.RegisterErasure(app.Group("/v1.0"), verifier, cfg.ErasureAccountClientID, elig.Blockers)
+}
+
+// startErasureConsumer runs the saga consumer in the background: it applies
+// user.locked/user.unlocked itself and calls Purger.Purge on user.erase, then
+// acks to ctech-account. Every replica runs one; SQS hands each message to
+// one of them, and the purge is idempotent.
+func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Client, c cache.Backend, store *erasure.Store, elig *userpurge.Eligibility) error {
+	if cfg.ErasureQueueURL == "" {
+		slog.Warn("ERASURE_QUEUE_URL empty: account-deletion consumer disabled (dev only; config.Load refuses this in prod)")
+		return nil
+	}
+	awsCfg, err := awsconfig.Load(context.Background(), cfg.AWSRegion)
+	if err != nil {
+		return err
+	}
+	// Poker instances have IPv6 egress only (see newAvatarService).
+	objects := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.EndpointOptions.UseDualStackEndpoint = aws.DualStackEndpointStateEnabled
+	})
+	queue := sqs.NewFromConfig(awsCfg, func(o *sqs.Options) {
+		o.EndpointOptions.UseDualStackEndpoint = aws.DualStackEndpointStateEnabled
+	})
+	purger := userpurge.NewPurger(db, objects, c, userpurge.Config{
+		Env: cfg.Env, AvatarBucket: cfg.AvatarBucket, ArchiveBucket: cfg.ActionLogArchiveBucket,
+	}, elig.Blockers)
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	account := strings.TrimRight(cfg.CtechURL, "/")
+	tokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.ErasureAckClientID, cfg.ErasureAckClientSecret, erasureAckScope)
+	acks := erasure.NewAckClient(httpClient, account+"/v1.0/internal/erasure/ack", tokens)
+	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			go func() {
+				defer close(done)
+				_ = consumer.Run(ctx)
+			}()
+			return nil
+		},
+		// A purge cut short here is redelivered after the visibility timeout
+		// and resumes: every step re-reads from scratch.
+		OnStop: func(stopCtx context.Context) error {
+			cancel()
+			select {
+			case <-done:
+			case <-stopCtx.Done():
+			}
+			return nil
+		},
+	})
+	return nil
 }
