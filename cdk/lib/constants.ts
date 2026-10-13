@@ -178,6 +178,10 @@ export const SSM_POKER = (env: Environment) => ({
   clientId: `/ctech/${env}/poker/poker-client-id`,
   clientSecret: `/ctech/${env}/poker/poker-client-secret`,
   turnstileSecret: `/ctech/${env}/poker/turnstile-secret`,
+  // Dedicated confidential client for account-deletion acks to ctech-account
+  // (scope internal:account:erasure-ack only), kept apart from the wallet M2M client.
+  erasureAckClientId: `/ctech/${env}/poker/erasure-ack-client-id`,
+  erasureAckClientSecret: `/ctech/${env}/poker/erasure-ack-client-secret`,
   // Real-money kill switch + legal sign-off reference. Both live in SSM (not
   // baked into userdata) so ops can flip them without a CDK redeploy —
   // config.Load() fails closed if REAL_MONEY_ENABLED=true and this ref is
@@ -201,7 +205,11 @@ export const SSM_ACCOUNT = (env: Environment) => ({
   internalBaseUrl: `/ctech-account/${env}/internal-base-url`,
   appUrl: `/ctech-account/${env}/app-url`,
   internalJwksUrl: `/ctech-account/${env}/internal-jwks-url`,
+  erasureTopicArn: `/ctech/${env}/account/erasure-topic-arn`,
 });
+
+/** Action-log S3 archive (archiver-stack.ts), rewritten by the account-deletion purge. */
+export const actionLogArchiveBucketName = (env: Environment) => `poker-action-log-archive-${env}`;
 
 // ── Domain helper (identical to ctech-wallet's / ctech-dfe's) ───────────────
 export const domainForEnv = (environment: Environment, prefix: string) => {

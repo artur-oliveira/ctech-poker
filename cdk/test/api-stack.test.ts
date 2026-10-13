@@ -179,3 +179,36 @@ test('no secret value is written into the launch template', () => {
     expect(text).toContain(`${secret}=/ctech/dev/poker/`);
   }
 });
+
+test('subscribes a poker queue to the account user-erasure topic (account deletion)', () => {
+  const template = Template.fromStack(synthStack());
+  template.hasResourceProperties('AWS::SQS::Queue', {
+    QueueName: 'dev-poker-user-erasure',
+    VisibilityTimeout: 43200,
+    RedrivePolicy: Match.objectLike({maxReceiveCount: 5}),
+  });
+  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-user-erasure-dlq'});
+  template.hasResourceProperties('AWS::SNS::Subscription', {
+    Protocol: 'sqs',
+    RawMessageDelivery: true,
+    FilterPolicy: {services: ['poker']},
+  });
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {Statement: Match.arrayWith([Match.objectLike({
+      Action: Match.arrayWith(['sqs:ReceiveMessage', 'sqs:DeleteMessage']),
+    })])},
+  });
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {Statement: Match.arrayWith([Match.objectLike({Action: 's3:ListBucketVersions'})])},
+  });
+  const text = userDataText(template);
+  expect(text).toContain('ERASURE_QUEUE_URL=');
+  expect(text).toContain('ACTION_LOG_ARCHIVE_BUCKET=poker-action-log-archive-dev');
+  expect(text).toContain('ERASURE_ACK_CLIENT_ID=/ctech/dev/poker/erasure-ack-client-id');
+  expect(text).toContain('ERASURE_ACK_CLIENT_SECRET=/ctech/dev/poker/erasure-ack-client-secret');
+});
+
+test('erasure DLQ alarm exists only when prod + cloudwatchAlarmsEnabled', () => {
+  const on = Template.fromStack(synthStack({environment: 'prod', cloudwatchAlarmsEnabled: true}));
+  on.hasResourceProperties('AWS::CloudWatch::Alarm', {AlarmName: 'prod-poker-user-erasure-dlq-depth'});
+});

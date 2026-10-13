@@ -43,7 +43,7 @@ export type TableName =
   'poker_chat_prefs' | 'poker_botcheck_contests' | 'poker_wallet_alert_prefs' |
   'poker_promo_codes' | 'poker_promo_redemptions' |
   'poker_table_entitlements' | 'poker_table_highlights' |
-  'poker_hand_reveals' | 'poker_hand_reveal_payments' |
+  'poker_hand_reveals' | 'poker_hand_reveal_payments' | 'poker_erasure_state' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -278,6 +278,11 @@ export class DynamoDBStack extends cdk.Stack {
     // once, by the hand-complete/hand-updated hooks, and never touched
     // again). No TTL, mirrors poker_sandbox_purchases' permanent history.
     table('poker_hand_reveal_payments', false);
+    // poker_erasure_state: the account-deletion saga's per-user lock and
+    // tombstone (pk "SUB#<sub>", TTL "ttl"). Schema owned by api-commons
+    // erasure.Store. PITR stays on: a lost tombstone lets a late message
+    // resurrect an erased user.
+    table('poker_erasure_state', false, true);
     // One permanent private aggregate per player plus short-lived idempotency
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);

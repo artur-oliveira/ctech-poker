@@ -14,6 +14,7 @@ import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from "./bundle";
 import {addLambdaDlqAlarms} from './alarms';
+import {actionLogArchiveBucketName} from './constants';
 
 // localGoBundling builds the archiver binary with the host's own Go
 // toolchain, skipping Docker entirely when `go` is on PATH — Docker-in-CI
@@ -35,7 +36,7 @@ export class ArchiverStack extends cdk.Stack {
     const {environment, actionLogTable, cloudwatchAlarmsEnabled} = props;
 
     const bucket = new s3.Bucket(this, 'ActionLogArchive', {
-      bucketName: `poker-action-log-archive-${environment}`,
+      bucketName: actionLogArchiveBucketName(environment),
       removalPolicy: environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
       autoDeleteObjects: environment === 'dev',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
