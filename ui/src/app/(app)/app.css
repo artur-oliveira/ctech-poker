@@ -447,7 +447,10 @@
     color: var(--muted);
     font: 600 11px var(--font-mono);
     text-transform: uppercase;
-    letter-spacing: .1em
+    letter-spacing: .1em;
+    /* The room picture has lit shelves and lamps right where the controls sit;
+       a scrim from the room colour keeps them legible on any of them. */
+    background: linear-gradient(color-mix(in srgb, var(--table-room) 92%, transparent), color-mix(in srgb, var(--table-room) 55%, transparent) 70%, transparent)
 }
 .game-chrome > header a:focus-visible {
     outline: 3px solid var(--focus-ring);
@@ -4679,7 +4682,9 @@
        clips overflow, so zero side padding cuts the rightmost/leftmost
        seat off. */
     padding: 12px 24px 16px;
-    background: var(--table-room)
+    /* Same picture as .game; --table-room is the layer beneath it, so a failed
+       fetch leaves the flat room colour the replay always had. */
+    background: var(--table-room-picture), var(--table-room)
 }
 .replay-live-table .game-table {
     width: 100%;
