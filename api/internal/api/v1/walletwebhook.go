@@ -37,11 +37,11 @@ type productPurchaseUpdate struct{ playerID, purchaseID, status string }
 // and premium cosmetics) the re-verified purchase's SKU picks the service.
 // Anything else goes to the sandbox-credits svc
 // (docs/specs/2026-08-12-premium-reactions.md).
-func RegisterWalletWebhook(router fiber.Router, hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, cosmeticSvc *cosmeticpurchase.Service, reg ws.Registry) {
-	router.Post("/webhooks/wallet", walletWebhookHandler(hmacSecret, sandboxSvc, reactionSvc, cosmeticSvc, reg))
+func RegisterWalletWebhook(router fiber.Router, hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, cosmeticSvc *cosmeticpurchase.Service, reg ws.Registry, blocked BlockedFunc) {
+	router.Post("/webhooks/wallet", walletWebhookHandler(hmacSecret, sandboxSvc, reactionSvc, cosmeticSvc, reg, blocked))
 }
 
-func walletWebhookHandler(hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, cosmeticSvc *cosmeticpurchase.Service, reg ws.Registry) fiber.Handler {
+func walletWebhookHandler(hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, cosmeticSvc *cosmeticpurchase.Service, reg ws.Registry, blocked BlockedFunc) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		body := c.Body()
 		if !validWalletWebhookSignature(hmacSecret, body, c.Get(walletWebhookSignatureHeader)) {
@@ -68,6 +68,19 @@ func walletWebhookHandler(hmacSecret string, sandboxSvc *sandboxpurchase.Service
 			if purchase == nil || purchase.PurchaseID != payload.PurchaseID {
 				slog.Error("wallet webhook: wallet returned a different product purchase", "purchase_id", payload.PurchaseID)
 				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			if blocked != nil {
+				locked, err := blocked(c.Context(), purchase.UserID)
+				if err != nil {
+					slog.Error("wallet webhook: erasure lock check failed", "purchase_id", payload.PurchaseID, "err", err)
+					return c.SendStatus(fiber.StatusInternalServerError)
+				}
+				if locked {
+					// Granting would resurrect a locked or erased user's rows
+					// (saga protocol §4.5). The payment stays in the wallet ledger.
+					slog.Warn("wallet webhook: dropped purchase of a locked or erased user", "purchase_id", payload.PurchaseID)
+					return c.SendStatus(fiber.StatusOK)
+				}
 			}
 
 			var (

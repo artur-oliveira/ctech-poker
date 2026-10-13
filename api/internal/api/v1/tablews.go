@@ -239,6 +239,7 @@ func RegisterTableWS(
 	stats pokerStatsReader,
 	actionLimiter *RateLimiter,
 	reactionLimiter *RateLimiter,
+	blocked BlockedFunc,
 ) {
 	connectionTracker := newTableConnectionTracker()
 	checker := botcheck.New(cfg.TurnstileSecret, cfg.TurnstileExpectedHostname)
@@ -310,6 +311,11 @@ func RegisterTableWS(
 				return
 			}
 			playerID := claims.Sub
+			if wsLocked(ctx, blocked, playerID) {
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
+				closePokerWS(ctx, conn, "connection shutdown")
+				return
+			}
 
 			// Private rooms are invite-only end to end: the WS gate mirrors
 			// the HTTP join gate, so knowing a table ID never grants access.
@@ -903,6 +909,7 @@ func RegisterGeneralWS(
 	reg ws.Registry,
 	allowedOrigins []string,
 	presenceSvc *presence.Service,
+	blocked BlockedFunc,
 ) {
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
@@ -952,6 +959,11 @@ func RegisterGeneralWS(
 				return
 			}
 			playerID := claims.Sub
+			if wsLocked(ctx, blocked, playerID) {
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
+				closePokerWS(ctx, conn, "connection shutdown")
+				return
+			}
 			connID := uuid.New().String()
 			if presenceSvc != nil {
 				if err := presenceSvc.Open(ctx, playerID, connID); err != nil {

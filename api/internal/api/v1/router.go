@@ -86,6 +86,7 @@ func Register(
 	chatPrefsCache *chatprefs.ExtraWordsCache,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
+	blocked BlockedFunc,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
@@ -105,12 +106,12 @@ func Register(
 	// script; reactions stay at one per 2 s.
 	wsActionLimiter := NewRateLimiter(cacheBackend, 10, time.Second)
 	wsReactionLimiter := NewRateLimiter(cacheBackend, 1, 2*time.Second)
-	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore, wsActionLimiter, wsReactionLimiter)
-	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins, presenceSvc)
-	auth := authMiddleware(verifier)
+	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore, wsActionLimiter, wsReactionLimiter, blocked)
+	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins, presenceSvc, blocked)
+	auth := authMiddleware(verifier, blocked)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
 	RegisterAchievementCatalog(router)
-	RegisterWalletWebhook(router, cfg.WalletWebhookHMACSecret, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, reg)
+	RegisterWalletWebhook(router, cfg.WalletWebhookHMACSecret, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, reg, blocked)
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.
