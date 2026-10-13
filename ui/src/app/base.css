@@ -15,6 +15,7 @@
     --on-brand: #fff;
     --table-room: var(--ink);
     --table-room-wine: var(--wine);
+    --table-room-picture: url('/table/room-landscape.webp') center / cover no-repeat;
     --table-rail: #7c4d2f;
     --table-rail-edge: #291714;
     --table-rail-highlight: #b0774a;
@@ -251,6 +252,11 @@
     /* reaction fx — muck brown for the "jogar cocô" splat, not a rail/wood surface */
     --reaction-muck: #6b4a2a;
     --reaction-muck-deep: #3f2b18
+}
+@media (orientation: portrait) {
+    :root {
+        --table-room-picture: url('/table/room-portrait.webp') center / cover no-repeat
+    }
 }
 * {
     box-sizing: border-box

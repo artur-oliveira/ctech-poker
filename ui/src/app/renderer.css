@@ -664,7 +664,10 @@
     margin-top: var(--api-bar-h);
     min-height: calc(100dvh - var(--api-bar-h));
     overflow-x: clip;
-    background: radial-gradient(circle at 50% 50%, var(--table-room-wine), var(--table-room) 65%);
+    /* The picture is the top layer and the original wine→ink gradient the one
+       beneath it: if the image never loads, that layer paints nothing and the
+       table looks exactly as it did before the picture existed. */
+    background: var(--table-room-picture), radial-gradient(circle at 50% 50%, var(--table-room-wine), var(--table-room) 65%);
     display: grid;
     grid-template-rows:auto minmax(320px, 1fr) auto
 }
