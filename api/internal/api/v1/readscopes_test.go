@@ -21,6 +21,14 @@ func TestReadScopeManifestMatchesEnforcement(t *testing.T) {
 	want := append([]string(nil), publicReadScopes...)
 	got := make([]string, 0, len(manifest.Scopes))
 	for _, scope := range manifest.Scopes {
+		// Internal scopes (e.g. the account-deletion eligibility scope) are
+		// never advertised; they exist so ctech-account's catalog knows them.
+		if scope.Visibility == "internal" {
+			if scope.Name != ScopeErasureEligibility {
+				t.Fatalf("unexpected internal scope %q", scope.Name)
+			}
+			continue
+		}
 		if scope.Visibility != "public" || scope.Status != "active" {
 			t.Fatalf("scope %q must be public and active", scope.Name)
 		}

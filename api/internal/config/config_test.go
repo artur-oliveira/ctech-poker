@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLoadFailsClosedWithoutValkeyURLInProd(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "prod")
@@ -114,5 +117,34 @@ func TestLoadParsesSocialGraphEnabled(t *testing.T) {
 	}
 	if !cfg.SocialGraphEnabled {
 		t.Fatal("expected SOCIAL_GRAPH_ENABLED=true to enable the rollout gate")
+	}
+}
+
+// Prod must never run without the deletion consumer: account would wait for
+// poker's ack forever (saga protocol §7).
+func TestLoadRequiresErasureWiringInProd(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "prod")
+	t.Setenv("VALKEY_URL", "redis://localhost:6379")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://poker.aoctech.app")
+	t.Setenv("WALLET_WEBHOOK_HMAC_SECRET", "s")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "ERASURE_QUEUE_URL") {
+		t.Fatalf("want ERASURE_QUEUE_URL error, got %v", err)
+	}
+	t.Setenv("ERASURE_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/1/prod-poker-user-erasure")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "ACTION_LOG_ARCHIVE_BUCKET") {
+		t.Fatalf("want ACTION_LOG_ARCHIVE_BUCKET error, got %v", err)
+	}
+	t.Setenv("ACTION_LOG_ARCHIVE_BUCKET", "poker-action-log-archive-prod")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "ERASURE_ACK_CLIENT_ID") {
+		t.Fatalf("want ERASURE_ACK_CLIENT_ID error, got %v", err)
+	}
+	t.Setenv("ERASURE_ACK_CLIENT_ID", "poker-erasure")
+	t.Setenv("ERASURE_ACK_CLIENT_SECRET", "secret")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("complete prod config rejected: %v", err)
+	}
+	if cfg.ErasureAccountClientID != "accounts" {
+		t.Fatalf("ERASURE_ACCOUNT_CLIENT_ID default: %q", cfg.ErasureAccountClientID)
 	}
 }

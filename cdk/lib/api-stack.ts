@@ -9,10 +9,13 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import {Construct} from 'constructs';
 import {Ec2ScriptRunner, Environment, HaproxyEc2Service, SSM as CtechSSM} from '@aoctech/cdk';
 import {addHandPipelineBudgetAlarm} from './alarms';
 import {
+  actionLogArchiveBucketName,
   API_CURRENT_ARTIFACT_KEY,
   API_MEMORY_METRIC_NAMESPACE,
   API_MEMORY_PRESSURE_LOG_MESSAGE,
@@ -180,6 +183,63 @@ export class PokerApiStack extends cdk.Stack {
       resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/av/*`],
     }));
 
+    // ── Account-deletion saga participant (docs/plans/2026-10-07-account-deletion-participant.md)
+    // ctech-account publishes user.locked/unlocked/erase on its topic with a
+    // `services` message attribute; this queue receives only poker's.
+    const erasureDlq = new sqs.Queue(this, 'ErasureDLQ', {
+      queueName: `${environment}-poker-user-erasure-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+    });
+    const erasureQueue = new sqs.Queue(this, 'ErasureQueue', {
+      queueName: `${environment}-poker-user-erasure`,
+      // The consumer has no visibility heartbeat and one purge rewrites every
+      // hand the user played: the SQS maximum (plan ruling R14).
+      visibilityTimeout: cdk.Duration.hours(12),
+      retentionPeriod: cdk.Duration.days(14),
+      receiveMessageWaitTime: cdk.Duration.seconds(20),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+      deadLetterQueue: {queue: erasureDlq, maxReceiveCount: 5},
+    });
+    sns.Topic.fromTopicArn(this, 'AccountUserErasureTopic',
+      ssm.StringParameter.valueForStringParameter(this, account.erasureTopicArn),
+    ).addSubscription(new snsSubscriptions.SqsSubscription(erasureQueue, {
+      rawMessageDelivery: true,
+      filterPolicy: {services: sns.SubscriptionFilter.stringFilter({allowlist: ['poker']})},
+    }));
+    erasureQueue.grantConsumeMessages(instanceRole);
+    // The purge deletes every version of the user's avatars (bucket versioned in prod).
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:ListBucketVersions'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:DeleteObjectVersion'],
+      resources: [
+        `arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/av/*`,
+        `arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/up/*`,
+      ],
+    }));
+    // The dedicated ack client's credentials, read at service start (ruling R2).
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [poker.erasureAckClientId, poker.erasureAckClientSecret].map(
+        (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
+      ),
+    }));
+    // ...and rewrites the action-log archive of every hand the user played.
+    const archiveBucket = actionLogArchiveBucketName(environment);
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:ListBucket'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${archiveBucket}`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject', 's3:PutObject'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${archiveBucket}/*`],
+    }));
+
     // ── Shared infrastructure from ctech-cdk ──────────────────────────────────
     const vpc = ec2.Vpc.fromLookup(this, 'Vpc', {vpcId});
 
@@ -260,6 +320,8 @@ export class PokerApiStack extends cdk.Stack {
       // CTech service fronted by it.
       `TRUSTED_PROXIES=127.0.0.1`,
       `AVATAR_BUCKET=${avatarsBucketName}`,
+      `ERASURE_QUEUE_URL=${erasureQueue.queueUrl}`,
+      `ACTION_LOG_ARCHIVE_BUCKET=${archiveBucket}`,
       `ENV`,
     );
 
@@ -287,6 +349,8 @@ export class PokerApiStack extends cdk.Stack {
       `SOCIAL_GRAPH_ENABLED=${socialGraphEnabledParam}`,
       `LEGAL_SIGNOFF_REF=${legalSignoffRefParam}`,
       `AVATAR_BASE_URL=${avatarBaseUrlParam}`,
+      `ERASURE_ACK_CLIENT_ID=${poker.erasureAckClientId}`,
+      `ERASURE_ACK_CLIENT_SECRET=${poker.erasureAckClientSecret}`,
     ];
     if (isAlpine) {
       const quoted = ssmEnvArgs.map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
@@ -484,6 +548,20 @@ export class PokerApiStack extends cdk.Stack {
       });
       alarm.addAlarmAction(new cloudwatchActions.SnsAction(
         sns.Topic.fromTopicArn(this, 'MemoryPressureAlertsTopic', ALERTS_TOPIC_ARN),
+      ));
+    }
+
+    if (isProd && cloudwatchAlarmsEnabled) {
+      new cloudwatch.Alarm(this, 'ErasureDlqDepthAlarm', {
+        alarmName: `${environment}-poker-user-erasure-dlq-depth`,
+        alarmDescription: 'An account-deletion message failed 5 times: a user is stuck in PURGING until it is redriven.',
+        metric: erasureDlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5), statistic: 'max'}),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }).addAlarmAction(new cloudwatchActions.SnsAction(
+        sns.Topic.fromTopicArn(this, 'ErasureAlertsTopic', ALERTS_TOPIC_ARN),
       ));
     }
 

@@ -68,6 +68,22 @@ type Config struct {
 	// poker's client_id in ctech-wallet's SSM M2M-clients param (see this
 	// plan's Global Constraints — a cross-repo/config blocker, not a code gap).
 	WalletWebhookHMACSecret string `env:"WALLET_WEBHOOK_HMAC_SECRET"`
+
+	// Account-deletion saga (docs/plans/2026-10-07-account-deletion-participant.md).
+	// ErasureAccountClientID is ctech-account's own client id (its SELF_CLIENT_ID):
+	// the azp of the token it mints for GET /internal/erasure/eligibility.
+	ErasureAccountClientID string `env:"ERASURE_ACCOUNT_CLIENT_ID" envDefault:"accounts"`
+	// ErasureQueueURL is poker's SQS queue on ctech-account's user-erasure
+	// topic; ActionLogArchiveBucket is the action-log S3 archive the purge
+	// rewrites. Both come from /etc/app-static.env (cdk/lib/api-stack.ts).
+	ErasureQueueURL        string `env:"ERASURE_QUEUE_URL"`
+	ActionLogArchiveBucket string `env:"ACTION_LOG_ARCHIVE_BUCKET"`
+	// ErasureAckClientID/Secret are poker's dedicated confidential client for
+	// acks to ctech-account (scope internal:account:erasure-ack only). Kept
+	// apart from POKER_CLIENT_ID so the wallet credentials never carry it.
+	// From SSM /ctech/<env>/poker/erasure-ack-client-{id,secret}.
+	ErasureAckClientID     string `env:"ERASURE_ACK_CLIENT_ID"`
+	ErasureAckClientSecret string `env:"ERASURE_ACK_CLIENT_SECRET"`
 }
 
 // Load reads config from environment variables.
@@ -103,6 +119,15 @@ func Load() (*Config, error) {
 	}
 	if cfg.WalletWebhookHMACSecret == "" && cfg.Env == "prod" {
 		return nil, fmt.Errorf("config: WALLET_WEBHOOK_HMAC_SECRET must be set in production so wallet webhooks can be verified")
+	}
+	if cfg.ErasureQueueURL == "" && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: ERASURE_QUEUE_URL must be set in production — without it account deletions are never purged or acked")
+	}
+	if cfg.ActionLogArchiveBucket == "" && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: ACTION_LOG_ARCHIVE_BUCKET must be set in production — the purge must anonymize the action-log archive")
+	}
+	if (cfg.ErasureAckClientID == "" || cfg.ErasureAckClientSecret == "") && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: ERASURE_ACK_CLIENT_ID and ERASURE_ACK_CLIENT_SECRET must be set in production — without them no erasure is ever acked")
 	}
 	if cfg.ReadTimeout <= 0 || cfg.WriteTimeout <= 0 || cfg.IdleTimeout <= 0 {
 		return nil, fmt.Errorf("config: server timeouts must be positive")

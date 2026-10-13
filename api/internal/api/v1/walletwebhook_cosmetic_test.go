@@ -65,7 +65,7 @@ func TestWalletWebhookDispatchesCosmeticPurchaseByPrefix(t *testing.T) {
 	reg.Register("user#player-1", "conn-1", conn)
 
 	app := fiber.New()
-	RegisterWalletWebhook(app.Group("/v1.0"), "secret", sandboxSvc, reactionSvc, cosmeticSvc, reg)
+	RegisterWalletWebhook(app.Group("/v1.0"), "secret", sandboxSvc, reactionSvc, cosmeticSvc, reg, nil)
 
 	body, _ := json.Marshal(map[string]string{"purchase_id": "prdp-webhook-cos-1"})
 	req := httptest.NewRequest(http.MethodPost, "/v1.0/webhooks/wallet", bytes.NewReader(body))

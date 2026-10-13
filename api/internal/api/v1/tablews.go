@@ -239,6 +239,7 @@ func RegisterTableWS(
 	stats pokerStatsReader,
 	actionLimiter *RateLimiter,
 	reactionLimiter *RateLimiter,
+	blocked BlockedFunc,
 ) {
 	connectionTracker := newTableConnectionTracker()
 	checker := botcheck.New(cfg.TurnstileSecret, cfg.TurnstileExpectedHostname)
@@ -310,6 +311,11 @@ func RegisterTableWS(
 				return
 			}
 			playerID := claims.Sub
+			if wsLocked(ctx, blocked, playerID) {
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
+				closePokerWS(ctx, conn, "connection shutdown")
+				return
+			}
 
 			// Private rooms are invite-only end to end: the WS gate mirrors
 			// the HTTP join gate, so knowing a table ID never grants access.
@@ -364,6 +370,8 @@ func RegisterTableWS(
 			// identity.
 			wsdrain.TrackByID(connID, safeConn)
 			defer wsdrain.UntrackByID(connID)
+			// Account deletion: closed fleet-wide when the player is locked.
+			defer watchErasureLock(reg, playerID, connID, conn)()
 			connectionRegistered := false
 
 			// dispatch sends a command to the table actor, re-resolving a live
@@ -903,6 +911,7 @@ func RegisterGeneralWS(
 	reg ws.Registry,
 	allowedOrigins []string,
 	presenceSvc *presence.Service,
+	blocked BlockedFunc,
 ) {
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
@@ -952,7 +961,14 @@ func RegisterGeneralWS(
 				return
 			}
 			playerID := claims.Sub
+			if wsLocked(ctx, blocked, playerID) {
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
+				closePokerWS(ctx, conn, "connection shutdown")
+				return
+			}
 			connID := uuid.New().String()
+			// Account deletion: closed fleet-wide when the player is locked.
+			defer watchErasureLock(reg, playerID, connID, conn)()
 			if presenceSvc != nil {
 				if err := presenceSvc.Open(ctx, playerID, connID); err != nil {
 					slog.Warn("presence: websocket open failed", "player", playerID, "err", err)

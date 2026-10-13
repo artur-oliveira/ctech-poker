@@ -1,10 +1,12 @@
 package v1
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +57,7 @@ func TestAuthMiddleware(t *testing.T) {
 	verifier := jwtverify.NewVerifier(srv.URL, "", "", cache.NewMemoryBackend(10))
 
 	app := fiber.New()
-	app.Get("/protected", authMiddleware(verifier), func(c fiber.Ctx) error {
+	app.Get("/protected", authMiddleware(verifier, nil), func(c fiber.Ctx) error {
 		return c.SendString(c.Locals(localsUserID).(string))
 	})
 
@@ -118,5 +120,126 @@ func TestLeaderboardTopIsPublic(t *testing.T) {
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox", nil))
 	if err != nil || resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("public leaderboard: expected 200, got %d, err %v", resp.StatusCode, err)
+	}
+}
+
+// downCache is a revocation backend that is unreachable.
+type downCache struct{ cache.Backend }
+
+func (downCache) Get(context.Context, string) ([]byte, bool, error) {
+	return nil, false, errors.New("valkey down")
+}
+
+// A revoked user is cut off at once; a revocation list outage fails open on
+// reads and closed on writes (saga protocol §5).
+func TestAuthMiddlewareRevocation(t *testing.T) {
+	key, srv := newJWKSServer(t)
+	revoked := cache.NewMemoryBackend(10)
+	if err := jwtverify.Revoke(context.Background(), revoked, "user_1", time.Now(), jwtverify.RevocationTTL); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	exp := time.Now().Add(15 * time.Minute).Unix()
+	iat := time.Now().Add(-time.Minute).Unix()
+	userTok := signToken(t, key, jwt.MapClaims{"sub": "user_1", "sid": "s1", "azp": "poker", "token_use": "access", "exp": exp, "iat": iat})
+	otherTok := signToken(t, key, jwt.MapClaims{"sub": "user_2", "sid": "s2", "azp": "poker", "token_use": "access", "exp": exp, "iat": iat})
+
+	newApp := func(revocation cache.Backend) *fiber.App {
+		verifier := jwtverify.NewVerifier(srv.URL, "", "", cache.NewMemoryBackend(10)).WithRevocation(revocation)
+		app := fiber.New()
+		ok := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) }
+		auth := authMiddleware(verifier, nil)
+		app.Get("/protected", auth, ok)
+		app.Post("/protected", auth, ok)
+		return app
+	}
+	status := func(t *testing.T, app *fiber.App, method, token string) int {
+		t.Helper()
+		req := httptest.NewRequest(method, "/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		return resp.StatusCode
+	}
+
+	app := newApp(revoked)
+	if got := status(t, app, fiber.MethodGet, userTok); got != fiber.StatusUnauthorized {
+		t.Fatalf("revoked user: want 401, got %d", got)
+	}
+	if got := status(t, app, fiber.MethodGet, otherTok); got != fiber.StatusOK {
+		t.Fatalf("other user: want 200, got %d", got)
+	}
+	down := newApp(downCache{})
+	if got := status(t, down, fiber.MethodGet, userTok); got != fiber.StatusOK {
+		t.Fatalf("read with revocation list down: want 200 (fail open), got %d", got)
+	}
+	if got := status(t, down, fiber.MethodPost, userTok); got != fiber.StatusServiceUnavailable {
+		t.Fatalf("write with revocation list down: want 503 (fail closed), got %d", got)
+	}
+}
+
+// A user the deletion saga locked or erased is refused everywhere except
+// leaving a table (saga protocol §4.2, plan rulings R4/R5).
+func TestAuthMiddlewareErasureLock(t *testing.T) {
+	key, srv := newJWKSServer(t)
+	verifier := jwtverify.NewVerifier(srv.URL, "", "", cache.NewMemoryBackend(10))
+	exp := time.Now().Add(15 * time.Minute).Unix()
+	tok := signToken(t, key, jwt.MapClaims{"sub": "user_1", "sid": "s1", "azp": "poker", "token_use": "access", "exp": exp})
+
+	var locked bool
+	var lockErr error
+	blocked := func(_ context.Context, sub string) (bool, error) { return locked && sub == "user_1", lockErr }
+	app := fiber.New()
+	auth := authMiddleware(verifier, blocked)
+	ok := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) }
+	app.Get("/v1.0/players/me", auth, ok)
+	app.Post("/v1.0/rooms", auth, ok)
+	app.Post("/v1.0/rooms/:id/leave", auth, ok)
+
+	cases := []struct {
+		name         string
+		locked       bool
+		err          error
+		method, path string
+		want         int
+	}{
+		{"active user writes", false, nil, fiber.MethodPost, "/v1.0/rooms", fiber.StatusOK},
+		{"locked user cannot write", true, nil, fiber.MethodPost, "/v1.0/rooms", fiber.StatusForbidden},
+		{"locked user cannot read", true, nil, fiber.MethodGet, "/v1.0/players/me", fiber.StatusForbidden},
+		{"locked user may leave a table", true, nil, fiber.MethodPost, "/v1.0/rooms/r1/leave", fiber.StatusOK},
+		{"store down fails closed on writes", false, errors.New("dynamo down"), fiber.MethodPost, "/v1.0/rooms", fiber.StatusServiceUnavailable},
+		{"store down fails open on reads", false, errors.New("dynamo down"), fiber.MethodGet, "/v1.0/players/me", fiber.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			locked, lockErr = tc.locked, tc.err
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer "+tok)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test: %v", err)
+			}
+			if resp.StatusCode != tc.want {
+				t.Fatalf("want %d, got %d", tc.want, resp.StatusCode)
+			}
+		})
+	}
+}
+
+// A socket outlives any later check, so the WS gateways refuse on a store failure.
+func TestWSLockedFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	if wsLocked(ctx, nil, "u") {
+		t.Fatal("no check configured must allow")
+	}
+	if !wsLocked(ctx, func(context.Context, string) (bool, error) { return false, errors.New("down") }, "u") {
+		t.Fatal("store failure must refuse")
+	}
+	if !wsLocked(ctx, func(context.Context, string) (bool, error) { return true, nil }, "u") {
+		t.Fatal("locked user must be refused")
+	}
+	if wsLocked(ctx, func(context.Context, string) (bool, error) { return false, nil }, "u") {
+		t.Fatal("active user must pass")
 	}
 }

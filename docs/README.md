@@ -36,6 +36,7 @@ history documents and lag the code by design. O índice de planos foi atualizado
 | WAF-equivalent edge protection                                            | Cloudflare edge, no AWS WAF | frontend has no `aws-wafv2`/`webAclId` (there is no CloudFront distribution left to attach one to); the API's own edge is `ctech-lbalancer`, not evaluated here |
 | ASG lifecycle hook for graceful scale-in drain                            | **LIVE, with a known gap** | `api-stack.ts`'s `asg.addLifecycleHook('TerminationDrainHook', …)` invokes a drain Lambda; `cdk/CLAUDE.md`'s "Known issues" documents a real gap (not every termination reliably invokes it) and the app-side mitigation (spot-termination-notice polling) shipped for it |
 | Multi-AZ / HA beyond a single ASG                                         | Partial — spread across 3 AZs (2026-09-02, #35) | see `cdk/CLAUDE.md`'s "ASG resilience" entry; capacity is still 1 base instance, not HA in the redundancy sense |
+| Account deletion participant (LGPD): eligibility, lock, purge, ack       | **BUILT, needs operator enablement** | `api/internal/userpurge`, `api/internal/app/erasure.go`, `docs/runbooks/account-deletion.md` |
 
 ## Known open issues
 

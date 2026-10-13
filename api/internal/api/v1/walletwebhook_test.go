@@ -87,7 +87,7 @@ func TestWalletWebhookBroadcastsOnConfirm(t *testing.T) {
 	reg.Register("user#player-1", "conn-1", conn)
 
 	app := fiber.New()
-	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, noopReactionSvc(), noopCosmeticSvc(), reg)
+	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, noopReactionSvc(), noopCosmeticSvc(), reg, nil)
 
 	body, _ := json.Marshal(map[string]string{"purchase_id": "sbxp-1"})
 	req := httptest.NewRequest(http.MethodPost, "/v1.0/webhooks/wallet", bytes.NewReader(body))
@@ -124,7 +124,7 @@ func TestWalletWebhookBroadcastsOnConfirm(t *testing.T) {
 func TestWalletWebhookRejectsBadSignature(t *testing.T) {
 	svc := sandboxpurchase.NewService(&fakeSandboxWallet{}, newFakeStoreForWebhookTest())
 	app := fiber.New()
-	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, noopReactionSvc(), noopCosmeticSvc(), ws.NewMemoryRegistry())
+	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, noopReactionSvc(), noopCosmeticSvc(), ws.NewMemoryRegistry(), nil)
 
 	body, _ := json.Marshal(map[string]string{"purchase_id": "sbxp-1"})
 	req := httptest.NewRequest(http.MethodPost, "/v1.0/webhooks/wallet", bytes.NewReader(body))
