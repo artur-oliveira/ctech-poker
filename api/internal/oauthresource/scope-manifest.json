@@ -14,6 +14,7 @@
     { "name": "poker:player-notes:read", "descriptions": { "pt-BR": "Consultar anotacoes privadas sobre jogadores.", "en": "Read private notes about players." }, "visibility": "public", "status": "active" },
     { "name": "poker:sandbox-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras sandbox existentes.", "en": "Read the catalog and existing sandbox purchases." }, "visibility": "public", "status": "active" },
     { "name": "poker:reaction-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de reacoes existentes.", "en": "Read the catalog and existing reaction purchases." }, "visibility": "public", "status": "active" },
-    { "name": "poker:cosmetic-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de cosméticos existentes.", "en": "Read the catalog and existing cosmetic purchases." }, "visibility": "public", "status": "active" }
+    { "name": "poker:cosmetic-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de cosméticos existentes.", "en": "Read the catalog and existing cosmetic purchases." }, "visibility": "public", "status": "active" },
+    { "name": "internal:poker:erasure-eligibility", "descriptions": { "pt-BR": "Consultar bloqueios de exclusao de conta (somente ctech-account).", "en": "Read account-deletion blockers (ctech-account only)." }, "visibility": "internal", "status": "active" }
   ]
 }

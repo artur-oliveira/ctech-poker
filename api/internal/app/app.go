@@ -90,6 +90,7 @@ var Module = fx.Options(
 		newTableLeaseService,
 		newDynamoClient,
 		newErasureStore,
+		newEligibility,
 		newAvatarService,
 		newTableStore,
 		newRoomStore,
@@ -150,6 +151,7 @@ var Module = fx.Options(
 	fx.Invoke(wireCapacityMetrics),
 	fx.Invoke(validateWalletScopes),
 	fx.Invoke(registerRoutesWithSocialRuntime),
+	fx.Invoke(registerErasureRoutes),
 	fx.Invoke(startServer),
 )
 

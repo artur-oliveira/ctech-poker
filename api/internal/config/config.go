@@ -68,6 +68,11 @@ type Config struct {
 	// poker's client_id in ctech-wallet's SSM M2M-clients param (see this
 	// plan's Global Constraints — a cross-repo/config blocker, not a code gap).
 	WalletWebhookHMACSecret string `env:"WALLET_WEBHOOK_HMAC_SECRET"`
+
+	// Account-deletion saga (docs/plans/2026-10-07-account-deletion-participant.md).
+	// ErasureAccountClientID is ctech-account's own client id (its SELF_CLIENT_ID):
+	// the azp of the token it mints for GET /internal/erasure/eligibility.
+	ErasureAccountClientID string `env:"ERASURE_ACCOUNT_CLIENT_ID" envDefault:"accounts"`
 }
 
 // Load reads config from environment variables.
