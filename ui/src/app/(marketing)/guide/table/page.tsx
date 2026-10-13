@@ -48,7 +48,7 @@ export default function TableGuide() {
       title: 'A mesa em cada tela',
       summary: 'A disposição muda com o formato da tela, não só o tamanho das coisas.',
       body: <><p>Em tela larga a mesa é um oval com os assentos na madeira ao redor do feltro e você embaixo.</p>
-        <p>Ao redor da mesa há um salão de pôquer à meia-luz, com um bar ao fundo, uma poltrona de couro no canto e outras mesas desfocadas. O centro do fundo é escuro de propósito, para a sua mesa ficar em destaque. Há uma imagem para tela deitada e outra para tela em pé, então o fundo preenche qualquer aparelho sem esticar.</p>
+        <p>Ao redor da mesa há um salão de pôquer à meia-luz, com um bar ao fundo, uma poltrona de couro no canto e outras mesas desfocadas. O centro do fundo é escuro de propósito, para a sua mesa ficar em destaque. Há uma imagem para tela deitada e outra para tela em pé, então o fundo preenche qualquer aparelho sem esticar. O replay de uma mão usa o mesmo fundo, e, se a imagem não carregar, a mesa volta ao fundo escuro liso de antes.</p>
         <p>No <b>celular em pé</b> os adversários viram fichas de avatar na borda de uma cápsula e você sai do anel:
           vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Cada avatar do anel tem a
           própria pilha na sua coluna (embaixo dele, ou acima quando são as cartas que ficam embaixo), no mesmo
