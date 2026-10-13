@@ -83,6 +83,13 @@ func pairKey(mode, a, b string) (key, idLow, idHigh string) {
 	return "pair#" + mode + "#" + idLow + "#" + idHigh, idLow, idHigh
 }
 
+// PairKey is the item key of the unordered pair (a, b) in mode. Exported for
+// userpurge, which deletes an erased player's pairs.
+func PairKey(mode, a, b string) string {
+	k, _, _ := pairKey(mode, a, b)
+	return k
+}
+
 // pairDelta is one hand's contribution to one unordered pair, computed pure
 // (no I/O) so the counting logic is unit-testable without DynamoDB.
 type pairDelta struct {
