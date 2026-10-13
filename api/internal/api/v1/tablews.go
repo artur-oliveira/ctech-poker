@@ -370,6 +370,8 @@ func RegisterTableWS(
 			// identity.
 			wsdrain.TrackByID(connID, safeConn)
 			defer wsdrain.UntrackByID(connID)
+			// Account deletion: closed fleet-wide when the player is locked.
+			defer watchErasureLock(reg, playerID, connID, conn)()
 			connectionRegistered := false
 
 			// dispatch sends a command to the table actor, re-resolving a live
@@ -965,6 +967,8 @@ func RegisterGeneralWS(
 				return
 			}
 			connID := uuid.New().String()
+			// Account deletion: closed fleet-wide when the player is locked.
+			defer watchErasureLock(reg, playerID, connID, conn)()
 			if presenceSvc != nil {
 				if err := presenceSvc.Open(ctx, playerID, connID); err != nil {
 					slog.Warn("presence: websocket open failed", "player", playerID, "err", err)

@@ -18,6 +18,7 @@ import (
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/oauth2client"
+	"gopkg.aoctech.app/api-commons/ws"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
@@ -55,7 +56,7 @@ func registerErasureRoutes(app *fiber.App, cfg *config.Config, verifier *jwtveri
 // user.locked/user.unlocked itself and calls Purger.Purge on user.erase, then
 // acks to ctech-account. Every replica runs one; SQS hands each message to
 // one of them, and the purge is idempotent.
-func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Client, c cache.Backend, store *erasure.Store, elig *userpurge.Eligibility) error {
+func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Client, c cache.Backend, store *erasure.Store, elig *userpurge.Eligibility, reg ws.Registry) error {
 	if cfg.ErasureQueueURL == "" {
 		slog.Warn("ERASURE_QUEUE_URL empty: account-deletion consumer disabled (dev only; config.Load refuses this in prod)")
 		return nil
@@ -78,7 +79,10 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 	account := strings.TrimRight(cfg.CtechURL, "/")
 	tokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.ErasureAckClientID, cfg.ErasureAckClientSecret, erasureAckScope)
 	acks := erasure.NewAckClient(httpClient, account+"/v1.0/internal/erasure/ack", tokens)
-	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks)
+	// OnLock fires only when a message really moves the sub to locked (not on
+	// redeliveries); it closes the user's sockets on every instance (R6).
+	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks).
+		OnLock(v1.CloseLockedSockets(reg))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
