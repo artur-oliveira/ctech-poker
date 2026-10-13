@@ -3605,6 +3605,6 @@ git commit -m "docs: account deletion participant (config, auth, purge, runbook)
 1. Legal approves the 1-year anonymized report retention (R9). Legal also approves erasing, rather than anonymizing, the user's own hand rows and the matchups (R7).
 2. ctech-account's prod `SELF_CLIENT_ID` is `accounts`, with no override (R12).
 3. Acks use a dedicated confidential client: `ERASURE_ACK_CLIENT_ID` / `_SECRET` from SSM (R2, Tasks 8 and 10).
-4. Sockets already open at lock time are force-closed through the v1.14.0 `OnLock` hook (R6, Task 9). The connect-time check stays.
+4. Sockets already open at lock time are force-closed through the v1.20.0 `OnLock` hook (R6, Task 9). The connect-time check stays.
 
 No open questions remain.
