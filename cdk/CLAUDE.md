@@ -39,7 +39,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   itself only ever configures one instance type. `minCapacity`/`maxCapacity` are unchanged; the
   table-leasing model already tolerates 2 concurrently-running instances (`tablelease` is a
   latency hint, not a correctness lock). No on-demand base instance — deferred, see `README.md`.
-- **36 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
+- **37 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
   then 27, then 29, then 30, then 33). `poker_wallet_alert_prefs` (#304), `poker_promo_codes` and
   `poker_promo_redemptions` (#348) are the newest three; all shipped in the promo-codes-and-wallet-alerts PR but were
   missed from this table list at the time. `poker_cosmetic_loadouts` (#313), `poker_chat_prefs` (#327) and
@@ -48,6 +48,12 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   "player metadata about a hand" record #349 and #347 were coordinated to share (`internal/handmeta`): a
   per-(player, hand) street-note/review-marker/collections row, plus a player's saved `/hands` filters under a fixed
   sort key in the same partition.
+- **Account-deletion participant** (`api-stack.ts`): queue `<env>-poker-user-erasure` (+ DLQ, `maxReceiveCount` 5,
+  12 h visibility) subscribed to ctech-account's `<env>-account-user-erasure` topic (ARN from SSM
+  `/ctech/<env>/account/erasure-topic-arn`, so ctech-account's stack must deploy first), raw delivery,
+  `FilterPolicy {"services":["poker"]}` on the message attribute. `poker_erasure_state` (`dynamodb-stack.ts`) holds
+  the lock/tombstone. The instance role may list/delete avatar versions and read/write the action-log archive for the
+  purge. DLQ depth alarm: prod + `CLOUDWATCH_ALARMS_ENABLED` only.
 - **WebSocket is served by the Go binary** on the ASG (not API Gateway); binary protobuf frames on
   two gateways (`/v1.0/tables/:id/ws`, `/v1.0/ws`).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).

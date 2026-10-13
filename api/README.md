@@ -80,6 +80,10 @@ unless noted otherwise. `*` = fails closed (server refuses to start) if unset/em
 | `AVATAR_BASE_URL`                                 | —                                 | prefix of every avatar URL the API serialises; since the Cloudflare migration, this API's own `/v1.0/avatars`         |
 | `REAL_MONEY_ENABLED`                              | `false`                           | Phase 5 gate; see below                                                                                              |
 | `LEGAL_SIGNOFF_REF`                               | —                                 | required non-empty if `REAL_MONEY_ENABLED=true`, else `Load()` errors (business sign-off, not an engineering toggle) |
+| `ERASURE_QUEUE_URL` *                             | —                                 | poker's SQS queue on ctech-account's `{env}-account-user-erasure` topic; empty disables the deletion consumer (dev only) |
+| `ACTION_LOG_ARCHIVE_BUCKET` *                     | —                                 | action-log S3 archive the deletion purge rewrites; empty skips that step (dev only)                                  |
+| `ERASURE_ACCOUNT_CLIENT_ID`                       | `accounts`                        | ctech-account's own client id (`SELF_CLIENT_ID`): the only `azp` allowed on the eligibility endpoint                |
+| `ERASURE_ACK_CLIENT_ID` / `ERASURE_ACK_CLIENT_SECRET` * | —                           | dedicated confidential client for erasure acks (`internal:account:erasure-ack` only), SSM `/ctech/<env>/poker/erasure-ack-client-{id,secret}` |
 
 `cmd/server` uses `config.Load()` (all `*` checks apply). `cmd/tablecleanup`/`cmd/reconcile` and the Lambda entrypoints
 use `config.LoadForLambda()`, which enforces the production `CTECH_URL`/derived `CTECH_JWKS_URL` checks and the same
@@ -505,6 +509,15 @@ index row disappears with it, so nothing needs pruning and nothing is best-effor
   JWK `use`/`alg` matching). ctech-account's issued access tokens already carry it; only hand-crafted test JWTs
   (`internal/api/v1/auth_test.go`) needed updating after the bump.
 
+- **Token revocation (account deletion).** The verifier checks ctech-account's revocation list (`jwtverify.WithRevocation`,
+  entries in Valkey DB 0 = `VALKEY_URL`). Reads fail open if Valkey is down; every non-GET route uses
+  `VerifyClaimsStrict` and returns **503** instead.
+- **Erasure lock.** `authMiddleware` refuses (**403**) any request from a user the deletion saga locked or erased
+  (`{env}_poker_erasure_state`, `erasure.Store.Blocked`), on every method, since `GET /players/me` creates the profile.
+  The one exception is `POST /rooms/:id/leave`. A store error is **503** on writes and fails open on reads. Both
+  WebSocket gateways refuse a locked user at connect (fail closed); the wallet webhook drops product purchases of a
+  locked or erased user.
+
 ### Avatars
 
 One private bucket, two prefixes, and the difference between them is a security boundary:
@@ -578,6 +591,26 @@ rebuy itself (`BuyIn`) dispatch back into that same loop — calling either sync
 table. Real-money rooms are excluded entirely (`room.CurrencyMode != "sandbox"` short-circuits the sweep), because
 the real-money buy-in path re-charges `EntryFeeCents` on every buy-in/rebuy — auto-rebuying there would silently
 repeat that charge with no way to opt out per attempt.
+
+## Account deletion (LGPD participant)
+
+Poker is a participant of ctech-account's erasure saga (ctech-account `docs/specs/2026-10-06-account-deletion-*`,
+plan `docs/plans/2026-10-07-account-deletion-participant.md`).
+
+- `GET /v1.0/internal/erasure/eligibility/:sub` — ctech-account's service token only (`azp` =
+  `ERASURE_ACCOUNT_CLIENT_ID`, no `sid`, scope `internal:poker:erasure-eligibility`). Returns `erasure.Eligibility`;
+  any failure is 503. Blocker codes: `poker.seated_at_table`, `poker.chips_held`, `poker.pending_cashout`,
+  `poker.pending_fee_debit`.
+- The consumer (`internal/app/erasure.go`, api-commons `erasure.Consumer`) reads `ERASURE_QUEUE_URL`, applies
+  lock/unlock to `{env}_poker_erasure_state`, runs `userpurge.Purger.Purge` on `user.erase`, then acks
+  `POST {CTECH_URL}/v1.0/internal/erasure/ack` with the dedicated `ERASURE_ACK_CLIENT_ID`'s client-credentials
+  token (scope `internal:account:erasure-ack`). When a message locks the user, its `OnLock` hook broadcasts on
+  `ws.Registry` key `erasure-lock#<sub>` and every instance closes that user's table and gateway sockets
+  (`api/v1/erasurews.go`).
+- What the purge does per table is `internal/userpurge/inventory.go`. A new `poker_*` table fails
+  `TestInventoryClassifiesEveryTable` until it is classified there and handled in `Purge`.
+- Others' hand histories keep the erased player as a random pseudonym (`anon_…`, never stored next to the sub),
+  without name, avatar or chat. Reports are kept anonymized for 1 year.
 
 ## Known issues
 

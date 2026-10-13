@@ -116,6 +116,11 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   action) — never a table, hand or player id, since every dimension combination is a separate custom metric;
   `maxSeries` (256) drops the excess and says so once per flush if that rule is broken anyway. Ids stay in the
   `slog` line next to the `Record` call, which is where a specific table is identified.
+- **Every new user write path goes through the erasure lock.** HTTP routes get it from `authMiddleware`; anything that
+  writes per-user rows outside it (a webhook, a background consumer) must call the `BlockedFunc`
+  (`erasure.Store.Blocked`) and drop work for a locked or erased user, or the account-deletion purge is undone
+  (saga protocol §4.5). **Every new `poker_*` table must be classified in `internal/userpurge/inventory.go` and
+  handled by `Purger.Purge`** — `TestInventoryClassifiesEveryTable` enforces the first half.
 - **Named constants / no magic strings.** DynamoDB table/field names, route paths, event type strings, and config keys
   live as named identifiers, not literals at call sites.
 - **Correctness = DynamoDB conditional writes.** Every mutated action commits via
