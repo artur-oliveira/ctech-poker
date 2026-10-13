@@ -1,8 +1,8 @@
 # Account Deletion — Poker Participant Implementation Plan
 
 > **Amendment 2026-10-13.** Source: ctech-account `docs/2026-10-13-account-deletion-plan-review.md`. Plan is otherwise current.
-> Pin no api-commons version (current `v1.16.0`; plan said `v1.14.0`). Social edge purges (friends, requests, blocked) must page to
-> the end (#422 fixed listings that missed edges past the first page).
+> Rebaselined 2026-10-13: api-commons is **v1.20.0 or later** (the first tag with `erasure.Consumer.OnLock`, ctech-go-common PR #59; the old plan's "v1.14.0" is the unrelated `patch` package). Poker is at `v1.16.0` today. Social edge purges (friends, requests, blocked) page to the end (`eachItem`; #422 fixed listings that missed edges past the first page).
+
 
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -16,7 +16,7 @@
 - ack the result to ctech-account.
 
 **Architecture:**
-- `gopkg.aoctech.app/api-commons` v1.14.0 provides the contract.
+- `gopkg.aoctech.app/api-commons` **v1.20.0** (or later) provides the contract.
   - `erasure.Store` keeps the lock/tombstone in `{env}_poker_erasure_state`.
   - `erasure.Consumer` runs the SQS loop and lock handling.
   - `erasure.AckClient` posts the acks.
@@ -40,7 +40,7 @@ The wire contract is fixed by ctech-account `docs/plans/2026-10-07-account-delet
 ## Global Constraints
 
 - Branch `feat/account-deletion-participant` from `main`. Conventional Commits. **No `Co-Authored-By` or any Claude/Anthropic attribution** in commits or PRs.
-- `gopkg.aoctech.app/api-commons` **v1.14.0** (poker pins v1.11.0 today).
+- `gopkg.aoctech.app/api-commons` **v1.20.0** or later (poker pins v1.16.0 today; v1.20.0 adds `Consumer.OnLock`).
 - Service id: `poker`. Every name below is literal.
   - Eligibility:
     - Route: `GET /v1.0/internal/erasure/eligibility/:sub`.
@@ -50,7 +50,7 @@ The wire contract is fixed by ctech-account `docs/plans/2026-10-07-account-delet
   - Ack:
     - `POST {CTECH_URL}/v1.0/internal/erasure/ack`, body `erasure.Ack`.
     - Client-credentials token from `{CTECH_URL}/v1.0/token`, scope `internal:account:erasure-ack`, using a **dedicated** confidential client: `ERASURE_ACK_CLIENT_ID` / `ERASURE_ACK_CLIENT_SECRET`, from SSM `/ctech/{env}/poker/erasure-ack-client-id` and `/ctech/{env}/poker/erasure-ack-client-secret`. It is **not** `POKER_CLIENT_ID`.
-  - Lock fan-out: `erasure.Consumer.OnLock` (api-commons v1.14.0) force-closes every open socket of the locked sub on every instance, both table sockets (seated or spectating) and gateway sockets. It goes through the `ws.Registry` key `erasure-lock#<sub>`. The connect-time check stays.
+  - Lock fan-out: `erasure.Consumer.OnLock` (api-commons v1.20.0) force-closes every open socket of the locked sub on every instance, both table sockets (seated or spectating) and gateway sockets. It goes through the `ws.Registry` key `erasure-lock#<sub>`. The connect-time check stays.
   - SNS topic `{env}-account-user-erasure`. Its ARN is in SSM `/ctech/{env}/account/erasure-topic-arn`.
     - Subscribe queue `{env}-poker-user-erasure` (DLQ `{env}-poker-user-erasure-dlq`, `maxReceiveCount` 5).
     - Raw message delivery on.
@@ -88,7 +88,7 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
   - *Cost:* one strongly consistent `GetItem` per authenticated request (~1 RRU).
 - **R5 A locked user may still `POST /v1.0/rooms/:id/leave`.** Money only flows back to the player on that path.
 - **R6 (decided by the user 2026-10-08) Sockets open at lock time are force-closed, and connect is still checked (fail closed).**
-  - The consumer's `OnLock` hook (api-commons v1.14.0) fires when a `user.locked`, or the synthetic lock applied on `user.erase`, moves the sub to locked. No-op redeliveries do not fire it.
+  - The consumer's `OnLock` hook (api-commons v1.20.0) fires when a `user.locked`, or the synthetic lock applied on `user.erase`, moves the sub to locked. No-op redeliveries do not fire it.
   - The hook broadcasts on `ws.Registry` key `erasure-lock#<sub>`. Valkey pub/sub fans that out to every instance.
   - Every table socket (seated or spectating) and every gateway socket registers a closer under that key at connect. The closer closes the socket, and the gateway's read loop then runs its normal cleanup.
   - *Cost if a broadcast is lost* (Valkey blip): the socket lives until it disconnects. The connect-time check and the HTTP lock still hold.
@@ -161,7 +161,7 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
 
 ---
 
-### Task 1: api-commons v1.14.0, revocation, strict writes
+### Task 1: api-commons v1.20.0, strict writes
 
 **Files:**
 - Modify: `api/go.mod`, `api/go.sum`
@@ -170,15 +170,15 @@ Rulings are decisions where the spec was silent or conflicting. Each is followed
 - Test: `api/internal/api/v1/auth_test.go`
 
 **Interfaces:**
-- Consumes: `jwtverify.Verifier.WithRevocation(cache.Backend) *Verifier`, `VerifyClaimsStrict`, `jwtverify.Revoke`, `jwtverify.ErrRevocationUnavailable` (api-commons v1.14.0).
+- Consumes: `jwtverify.Verifier.WithRevocation(cache.Backend) *Verifier`, `VerifyClaimsStrict`, `jwtverify.Revoke`, `jwtverify.ErrRevocationUnavailable` (api-commons v1.20.0).
 - Produces: `func unavailable(detail string) *problem.Problem` in package `v1` (a 503 problem), used by Tasks 2–3.
 
 - [ ] **Step 1: Upgrade the dependency**
 
 ```bash
-cd api && go get gopkg.aoctech.app/api-commons@v1.14.0 && go mod tidy && go build ./...
+cd api && go get gopkg.aoctech.app/api-commons@v1.20.0 && go mod tidy && go build ./...
 ```
-Expected: no output from `go build`. (v1.12–v1.14 only add `erasure` (incl. `Consumer.OnLock`, v1.14.0), `jwtverify` revocation and an optional `ws.Publisher`, with no breaking change. v1.14.0 is released by a separate ctech-go-common plan: this task is blocked until the tag exists — `go list -m gopkg.aoctech.app/api-commons@v1.14.0` must resolve.)
+Expected: no output from `go build`. (Poker already has the revocation check at v1.16.0; v1.17 to v1.20 add `inter`/`byok`/`oauthclients`/`erasure.Workspaces`/`Consumer.OnLock` with no breaking change. Prerequisite: `go list -m gopkg.aoctech.app/api-commons@v1.20.0` resolves, i.e. ctech-go-common PR #59 is merged and tagged.)
 
 - [ ] **Step 2: Write the failing test** — append to `api/internal/api/v1/auth_test.go` and add `"context"` and `"errors"` to its imports:
 
@@ -293,7 +293,7 @@ Expected: `ok  	gopkg.aoctech.app/poker/api/internal/api/v1`, with vet silent.
 
 ```bash
 git add api/go.mod api/go.sum api/internal/app/app.go api/internal/api/v1/auth.go api/internal/api/v1/auth_test.go
-git commit -m "feat(api): api-commons v1.14.0, JWT revocation, strict verify on writes"
+git commit -m "feat(api): api-commons v1.20.0, strict verify on writes"
 ```
 
 ---
@@ -3072,7 +3072,7 @@ git commit -m "feat(api): run the account-deletion consumer and ack to ctech-acc
 
 **Interfaces:**
 - Consumes:
-  - `(*erasure.Consumer).OnLock(fn func(ctx context.Context, sub string)) *erasure.Consumer` (api-commons v1.14.0). It is called when a `user.locked`, or the synthetic lock applied on `user.erase`, changes the sub's state to locked. It is not called on no-op redeliveries.
+  - `(*erasure.Consumer).OnLock(fn func(ctx context.Context, sub string)) *erasure.Consumer` (api-commons v1.20.0). It is called when a `user.locked`, or the synthetic lock applied on `user.erase`, changes the sub's state to locked. It is not called on no-op redeliveries.
   - `ws.Registry` (`Register`, `Unregister`, `Broadcast`).
   - `startErasureConsumer` (Task 8).
 - Produces:
@@ -3595,7 +3595,7 @@ git commit -m "docs: account deletion participant (config, auth, purge, runbook)
 
   If account changes either, poker's endpoint returns 403 or its acks fail into the DLQ.
 - **ctech-account ui:** must translate the four `poker.*` blocker codes.
-- **ctech-go-common:** poker needs **v1.14.0**, which adds `erasure.Consumer.OnLock` (separate go-common plan). Task 1 is blocked until that tag exists. Its README "Account erasure" still says filter scope `MessageBody` and scope `account:erasure:ack`; account's phase 3 plan (Task 8) owns that fix. The `erasure.AckClient` doc comment has the same stale scope name.
+- **ctech-go-common:** poker needs **v1.20.0**, which adds `erasure.Consumer.OnLock` (PR #59). The README "Account erasure" scope names and the `erasure.AckClient` comment were corrected in go-common v1.19.0.
 - **ctech-wallet:** none directly. Poker's money trail stays in the wallet ledger (D5). A product purchase dropped by the webhook during a deletion stays paid in the wallet, so support refunds it (R15).
 - **ctech-dfe, ctech-billing:** none. The same participant pattern applies; `userpurge`'s anonymizer and the `BlockedFunc` choke-point approach are candidates for `ctech-go-common/erasure` if a second service needs them.
 - **Shared Valkey:** read-only use of DB 0 revocation keys (one GET per verification). Shared Valkey latency now also gates poker writes (R3).
