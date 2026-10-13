@@ -238,6 +238,7 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 ### Neutral
 
 - **Night Ink** (colors.night-ink): the global room and base page canvas.
+- **Room image** (`--table-room-image`, `--table-room-image-portrait`): `/table/room-landscape.webp` (1672×940) and `/table/room-portrait.webp` (941×1672), a dimly lit card room (bar, leather armchair, other tables out of focus) behind the table on `.game`, chosen by `@media (orientation: portrait)` and drawn `cover`. The centre of both is dark and empty on purpose, because the table sits there. A light wine→ink wash sits over the picture so the surround keeps the contrast the seat chrome was tuned against, and Night Ink is the fallback if it never loads. Same-origin, so `img-src 'self'` already allows it. WebP like the rest of `public/`.
 - **Card Paper** (colors.card-paper): playing cards, light action buttons, and rare high-contrast material surfaces—not the default page background.
 - **Seat Surface** (colors.seat-surface): compact player identity and dense table modules.
 - **Control Surface** (colors.control-surface) and **Control Hover** (colors.control-hover): fields, dialogs, action controls, and their lifted interaction state.
