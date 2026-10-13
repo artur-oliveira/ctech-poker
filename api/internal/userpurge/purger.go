@@ -3,13 +3,18 @@ package userpurge
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/poker/api/internal/matchup"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
@@ -81,7 +86,10 @@ func (p *Purger) Purge(ctx context.Context, m erasure.Message) (erasure.Ack, err
 
 // steps is the purge in order.
 func (r *run) steps() []func(context.Context) error {
-	return []func(context.Context) error{r.sharedHands}
+	return []func(context.Context) error{
+		r.sharedHands, r.socialGraph, r.notesAboutUser, r.avatarReports,
+		r.reports, r.leaderboard, r.ownRows, r.cacheKeys, r.avatars,
+	}
 }
 
 // sharedHands walks the user's own hand rows, the only index of the hands
@@ -149,6 +157,219 @@ func (r *run) handRows(ctx context.Context, h sessionlog.HandItem) error {
 		if err := r.deleteItem(ctx, TableMatchups, key(matchup.PairKey(h.CurrencyMode, r.sub, o.PlayerID), "")); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// socialGraph erases both directions of every edge, and first the events and
+// invite guards the user caused in each counterpart's inbox (found only
+// through the edge, which is why the edge goes last).
+func (r *run) socialGraph(ctx context.Context) error {
+	return r.p.eachItem(ctx, r.p.partition(TableSocialEdges, r.sub), func(edge item) error {
+		other := stringAttr(edge, "sk")
+		if err := r.actorEvents(ctx, other); err != nil {
+			return err
+		}
+		if err := r.deleteItem(ctx, TableSocialEdges, key(other, r.sub)); err != nil {
+			return err
+		}
+		return r.deleteItem(ctx, TableSocialEdges, keyOf(edge))
+	})
+}
+
+func (r *run) actorEvents(ctx context.Context, recipient string) error {
+	// sk is a key attribute, so the invite guards need a key condition; the
+	// events the user caused are found by a filter on the rest.
+	byActor := r.p.partition(TableSocialEvents, recipient)
+	byActor.FilterExpression = aws.String("actor_id = :sub")
+	byActor.ExpressionAttributeValues[":sub"] = str(r.sub)
+	guards := r.p.partition(TableSocialEvents, recipient)
+	guards.KeyConditionExpression = aws.String("pk = :pk AND begins_with(sk, :guard)")
+	guards.ExpressionAttributeValues[":guard"] = str("invite_guard#" + r.sub + "#")
+	var keys []item
+	for _, in := range []*dynamodb.QueryInput{byActor, guards} {
+		if err := r.p.eachItem(ctx, in, func(it item) error {
+			keys = append(keys, keyOf(it))
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	r.count(TableSocialEvents+"_erased", len(keys))
+	return r.p.deleteKeys(ctx, TableSocialEvents, keys)
+}
+
+// notesAboutUser erases notes others wrote about the user (sk = sub, no index).
+func (r *run) notesAboutUser(ctx context.Context) error {
+	var keys []item
+	if err := r.p.eachScan(ctx, &dynamodb.ScanInput{
+		TableName:                 aws.String(r.p.table(TablePlayerNotes)),
+		FilterExpression:          aws.String("sk = :sub"),
+		ExpressionAttributeValues: item{":sub": str(r.sub)},
+		ConsistentRead:            aws.Bool(true),
+	}, func(it item) error {
+		keys = append(keys, keyOf(it))
+		return nil
+	}); err != nil {
+		return err
+	}
+	r.count(TablePlayerNotes+"_erased", len(keys))
+	return r.p.deleteKeys(ctx, TablePlayerNotes, keys)
+}
+
+// avatarReports erases the avatar-report guard rows by or about the user and
+// removes the user from the legacy avatar_reporters sets (no index: scan).
+func (r *run) avatarReports(ctx context.Context) error {
+	return r.p.eachScan(ctx, &dynamodb.ScanInput{
+		TableName:                 aws.String(r.p.table(TablePlayerProfiles)),
+		FilterExpression:          aws.String("(begins_with(pk, :guard) AND (target_id = :sub OR reporter_id = :sub)) OR contains(avatar_reporters, :sub)"),
+		ExpressionAttributeValues: item{":guard": str("avreport#"), ":sub": str(r.sub)},
+		ConsistentRead:            aws.Bool(true),
+	}, func(it item) error {
+		if strings.HasPrefix(stringAttr(it, "pk"), "avreport#") {
+			return r.deleteItem(ctx, TablePlayerProfiles, keyOf(it))
+		}
+		if _, err := r.p.db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+			TableName:                 aws.String(r.p.table(TablePlayerProfiles)),
+			Key:                       keyOf(it),
+			UpdateExpression:          aws.String("DELETE avatar_reporters :sub"),
+			ExpressionAttributeValues: item{":sub": &types.AttributeValueMemberSS{Value: []string{r.sub}}},
+		}); err != nil {
+			return fmt.Errorf("userpurge: avatar_reporters: %w", err)
+		}
+		r.count(TablePlayerProfiles+"_anonymized", 1)
+		return nil
+	})
+}
+
+// reports keeps reports for 1 year under the pseudonym (plan ruling R9) and
+// drops the text the erased user wrote: their copied chat on reports against
+// them, their details on reports they filed.
+func (r *run) reports(ctx context.Context) error {
+	expires := r.p.now().Add(reportRetention).Unix()
+	against := func(it item) error { return r.retainReport(ctx, it, "evidence_message", expires) }
+	if err := r.p.eachItem(ctx, r.p.partition(TablePlayerReports, r.sub), against); err != nil {
+		return err
+	}
+	return r.p.eachItem(ctx, &dynamodb.QueryInput{
+		TableName:                 aws.String(r.p.table(TablePlayerReports)),
+		IndexName:                 aws.String(gsiReportReporter),
+		KeyConditionExpression:    aws.String("gsi_reporter_pk = :sub"),
+		ExpressionAttributeValues: item{":sub": str(r.sub)},
+	}, func(it item) error {
+		// The index lags the table: re-read, so a retry cannot re-key twice.
+		cur, err := r.getItem(ctx, TablePlayerReports, keyOf(it))
+		if err != nil || len(cur) == 0 {
+			return err
+		}
+		return r.retainReport(ctx, cur, "details", expires)
+	})
+}
+
+func (r *run) retainReport(ctx context.Context, it item, dropText string, expires int64) error {
+	next, _ := anonymizeMap(it, r.sub, r.pseudo)
+	delete(next, dropText)
+	if cur, ok := next["ttl"].(*types.AttributeValueMemberN); !ok || mustInt(cur.Value) > expires {
+		next["ttl"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(expires, 10)}
+	}
+	return r.rekey(ctx, TablePlayerReports, it, next)
+}
+
+func mustInt(s string) int64 {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 1<<63 - 1
+	}
+	return n
+}
+
+// leaderboard re-keys the user's board rows to the pseudonym so other
+// players' ranks do not move, and drops the display name.
+func (r *run) leaderboard(ctx context.Context) error {
+	return r.p.eachItem(ctx, r.p.partition(TableLeaderboardStats, r.sub), func(it item) error {
+		next, _ := anonymizeMap(it, r.sub, r.pseudo)
+		delete(next, "player_name")
+		return r.rekey(ctx, TableLeaderboardStats, it, next)
+	})
+}
+
+// erasedBySub are the tables partitioned by the user's sub: the whole
+// partition is the user's own data.
+var erasedBySub = []string{
+	TableAchievementProgress, TableDailyReward, TablePlayerSessions, TablePlayerNotes, TableHandMeta,
+	TableSandboxPurchases, TableReactionEntitlements, TableReactionPurchases, TableCosmeticEntitlements,
+	TableCosmeticPurchases, TableCosmeticLoadouts, TableChatPrefs, TableBotCheckContests,
+	TableWalletAlertPrefs, TablePromoRedemptions, TableTableEntitlements, TableSocialEvents,
+	TableRecentPlayers, TablePlayerHands,
+}
+
+func (r *run) ownRows(ctx context.Context) error {
+	for _, table := range erasedBySub {
+		if err := r.erasePartition(ctx, table, r.sub); err != nil {
+			return err
+		}
+	}
+	for _, part := range []struct{ table, pk string }{
+		{TablePlayerSessions, "buyinguard#" + r.sub},
+		{TablePokerStats, "stats#" + roomstore.CurrencyModeSandbox + "#" + r.sub},
+		{TablePokerStats, "stats#" + roomstore.CurrencyModeReal + "#" + r.sub},
+	} {
+		if err := r.erasePartition(ctx, part.table, part.pk); err != nil {
+			return err
+		}
+	}
+	if err := r.ownByIndex(ctx, TableHandShares, gsiHandShareOwner, "owner_id", false); err != nil {
+		return err
+	}
+	// Unresolved settlements are a blocker; resolvedOnly makes sure a money
+	// row is never deleted even if one raced the eligibility check.
+	if err := r.ownByIndex(ctx, TablePendingCashouts, gsiPlayerSettlements, "player_id", true); err != nil {
+		return err
+	}
+	// The profile goes last: nothing above reads it, so any earlier crash
+	// leaves a row a retry still finds.
+	return r.erasePartition(ctx, TablePlayerProfiles, r.sub)
+}
+
+func (r *run) ownByIndex(ctx context.Context, table, index, attr string, resolvedOnly bool) error {
+	in := &dynamodb.QueryInput{
+		TableName:                 aws.String(r.p.table(table)),
+		IndexName:                 aws.String(index),
+		KeyConditionExpression:    aws.String("#a = :sub"),
+		ExpressionAttributeNames:  map[string]string{"#a": attr},
+		ExpressionAttributeValues: item{":sub": str(r.sub)},
+	}
+	if resolvedOnly {
+		in.FilterExpression = aws.String("resolved = :true")
+		in.ExpressionAttributeValues[":true"] = &types.AttributeValueMemberBOOL{Value: true}
+	}
+	var keys []item
+	if err := r.p.eachItem(ctx, in, func(it item) error {
+		keys = append(keys, keyOf(it))
+		return nil
+	}); err != nil {
+		return err
+	}
+	r.count(table+"_erased", len(keys))
+	return r.p.deleteKeys(ctx, table, keys)
+}
+
+// cacheKeys deletes the user's Valkey keys. Rate-limit windows, the
+// leaderboard rank mirror and table-keyed keys expire within minutes (R11).
+func (r *run) cacheKeys(ctx context.Context) error {
+	for _, k := range []string{
+		"poker:presence:connections:" + r.sub,
+		"poker:presence:table:" + r.sub,
+		"chatprefs:extra:" + r.sub,
+		"poker:achv:lastpocketpair:" + roomstore.CurrencyModeSandbox + "#" + r.sub,
+		"poker:achv:lastpocketpair:" + roomstore.CurrencyModeReal + "#" + r.sub,
+	} {
+		if err := r.p.cache.Delete(ctx, k); err != nil {
+			return fmt.Errorf("userpurge: cache delete: %w", err)
+		}
+	}
+	if err := r.p.cache.DeletePrefix(ctx, "reaction-owned:"+r.sub+":"); err != nil {
+		return fmt.Errorf("userpurge: cache delete prefix: %w", err)
 	}
 	return nil
 }
