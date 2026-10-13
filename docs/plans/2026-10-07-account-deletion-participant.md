@@ -1,5 +1,10 @@
 # Account Deletion — Poker Participant Implementation Plan
 
+> **Amendment 2026-10-13.** Source: ctech-account `docs/2026-10-13-account-deletion-plan-review.md`. Plan is otherwise current.
+> Pin no api-commons version (current `v1.16.0`; plan said `v1.14.0`). Social edge purges (friends, requests, blocked) must page to
+> the end (#422 fixed listings that missed edges past the first page).
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make ctech-poker a participant of the LGPD account-deletion saga. Poker will:
