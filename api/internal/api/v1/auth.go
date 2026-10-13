@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -19,7 +20,16 @@ func authMiddleware(verifier *jwtverify.Verifier) fiber.Handler {
 		if !strings.HasPrefix(authHeader, "Bearer ") {
 			return problem.Unauthorized("missing bearer token").Send(c)
 		}
-		claims, err := verifier.VerifyClaims(c.Context(), strings.TrimPrefix(authHeader, "Bearer "))
+		// Writes fail closed when the revocation list is unreachable (saga
+		// protocol §5: money-moving routes are strict); reads fail open.
+		verify := verifier.VerifyClaims
+		if c.Method() != fiber.MethodGet {
+			verify = verifier.VerifyClaimsStrict
+		}
+		claims, err := verify(c.Context(), strings.TrimPrefix(authHeader, "Bearer "))
+		if errors.Is(err, jwtverify.ErrRevocationUnavailable) {
+			return unavailable("authorization is temporarily unavailable, retry shortly").Send(c)
+		}
 		if err != nil || claims == nil || claims.Sub == "" {
 			return problem.Unauthorized("invalid credentials").Send(c)
 		}
@@ -44,4 +54,9 @@ func firstPartyOnly(c fiber.Ctx) error {
 		return problem.Forbidden("social data requires the first-party Poker client").Send(c)
 	}
 	return c.Next()
+}
+
+// unavailable is a 503: the request may succeed if retried.
+func unavailable(detail string) *problem.Problem {
+	return problem.New(fiber.StatusServiceUnavailable, "/problems/unavailable", "Service Unavailable", detail)
 }

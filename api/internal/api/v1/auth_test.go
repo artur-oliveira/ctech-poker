@@ -1,10 +1,12 @@
 package v1
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -118,5 +120,61 @@ func TestLeaderboardTopIsPublic(t *testing.T) {
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox", nil))
 	if err != nil || resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("public leaderboard: expected 200, got %d, err %v", resp.StatusCode, err)
+	}
+}
+
+// downCache is a revocation backend that is unreachable.
+type downCache struct{ cache.Backend }
+
+func (downCache) Get(context.Context, string) ([]byte, bool, error) {
+	return nil, false, errors.New("valkey down")
+}
+
+// A revoked user is cut off at once; a revocation list outage fails open on
+// reads and closed on writes (saga protocol §5).
+func TestAuthMiddlewareRevocation(t *testing.T) {
+	key, srv := newJWKSServer(t)
+	revoked := cache.NewMemoryBackend(10)
+	if err := jwtverify.Revoke(context.Background(), revoked, "user_1", time.Now(), jwtverify.RevocationTTL); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	exp := time.Now().Add(15 * time.Minute).Unix()
+	iat := time.Now().Add(-time.Minute).Unix()
+	userTok := signToken(t, key, jwt.MapClaims{"sub": "user_1", "sid": "s1", "azp": "poker", "token_use": "access", "exp": exp, "iat": iat})
+	otherTok := signToken(t, key, jwt.MapClaims{"sub": "user_2", "sid": "s2", "azp": "poker", "token_use": "access", "exp": exp, "iat": iat})
+
+	newApp := func(revocation cache.Backend) *fiber.App {
+		verifier := jwtverify.NewVerifier(srv.URL, "", "", cache.NewMemoryBackend(10)).WithRevocation(revocation)
+		app := fiber.New()
+		ok := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) }
+		auth := authMiddleware(verifier)
+		app.Get("/protected", auth, ok)
+		app.Post("/protected", auth, ok)
+		return app
+	}
+	status := func(t *testing.T, app *fiber.App, method, token string) int {
+		t.Helper()
+		req := httptest.NewRequest(method, "/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		return resp.StatusCode
+	}
+
+	app := newApp(revoked)
+	if got := status(t, app, fiber.MethodGet, userTok); got != fiber.StatusUnauthorized {
+		t.Fatalf("revoked user: want 401, got %d", got)
+	}
+	if got := status(t, app, fiber.MethodGet, otherTok); got != fiber.StatusOK {
+		t.Fatalf("other user: want 200, got %d", got)
+	}
+	down := newApp(downCache{})
+	if got := status(t, down, fiber.MethodGet, userTok); got != fiber.StatusOK {
+		t.Fatalf("read with revocation list down: want 200 (fail open), got %d", got)
+	}
+	if got := status(t, down, fiber.MethodPost, userTok); got != fiber.StatusServiceUnavailable {
+		t.Fatalf("write with revocation list down: want 503 (fail closed), got %d", got)
 	}
 }

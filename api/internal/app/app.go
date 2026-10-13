@@ -230,7 +230,10 @@ func newCacheBackend(cfg *config.Config) (cache.Backend, error) {
 }
 
 func newVerifier(c cache.Backend, cfg *config.Config) *jwtverify.Verifier {
-	return jwtverify.NewVerifier(cfg.CtechJWKSURL, cfg.ServiceAudience, cfg.CtechIssuerURL, c)
+	// Account-deletion revocation entries live in Valkey DB 0, the shared base
+	// URL. VALKEY_URL is that base URL (no DB suffix, cdk/lib/constants.ts
+	// SSM_SHARED), so the main backend reads them; no second backend needed.
+	return jwtverify.NewVerifier(cfg.CtechJWKSURL, cfg.ServiceAudience, cfg.CtechIssuerURL, c).WithRevocation(c)
 }
 
 // newRealtimeValkeyClient is a connection dedicated to the latency-critical
