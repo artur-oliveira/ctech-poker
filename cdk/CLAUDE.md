@@ -53,7 +53,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   `/ctech/<env>/account/erasure-topic-arn`, so ctech-account's stack must deploy first), raw delivery,
   `FilterPolicy {"services":["poker"]}` on the message attribute. `poker_erasure_state` (`dynamodb-stack.ts`) holds
   the lock/tombstone. The instance role may list/delete avatar versions and read/write the action-log archive for the
-  purge. DLQ depth alarm: prod + `CLOUDWATCH_ALARMS_ENABLED` only.
+  purge. No CloudWatch alarm is attached to the DLQ (alarms cost money and were declined); check the DLQ depth by hand (`docs/runbooks/account-deletion.md`).
 - **WebSocket is served by the Go binary** on the ASG (not API Gateway); binary protobuf frames on
   two gateways (`/v1.0/tables/:id/ws`, `/v1.0/ws`).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).

@@ -551,20 +551,6 @@ export class PokerApiStack extends cdk.Stack {
       ));
     }
 
-    if (isProd && cloudwatchAlarmsEnabled) {
-      new cloudwatch.Alarm(this, 'ErasureDlqDepthAlarm', {
-        alarmName: `${environment}-poker-user-erasure-dlq-depth`,
-        alarmDescription: 'An account-deletion message failed 5 times: a user is stuck in PURGING until it is redriven.',
-        metric: erasureDlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5), statistic: 'max'}),
-        threshold: 1,
-        evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      }).addAlarmAction(new cloudwatchActions.SnsAction(
-        sns.Topic.fromTopicArn(this, 'ErasureAlertsTopic', ALERTS_TOPIC_ARN),
-      ));
-    }
-
     // Issue #290: a hand-pipeline budget violation is now alarmable from the
     // runtime metric itself (internal/metrics's HandPipelineDuration), not
     // only from TestHandPipelineDynamoBudget pinning the ceiling in CI.
