@@ -9,8 +9,10 @@
    `{"service":"poker","url":"https://poker-api[-<env>].aoctech.app/v1.0","audience":"<poker SERVICE_AUDIENCE>","client_id":"<ERASURE_ACK_CLIENT_ID>"}`.
 4. Check poker's `ERASURE_ACCOUNT_CLIENT_ID` equals ctech-account's `SELF_CLIENT_ID` (default `accounts`).
 
-## DLQ alarm (`<env>-poker-user-erasure-dlq-depth`)
-A message failed 5 times. Read the app log for `erasure: message left for redelivery` with its error, fix the cause,
+## Stuck deletion (messages in `<env>-poker-user-erasure-dlq`)
+There is no CloudWatch alarm on this DLQ (alarms cost money and were declined), so check its depth when a user's
+deletion stays in `purging` in ctech-account (`aws sqs get-queue-attributes --attribute-names ApproximateNumberOfMessages`).
+A message in the DLQ failed 5 times. Read the app log for `erasure: message left for redelivery` with its error, fix the cause,
 then redrive the DLQ to the queue (`aws sqs start-message-move-task --source-arn <dlq-arn> --profile ctech`). The
 purge is idempotent: redriving is always safe.
 

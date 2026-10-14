@@ -207,8 +207,3 @@ test('subscribes a poker queue to the account user-erasure topic (account deleti
   expect(text).toContain('ERASURE_ACK_CLIENT_ID=/ctech/dev/poker/erasure-ack-client-id');
   expect(text).toContain('ERASURE_ACK_CLIENT_SECRET=/ctech/dev/poker/erasure-ack-client-secret');
 });
-
-test('erasure DLQ alarm exists only when prod + cloudwatchAlarmsEnabled', () => {
-  const on = Template.fromStack(synthStack({environment: 'prod', cloudwatchAlarmsEnabled: true}));
-  on.hasResourceProperties('AWS::CloudWatch::Alarm', {AlarmName: 'prod-poker-user-erasure-dlq-depth'});
-});
