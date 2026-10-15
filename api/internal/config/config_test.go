@@ -1,9 +1,18 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	// Billing is how Poker sells; every Load needs its settings.
+	for k, v := range map[string]string{"BILLING_URL": "https://billing-api.aoctech.app", "BILLING_CLIENT_ID": "poker-billing", "BILLING_CLIENT_SECRET": "s", "BILLING_EVENT_SECRET": "e"} {
+		_ = os.Setenv(k, v)
+	}
+	os.Exit(m.Run())
+}
 
 func TestLoadFailsClosedWithoutValkeyURLInProd(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "prod")
@@ -149,28 +158,17 @@ func TestLoadRequiresErasureWiringInProd(t *testing.T) {
 	}
 }
 
-func TestPurchasesViaDefaultsToTheWalletAndNeedsBillingSettingsForBilling(t *testing.T) {
+func TestBillingSettingsAreRequired(t *testing.T) {
 	t.Setenv("VALKEY_URL", "")
-	cfg, err := Load()
-	if err != nil || cfg.PurchasesVia != "wallet" || cfg.BillingSalesOn() {
-		t.Fatalf("default = %q err=%v", cfg.PurchasesVia, err)
-	}
-
-	t.Setenv("PURCHASES_VIA", "billing")
+	t.Setenv("BILLING_URL", "")
 	if _, err := Load(); err == nil {
-		t.Fatal("PURCHASES_VIA=billing without the Billing settings must not start")
+		t.Fatal("without the Billing settings the service must not start")
 	}
 	t.Setenv("BILLING_URL", "https://billing-api.aoctech.app")
 	t.Setenv("BILLING_CLIENT_ID", "poker-billing")
 	t.Setenv("BILLING_CLIENT_SECRET", "s")
 	t.Setenv("BILLING_EVENT_SECRET", "e")
-	cfg, err = Load()
-	if err != nil || !cfg.BillingSalesOn() {
-		t.Fatalf("complete settings: on=%v err=%v", cfg != nil && cfg.BillingSalesOn(), err)
-	}
-
-	t.Setenv("PURCHASES_VIA", "stripe")
-	if _, err := Load(); err == nil {
-		t.Fatal("an unknown PURCHASES_VIA must not start")
+	if _, err := Load(); err != nil {
+		t.Fatalf("complete settings: %v", err)
 	}
 }
