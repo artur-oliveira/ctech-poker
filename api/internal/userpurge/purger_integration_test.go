@@ -91,7 +91,7 @@ func TestPurgeLeavesNoTraceOfTheUser(t *testing.T) {
 		TableHandMeta: "hand#h1", TableSandboxPurchases: "p1", TableReactionEntitlements: "fire", TableReactionPurchases: "p2",
 		TableCosmeticEntitlements: "deck#casino", TableCosmeticPurchases: "p3", TableCosmeticLoadouts: "l1",
 		TableBotCheckContests: "c1", TablePromoRedemptions: "CODE", TableTableEntitlements: "ent#t1",
-		TableRecentPlayers: "hand#h1", TableSocialEvents: "e2",
+		TableRecentPlayers: "hand#h1", TableSocialEvents: "e2", TableResponsible: "STATE",
 	} {
 		put(t, db, env, table, map[string]any{"pk": testU, "sk": sk, "name": "Alice's"})
 	}

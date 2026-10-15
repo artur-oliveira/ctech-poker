@@ -42,8 +42,15 @@ type Purger struct {
 	cache    cache.Backend
 	cfg      Config
 	blockers BlockersFunc
+	carry    CarryFunc
 	now      func() time.Time
 }
+
+// CarryFunc keeps an active self-exclusion past the erasure (see responsible.Service.CarryOnErase).
+type CarryFunc func(ctx context.Context, sub string) (carried bool, err error)
+
+// WithCarrier makes the purge carry self-exclusions before it erases them.
+func (p *Purger) WithCarrier(carry CarryFunc) *Purger { p.carry = carry; return p }
 
 func NewPurger(db *dynamodb.Client, objects S3API, c cache.Backend, cfg Config, blockers BlockersFunc) *Purger {
 	return &Purger{db: db, objects: objects, cache: c, cfg: cfg, blockers: blockers, now: time.Now}
@@ -87,9 +94,25 @@ func (p *Purger) Purge(ctx context.Context, m erasure.Message) (erasure.Ack, err
 // steps is the purge in order.
 func (r *run) steps() []func(context.Context) error {
 	return []func(context.Context) error{
-		r.sharedHands, r.socialGraph, r.notesAboutUser, r.avatarReports,
+		r.carryExclusion, r.sharedHands, r.socialGraph, r.notesAboutUser, r.avatarReports,
 		r.reports, r.leaderboard, r.ownRows, r.cacheKeys, r.avatars,
 	}
+}
+
+// carryExclusion keeps an active self-exclusion past the account, before any state is
+// erased: if this step fails the purge stops and a retry carries it again.
+func (r *run) carryExclusion(ctx context.Context) error {
+	if r.p.carry == nil {
+		return nil
+	}
+	carried, err := r.p.carry(ctx, r.sub)
+	if err != nil {
+		return fmt.Errorf("userpurge: carry self-exclusion: %w", err)
+	}
+	if carried {
+		r.count(CountSelfExclusionCarried, 1)
+	}
+	return nil
 }
 
 // sharedHands walks the user's own hand rows, the only index of the hands
@@ -298,7 +321,7 @@ func (r *run) leaderboard(ctx context.Context) error {
 var erasedBySub = []string{
 	TableAchievementProgress, TableDailyReward, TablePlayerSessions, TablePlayerNotes, TableHandMeta,
 	TableSandboxPurchases, TableReactionEntitlements, TableReactionPurchases, TableCosmeticEntitlements,
-	TableCosmeticPurchases, TableCosmeticLoadouts, TableChatPrefs, TableBotCheckContests,
+	TableCosmeticPurchases, TableCosmeticLoadouts, TableChatPrefs, TableBotCheckContests, TableResponsible,
 	TableWalletAlertPrefs, TablePromoRedemptions, TableTableEntitlements, TableSocialEvents,
 	TableRecentPlayers, TablePlayerHands,
 }

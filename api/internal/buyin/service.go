@@ -19,6 +19,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
@@ -40,7 +41,7 @@ type walletMover interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 	HoldGame(ctx context.Context, userID string, amount int64, tableRef, idempotencyKey, reason string) (string, error)
-	ReleaseHold(ctx context.Context, holdID string) error
+	ReleaseHold(ctx context.Context, userID, holdID, idempotencyKey string) error
 	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason, description string) error
 	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 	Balances(ctx context.Context, userID string) (*walletclient.Balances, error)
@@ -50,8 +51,12 @@ type roomLookup interface {
 	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
 }
 
-type activationChecker interface {
-	IsGamblingActivated(ctx context.Context, userID string) (bool, error)
+// eligibility is the responsible-gambling rulebook a real-money buy-in answers to
+// (internal/responsible.Service). Eligibility refuses early, before any money
+// moves; RecordInflow is the authoritative meter, run once the hold succeeded.
+type eligibility interface {
+	Eligibility(ctx context.Context, userID string, amount int64) error
+	RecordInflow(ctx context.Context, userID string, amount int64, key string) (*responsible.LimitBreach, error)
 }
 
 type pendingStore interface {
@@ -74,7 +79,7 @@ type Service struct {
 	game         walletMover
 	manager      *tablemanager.Manager
 	rooms        roomLookup
-	activation   activationChecker
+	rules        eligibility
 	pending      pendingStore
 	entitlements entitlementStore
 	now          func() time.Time
@@ -103,8 +108,8 @@ func NewService(wallet walletMover, manager *tablemanager.Manager, rooms roomLoo
 	return &Service{wallet: wallet, manager: manager, rooms: rooms, now: time.Now}
 }
 
-func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager, rooms roomLookup, activation activationChecker) *Service {
-	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation, now: time.Now}
+func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager, rooms roomLookup, rules eligibility) *Service {
+	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, rules: rules, now: time.Now}
 }
 
 func (s *Service) WithPendingStore(pending pendingStore) *Service {
@@ -177,15 +182,8 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 	if room == nil || room.CurrencyMode != "real" {
 		return s.wallet, nil
 	}
-	if s.game == nil || s.activation == nil {
+	if s.game == nil || s.rules == nil {
 		return nil, fmt.Errorf("buyin: room %s is real-money but this Service was built without NewServiceWithGame", roomID)
-	}
-	ok, err := s.activation.IsGamblingActivated(ctx, playerID)
-	if err != nil {
-		return nil, fmt.Errorf("buyin: activation check: %w", err)
-	}
-	if !ok {
-		return nil, fmt.Errorf("buyin: player %s has not activated gambling on ctech-wallet", playerID)
 	}
 	return s.game, nil
 }
@@ -262,6 +260,19 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	}
 	key := fmt.Sprintf("%s#%s#buyin#%s", roomID, playerID, nonce)
 
+	// Responsible gambling comes first: consent, self-exclusion and the personal
+	// limits are checked before the entry fee or any hold, so a refusal costs the
+	// player nothing. (RecordInflow below is what actually meters the limits.)
+	realRoom := room != nil && room.CurrencyMode == roomstore.CurrencyModeReal
+	if realRoom {
+		if s.rules == nil {
+			return fmt.Errorf("buyin: room %s is real-money but this Service was built without NewServiceWithGame", roomID)
+		}
+		if err := s.rules.Eligibility(ctx, playerID, amount); err != nil {
+			return err
+		}
+	}
+
 	// The table-entry fee is resolved and charged before any stack money
 	// moves and before the player is seated (docs/plans/2026-08-21-entry-fee-entitlement.md):
 	// a failure here aborts the buy-in cleanly, with nobody seated and no
@@ -283,6 +294,19 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		if err != nil {
 			return fmt.Errorf("buyin: hold: %w", err)
 		}
+		// Meter the limit only now that the money is held, under the buy-in's own
+		// key so a retry counts once. If the meter says no (a racing buy-in took the
+		// last of the window) or fails, the hold goes back and nobody is seated.
+		breach, meterErr := s.rules.RecordInflow(ctx, playerID, amount, key)
+		if meterErr != nil || breach != nil {
+			if relErr := mover.ReleaseHold(ctx, playerID, holdID, key+":release"); relErr != nil {
+				return fmt.Errorf("buyin: limit check failed AND release failed (manual reconciliation needed): check=%v/%v release=%w", meterErr, breach, relErr)
+			}
+			if breach != nil {
+				return &responsible.BreachError{Breach: *breach}
+			}
+			return fmt.Errorf("buyin: limit check: %w", meterErr)
+		}
 	} else {
 		if err := mover.Debit(ctx, playerID, amount, key, "poker_buyin", fmt.Sprintf(descriptionBuyInFormat, roomID)); err != nil {
 			return fmt.Errorf("buyin: debit: %w", err)
@@ -300,7 +324,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		// it must be refunded like any other failed join, never silently
 		// dropped.
 		if mover == s.game {
-			if refundErr := mover.ReleaseHold(ctx, holdID); refundErr != nil {
+			if refundErr := mover.ReleaseHold(ctx, playerID, holdID, key+":release"); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND release failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
 		} else {

@@ -27,6 +27,7 @@ import (
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	"gopkg.aoctech.app/api-commons/ws"
+	"gopkg.aoctech.app/poker/api/internal/accountclient"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
@@ -59,6 +60,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/reports"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -136,6 +138,8 @@ var Module = fx.Options(
 		newReportStore,
 		newReportService,
 		newChatPrefsStore,
+		newResponsibleStore,
+		newResponsibleService,
 		newChatPrefsCache,
 		newBotCheckContestStore,
 		walletclient.New,
@@ -359,6 +363,22 @@ func newPlayerService(store *player.Store, wallet *walletclient.Client, cosmetic
 func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.Store {
 	return playernotes.NewStore(db, cfg.Env)
 }
+func newResponsibleStore(db *dynamodb.Client, cfg *config.Config) *responsible.DynamoStore {
+	return responsible.NewDynamoStore(db, cfg.Env)
+}
+
+// newResponsibleService wires the gambling rules. The CPF-hash lookup (for exclusions
+// carried over from erased accounts) uses Poker's M2M client; without credentials
+// (dev) it is left out and the carried check is skipped.
+func newResponsibleService(store *responsible.DynamoStore, cfg *config.Config, cacheBackend cache.Backend) *responsible.Service {
+	svc := responsible.NewService(store)
+	if cfg.PokerClientID != "" && cfg.PokerClientSecret != "" {
+		kyc := accountclient.New(cfg.CtechURL, cfg.PokerClientID, cfg.PokerClientSecret, cacheBackend)
+		svc = svc.WithCPFHasher(kyc.CPFHMAC)
+	}
+	return svc
+}
+
 func newChatPrefsStore(db *dynamodb.Client, cfg *config.Config) *chatprefs.Store {
 	return chatprefs.NewStore(db, cfg.Env)
 }
@@ -608,9 +628,9 @@ func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.Pending
 func newEntitlementStore(db *dynamodb.Client, cfg *config.Config) *entitlement.Store {
 	return entitlement.NewStore(db, cfg.Env)
 }
-func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, entitlements *entitlement.Store, pokerStatsStore *pokerstats.Store, presenceSvc *presence.Service) *buyin.Service {
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, entitlements *entitlement.Store, pokerStatsStore *pokerstats.Store, presenceSvc *presence.Service, rules *responsible.Service) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithPendingStore(pending).WithEntitlements(entitlements).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, rules).WithPendingStore(pending).WithEntitlements(entitlements).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
 	}
 	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithPendingStore(pending).WithEntitlements(entitlements).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
 }
@@ -1026,11 +1046,12 @@ func registerRoutesWithSocialRuntime(
 	walletAlertSvc *walletalert.Service,
 	chatPrefsStore *chatprefs.Store,
 	chatPrefsCache *chatprefs.ExtraWordsCache,
+	responsibleSvc *responsible.Service,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 	erasureStore *erasure.Store,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, botCheckContestStore, cosmeticLoadoutSvc, erasureStore.Blocked)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, responsibleSvc, botCheckContestStore, cosmeticLoadoutSvc, erasureStore.Blocked)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -1046,7 +1067,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so

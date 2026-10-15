@@ -3,6 +3,7 @@ package buyin
 import (
 	"context"
 	"errors"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/player"
@@ -20,7 +21,7 @@ func (w *gateWallet) Debit(context.Context, string, int64, string, string, strin
 func (w *gateWallet) HoldGame(context.Context, string, int64, string, string, string) (string, error) {
 	return "h1", nil
 }
-func (w *gateWallet) ReleaseHold(context.Context, string) error { return nil }
+func (w *gateWallet) ReleaseHold(context.Context, string, string, string) error { return nil }
 func (w *gateWallet) CashoutGame(context.Context, string, int64, string, []string, string, string, string) error {
 	return nil
 }
@@ -89,7 +90,10 @@ func (r *gateRoomLookup) Get(context.Context, string) (*roomstore.Room, error) {
 
 type gateActivation struct{}
 
-func (gateActivation) IsGamblingActivated(context.Context, string) (bool, error) { return true, nil }
+func (gateActivation) Eligibility(context.Context, string, int64) error { return nil }
+func (gateActivation) RecordInflow(context.Context, string, int64, string) (*responsible.LimitBreach, error) {
+	return nil, nil
+}
 
 // TestRealMoneyBuyInRequiresPokerTerms guards app.newBuyinService's real-money
 // wiring: it must chain .WithPlayers(players) the same way the sandbox

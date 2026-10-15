@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 37);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 38);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -419,7 +419,7 @@ test('creates no alarms and no SNS topic reference when cloudwatchAlarmsEnabled 
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::SNS::Topic', 0);
   // Tables themselves are unaffected by the flag.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 37);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 38);
 });
 
 test('poker_erasure_state holds the account-deletion lock/tombstone (pk only, TTL)', () => {
@@ -427,6 +427,15 @@ test('poker_erasure_state holds the account-deletion lock/tombstone (pk only, TT
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_erasure_state',
     KeySchema: [{AttributeName: 'pk', KeyType: 'HASH'}],
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+  });
+});
+
+test('poker_responsible holds the responsible-gambling state (pk+sk, TTL)', () => {
+  const template = Template.fromStack(new DynamoDBStack(new App(), 'TestResponsible', {environment: 'dev', cloudwatchAlarmsEnabled: false}));
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_responsible',
+    KeySchema: [{AttributeName: 'pk', KeyType: 'HASH'}, {AttributeName: 'sk', KeyType: 'RANGE'}],
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
   });
 });

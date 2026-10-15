@@ -44,6 +44,7 @@ export type TableName =
   'poker_promo_codes' | 'poker_promo_redemptions' |
   'poker_table_entitlements' | 'poker_table_highlights' |
   'poker_hand_reveals' | 'poker_hand_reveal_payments' | 'poker_erasure_state' |
+  'poker_responsible' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -283,6 +284,12 @@ export class DynamoDBStack extends cdk.Stack {
     // erasure.Store. PITR stays on: a lost tombstone lets a late message
     // resurrect an erased user.
     table('poker_erasure_state', false, true);
+    // poker_responsible (P4): responsible-gambling state. pk = player id, sk = STATE
+    // (consent, personal limits, inflow counters, self-exclusion; one item, versioned)
+    // | AUDIT#<ts>#<id> (append-only) | INFLOW#<buy-in key> (idempotency marker, TTL).
+    // A self-exclusion that outlives an erased account sits under pk SELFEXCL#<cpf
+    // keyed hash>, TTL = its end. Durable and not reconstructable: PITR stays on.
+    table('poker_responsible', true, true);
     // One permanent private aggregate per player plus short-lived idempotency
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);
