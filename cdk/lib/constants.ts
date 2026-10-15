@@ -181,9 +181,9 @@ export const SSM_POKER = (env: Environment) => ({
   // Dedicated confidential client for account-deletion acks to ctech-account
   // (scope internal:account:erasure-ack only), kept apart from the wallet M2M client.
   erasureAckClientId: `/ctech/${env}/poker/erasure-ack-client-id`,
-  // Billing sales (PURCHASES_VIA=billing): Poker's OAuth client for ctech-billing, the base URL
+  // Billing sales: Poker's OAuth client for ctech-billing, the base URL
   // of its API, and the secret that signs its invoice.paid deliveries. Seeded operationally
-  // and read only when the environment sells through Billing (docs/runbooks/poker-owns-games.md).
+  // (docs/runbooks/poker-owns-games.md).
   billingUrl: `/ctech/${env}/poker/billing-url`,
   billingClientId: `/ctech/${env}/poker/billing-client-id`,
   billingClientSecret: `/ctech/${env}/poker/billing-client-secret`, // SecureString
@@ -229,14 +229,3 @@ export const domainForEnv = (environment: Environment, prefix: string) => {
   }
 };
 
-/**
- * What sells the chip packs and premium goods: "wallet" is ctech-wallet's PIX sale as
- * always, "billing" is a Billing invoice per sale. Switched per environment, one deploy
- * at a time, after the cutover in docs/runbooks/poker-owns-games.md.
- */
-export type PurchasesVia = 'wallet' | 'billing';
-export const PURCHASES_VIA: Record<Environment, PurchasesVia> = {
-  dev: 'wallet',
-  stage: 'wallet',
-  prod: 'billing',
-};

@@ -455,8 +455,7 @@ func newPromoCodeStore(db *dynamodb.Client, cfg *config.Config) *promocode.Store
 	return promocode.NewStore(db, cfg.Env)
 }
 
-// purchaseWallet is what the three purchase services need from whatever stands behind
-// them: ctech-wallet's PIX sale (PURCHASES_VIA=wallet) or the Billing gateway.
+// purchaseWallet is what the three purchase services need from the Billing gateway.
 type purchaseWallet interface {
 	ListSandboxSKUs(ctx context.Context) ([]walletclient.SandboxSKU, error)
 	PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey, description string) (*walletclient.SandboxPurchase, error)
@@ -470,20 +469,13 @@ type purchaseWallet interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
-// newBillingClient is nil unless sales go through Billing, so nothing else can reach it.
 func newBillingClient(cfg *config.Config) *billingclient.Client {
-	if !cfg.BillingSalesOn() {
-		return nil
-	}
 	return billingclient.New(cfg.BillingURL, cfg.CtechURL, cfg.BillingClientID, cfg.BillingClientSecret)
 }
 
-// newPurchaseWallet chooses what sells: the wallet as always, or the Billing gateway (the
-// wallet then only holds the Sandbox ledger). The KYC read it needs shares Poker's M2M client.
+// newPurchaseWallet sells through the Billing gateway; the wallet only holds the Sandbox
+// ledger. The KYC read it needs shares Poker's M2M client.
 func newPurchaseWallet(cfg *config.Config, wallet *walletclient.Client, bc *billingclient.Client, cacheBackend cache.Backend) purchaseWallet {
-	if !cfg.BillingSalesOn() {
-		return wallet
-	}
 	return purchasegw.New(wallet, bc, accountclient.New(cfg.CtechURL, cfg.PokerClientID, cfg.PokerClientSecret, cacheBackend))
 }
 

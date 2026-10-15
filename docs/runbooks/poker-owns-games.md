@@ -3,7 +3,7 @@
 Two independent moves, each safe on its own, each with its own rollback.
 
 1. **Responsible gambling** (consent, personal limits, self-exclusion) lives in Poker (`internal/responsible`, table `poker_responsible`). The real-money buy-in enforces it. Real money is off in production (`/ctech/prod/poker/real-money-enabled` absent), so nothing changes for players until it is turned on, which also needs the legal sign-off reference.
-2. **Sales** of chip packs and premium goods go through Billing invoices (`internal/purchasegw`) instead of ctech-wallet's Pix sale. Switched by `PURCHASES_VIA` (`wallet` default, `billing`).
+2. **Sales** of chip packs and premium goods go through Billing invoices (`internal/purchasegw`) instead of ctech-wallet's Pix sale. Always on since P5; there is no switch (rollback is reverting the P5 commit).
 
 ## Prerequisites (done 2026-10-15 in production)
 
@@ -24,11 +24,9 @@ Account deletion: an active self-exclusion is carried (keyed by the CPF keyed ha
 
 ## 2. Sales through Billing
 
-1. Deploy Poker with `PURCHASES_VIA=wallet` (the default): no Billing call is made, the Billing webhook route is not mounted.
-2. Non-prod (when a stage exists): set `PURCHASES_VIA` to `billing` in `cdk/lib/constants.ts`, deploy, buy the R$ 1,00 pack with Inter's simulated payment, see the chips credited and a deck unlocked.
-3. **Production, owner first (live money).** Set `prod: 'billing'` in `cdk/lib/constants.ts`, deploy; the owner buys the smallest pack and one good. Check: the invoice is `PAID` in Billing, the Sandbox balance rose by the pack's credits once, the `invoice.paid` delivery shows `delivered` in Billing's console.
-4. Leave both rails' history for a week; watch for `ALARM poker sale` log lines (a paid invoice that does not match the catalogue price) in `/ctech-poker/prod/app`.
-5. Rollback: `prod: 'wallet'`. Sales opened through Billing and still unpaid are paid at Billing and credited by the next read of the purchase; do not switch back while one is in flight (list open Poker invoices in Billing first).
+Since P5 every sale goes through Billing: the API needs `BILLING_URL`, `BILLING_CLIENT_ID`, `BILLING_CLIENT_SECRET` and `BILLING_EVENT_SECRET` (SSM, seeded as in the prerequisites) and refuses to start without them. Only production exists.
+
+Watch for `ALARM poker sale` log lines (a paid invoice that does not match the catalogue price) in `/ctech-poker/prod/app`. Open Poker invoices at the time of a deploy are paid at Billing and credited by the next read of the purchase.
 
 Buying needs a CPF on the player's KYC (Billing opens a Pix only for a customer with one). A player without it gets `422 kyc-required`.
 
@@ -41,4 +39,4 @@ No new infrastructure beyond one DynamoDB table (on demand) and a handful of SSM
 ## Done in production
 
 - 2026-10-15: `import-responsible prod` imported the one player with gambling state (the owner); a second run changed nothing.
-- 2026-10-15: the first Poker deploy of this work took the API down for about 17 minutes: `PURCHASES_VIA=wallet` was put in the list of SSM `VAR=/path` pairs, and `setup-ssm-env.sh` refuses anything that is not a path, so the instance started with no environment. It is a literal in the service env now, and a CDK test fails if it returns to that list.
+- 2026-10-15: the first Poker deploy of this work took the API down for about 17 minutes: `PURCHASES_VIA=wallet` was put in the list of SSM `VAR=/path` pairs, and `setup-ssm-env.sh` refuses anything that is not a path, so the instance started with no environment. The switch was removed in P5.

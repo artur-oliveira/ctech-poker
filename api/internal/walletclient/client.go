@@ -37,7 +37,6 @@ const (
 	pathGameHold    = "/v1.0/internal/wallet/holds"
 	pathGameRelease = "/v1.0/internal/wallet/holds/%s/release"
 	pathGameCashout = "/v1.0/internal/wallet/holds/cashout"
-	pathGameStatus  = "/v1.0/internal/wallet/holds/status/%s"
 	pathBalance     = "/v1.0/internal/wallet/balance/%s"
 
 	scopeCredit    = "internal:wallet:credit"
@@ -49,20 +48,6 @@ const (
 	scopeGameStatus  = scopeGameHold
 
 	scopeBalance = "internal:wallet:balance"
-
-	pathSandboxPurchaseSkus   = "/v1.0/internal/wallet/sandbox-purchase/skus"
-	pathSandboxPurchaseCreate = "/v1.0/internal/wallet/sandbox-purchase"
-	pathSandboxPurchaseGet    = "/v1.0/internal/wallet/sandbox-purchase/%s"
-	pathSandboxPurchaseRefund = "/v1.0/internal/wallet/sandbox-purchase/%s/refund"
-
-	scopeSandboxPurchase = "internal:wallet:sandbox-purchase"
-
-	pathProductPurchaseSkus   = "/v1.0/internal/wallet/product-purchase/skus"
-	pathProductPurchaseCreate = "/v1.0/internal/wallet/product-purchase"
-	pathProductPurchaseGet    = "/v1.0/internal/wallet/product-purchase/%s"
-	pathProductPurchaseRefund = "/v1.0/internal/wallet/product-purchase/%s/refund"
-
-	scopeProductPurchase = "internal:wallet:product-purchase"
 )
 
 // Error is a passthrough of ctech-wallet's own RFC 9457 problem+json body —
@@ -115,21 +100,19 @@ type MovementRequest struct {
 }
 
 type Client struct {
-	base                  string
-	http                  *http.Client
-	creditTokens          *oauth2client.TokenManager
-	debitTokens           *oauth2client.TokenManager
-	debitRealTokens       *oauth2client.TokenManager
-	gameHoldTokens        *oauth2client.TokenManager
-	gameCashoutTokens     *oauth2client.TokenManager
-	gameStatusTokens      *oauth2client.TokenManager
-	balanceTokens         *oauth2client.TokenManager
-	sandboxPurchaseTokens *oauth2client.TokenManager
-	productPurchaseTokens *oauth2client.TokenManager
-	env                   string
-	breakersMu            sync.Mutex
-	breakers              map[string]breakerState
-	retryDelay            func(time.Duration)
+	base              string
+	http              *http.Client
+	creditTokens      *oauth2client.TokenManager
+	debitTokens       *oauth2client.TokenManager
+	debitRealTokens   *oauth2client.TokenManager
+	gameHoldTokens    *oauth2client.TokenManager
+	gameCashoutTokens *oauth2client.TokenManager
+	gameStatusTokens  *oauth2client.TokenManager
+	balanceTokens     *oauth2client.TokenManager
+	env               string
+	breakersMu        sync.Mutex
+	breakers          map[string]breakerState
+	retryDelay        func(time.Duration)
 }
 
 type breakerState struct {
@@ -171,20 +154,18 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 	baseAuth := strings.TrimRight(cfg.CtechURL, "/")
 	base := strings.TrimRight(cfg.WalletURL, "/")
 	return &Client{
-		base:                  base,
-		http:                  httpClient,
-		creditTokens:          oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
-		debitTokens:           oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
-		debitRealTokens:       oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebitReal),
-		gameHoldTokens:        oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
-		gameCashoutTokens:     oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
-		gameStatusTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
-		balanceTokens:         oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
-		sandboxPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeSandboxPurchase),
-		productPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeProductPurchase),
-		env:                   cfg.Env,
-		breakers:              make(map[string]breakerState),
-		retryDelay:            time.Sleep,
+		base:              base,
+		http:              httpClient,
+		creditTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
+		debitTokens:       oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
+		debitRealTokens:   oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebitReal),
+		gameHoldTokens:    oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
+		gameCashoutTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
+		gameStatusTokens:  oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
+		balanceTokens:     oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
+		env:               cfg.Env,
+		breakers:          make(map[string]breakerState),
+		retryDelay:        time.Sleep,
 	}
 }
 
@@ -228,7 +209,7 @@ type requiredRealMoneyScope struct {
 func (c *Client) ValidateRequiredScopes(ctx context.Context) error {
 	checks := []requiredRealMoneyScope{
 		{scope: scopeDebitReal, tokens: c.debitRealTokens, purpose: "DebitReal (real-money table entry fee)"},
-		{scope: scopeGameStatus, tokens: c.gameStatusTokens, purpose: "IsGamblingActivated (real-money gambling precondition)"},
+		{scope: scopeGameStatus, tokens: c.gameStatusTokens, purpose: "HoldGame/ReleaseHold/CashoutGame (real-money table holds)"},
 	}
 	var missing []string
 	for _, check := range checks {
@@ -508,39 +489,6 @@ func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, t
 	return nil
 }
 
-// IsGamblingActivated checks whether userID has completed ctech-wallet's
-// ActivateGambling flow (verified KYC + gambling addendum).
-func (c *Client) IsGamblingActivated(ctx context.Context, userID string) (bool, error) {
-	token, err := c.gameStatusTokens.Get(ctx)
-	if err != nil {
-		return false, fmt.Errorf("walletclient: token: %w", err)
-	}
-	url := fmt.Sprintf(c.base+pathGameStatus, userID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return false, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.do(req, true)
-	if err != nil {
-		return false, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return false, fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
-	}
-
-	var body struct {
-		Activated bool `json:"activated"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return false, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	return body.Activated, nil
-}
-
 // Balances reports userID's game+sandbox balances. real is never returned
 // (ctech-wallet keeps it out of this endpoint's response entirely).
 func (c *Client) Balances(ctx context.Context, userID string) (*Balances, error) {
@@ -643,142 +591,6 @@ func (p *SandboxPurchase) normalizeAmount() {
 	}
 }
 
-// ListSandboxSKUs fetches the purchasable sandbox-credit pack catalog.
-func (c *Client) ListSandboxSKUs(ctx context.Context) ([]SandboxSKU, error) {
-	token, err := c.sandboxPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+pathSandboxPurchaseSkus, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.do(req, true)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var skus []SandboxSKU
-	if err := json.NewDecoder(resp.Body).Decode(&skus); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	return skus, nil
-}
-
-// PurchaseSandbox opens a direct PIX→sandbox-credits sale on userID's behalf.
-func (c *Client) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey, description string) (*SandboxPurchase, error) {
-	token, err := c.sandboxPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	body, err := json.Marshal(map[string]any{
-		"user_id":         userID,
-		"sku":             sku,
-		"idempotency_key": idempotencyKey,
-		"description":     description,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: encode: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+pathSandboxPurchaseCreate, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.do(req, idempotencyKey != "")
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var p SandboxPurchase
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	p.normalizeAmount()
-	return &p, nil
-}
-
-// GetSandboxPurchase re-fetches a purchase's current status from wallet — the
-// source of truth callers must consult before crediting or broadcasting
-// anything (never the webhook body).
-func (c *Client) GetSandboxPurchase(ctx context.Context, purchaseID string) (*SandboxPurchase, error) {
-	token, err := c.sandboxPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	url := fmt.Sprintf(c.base+pathSandboxPurchaseGet, purchaseID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.do(req, true)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var p SandboxPurchase
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	p.normalizeAmount()
-	return &p, nil
-}
-
-// RefundSandboxPurchase reverses an unused sandbox purchase.
-func (c *Client) RefundSandboxPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*SandboxPurchase, error) {
-	token, err := c.sandboxPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	body, err := json.Marshal(map[string]any{
-		"user_id": userID, "idempotency_key": idempotencyKey,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: encode: %w", err)
-	}
-	url := fmt.Sprintf(c.base+pathSandboxPurchaseRefund, purchaseID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.do(req, idempotencyKey != "")
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var p SandboxPurchase
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	p.normalizeAmount()
-	return &p, nil
-}
-
 // ProductSKU mirrors ctech-wallet's M2M GET .../product-purchase/skus response.
 type ProductSKU struct {
 	ID         string `json:"id"`
@@ -802,140 +614,4 @@ func (p *ProductPurchase) normalizeAmount() {
 	if p.Amount == 0 {
 		p.Amount = p.AmountExpected
 	}
-}
-
-// ListProductSKUs fetches the purchasable generic-product catalog.
-func (c *Client) ListProductSKUs(ctx context.Context) ([]ProductSKU, error) {
-	token, err := c.productPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+pathProductPurchaseSkus, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.do(req, true)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var skus []ProductSKU
-	if err := json.NewDecoder(resp.Body).Decode(&skus); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	return skus, nil
-}
-
-// PurchaseProduct opens a direct PIX product sale on userID's behalf.
-func (c *Client) PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey, description string) (*ProductPurchase, error) {
-	token, err := c.productPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	body, err := json.Marshal(map[string]any{
-		"user_id":         userID,
-		"sku":             sku,
-		"idempotency_key": idempotencyKey,
-		"description":     description,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: encode: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+pathProductPurchaseCreate, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.do(req, idempotencyKey != "")
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var p ProductPurchase
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	p.normalizeAmount()
-	return &p, nil
-}
-
-// GetProductPurchase re-fetches a purchase's current status from wallet — the
-// source of truth callers must consult before crediting or broadcasting
-// anything (never the webhook body).
-func (c *Client) GetProductPurchase(ctx context.Context, purchaseID string) (*ProductPurchase, error) {
-	token, err := c.productPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	url := fmt.Sprintf(c.base+pathProductPurchaseGet, purchaseID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.do(req, true)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var p ProductPurchase
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	p.normalizeAmount()
-	return &p, nil
-}
-
-// RefundProductPurchase reverses a confirmed product purchase.
-func (c *Client) RefundProductPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*ProductPurchase, error) {
-	token, err := c.productPurchaseTokens.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: token: %w", err)
-	}
-	body, err := json.Marshal(map[string]any{
-		"user_id": userID, "idempotency_key": idempotencyKey,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: encode: %w", err)
-	}
-	url := fmt.Sprintf(c.base+pathProductPurchaseRefund, purchaseID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.do(req, idempotencyKey != "")
-	if err != nil {
-		return nil, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer closeResponseBody(ctx, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw := readResponseBody(ctx, resp.Body)
-		return nil, walletError(resp.StatusCode, raw)
-	}
-	var p ProductPurchase
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	p.normalizeAmount()
-	return &p, nil
 }

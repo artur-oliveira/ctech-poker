@@ -27,7 +27,6 @@ import {
   HEALTH_CHECK_PATH,
   instanceRoleName,
   NGINX_PORT,
-  PURCHASES_VIA,
   S3_PREFIX,
   SERVICE,
   SSM_ACCOUNT,
@@ -223,14 +222,12 @@ export class PokerApiStack extends cdk.Stack {
         `arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/up/*`,
       ],
     }));
-    if (PURCHASES_VIA[environment] === 'billing') {
-      instanceRole.addToPolicy(new iam.PolicyStatement({
-        actions: ['ssm:GetParameter'],
-        resources: [poker.billingUrl, poker.billingClientId, poker.billingClientSecret, poker.billingEventSecret].map(
-          (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
-        ),
-      }));
-    }
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [poker.billingUrl, poker.billingClientId, poker.billingClientSecret, poker.billingEventSecret].map(
+        (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
+      ),
+    }));
     // The dedicated ack client's credentials, read at service start (ruling R2).
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
@@ -360,14 +357,10 @@ export class PokerApiStack extends cdk.Stack {
       `AVATAR_BASE_URL=${avatarBaseUrlParam}`,
       `ERASURE_ACK_CLIENT_ID=${poker.erasureAckClientId}`,
       `ERASURE_ACK_CLIENT_SECRET=${poker.erasureAckClientSecret}`,
-      // Only read when the environment sells through Billing: an unseeded SSM path would
-      // otherwise stop the service from starting.
-      ...(PURCHASES_VIA[environment] === 'billing' ? [
-        `BILLING_URL=${poker.billingUrl}`,
-        `BILLING_CLIENT_ID=${poker.billingClientId}`,
-        `BILLING_CLIENT_SECRET=${poker.billingClientSecret}`,
-        `BILLING_EVENT_SECRET=${poker.billingEventSecret}`,
-      ] : []),
+      `BILLING_URL=${poker.billingUrl}`,
+      `BILLING_CLIENT_ID=${poker.billingClientId}`,
+      `BILLING_CLIENT_SECRET=${poker.billingClientSecret}`,
+      `BILLING_EVENT_SECRET=${poker.billingEventSecret}`,
     ];
     if (isAlpine) {
       const quoted = ssmEnvArgs.map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
@@ -385,10 +378,7 @@ export class PokerApiStack extends cdk.Stack {
       `CORS_ALLOWED_ORIGINS="$SERVICE_AUDIENCE"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${SERVICE_AUDIENCE#*://}"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${TURNSTILE_EXPECTED_HOSTNAME%%/*}"`,
-      // A literal, not an SSM path: setup-ssm-env.sh takes VAR=/ssm/path pairs only and refuses
-      // anything else, which leaves the service with no environment at all.
-      `PURCHASES_VIA=${PURCHASES_VIA[environment]}`,
-      `export GOMEMLIMIT CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME PURCHASES_VIA`,
+      `export GOMEMLIMIT CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
       `SERVICEENV`,
       `chmod 0755 /opt/app/service-env.sh`,
     );

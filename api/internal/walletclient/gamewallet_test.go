@@ -10,36 +10,6 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
-func TestIsGamblingActivated(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
-	})
-	mux.HandleFunc("/v1.0/internal/wallet/holds/status/user-1", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"activated": true})
-	})
-	mux.HandleFunc("/v1.0/internal/wallet/holds/status/user-2", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"activated": false})
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-
-	t.Run("activated", func(t *testing.T) {
-		ok, err := c.IsGamblingActivated(t.Context(), "user-1")
-		if err != nil || !ok {
-			t.Fatalf("expected activated=true, got ok=%v err=%v", ok, err)
-		}
-	})
-	t.Run("not activated", func(t *testing.T) {
-		ok, err := c.IsGamblingActivated(t.Context(), "user-2")
-		if err != nil || ok {
-			t.Fatalf("expected activated=false, got ok=%v err=%v", ok, err)
-		}
-	})
-}
-
 func TestHoldAndRelease(t *testing.T) {
 	var holdCalled bool
 	var releaseCalled bool
