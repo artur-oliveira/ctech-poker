@@ -54,7 +54,7 @@ func newTestClient(srv *httptest.Server) *Client {
 func TestValidateRequiredScopesPassesWhenBothGranted(t *testing.T) {
 	srv := newScopeTestServer(t, map[string]string{
 		scopeDebitReal:  fakeM2MToken(t, "internal:wallet:debit-real internal:wallet:credit"),
-		scopeGameStatus: fakeM2MToken(t, "internal:wallet:game-status"),
+		scopeGameStatus: fakeM2MToken(t, "internal:wallet:hold"),
 	})
 	defer srv.Close()
 
@@ -65,10 +65,10 @@ func TestValidateRequiredScopesPassesWhenBothGranted(t *testing.T) {
 
 func TestValidateRequiredScopesFailsWhenTokenEndpointRejectsScope(t *testing.T) {
 	// Only game-status is a scope the token endpoint recognizes at all —
-	// mirrors ctech-wallet's scope catalog missing internal:wallet:game-status
+	// mirrors ctech-wallet's scope catalog missing internal:wallet:hold
 	// entirely (issue #39 point 1).
 	srv := newScopeTestServer(t, map[string]string{
-		scopeGameStatus: fakeM2MToken(t, "internal:wallet:game-status"),
+		scopeGameStatus: fakeM2MToken(t, "internal:wallet:hold"),
 	})
 	defer srv.Close()
 
@@ -87,7 +87,7 @@ func TestValidateRequiredScopesFailsWhenGrantedTokenOmitsScope(t *testing.T) {
 	// internal:wallet:debit-real (issue #39 point 2).
 	srv := newScopeTestServer(t, map[string]string{
 		scopeDebitReal:  fakeM2MToken(t, "internal:wallet:credit internal:wallet:debit"),
-		scopeGameStatus: fakeM2MToken(t, "internal:wallet:game-status"),
+		scopeGameStatus: fakeM2MToken(t, "internal:wallet:hold"),
 	})
 	defer srv.Close()
 

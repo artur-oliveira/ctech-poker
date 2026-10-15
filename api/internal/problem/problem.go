@@ -4,12 +4,15 @@ package problem
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/observability"
 	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	common "gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
@@ -121,6 +124,49 @@ func FromWalletError(err error) (p *Problem, ok bool) {
 			p.WithNextAction(werr.NextAction, werr.RetryAfterSeconds)
 		}
 		return p, true
+	}
+	return nil, false
+}
+
+// Problem types for the responsible-gambling refusals. The strings are the ones
+// ctech-wallet used before the rules moved here, so a client that already knows
+// them keeps working.
+const (
+	TypeGamblingTermsRequired   = "/problems/gambling-terms-required"
+	TypeSelfExcluded            = "/problems/self-excluded"
+	TypeLimitsNotConfigured     = "/problems/limits-not-configured"
+	TypeDepositLimitExceeded    = "/problems/deposit-limit-exceeded"
+	TypeExclusionChangeRejected = "/problems/exclusion-change-rejected"
+)
+
+// FromResponsibleError maps a responsible-gambling refusal to its problem+json;
+// ok is false for any other error, so the caller can fall back to its own.
+func FromResponsibleError(err error) (p *Problem, ok bool) {
+	var (
+		excluded *responsible.ExcludedError
+		breach   *responsible.BreachError
+		rule     *responsible.RuleError
+	)
+	switch {
+	case errors.Is(err, responsible.ErrConsentRequired):
+		return New(http.StatusForbidden, TypeGamblingTermsRequired, "Gambling Terms Required",
+			"aceite o termo de jogo responsável para jogar com dinheiro real"), true
+	case errors.Is(err, responsible.ErrLimitsNotConfigured):
+		return New(http.StatusConflict, TypeLimitsNotConfigured, "Limits Not Configured",
+			"defina seus limites (diário, semanal e mensal) antes de jogar com dinheiro real"), true
+	case errors.As(err, &excluded):
+		detail := "você se autoexcluiu do jogo por tempo indeterminado"
+		if excluded.Until != "" {
+			detail = "você se autoexcluiu do jogo até " + excluded.Until
+		}
+		return New(http.StatusConflict, TypeSelfExcluded, "Self-Excluded", detail), true
+	case errors.As(err, &breach):
+		names := map[string]string{"daily": "diário", "weekly": "semanal", "monthly": "mensal"}
+		p := New(http.StatusConflict, TypeDepositLimitExceeded, "Deposit Limit Exceeded",
+			fmt.Sprintf("limite %s atingido; renova em %s", names[breach.Breach.Window], breach.Breach.ResetsAt.Format(time.RFC3339)))
+		return p, true
+	case errors.As(err, &rule):
+		return New(http.StatusConflict, TypeExclusionChangeRejected, "Change Rejected", rule.Message), true
 	}
 	return nil, false
 }

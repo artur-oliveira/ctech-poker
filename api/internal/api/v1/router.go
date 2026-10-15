@@ -32,6 +32,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
@@ -84,6 +85,7 @@ func Register(
 	walletAlertSvc *walletalert.Service,
 	chatPrefsStore *chatprefs.Store,
 	chatPrefsCache *chatprefs.ExtraWordsCache,
+	responsibleSvc *responsible.Service,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 	blocked BlockedFunc,
@@ -148,6 +150,7 @@ func Register(
 	RegisterReactionWheel(router, auth, players)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterChatPrefs(router, auth, chatPrefsStore, chatPrefsCache)
+	RegisterResponsible(router, auth, responsibleSvc)
 	RegisterBotCheckContest(router, auth, botCheckContestStore)
 	RegisterHandMeta(router, auth, handMetaStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)

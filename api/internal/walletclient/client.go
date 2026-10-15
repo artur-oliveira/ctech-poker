@@ -32,19 +32,26 @@ const (
 	pathSandboxDebit  = "/v1.0/internal/wallet/sandbox/debit"
 	pathRealDebit     = "/v1.0/internal/wallet/real/debit"
 
-	pathGameHold    = "/v1.0/internal/wallet/game/hold"
-	pathGameRelease = "/v1.0/internal/wallet/game/hold/%s/release"
-	pathGameCashout = "/v1.0/internal/wallet/game/cashout"
-	pathGameStatus  = "/v1.0/internal/wallet/game/status/%s"
-	pathBalance     = "/v1.0/internal/wallet/balance/%s"
+	// The holds live under routes that do not say "game": the wallet only reserves
+	// and settles money on `real`; the games, and the rules around them, are Poker's.
+	pathGameHold          = "/v1.0/internal/wallet/holds"
+	pathGameRelease       = "/v1.0/internal/wallet/holds/%s/release"
+	pathGameCashout       = "/v1.0/internal/wallet/holds/cashout"
+	pathGameStatus        = "/v1.0/internal/wallet/holds/status/%s"
+	pathResponsibleExport = "/v1.0/internal/wallet/responsible/export"
+	pathBalance           = "/v1.0/internal/wallet/balance/%s"
 
-	scopeCredit      = "internal:wallet:credit"
-	scopeDebit       = "internal:wallet:debit"
-	scopeDebitReal   = "internal:wallet:debit-real"
-	scopeGameHold    = "internal:wallet:game-hold"
-	scopeGameCashout = "internal:wallet:game-cashout"
-	scopeGameStatus  = "internal:wallet:game-status"
-	scopeBalance     = "internal:wallet:balance"
+	scopeCredit    = "internal:wallet:credit"
+	scopeDebit     = "internal:wallet:debit"
+	scopeDebitReal = "internal:wallet:debit-real"
+	// One scope for the whole hold lifecycle (hold, release, cashout, status).
+	scopeGameHold    = "internal:wallet:hold"
+	scopeGameCashout = scopeGameHold
+	scopeGameStatus  = scopeGameHold
+
+	// scopeResponsibleExport reads the responsible-gambling state, once, for the import.
+	scopeResponsibleExport = "internal:wallet:responsible-export"
+	scopeBalance           = "internal:wallet:balance"
 
 	pathSandboxPurchaseSkus   = "/v1.0/internal/wallet/sandbox-purchase/skus"
 	pathSandboxPurchaseCreate = "/v1.0/internal/wallet/sandbox-purchase"
@@ -119,6 +126,7 @@ type Client struct {
 	gameHoldTokens        *oauth2client.TokenManager
 	gameCashoutTokens     *oauth2client.TokenManager
 	gameStatusTokens      *oauth2client.TokenManager
+	exportTokens          *oauth2client.TokenManager
 	balanceTokens         *oauth2client.TokenManager
 	sandboxPurchaseTokens *oauth2client.TokenManager
 	productPurchaseTokens *oauth2client.TokenManager
@@ -175,6 +183,7 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 		gameHoldTokens:        oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
 		gameCashoutTokens:     oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
 		gameStatusTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
+		exportTokens:          oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeResponsibleExport),
 		balanceTokens:         oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
 		sandboxPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeSandboxPurchase),
 		productPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeProductPurchase),
@@ -436,17 +445,23 @@ func (c *Client) HoldGame(ctx context.Context, userID string, amount int64, tabl
 	return res.ID, nil
 }
 
-func (c *Client) ReleaseHold(ctx context.Context, holdID string) error {
+func (c *Client) ReleaseHold(ctx context.Context, userID, holdID, idempotencyKey string) error {
 	token, err := c.gameHoldTokens.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("walletclient: token: %w", err)
 	}
+	// The wallet checks the hold belongs to the named user and replays by key.
+	body, err := json.Marshal(map[string]any{"user_id": userID, "idempotency_key": idempotencyKey})
+	if err != nil {
+		return fmt.Errorf("walletclient: encode: %w", err)
+	}
 	url := fmt.Sprintf(c.base+pathGameRelease, holdID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.do(req, true)
 	if err != nil {

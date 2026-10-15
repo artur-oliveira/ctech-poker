@@ -15,10 +15,10 @@ func TestIsGamblingActivated(t *testing.T) {
 	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
 	})
-	mux.HandleFunc("/v1.0/internal/wallet/game/status/user-1", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1.0/internal/wallet/holds/status/user-1", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"activated": true})
 	})
-	mux.HandleFunc("/v1.0/internal/wallet/game/status/user-2", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1.0/internal/wallet/holds/status/user-2", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"activated": false})
 	})
 	srv := httptest.NewServer(mux)
@@ -47,12 +47,12 @@ func TestHoldAndRelease(t *testing.T) {
 	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
 	})
-	mux.HandleFunc("/v1.0/internal/wallet/game/hold", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1.0/internal/wallet/holds", func(w http.ResponseWriter, r *http.Request) {
 		holdCalled = true
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "hold-123"})
 	})
-	mux.HandleFunc("/v1.0/internal/wallet/game/hold/hold-123/release", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1.0/internal/wallet/holds/hold-123/release", func(w http.ResponseWriter, r *http.Request) {
 		releaseCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -69,7 +69,7 @@ func TestHoldAndRelease(t *testing.T) {
 		t.Fatal("expected HoldGame to hit endpoint")
 	}
 
-	if err := c.ReleaseHold(t.Context(), "hold-123"); err != nil {
+	if err := c.ReleaseHold(t.Context(), "user-1", "hold-123", "idem-1"); err != nil {
 		t.Fatalf("ReleaseHold failed: %v", err)
 	}
 	if !releaseCalled {
@@ -84,7 +84,7 @@ func TestCashoutGame(t *testing.T) {
 	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
 	})
-	mux.HandleFunc("/v1.0/internal/wallet/game/cashout", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1.0/internal/wallet/holds/cashout", func(w http.ResponseWriter, r *http.Request) {
 		cashoutCalled = true
 		_ = json.NewDecoder(r.Body).Decode(&cashoutBody)
 		w.WriteHeader(http.StatusCreated)

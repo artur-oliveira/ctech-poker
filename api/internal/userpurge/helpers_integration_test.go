@@ -54,7 +54,7 @@ var purgeTables = map[string]bool{
 	TablePlayerNotes: true, TableHandMeta: true, TablePokerStats: false, TableMatchups: false,
 	TableSandboxPurchases: true, TableReactionEntitlements: true, TableReactionPurchases: true,
 	TableCosmeticEntitlements: true, TableCosmeticPurchases: true, TableCosmeticLoadouts: true,
-	TableChatPrefs: false, TableBotCheckContests: true, TableWalletAlertPrefs: false, TablePromoRedemptions: true,
+	TableChatPrefs: false, TableBotCheckContests: true, TableWalletAlertPrefs: false, TablePromoRedemptions: true, TableResponsible: true,
 	TableTableEntitlements: true, TableTableHighlights: true, TableHandReveals: false, TableHandRevealPayments: false,
 	TableSocialEdges: true, TableRecentPlayers: true, TableSocialEvents: true,
 	TablePlayerReports: true, TableHandShares: false, TablePendingCashouts: true,

@@ -42,6 +42,10 @@ const (
 	TableSocialEvents         = "poker_social_events"
 	TablePlayerReports        = "poker_player_reports"
 	TableErasureState         = "poker_erasure_state"
+	TableResponsible          = "poker_responsible"
+
+	// CountSelfExclusionCarried is the ack count for an exclusion kept past the account.
+	CountSelfExclusionCarried = "self_exclusion_carried"
 )
 
 // Index names the purge queries (cdk/lib/dynamodb-stack.ts).
@@ -91,4 +95,5 @@ var inventory = map[string]string{
 	TableSocialEvents:         "erase: own inbox, and events/invite guards the user caused in friends' inboxes",
 	TablePlayerReports:        "retain anonymized 1 year: re-keyed to the pseudonym, the user's own text dropped",
 	TableErasureState:         "untouched: the saga's own lock/tombstone (api-commons erasure.Store)",
+	TableResponsible:          "erase: consent, limits, counters, audit and inflow markers; an active self-exclusion is carried first, keyed by the CPF keyed hash (carried rows are keyed SELFEXCL#<hash>, not by the user)",
 }

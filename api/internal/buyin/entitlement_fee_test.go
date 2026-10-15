@@ -27,7 +27,7 @@ func (w *feeWallet) Debit(context.Context, string, int64, string, string, string
 func (w *feeWallet) HoldGame(context.Context, string, int64, string, string, string) (string, error) {
 	return "h1", nil
 }
-func (w *feeWallet) ReleaseHold(context.Context, string) error { return nil }
+func (w *feeWallet) ReleaseHold(context.Context, string, string, string) error { return nil }
 func (w *feeWallet) CashoutGame(context.Context, string, int64, string, []string, string, string, string) error {
 	return nil
 }
@@ -128,7 +128,7 @@ func (m *memEntitlements) Rebind(_ context.Context, playerID, originTableID, exp
 }
 
 func feeService(wallet *feeWallet, pending *memPending, ents *memEntitlements, rooms roomLookup) *Service {
-	return NewServiceWithGame(wallet, wallet, nil, rooms, nil).
+	return NewServiceWithGame(wallet, wallet, nil, rooms, gateActivation{}).
 		WithPendingStore(pending).WithEntitlements(ents)
 }
 

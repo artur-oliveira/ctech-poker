@@ -393,6 +393,9 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 		if errors.Is(err, buyin.ErrTermsNotAccepted) {
 			return problem.Forbidden(err.Error()).Send(c)
 		}
+		if p, ok := problem.FromResponsibleError(err); ok {
+			return p.Send(c)
+		}
 		if p, ok := problem.FromWalletError(err); ok {
 			return p.Send(c)
 		}
@@ -633,6 +636,9 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 		}
 		if errors.Is(err, table.ErrNoSeatsAvailable) {
 			return problem.TableFull().Send(c)
+		}
+		if p, ok := problem.FromResponsibleError(err); ok {
+			return p.Send(c)
 		}
 		if p, ok := problem.FromWalletError(err); ok {
 			return p.Send(c)

@@ -15,6 +15,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
@@ -32,6 +33,7 @@ type fakeWallet struct {
 	cashouts   []cashoutCall
 	balances   map[string]int64 // playerID -> sandbox balance, for the auto-rebuy tests
 	failCredit error            // when set, Credit/CashoutGame return this instead of succeeding
+	released   []string         // hold ids given back, in order
 	// descriptions records the statement text of every Debit and Credit, in order.
 	descriptions []string
 }
@@ -86,7 +88,8 @@ func (f *fakeWallet) HoldGame(_ context.Context, userID string, amount int64, ta
 	f.holds = append(f.holds, holdCall{userID, amount, tableRef, idempotencyKey, reason, id})
 	return id, nil
 }
-func (f *fakeWallet) ReleaseHold(_ context.Context, holdID string) error {
+func (f *fakeWallet) ReleaseHold(_ context.Context, _, holdID, _ string) error {
+	f.released = append(f.released, holdID)
 	return nil
 }
 func (f *fakeWallet) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, key, reason, description string) error {
@@ -550,10 +553,27 @@ func TestSettleClosesSessionEvenWhenWalletCreditFails(t *testing.T) {
 	}
 }
 
-type fakeActivation struct{ activated map[string]bool }
+// fakeActivation stands in for the responsible-gambling rules: a player in
+// `activated` may buy in, anyone else has not accepted the addendum.
+type fakeActivation struct {
+	activated map[string]bool
+	inflows   []string // "user|amount|key"
+	breach    *responsible.LimitBreach
+}
 
-func (f *fakeActivation) IsGamblingActivated(_ context.Context, userID string) (bool, error) {
-	return f.activated[userID], nil
+func (f *fakeActivation) Eligibility(_ context.Context, userID string, _ int64) error {
+	if !f.activated[userID] {
+		return responsible.ErrConsentRequired
+	}
+	return nil
+}
+
+func (f *fakeActivation) RecordInflow(_ context.Context, userID string, amount int64, key string) (*responsible.LimitBreach, error) {
+	if f.breach != nil {
+		return f.breach, nil
+	}
+	f.inflows = append(f.inflows, fmt.Sprintf("%s|%d|%s", userID, amount, key))
+	return nil, nil
 }
 
 type fakeRoomLookup struct{ room *roomstore.Room }
