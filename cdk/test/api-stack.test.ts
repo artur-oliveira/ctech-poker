@@ -206,6 +206,8 @@ test('subscribes a poker queue to the account user-erasure topic (account deleti
   // Sales stay with the wallet until the cutover; no Billing setting is read, so an unseeded
   // SSM path cannot stop the service from starting.
   expect(text).toContain('PURCHASES_VIA=wallet');
+  // setup-ssm-env.sh takes VAR=/ssm/path pairs only: a literal in that list stops the service from starting.
+  expect(text).not.toMatch(/setup-ssm-env\.sh[^\n]*PURCHASES_VIA/);
   expect(text).not.toContain('BILLING_URL');
   expect(text).not.toContain('BILLING_CLIENT_SECRET');
 });

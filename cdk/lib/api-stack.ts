@@ -360,7 +360,6 @@ export class PokerApiStack extends cdk.Stack {
       `AVATAR_BASE_URL=${avatarBaseUrlParam}`,
       `ERASURE_ACK_CLIENT_ID=${poker.erasureAckClientId}`,
       `ERASURE_ACK_CLIENT_SECRET=${poker.erasureAckClientSecret}`,
-      `PURCHASES_VIA=${PURCHASES_VIA[environment]}`,
       // Only read when the environment sells through Billing: an unseeded SSM path would
       // otherwise stop the service from starting.
       ...(PURCHASES_VIA[environment] === 'billing' ? [
@@ -386,7 +385,10 @@ export class PokerApiStack extends cdk.Stack {
       `CORS_ALLOWED_ORIGINS="$SERVICE_AUDIENCE"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${SERVICE_AUDIENCE#*://}"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${TURNSTILE_EXPECTED_HOSTNAME%%/*}"`,
-      `export GOMEMLIMIT CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
+      // A literal, not an SSM path: setup-ssm-env.sh takes VAR=/ssm/path pairs only and refuses
+      // anything else, which leaves the service with no environment at all.
+      `PURCHASES_VIA=${PURCHASES_VIA[environment]}`,
+      `export GOMEMLIMIT CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME PURCHASES_VIA`,
       `SERVICEENV`,
       `chmod 0755 /opt/app/service-env.sh`,
     );
