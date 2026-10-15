@@ -32,6 +32,7 @@ import (
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
+	"gopkg.aoctech.app/poker/api/internal/billingclient"
 	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/chatprefs"
@@ -56,6 +57,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/promocode"
+	"gopkg.aoctech.app/poker/api/internal/purchasegw"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
@@ -138,6 +140,8 @@ var Module = fx.Options(
 		newReportStore,
 		newReportService,
 		newChatPrefsStore,
+		newBillingClient,
+		newPurchaseWallet,
 		newResponsibleStore,
 		newResponsibleService,
 		newChatPrefsCache,
@@ -450,7 +454,40 @@ func newSandboxPurchaseStore(db *dynamodb.Client, cfg *config.Config) *sandboxpu
 func newPromoCodeStore(db *dynamodb.Client, cfg *config.Config) *promocode.Store {
 	return promocode.NewStore(db, cfg.Env)
 }
-func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store, promo *promocode.Store) *sandboxpurchase.Service {
+
+// purchaseWallet is what the three purchase services need from whatever stands behind
+// them: ctech-wallet's PIX sale (PURCHASES_VIA=wallet) or the Billing gateway.
+type purchaseWallet interface {
+	ListSandboxSKUs(ctx context.Context) ([]walletclient.SandboxSKU, error)
+	PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKey, description string) (*walletclient.SandboxPurchase, error)
+	GetSandboxPurchase(ctx context.Context, purchaseID string) (*walletclient.SandboxPurchase, error)
+	RefundSandboxPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*walletclient.SandboxPurchase, error)
+	ListProductSKUs(ctx context.Context) ([]walletclient.ProductSKU, error)
+	PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey, description string) (*walletclient.ProductPurchase, error)
+	GetProductPurchase(ctx context.Context, purchaseID string) (*walletclient.ProductPurchase, error)
+	RefundProductPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*walletclient.ProductPurchase, error)
+	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
+	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
+}
+
+// newBillingClient is nil unless sales go through Billing, so nothing else can reach it.
+func newBillingClient(cfg *config.Config) *billingclient.Client {
+	if !cfg.BillingSalesOn() {
+		return nil
+	}
+	return billingclient.New(cfg.BillingURL, cfg.CtechURL, cfg.BillingClientID, cfg.BillingClientSecret)
+}
+
+// newPurchaseWallet chooses what sells: the wallet as always, or the Billing gateway (the
+// wallet then only holds the Sandbox ledger). The KYC read it needs shares Poker's M2M client.
+func newPurchaseWallet(cfg *config.Config, wallet *walletclient.Client, bc *billingclient.Client, cacheBackend cache.Backend) purchaseWallet {
+	if !cfg.BillingSalesOn() {
+		return wallet
+	}
+	return purchasegw.New(wallet, bc, accountclient.New(cfg.CtechURL, cfg.PokerClientID, cfg.PokerClientSecret, cacheBackend))
+}
+
+func newSandboxPurchaseService(wallet purchaseWallet, store *sandboxpurchase.Store, promo *promocode.Store) *sandboxpurchase.Service {
 	return sandboxpurchase.NewService(wallet, store).WithPromo(promo)
 }
 func newWalletAlertStore(db *dynamodb.Client, cfg *config.Config) *walletalert.Store {
@@ -465,7 +502,7 @@ func newReactionEntitlementStore(db *dynamodb.Client, cfg *config.Config) *react
 func newReactionPurchaseStore(db *dynamodb.Client, cfg *config.Config) *reactionpurchase.Store {
 	return reactionpurchase.NewStore(db, cfg.Env)
 }
-func newReactionPurchaseService(wallet *walletclient.Client, entitlements *reactionpurchase.EntitlementStore, store *reactionpurchase.Store) *reactionpurchase.Service {
+func newReactionPurchaseService(wallet purchaseWallet, entitlements *reactionpurchase.EntitlementStore, store *reactionpurchase.Store) *reactionpurchase.Service {
 	return reactionpurchase.NewService(wallet, entitlements, store)
 }
 func newReactionOwnershipCache(svc *reactionpurchase.Service, cacheB cache.Backend) *reactionpurchase.OwnershipCache {
@@ -477,7 +514,7 @@ func newCosmeticsEntitlementStore(db *dynamodb.Client, cfg *config.Config) *cosm
 func newCosmeticsPurchaseStore(db *dynamodb.Client, cfg *config.Config) *cosmeticpurchase.Store {
 	return cosmeticpurchase.NewStore(db, cfg.Env)
 }
-func newCosmeticsPurchaseService(wallet *walletclient.Client, entitlements *cosmeticpurchase.EntitlementStore, store *cosmeticpurchase.Store) *cosmeticpurchase.Service {
+func newCosmeticsPurchaseService(wallet purchaseWallet, entitlements *cosmeticpurchase.EntitlementStore, store *cosmeticpurchase.Store) *cosmeticpurchase.Service {
 	return cosmeticpurchase.NewService(wallet, entitlements, store)
 }
 
@@ -1047,11 +1084,12 @@ func registerRoutesWithSocialRuntime(
 	chatPrefsStore *chatprefs.Store,
 	chatPrefsCache *chatprefs.ExtraWordsCache,
 	responsibleSvc *responsible.Service,
+	billing *billingclient.Client,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 	erasureStore *erasure.Store,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, responsibleSvc, botCheckContestStore, cosmeticLoadoutSvc, erasureStore.Blocked)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, responsibleSvc, billing, botCheckContestStore, cosmeticLoadoutSvc, erasureStore.Blocked)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -1067,7 +1105,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so
