@@ -203,4 +203,9 @@ test('subscribes a poker queue to the account user-erasure topic (account deleti
   expect(text).toContain('ACTION_LOG_ARCHIVE_BUCKET=poker-action-log-archive-dev');
   expect(text).toContain('ERASURE_ACK_CLIENT_ID=/ctech/dev/poker/erasure-ack-client-id');
   expect(text).toContain('ERASURE_ACK_CLIENT_SECRET=/ctech/dev/poker/erasure-ack-client-secret');
+  // Sales stay with the wallet until the cutover; no Billing setting is read, so an unseeded
+  // SSM path cannot stop the service from starting.
+  expect(text).toContain('PURCHASES_VIA=wallet');
+  expect(text).not.toContain('BILLING_URL');
+  expect(text).not.toContain('BILLING_CLIENT_SECRET');
 });

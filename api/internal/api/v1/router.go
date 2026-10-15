@@ -10,6 +10,7 @@ import (
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
+	"gopkg.aoctech.app/poker/api/internal/billingclient"
 	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/chatprefs"
@@ -32,8 +33,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
-	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/reports"
+	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -86,6 +87,7 @@ func Register(
 	chatPrefsStore *chatprefs.Store,
 	chatPrefsCache *chatprefs.ExtraWordsCache,
 	responsibleSvc *responsible.Service,
+	billing *billingclient.Client,
 	botCheckContestStore *botcheck.ContestStore,
 	cosmeticLoadoutSvc *cosmeticloadout.Service,
 	blocked BlockedFunc,
@@ -114,6 +116,9 @@ func Register(
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
 	RegisterAchievementCatalog(router)
 	RegisterWalletWebhook(router, cfg.WalletWebhookHMACSecret, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, reg, blocked)
+	if billing != nil {
+		RegisterBillingWebhook(router, cfg.BillingEventSecret, billing, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, reg, blocked)
+	}
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.

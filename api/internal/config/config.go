@@ -69,6 +69,18 @@ type Config struct {
 	// plan's Global Constraints — a cross-repo/config blocker, not a code gap).
 	WalletWebhookHMACSecret string `env:"WALLET_WEBHOOK_HMAC_SECRET"`
 
+	// PurchasesVia chooses what sells the chip packs and premium goods: "wallet" (default) is
+	// ctech-wallet's PIX sale as always; "billing" is a Billing invoice per sale. With
+	// "wallet" no Billing call is ever made and none of the BILLING_* below is read.
+	PurchasesVia string `env:"PURCHASES_VIA" envDefault:"wallet"`
+	// BillingURL is Billing's API base; BillingClientID/Secret is Poker's OAuth client for it
+	// (scopes billing:customers:read|write, billing:invoices:read|write); BillingEventSecret
+	// verifies the signature of Billing's invoice.paid deliveries.
+	BillingURL          string `env:"BILLING_URL"`
+	BillingClientID     string `env:"BILLING_CLIENT_ID"`
+	BillingClientSecret string `env:"BILLING_CLIENT_SECRET"`
+	BillingEventSecret  string `env:"BILLING_EVENT_SECRET"`
+
 	// Account-deletion saga (docs/plans/2026-10-07-account-deletion-participant.md).
 	// ErasureAccountClientID is ctech-account's own client id (its SELF_CLIENT_ID):
 	// the azp of the token it mints for GET /internal/erasure/eligibility.
@@ -135,6 +147,9 @@ func Load() (*Config, error) {
 	if cfg.CtechJWKSURL == "" && cfg.CtechURL != "" {
 		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"
 	}
+	if err := cfg.validatePurchases(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
@@ -157,4 +172,21 @@ func LoadForLambda() (*Config, error) {
 		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"
 	}
 	return cfg, nil
+}
+
+// BillingSalesOn reports whether chip packs and goods are sold through Billing invoices.
+func (c *Config) BillingSalesOn() bool { return c.PurchasesVia == "billing" }
+
+func (c *Config) validatePurchases() error {
+	switch c.PurchasesVia {
+	case "wallet":
+		return nil
+	case "billing":
+		if c.BillingURL == "" || c.BillingClientID == "" || c.BillingClientSecret == "" || c.BillingEventSecret == "" {
+			return fmt.Errorf("config: PURCHASES_VIA=billing needs BILLING_URL, BILLING_CLIENT_ID, BILLING_CLIENT_SECRET and BILLING_EVENT_SECRET")
+		}
+		return nil
+	default:
+		return fmt.Errorf("config: PURCHASES_VIA must be wallet or billing, got %q", c.PurchasesVia)
+	}
 }

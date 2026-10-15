@@ -53,95 +53,101 @@ func walletWebhookHandler(hmacSecret string, sandboxSvc *sandboxpurchase.Service
 		if err := json.Unmarshal(body, &payload); err != nil || payload.PurchaseID == "" {
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
+		return applyPurchaseEvent(c, payload.PurchaseID, sandboxSvc, reactionSvc, cosmeticSvc, reg, blocked)
+	}
+}
 
-		if strings.HasPrefix(payload.PurchaseID, productPurchasePrefix) {
-			// One verification per delivery: the purchase is re-read from
-			// wallet once and the SKU on it decides which product service
-			// applies it. Reactions and cosmetics share the "prdp" id space,
-			// and this used to try reactions first and re-verify the same id a
-			// second time as a cosmetic on every cosmetic callback (#211).
-			purchase, err := reactionSvc.VerifyPurchase(c.Context(), payload.PurchaseID)
+// applyPurchaseEvent is what a delivery about a purchase causes, whoever sent it (the
+// wallet's webhook or Billing's invoice.paid): the purchase is re-read from its source
+// and the local row follows. The body of the delivery decides nothing.
+func applyPurchaseEvent(c fiber.Ctx, purchaseID string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, cosmeticSvc *cosmeticpurchase.Service, reg ws.Registry, blocked BlockedFunc) error {
+	if strings.HasPrefix(purchaseID, productPurchasePrefix) {
+		// One verification per delivery: the purchase is re-read from
+		// wallet once and the SKU on it decides which product service
+		// applies it. Reactions and cosmetics share the "prdp" id space,
+		// and this used to try reactions first and re-verify the same id a
+		// second time as a cosmetic on every cosmetic callback (#211).
+		purchase, err := reactionSvc.VerifyPurchase(c.Context(), purchaseID)
+		if err != nil {
+			slog.Error("wallet webhook: product reverify failed", "purchase_id", purchaseID, "err", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+		if purchase == nil || purchase.PurchaseID != purchaseID {
+			slog.Error("wallet webhook: wallet returned a different product purchase", "purchase_id", purchaseID)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+		if blocked != nil {
+			locked, err := blocked(c.Context(), purchase.UserID)
 			if err != nil {
-				slog.Error("wallet webhook: product reverify failed", "purchase_id", payload.PurchaseID, "err", err)
+				slog.Error("wallet webhook: erasure lock check failed", "purchase_id", purchaseID, "err", err)
 				return c.SendStatus(fiber.StatusInternalServerError)
 			}
-			if purchase == nil || purchase.PurchaseID != payload.PurchaseID {
-				slog.Error("wallet webhook: wallet returned a different product purchase", "purchase_id", payload.PurchaseID)
-				return c.SendStatus(fiber.StatusInternalServerError)
+			if locked {
+				// Granting would resurrect a locked or erased user's rows
+				// (saga protocol §4.5). The payment stays in the wallet ledger.
+				slog.Warn("wallet webhook: dropped purchase of a locked or erased user", "purchase_id", purchaseID)
+				return c.SendStatus(fiber.StatusOK)
 			}
-			if blocked != nil {
-				locked, err := blocked(c.Context(), purchase.UserID)
-				if err != nil {
-					slog.Error("wallet webhook: erasure lock check failed", "purchase_id", payload.PurchaseID, "err", err)
-					return c.SendStatus(fiber.StatusInternalServerError)
-				}
-				if locked {
-					// Granting would resurrect a locked or erased user's rows
-					// (saga protocol §4.5). The payment stays in the wallet ledger.
-					slog.Warn("wallet webhook: dropped purchase of a locked or erased user", "purchase_id", payload.PurchaseID)
-					return c.SendStatus(fiber.StatusOK)
-				}
-			}
-
-			var (
-				record    productPurchaseUpdate
-				changed   bool
-				eventType string
-			)
-			switch {
-			case reactionSvc.HandlesSKU(purchase.SKU):
-				eventType = "reaction_purchase_update"
-				rec, ch, syncErr := reactionSvc.SyncPurchase(c.Context(), purchase)
-				record, changed, err = productPurchaseUpdate{rec.PlayerID, rec.PurchaseID, rec.Status}, ch, syncErr
-			case cosmeticSvc.HandlesSKU(purchase.SKU):
-				eventType = "cosmetic_purchase_update"
-				rec, ch, syncErr := cosmeticSvc.SyncPurchase(c.Context(), purchase)
-				record, changed, err = productPurchaseUpdate{rec.PlayerID, rec.PurchaseID, rec.Status}, ch, syncErr
-			default:
-				// Wallet knows a product SKU this build's catalogs do not.
-				// Non-2xx so the delivery is retried after a deploy that adds
-				// it, rather than silently dropped.
-				slog.Error("wallet webhook: unknown product SKU", "purchase_id", payload.PurchaseID, "sku", purchase.SKU)
-				return c.SendStatus(fiber.StatusInternalServerError)
-			}
-			if err != nil {
-				slog.Error("wallet webhook: product sync failed", "purchase_id", payload.PurchaseID, "sku", purchase.SKU, "err", err)
-				return c.SendStatus(fiber.StatusInternalServerError)
-			}
-			if changed {
-				data, err := goproto.Marshal(&pokerproto.ServerMessage{
-					Type:       eventType,
-					PlayerId:   record.playerID,
-					PurchaseId: record.purchaseID,
-					Code:       record.status,
-				})
-				if err == nil {
-					reg.Broadcast(c.Context(), "user#"+record.playerID, data)
-				}
-			}
-			return c.SendStatus(fiber.StatusOK)
 		}
 
-		record, changed, err := sandboxSvc.ConfirmFromWebhook(c.Context(), payload.PurchaseID)
+		var (
+			record    productPurchaseUpdate
+			changed   bool
+			eventType string
+		)
+		switch {
+		case reactionSvc.HandlesSKU(purchase.SKU):
+			eventType = "reaction_purchase_update"
+			rec, ch, syncErr := reactionSvc.SyncPurchase(c.Context(), purchase)
+			record, changed, err = productPurchaseUpdate{rec.PlayerID, rec.PurchaseID, rec.Status}, ch, syncErr
+		case cosmeticSvc.HandlesSKU(purchase.SKU):
+			eventType = "cosmetic_purchase_update"
+			rec, ch, syncErr := cosmeticSvc.SyncPurchase(c.Context(), purchase)
+			record, changed, err = productPurchaseUpdate{rec.PlayerID, rec.PurchaseID, rec.Status}, ch, syncErr
+		default:
+			// Wallet knows a product SKU this build's catalogs do not.
+			// Non-2xx so the delivery is retried after a deploy that adds
+			// it, rather than silently dropped.
+			slog.Error("wallet webhook: unknown product SKU", "purchase_id", purchaseID, "sku", purchase.SKU)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 		if err != nil {
-			// Non-2xx makes ctech-wallet retry via its own reconcile sweep.
-			slog.Error("wallet webhook: reverify failed", "purchase_id", payload.PurchaseID, "err", err)
+			slog.Error("wallet webhook: product sync failed", "purchase_id", purchaseID, "sku", purchase.SKU, "err", err)
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 		if changed {
 			data, err := goproto.Marshal(&pokerproto.ServerMessage{
-				Type:       "sandbox_purchase_update",
-				PlayerId:   record.PlayerID,
-				PurchaseId: record.PurchaseID,
-				Amount:     record.TotalCredits,
-				Code:       record.Status,
+				Type:       eventType,
+				PlayerId:   record.playerID,
+				PurchaseId: record.purchaseID,
+				Code:       record.status,
 			})
 			if err == nil {
-				reg.Broadcast(c.Context(), "user#"+record.PlayerID, data)
+				reg.Broadcast(c.Context(), "user#"+record.playerID, data)
 			}
 		}
 		return c.SendStatus(fiber.StatusOK)
 	}
+
+	record, changed, err := sandboxSvc.ConfirmFromWebhook(c.Context(), purchaseID)
+	if err != nil {
+		// Non-2xx makes ctech-wallet retry via its own reconcile sweep.
+		slog.Error("wallet webhook: reverify failed", "purchase_id", purchaseID, "err", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if changed {
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{
+			Type:       "sandbox_purchase_update",
+			PlayerId:   record.PlayerID,
+			PurchaseId: record.PurchaseID,
+			Amount:     record.TotalCredits,
+			Code:       record.Status,
+		})
+		if err == nil {
+			reg.Broadcast(c.Context(), "user#"+record.PlayerID, data)
+		}
+	}
+	return c.SendStatus(fiber.StatusOK)
 }
 
 func validWalletWebhookSignature(secret string, body []byte, header string) bool {

@@ -6,6 +6,7 @@ package accountclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,9 @@ const (
 	scopeKYC   = "internal:account:kyc"
 )
 
+// ErrNoKYC: the account has no KYC record for the player.
+var ErrNoKYC = errors.New("accountclient: no KYC record")
+
 // Client talks to ctech-account's internal KYC endpoint.
 type Client struct {
 	base   string
@@ -37,35 +41,54 @@ func New(base, clientID, clientSecret string, c cache.Backend) *Client {
 	return &Client{base: base, http: httpClient, tokens: oauth2client.New(httpClient, c, base+pathToken, clientID, clientSecret, scopeKYC)}
 }
 
-// CPFHMAC returns the keyed hash of the player's CPF, or "" when the account has none
-// on record (no KYC, or an account that does not serve the hash).
-func (c *Client) CPFHMAC(ctx context.Context, userID string) (string, error) {
+// KYC is the part of a player's verified identity Poker needs to open a sale.
+type KYC struct {
+	Level     string `json:"level"`
+	CPF       string `json:"cpf"`
+	CPFHMAC   string `json:"cpf_hmac"`
+	LegalName string `json:"legal_name"`
+	Email     string `json:"email"`
+}
+
+// Get reads the player's KYC record. ErrNoKYC means the account has none.
+func (c *Client) Get(ctx context.Context, userID string) (*KYC, error) {
 	token, err := c.tokens.Get(ctx)
 	if err != nil {
-		return "", fmt.Errorf("accountclient: token: %w", err)
+		return nil, fmt.Errorf("accountclient: token: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(c.base+pathKYCGet, url.PathEscape(userID)), nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("accountclient: request: %w", err)
+		return nil, fmt.Errorf("accountclient: request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return "", nil // no KYC record: nothing to key an exclusion by
+		return nil, ErrNoKYC
 	case resp.StatusCode < 200 || resp.StatusCode >= 300:
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("accountclient: status %d: %s", resp.StatusCode, raw)
+		return nil, fmt.Errorf("accountclient: status %d: %s", resp.StatusCode, raw)
 	}
-	var body struct {
-		CPFHMAC string `json:"cpf_hmac"`
+	var k KYC
+	if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
+		return nil, fmt.Errorf("accountclient: decode: %w", err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return "", fmt.Errorf("accountclient: decode: %w", err)
+	return &k, nil
+}
+
+// CPFHMAC returns the keyed hash of the player's CPF, or "" when the account has none
+// on record (no KYC, or an account that does not serve the hash).
+func (c *Client) CPFHMAC(ctx context.Context, userID string) (string, error) {
+	k, err := c.Get(ctx, userID)
+	if errors.Is(err, ErrNoKYC) {
+		return "", nil // no KYC record: nothing to key an exclusion by
 	}
-	return body.CPFHMAC, nil
+	if err != nil {
+		return "", err
+	}
+	return k.CPFHMAC, nil
 }

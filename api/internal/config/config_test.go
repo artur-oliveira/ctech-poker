@@ -148,3 +148,29 @@ func TestLoadRequiresErasureWiringInProd(t *testing.T) {
 		t.Fatalf("ERASURE_ACCOUNT_CLIENT_ID default: %q", cfg.ErasureAccountClientID)
 	}
 }
+
+func TestPurchasesViaDefaultsToTheWalletAndNeedsBillingSettingsForBilling(t *testing.T) {
+	t.Setenv("VALKEY_URL", "")
+	cfg, err := Load()
+	if err != nil || cfg.PurchasesVia != "wallet" || cfg.BillingSalesOn() {
+		t.Fatalf("default = %q err=%v", cfg.PurchasesVia, err)
+	}
+
+	t.Setenv("PURCHASES_VIA", "billing")
+	if _, err := Load(); err == nil {
+		t.Fatal("PURCHASES_VIA=billing without the Billing settings must not start")
+	}
+	t.Setenv("BILLING_URL", "https://billing-api.aoctech.app")
+	t.Setenv("BILLING_CLIENT_ID", "poker-billing")
+	t.Setenv("BILLING_CLIENT_SECRET", "s")
+	t.Setenv("BILLING_EVENT_SECRET", "e")
+	cfg, err = Load()
+	if err != nil || !cfg.BillingSalesOn() {
+		t.Fatalf("complete settings: on=%v err=%v", cfg != nil && cfg.BillingSalesOn(), err)
+	}
+
+	t.Setenv("PURCHASES_VIA", "stripe")
+	if _, err := Load(); err == nil {
+		t.Fatal("an unknown PURCHASES_VIA must not start")
+	}
+}
