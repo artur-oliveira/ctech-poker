@@ -238,5 +238,5 @@ export type PurchasesVia = 'wallet' | 'billing';
 export const PURCHASES_VIA: Record<Environment, PurchasesVia> = {
   dev: 'wallet',
   stage: 'wallet',
-  prod: 'wallet',
+  prod: 'billing',
 };
