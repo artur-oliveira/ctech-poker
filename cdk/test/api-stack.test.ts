@@ -125,17 +125,14 @@ test('hand-pipeline duration budget alarm exists only when prod + cloudwatchAlar
   });
 });
 
-test('ASG spreads nano On-Demand capacity across multiple AZs', () => {
+test('ASG is pinned to a single AZ (no inter-AZ transfer cost)', () => {
   const template = Template.fromStack(synthStack());
-  // The dummy VPC ec2.Vpc.fromLookup falls back to (no cdk.context.json
-  // cache entry for this vpc-id/account/region combination) carries subnets
-  // in 2 AZs — enough to prove the ASG is not artificially pinned to one.
-  // The real shared VPC (see cdk.context.json) has 3 (us-east-1b/c/d); this
-  // stack applies no `availabilityZones` filter, so it inherits whatever
-  // the looked-up VPC provides.
+  // HaproxyEc2Service pins the ASG to us-east-1b. The dummy VPC that
+  // ec2.Vpc.fromLookup falls back to has no such AZ, so it yields 0 subnets here;
+  // the real shared VPC (cdk.context.json) yields exactly 1.
   const asgResources = template.findResources('AWS::AutoScaling::AutoScalingGroup');
   const [asg] = Object.values(asgResources) as any[];
-  expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
+  expect(asg.Properties.VPCZoneIdentifier.length).toBeLessThanOrEqual(1);
 
   expect(asg.Properties.MixedInstancesPolicy).toBeUndefined();
   expect(asg.Properties.LaunchTemplate).toBeDefined();
