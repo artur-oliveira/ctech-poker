@@ -568,10 +568,7 @@ type SandboxSKU struct {
 	TotalCredits int64  `json:"total_credits"`
 }
 
-// SandboxPurchase mirrors ctech-wallet's M2M sandbox-purchase response
-// shapes. Amount/AmountExpected carry the same centavos value under two
-// different wallet-side JSON keys (create vs get/refund responses) —
-// normalizeAmount folds them into Amount so callers only ever read that field.
+// SandboxPurchase is the view the Billing gateway (purchasegw) hands back for a chip-pack sale.
 type SandboxPurchase struct {
 	PurchaseID     string `json:"purchase_id"`
 	UserID         string `json:"user_id"`
@@ -583,12 +580,6 @@ type SandboxPurchase struct {
 	PixCopiaECola  string `json:"pix_copia_e_cola,omitempty"`
 	QRCodeBase64   string `json:"qr_code_base64,omitempty"`
 	ExpiresAt      string `json:"expires_at,omitempty"`
-}
-
-func (p *SandboxPurchase) normalizeAmount() {
-	if p.Amount == 0 {
-		p.Amount = p.AmountExpected
-	}
 }
 
 // ProductSKU mirrors ctech-wallet's M2M GET .../product-purchase/skus response.
@@ -608,10 +599,4 @@ type ProductPurchase struct {
 	PixCopiaECola  string `json:"pix_copia_e_cola,omitempty"`
 	QRCodeBase64   string `json:"qr_code_base64,omitempty"`
 	ExpiresAt      string `json:"expires_at,omitempty"`
-}
-
-func (p *ProductPurchase) normalizeAmount() {
-	if p.Amount == 0 {
-		p.Amount = p.AmountExpected
-	}
 }
