@@ -1,7 +1,7 @@
 // Command import-responsible copies the responsible-gambling state (consent, personal
-// limits, self-exclusion, carried exclusions) from ctech-wallet into Poker, once. Run by
-// an operator through scripts/import-responsible.sh, which reads the M2M credentials
-// from SSM. Safe to repeat: a player already present is left alone.
+// limits, self-exclusion, carried exclusions) from ctech-wallet's users table into Poker, once.
+// Run by an operator through scripts/import-responsible.sh with their own AWS profile. Safe to
+// repeat: a player already present is left alone.
 package main
 
 import (
@@ -13,11 +13,8 @@ import (
 
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"gopkg.aoctech.app/api-commons/cache"
 
-	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/responsible"
-	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 func main() {
@@ -26,15 +23,9 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
-	cfg := &config.Config{
-		Env:               os.Getenv("ENVIRONMENT"),
-		CtechURL:          os.Getenv("CTECH_URL"),
-		WalletURL:         os.Getenv("WALLET_URL"),
-		PokerClientID:     os.Getenv("POKER_CLIENT_ID"),
-		PokerClientSecret: os.Getenv("POKER_CLIENT_SECRET"),
-	}
-	if cfg.Env == "" || cfg.CtechURL == "" || cfg.WalletURL == "" || cfg.PokerClientID == "" || cfg.PokerClientSecret == "" {
-		slog.Error("ENVIRONMENT, CTECH_URL, WALLET_URL, POKER_CLIENT_ID and POKER_CLIENT_SECRET are required (use scripts/import-responsible.sh)")
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		slog.Error("ENVIRONMENT is required (use scripts/import-responsible.sh)")
 		os.Exit(2)
 	}
 	awsCfg, err := awscfg.LoadDefaultConfig(ctx)
@@ -42,8 +33,11 @@ func main() {
 		slog.Error("aws config", "err", err)
 		os.Exit(1)
 	}
-	store := responsible.NewDynamoStore(dynamodb.NewFromConfig(awsCfg), cfg.Env)
-	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
+	db := dynamodb.NewFromConfig(awsCfg)
+	store := responsible.NewDynamoStore(db, env)
+	// The wallet's API role may not Scan, by design, so the one-off reads its users table with
+	// the operator's own credentials.
+	wallet := responsible.WalletTable{DB: db, Table: env + "_wallet_users"}
 
 	counts, err := responsible.Import(ctx, wallet, store, *dry, time.Now())
 	slog.Info("import-responsible", "dry_run", *dry, "users", counts.Users, "imported", counts.Imported,

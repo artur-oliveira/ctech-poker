@@ -34,12 +34,11 @@ const (
 
 	// The holds live under routes that do not say "game": the wallet only reserves
 	// and settles money on `real`; the games, and the rules around them, are Poker's.
-	pathGameHold          = "/v1.0/internal/wallet/holds"
-	pathGameRelease       = "/v1.0/internal/wallet/holds/%s/release"
-	pathGameCashout       = "/v1.0/internal/wallet/holds/cashout"
-	pathGameStatus        = "/v1.0/internal/wallet/holds/status/%s"
-	pathResponsibleExport = "/v1.0/internal/wallet/responsible/export"
-	pathBalance           = "/v1.0/internal/wallet/balance/%s"
+	pathGameHold    = "/v1.0/internal/wallet/holds"
+	pathGameRelease = "/v1.0/internal/wallet/holds/%s/release"
+	pathGameCashout = "/v1.0/internal/wallet/holds/cashout"
+	pathGameStatus  = "/v1.0/internal/wallet/holds/status/%s"
+	pathBalance     = "/v1.0/internal/wallet/balance/%s"
 
 	scopeCredit    = "internal:wallet:credit"
 	scopeDebit     = "internal:wallet:debit"
@@ -49,9 +48,7 @@ const (
 	scopeGameCashout = scopeGameHold
 	scopeGameStatus  = scopeGameHold
 
-	// scopeResponsibleExport reads the responsible-gambling state, once, for the import.
-	scopeResponsibleExport = "internal:wallet:responsible-export"
-	scopeBalance           = "internal:wallet:balance"
+	scopeBalance = "internal:wallet:balance"
 
 	pathSandboxPurchaseSkus   = "/v1.0/internal/wallet/sandbox-purchase/skus"
 	pathSandboxPurchaseCreate = "/v1.0/internal/wallet/sandbox-purchase"
@@ -126,7 +123,6 @@ type Client struct {
 	gameHoldTokens        *oauth2client.TokenManager
 	gameCashoutTokens     *oauth2client.TokenManager
 	gameStatusTokens      *oauth2client.TokenManager
-	exportTokens          *oauth2client.TokenManager
 	balanceTokens         *oauth2client.TokenManager
 	sandboxPurchaseTokens *oauth2client.TokenManager
 	productPurchaseTokens *oauth2client.TokenManager
@@ -183,7 +179,6 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 		gameHoldTokens:        oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
 		gameCashoutTokens:     oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
 		gameStatusTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
-		exportTokens:          oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeResponsibleExport),
 		balanceTokens:         oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
 		sandboxPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeSandboxPurchase),
 		productPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeProductPurchase),
