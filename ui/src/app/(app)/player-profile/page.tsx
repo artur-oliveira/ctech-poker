@@ -12,6 +12,7 @@ import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
 import {AvatarDecorationSection} from './AvatarDecorationSection';
 import {ChatFilterSection} from './ChatFilterSection';
+import {ResponsibleSection} from './ResponsibleSection';
 import {IdentitySection} from './IdentitySection';
 import {ShowcaseSection} from './ShowcaseSection';
 import {TableSection} from './TableSection';
@@ -78,6 +79,7 @@ export default function PlayerProfilePage() {
             <ChatFilterSection/>
             <BalancesSection me={me}/>
             <WalletAlertsSection/>
+            {REAL_MONEY_UI_ENABLED && <ResponsibleSection/>}
           </>
           : <LoadingRegion label={isLoading ? 'Carregando seu perfil…' : 'Preparando seu perfil…'}
                            className="skeleton-panel player-profile-skeleton">
