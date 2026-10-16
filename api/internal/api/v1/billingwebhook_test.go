@@ -115,3 +115,14 @@ func TestBillingWebhookAsksBillingToRetryWhenTheInvoiceCannotBeRead(t *testing.T
 		t.Fatalf("unreadable invoice = %d, want 502", code)
 	}
 }
+
+// invoice.paid whose invoice does not read as paid yet (a stale read) must be retried, not answered 200.
+func TestBillingWebhookRetriesAnInvoiceThatDoesNotReadAsPaidYet(t *testing.T) {
+	svc := sandboxpurchase.NewService(&fakeSandboxWallet{}, newFakeStoreForWebhookTest())
+	invoices := fakeInvoices{byID: map[string]*billingclient.Invoice{"in_1": {ID: "in_1", Reference: "snd_abc", Status: "OPEN"}}}
+	app := fiber.New()
+	RegisterBillingWebhook(app.Group("/v1.0"), "secret", invoices, svc, noopReactionSvc(), noopCosmeticSvc(), ws.NewMemoryRegistry(), nil)
+	if code := billingDelivery(t, app, "secret", `{"type":"invoice.paid","data":{"object":"invoice","id":"in_1"}}`, time.Now()); code != http.StatusServiceUnavailable {
+		t.Fatalf("a not-yet-paid read = %d, want 503 so Billing retries", code)
+	}
+}

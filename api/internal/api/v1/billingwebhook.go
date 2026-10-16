@@ -66,6 +66,12 @@ func RegisterBillingWebhook(router fiber.Router, secret string, invoices invoice
 		if !strings.HasPrefix(inv.Reference, purchasegw.SandboxPrefix) && !strings.HasPrefix(inv.Reference, purchasegw.ProductPrefix) {
 			return c.SendStatus(fiber.StatusOK) // an invoice of another service
 		}
+		if inv.Status != billingclient.StatusPaid {
+			// The event says paid and the read says otherwise: the read is the stale one. Answered
+			// 200 the delivery would not come again and nobody would ever be told; 503 brings it back.
+			slog.Warn("billing webhook: invoice.paid but the invoice does not read as paid yet, Billing will retry", "invoice_id", inv.ID, "status", inv.Status)
+			return c.SendStatus(fiber.StatusServiceUnavailable)
+		}
 		return applyPurchaseEvent(c, inv.Reference, sandboxSvc, reactionSvc, cosmeticSvc, reg, blocked)
 	})
 }

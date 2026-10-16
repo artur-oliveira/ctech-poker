@@ -69,10 +69,10 @@ func TestListSkusRouteRegisteredBeforeIDRoute(t *testing.T) {
 // TestCreateSandboxPurchaseRouteRegistered proves POST / is wired without
 // reaching sandboxpurchase.Store's DynamoDB write path — an unknown sku is
 // rejected by Service.Create before it ever calls store.Create, so this test
-// stays a pure-Go route/handler check with sandboxpurchase.NewStore(nil, ...).
+// stays a pure-Go route/handler check over an in-memory store.
 func TestCreateSandboxPurchaseRouteRegistered(t *testing.T) {
 	wallet := &fakeSandboxWallet{skus: []walletclient.SandboxSKU{{ID: "pack_100", PriceCents: 100, BaseCredits: 1000}}}
-	svc := sandboxpurchase.NewService(wallet, sandboxpurchase.NewStore(nil, "test"))
+	svc := sandboxpurchase.NewService(wallet, newFakeStoreForWebhookTest())
 	app := newSandboxPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"sku": "not_a_real_sku"})
