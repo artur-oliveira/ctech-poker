@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
 )
 
@@ -92,14 +93,15 @@ type Client struct {
 }
 
 // New builds the client. base is Billing's API, ctechURL ctech-account's (the token
-// endpoint). It makes no request: the token is fetched on first use.
-func New(base, ctechURL, clientID, clientSecret string) *Client {
+// endpoint). It makes no request: the token is fetched on first use, and shared through c (the
+// fleet's Valkey) so a replica reuses the token another one already fetched; nil keeps it per process.
+func New(base, ctechURL, clientID, clientSecret string, c cache.Backend) *Client {
 	h := &http.Client{Timeout: 8 * time.Second}
 	ctech := strings.TrimRight(ctechURL, "/")
 	return &Client{
 		base:   strings.TrimRight(base, "/"),
 		http:   h,
-		tokens: oauth2client.New(h, nil, ctech+pathToken, clientID, clientSecret, scopes),
+		tokens: oauth2client.New(h, c, ctech+pathToken, clientID, clientSecret, scopes),
 	}
 }
 

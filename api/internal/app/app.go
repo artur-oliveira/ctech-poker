@@ -469,8 +469,8 @@ type purchaseWallet interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason, description string) error
 }
 
-func newBillingClient(cfg *config.Config) *billingclient.Client {
-	return billingclient.New(cfg.BillingURL, cfg.CtechURL, cfg.BillingClientID, cfg.BillingClientSecret)
+func newBillingClient(cfg *config.Config, cacheBackend cache.Backend) *billingclient.Client {
+	return billingclient.New(cfg.BillingURL, cfg.CtechURL, cfg.BillingClientID, cfg.BillingClientSecret, cacheBackend)
 }
 
 // newPurchaseWallet sells through the Billing gateway; the wallet only holds the Sandbox
