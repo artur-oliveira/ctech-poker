@@ -18,13 +18,15 @@ import (
 var ctx = context.Background()
 
 type fakeBilling struct {
-	invoices    map[string]*billingclient.Invoice // by reference
-	created     []string
-	refunds     []string // "invoice|amount|key"
-	customers   []string
-	createErr   error
-	pixOpened   int
-	nextInvoice int
+	invoices      map[string]*billingclient.Invoice // by reference
+	created       []string
+	refunds       []string // "invoice|amount|key"
+	customers     []string
+	createErr     error
+	pixOpened     int
+	nextInvoice   int
+	payerMessages []string
+	lifetimes     []time.Duration
 }
 
 func newFakeBilling() *fakeBilling {
@@ -36,7 +38,9 @@ func (f *fakeBilling) EnsureCustomer(_ context.Context, userID, taxID, name, ema
 	return "cus_" + userID, nil
 }
 
-func (f *fakeBilling) CreateInvoice(_ context.Context, customerID, reference, _ string, amount int64, md map[string]string) (*billingclient.Invoice, error) {
+func (f *fakeBilling) CreateInvoice(_ context.Context, customerID, reference, _, payerMessage string, amount int64, lifetime time.Duration, md map[string]string) (*billingclient.Invoice, error) {
+	f.payerMessages = append(f.payerMessages, payerMessage)
+	f.lifetimes = append(f.lifetimes, lifetime)
 	if f.createErr != nil {
 		return nil, f.createErr
 	}
@@ -310,5 +314,32 @@ func TestTheGatewayHasNoRealMoneyDoor(t *testing.T) {
 	}
 	if _, ok := typ.MethodByName("Credit"); !ok {
 		t.Error("the Sandbox credit the services spend fichas through is missing")
+	}
+}
+
+// The payer reads what was bought on the Pix, and the Pix lives an hour, not a month.
+func TestThePixNamesWhatWasBoughtAndLivesAnHour(t *testing.T) {
+	g, b, _ := newGateway()
+	if _, err := g.PurchaseSandbox(ctx, "u1", "pack_500", "k1", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.PurchaseProduct(ctx, "u1", "poker_deck_golden", "k2", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(b.payerMessages, " | "); got != "Pacote de 55.000 fichas | Poker: baralho golden" {
+		t.Fatalf("messages = %q", got)
+	}
+	for _, l := range b.lifetimes {
+		if l != time.Hour {
+			t.Fatalf("lifetime = %v", l)
+		}
+	}
+}
+
+func TestGroupThousandsWritesChipsTheWayPlayersRead(t *testing.T) {
+	for in, want := range map[int64]string{0: "0", 999: "999", 1000: "1.000", 55000: "55.000", 2000000: "2.000.000"} {
+		if got := groupThousands(in); got != want {
+			t.Errorf("%d = %q, want %q", in, got, want)
+		}
 	}
 }

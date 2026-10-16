@@ -230,10 +230,13 @@ func (j *invoiceJSON) invoice() *Invoice {
 
 // CreateInvoice issues a sale's invoice. The reference doubles as the idempotency key, so a
 // retry returns the same invoice; metadata says what was sold, for the check on payment.
-func (c *Client) CreateInvoice(ctx context.Context, customerID, reference, description string, amountCents int64, metadata map[string]string) (*Invoice, error) {
+// payerMessage is what the payer reads on the Pix ("Pacote de 10.000 fichas") and pixLifetime
+// how long the Pix stays payable: a sale here is a quick one, and Billing cannot know that.
+func (c *Client) CreateInvoice(ctx context.Context, customerID, reference, description, payerMessage string, amountCents int64, pixLifetime time.Duration, metadata map[string]string) (*Invoice, error) {
 	var out invoiceJSON
 	err := c.do(ctx, http.MethodPost, "/v1.0/invoices", reference, map[string]any{
 		"customer_id": customerID, "description": description, "amount_cents": amountCents,
+		"payer_message": payerMessage, "pix_expires_in_seconds": int(pixLifetime.Seconds()),
 		"reference": reference, "owner_key": OwnerKey, "metadata": metadata,
 	}, &out, true)
 	if err != nil {

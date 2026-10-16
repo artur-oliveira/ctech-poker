@@ -25,7 +25,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 
@@ -45,6 +47,9 @@ const (
 	kindSandbox = "sandbox"
 	kindProduct = "product"
 
+	// pixLifetime is how long a sale's Pix stays payable: a quick purchase, not a monthly bill.
+	pixLifetime = time.Hour
+
 	reasonSandboxPack = "sandbox_pack"
 	creditDescription = "Compra de fichas (%s)"
 	refundReason      = "requested_by_customer"
@@ -53,7 +58,7 @@ const (
 // Billing is the part of billingclient.Client the gateway uses.
 type Billing interface {
 	EnsureCustomer(ctx context.Context, userID, taxID, name, email string) (string, error)
-	CreateInvoice(ctx context.Context, customerID, reference, description string, amountCents int64, metadata map[string]string) (*billingclient.Invoice, error)
+	CreateInvoice(ctx context.Context, customerID, reference, description, payerMessage string, amountCents int64, pixLifetime time.Duration, metadata map[string]string) (*billingclient.Invoice, error)
 	InvoiceByReference(ctx context.Context, reference string) (*billingclient.Invoice, error)
 	OpenPix(ctx context.Context, inv *billingclient.Invoice) error
 	RefundInvoice(ctx context.Context, invoiceID string, amountCents int64, reason, idemKey string) error
@@ -113,7 +118,7 @@ func (g *Gateway) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyK
 	if !ok {
 		return nil, rejected(http.StatusBadRequest, "/problems/bad-request", "Bad Request", "sku inválido")
 	}
-	inv, id, err := g.open(ctx, kindSandbox, SandboxPrefix, userID, sku, pack.PriceCents, idempotencyKey, description)
+	inv, id, err := g.open(ctx, kindSandbox, SandboxPrefix, userID, sku, pack.PriceCents, idempotencyKey, description, packMessage(pack))
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +189,7 @@ func (g *Gateway) PurchaseProduct(ctx context.Context, userID, sku, idempotencyK
 	if !ok {
 		return nil, rejected(http.StatusBadRequest, "/problems/bad-request", "Bad Request", "sku inválido")
 	}
-	inv, id, err := g.open(ctx, kindProduct, ProductPrefix, userID, sku, product.PriceCents, idempotencyKey, description)
+	inv, id, err := g.open(ctx, kindProduct, ProductPrefix, userID, sku, product.PriceCents, idempotencyKey, description, productMessage(sku))
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +253,7 @@ func purchaseID(prefix, userID, idempotencyKey string) string {
 }
 
 // open issues the invoice (or returns the one an earlier try issued) and its Pix.
-func (g *Gateway) open(ctx context.Context, kind, prefix, userID, sku string, priceCents int64, idempotencyKey, description string) (*billingclient.Invoice, string, error) {
+func (g *Gateway) open(ctx context.Context, kind, prefix, userID, sku string, priceCents int64, idempotencyKey, description, payerMessage string) (*billingclient.Invoice, string, error) {
 	if idempotencyKey == "" {
 		return nil, "", rejected(http.StatusBadRequest, "/problems/bad-request", "Bad Request", "idempotency key obrigatória")
 	}
@@ -276,7 +281,7 @@ func (g *Gateway) open(ctx context.Context, kind, prefix, userID, sku string, pr
 	if err != nil {
 		return nil, "", err
 	}
-	inv, err := g.billing.CreateInvoice(ctx, customerID, id, description, priceCents, map[string]string{
+	inv, err := g.billing.CreateInvoice(ctx, customerID, id, description, payerMessage, priceCents, pixLifetime, map[string]string{
 		billingclient.MetadataSKU: sku, billingclient.MetadataUserID: userID, billingclient.MetadataKind: kind,
 	})
 	switch {
@@ -378,4 +383,35 @@ func productView(id, userID, sku string, product catalog.Product, inv *billingcl
 // (purchaselifecycle.DefinitiveWalletRejection): a 4xx walletclient.Error.
 func rejected(statusCode int, typ, title, detail string) error {
 	return &walletclient.Error{Status: statusCode, Type: typ, Title: title, Detail: detail}
+}
+
+// packMessage is what the payer reads on the Pix of a chip pack: "Pacote de 55.000 fichas".
+func packMessage(p catalog.Sandbox) string {
+	return "Pacote de " + groupThousands(p.TotalCredits()) + " fichas"
+}
+
+// productMessage is what the payer reads on the Pix of a good: "Poker: baralho golden".
+func productMessage(sku string) string {
+	kind, name, ok := strings.Cut(strings.TrimPrefix(sku, "poker_"), "_")
+	if !ok {
+		return "Poker: " + sku
+	}
+	label := map[string]string{"reaction": "reação", "deck": "baralho", "felt": "feltro"}[kind]
+	if label == "" {
+		label = kind
+	}
+	return "Poker: " + label + " " + name
+}
+
+// groupThousands writes 55000 as 55.000, the way the player reads chips.
+func groupThousands(n int64) string {
+	digits := strconv.FormatInt(n, 10)
+	var out []byte
+	for i, c := range []byte(digits) {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			out = append(out, '.')
+		}
+		out = append(out, c)
+	}
+	return string(out)
 }
