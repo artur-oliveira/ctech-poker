@@ -148,14 +148,14 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
   or vice versa. This separation must be enforced at the data-model level (different tables /
   a `currency_mode` field that every wallet-interaction code path checks and rejects mixing
   on), not just by convention.
-- **Current state (2026-07-28)**: both surfaces are wired. `api/internal/walletclient` speaks
-  sandbox credit/debit *and* real-money `HoldGame` / `ReleaseHold` / `CashoutGame` /
-  `DebitReal` / `IsGamblingActivated`, over M2M client-credentials. Anything that can fail
-  after chips moved is recorded in `poker_pending_cashouts` and retried every 5 minutes by
-  the `cmd/reconcile` Lambda, so a crash between "chips awarded" and "balance settled"
-  self-heals instead of losing funds. `ctech-wallet`'s DynamoDB throughput cap was a stated
-  blocker in earlier revisions of this doc — re-confirm it against the wallet repo before
-  turning real money on at volume.
+- **Current state (2026-10-15)**: both surfaces are wired. `api/internal/walletclient` speaks sandbox
+  credit/debit and the real-money `HoldGame` / `ReleaseHold` / `CashoutGame` / `DebitReal` over M2M client-credentials,
+  against the wallet's generic holds routes; the wallet stakes the player's `real` balance. Consent, personal limits and
+  self-exclusion are Poker's (`api/internal/responsible`) and gate the buy-in before the wallet is called. Chip packs and
+  goods are sold through Billing invoices (`api/internal/purchasegw`); the wallet no longer sells anything. Anything that can
+  fail after chips moved is recorded in `poker_pending_cashouts` and retried every 5 minutes by the `cmd/reconcile` Lambda,
+  so a crash between "chips awarded" and "balance settled" self-heals instead of losing funds. Real money is still off in
+  production (`/ctech/prod/poker/real-money-enabled` absent).
 
 ## 6. Frontend
 
