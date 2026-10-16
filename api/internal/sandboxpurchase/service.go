@@ -14,6 +14,11 @@ import (
 
 var ErrNotFound = errors.New("sandboxpurchase: not found")
 
+// ErrUsed: the player sat at a table after the chips arrived, so the purchase can no longer be
+// refunded. Without this rule chips bought, won back at the tables and refunded would be a loan
+// of chips that costs nothing.
+var ErrUsed = errors.New("sandboxpurchase: the chips were already put in play")
+
 // WelcomePackSKU is the special, controlled-price wallet catalog SKU a
 // player may purchase at most once — see Service.Create.
 const WelcomePackSKU = "welcome_pack"
@@ -47,10 +52,16 @@ type promoStore interface {
 	ReleaseClaim(ctx context.Context, playerID, sku string)
 }
 
+// usage tells whether a player has put chips in play since a moment.
+type usage interface {
+	PlayedSince(ctx context.Context, playerID string, since time.Time) (bool, error)
+}
+
 type Service struct {
 	wallet wallet
 	store  store
 	promo  promoStore
+	played usage
 	now    func() time.Time
 }
 
@@ -63,6 +74,12 @@ func NewService(wallet wallet, store store) *Service {
 // pattern.
 func (s *Service) WithPromo(promo promoStore) *Service {
 	s.promo = promo
+	return s
+}
+
+// WithUsage closes the refund of chips the player has already played with.
+func (s *Service) WithUsage(played usage) *Service {
+	s.played = played
 	return s
 }
 
@@ -201,6 +218,20 @@ func (s *Service) Refund(ctx context.Context, playerID, purchaseID, idemKey stri
 	}
 	if local == nil {
 		return Record{}, ErrNotFound
+	}
+	// A refund already begun (refunding) resumes; a fresh one is refused once the chips were played.
+	if s.played != nil && local.Status != "refunding" {
+		since, perr := time.Parse(time.RFC3339Nano, local.UpdatedAt)
+		if perr != nil {
+			since, _ = time.Parse(time.RFC3339Nano, local.CreatedAt)
+		}
+		used, uerr := s.played.PlayedSince(ctx, playerID, since)
+		if uerr != nil {
+			return Record{}, fmt.Errorf("sandboxpurchase: usage check: %w", uerr)
+		}
+		if used {
+			return Record{}, ErrUsed
+		}
 	}
 	purchase, err := s.wallet.RefundSandboxPurchase(ctx, playerID, purchaseID, idemKey)
 	if err != nil {

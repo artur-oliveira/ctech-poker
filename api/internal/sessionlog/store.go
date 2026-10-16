@@ -628,3 +628,17 @@ func (s *Store) GetHand(ctx context.Context, playerID, mode, handID string) (*Ha
 func handSK(mode, handID string) string {
 	return mode + "#" + handID
 }
+
+// PlayedSince reports whether playerID sat at any table at any moment after since: a session
+// that began after it, one still open, or one that ended after it. The newest session decides,
+// so it is one read however long the history is. Used to close the refund of chips the player
+// has put in play.
+func (s *Store) PlayedSince(ctx context.Context, playerID string, since time.Time) (bool, error) {
+	sessions, _, err := s.ListSessions(ctx, playerID, 1, nil)
+	if err != nil || len(sessions) == 0 {
+		return false, err
+	}
+	at := since.UnixMilli()
+	n := sessions[0]
+	return n.JoinedAt > at || n.EndedAt == 0 || n.EndedAt > at, nil
+}

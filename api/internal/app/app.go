@@ -479,8 +479,8 @@ func newPurchaseWallet(cfg *config.Config, wallet *walletclient.Client, bc *bill
 	return purchasegw.New(wallet, bc, accountclient.New(cfg.CtechURL, cfg.PokerClientID, cfg.PokerClientSecret, cacheBackend))
 }
 
-func newSandboxPurchaseService(wallet purchaseWallet, store *sandboxpurchase.Store, promo *promocode.Store) *sandboxpurchase.Service {
-	return sandboxpurchase.NewService(wallet, store).WithPromo(promo)
+func newSandboxPurchaseService(wallet purchaseWallet, store *sandboxpurchase.Store, promo *promocode.Store, sessions *sessionlog.Store) *sandboxpurchase.Service {
+	return sandboxpurchase.NewService(wallet, store).WithPromo(promo).WithUsage(sessions)
 }
 func newWalletAlertStore(db *dynamodb.Client, cfg *config.Config) *walletalert.Store {
 	return walletalert.NewStore(db, cfg.Env)

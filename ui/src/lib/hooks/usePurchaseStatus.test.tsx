@@ -36,7 +36,7 @@ describe('nextPurchasePollMs', () => {
     expect(nextPurchasePollMs(4)).toBe(PURCHASE_POLL_MS);
     expect(nextPurchasePollMs(5)).toBe(PURCHASE_POLL_MS * 2);
     expect(nextPurchasePollMs(10)).toBe(PURCHASE_POLL_MS * 4);
-    expect(nextPurchasePollMs(30)).toBe(PURCHASE_POLL_MAX_MS);
+    expect(nextPurchasePollMs(PURCHASE_POLL_BUDGET - 1)).toBe(PURCHASE_POLL_MAX_MS);
   });
 
   test('gives up at the budget and when the Pix window has closed', () => {

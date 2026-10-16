@@ -30,7 +30,9 @@ Watch for `ALARM poker sale` log lines (a paid invoice that does not match the c
 
 Buying needs a CPF on the player's KYC (Billing opens a Pix only for a customer with one). A player without it gets `422 kyc-required`.
 
-A refund of a chip pack works while the player still has the credits (the wallet debit is refused otherwise and no money moves); the wallet's stricter "no debit since the credit" rule has no equivalent through the generic debit route.
+A chip-pack refund is closed once the player sat at a table after the purchase was confirmed (`sandboxpurchase.ErrUsed`, `409 sandbox-purchase-used`; checked against the newest session, so one read). Otherwise chips bought, won back at the tables and refunded would be a free loan of chips. It also needs the credits still to be there (the wallet debit is refused otherwise and no money moves). Spending fichas in the store does not close it yet.
+
+The store's fallback poll starts at 15 s and gives up after 12 polls (about 6 minutes, a Pix window); the websocket frame from Billing's `invoice.paid` is the primary confirmation.
 
 ## What this costs
 

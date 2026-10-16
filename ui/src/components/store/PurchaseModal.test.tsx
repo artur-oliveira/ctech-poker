@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {focusManager, QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {PURCHASE_POLL_MS} from '@/lib/hooks/usePurchaseStatus';
 import {PurchaseModal} from './PurchaseModal';
 import type {SandboxPurchase} from '@/lib/api/wallet';
 
@@ -103,7 +104,7 @@ describe('PurchaseModal', () => {
       getPurchase.mockResolvedValue(confirmed);
       renderModal(purchase(), {onUpdateAction});
 
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(PURCHASE_POLL_MS + 1000);
       expect(getPurchase).toHaveBeenCalledWith('sbxp-1');
       expect(onUpdateAction).toHaveBeenCalledWith(confirmed);
     } finally {
@@ -137,7 +138,7 @@ describe('PurchaseModal', () => {
       getPurchase.mockRejectedValueOnce(new Error('offline'));
       renderModal(purchase(), {onUpdateAction});
 
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(PURCHASE_POLL_MS + 1000);
       await vi.waitFor(() => expect(screen.getByRole('alert'))
         .toHaveTextContent('Seu pagamento não foi alterado.'));
 
@@ -156,7 +157,7 @@ describe('PurchaseModal', () => {
       getPurchase.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('offline'));
       renderModal(purchase());
 
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(PURCHASE_POLL_MS + 1000);
       await vi.waitFor(() => expect(screen.getByRole('button', {name: 'Verificar pagamento'})).toBeInTheDocument());
       act(() => void screen.getByRole('button', {name: 'Verificar pagamento'}).click());
       await vi.waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
