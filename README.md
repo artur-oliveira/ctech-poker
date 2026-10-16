@@ -84,8 +84,8 @@ A pull request that adds person-linked data without this is incomplete, whatever
 
 - **ctech-account** — OIDC auth for the SPA and the API (`sub` + `sid` claims, `jwtverify`).
   Owns the identity-level display name/avatar; poker keeps its own table nickname.
-- **ctech-wallet** — real-money buy-ins/cash-outs and the sandbox play-money ledger, reached
-  M2M via `api/internal/walletclient`. Sandbox chips are non-convertible — see OVERVIEW.md § 5.
+- **ctech-wallet** — real-money buy-ins/cash-outs (holds on `real`) and the sandbox play-money ledger, reached
+  M2M via `api/internal/walletclient`. **ctech-billing** — sells chip packs and goods by Pix (`api/internal/purchasegw`). Sandbox chips are non-convertible — see OVERVIEW.md § 5.
 - **ctech-cdk** (`@aoctech/cdk`) — the `HaproxyEc2Service` construct and `Ec2ScriptRunner`,
   which fetches the shared `assets/ec2/*.sh` bootstrap scripts from
   `{env}-ctech-ec2-scripts` at boot; also owns the VPC, shared edge SG, private zone and

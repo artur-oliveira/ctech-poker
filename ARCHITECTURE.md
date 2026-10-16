@@ -94,15 +94,25 @@ upgrade**, not in a query string or header, and frames are capped at 32 KiB. Fan
   DynamoDB pattern, rather than poker inventing a parallel actor-plus-lease-plus-log mechanism that wallet
   doesn't need for an equivalent correctness/audit guarantee.
 
-## 4. Wallet integration — as built
+## 4. Wallet and Billing integration — as built
 
 `api/internal/walletclient` is an M2M (client-credentials) client for `ctech-wallet`, and
-`api/internal/buyin` is the only thing that calls it. Two ledgers, one code path, selected by the
+`api/internal/buyin` is the only thing that calls it for table money. Two ledgers, one code path, selected by the
 room's `currency_mode`:
 
 - **Sandbox**: `Credit` / `Debit` against the play-money ledger. Non-convertible by construction.
-- **Real**: `HoldGame` on buy-in, `ReleaseHold` if seating fails, `CashoutGame` on leave,
-  `DebitReal` for the fixed entry fee, `IsGamblingActivated` as a per-player precondition.
+- **Real**: `HoldGame` on buy-in, `ReleaseHold` if seating fails, `CashoutGame` on leave and `DebitReal` for the fixed
+  entry fee, over the wallet's generic `/internal/wallet/holds*` routes (scope `internal:wallet:hold`). The wallet stakes the
+  player's `real` balance: the game wallet was merged into it.
+- **The rules are Poker's.** Consent, personal limits, self-exclusion (carried across account deletion) and the daily
+  inflow meter live in `api/internal/responsible` and gate the real-money buy-in **before** any wallet call
+  (`docs/runbooks/poker-owns-games.md`). The wallet keeps only a last, fail-closed refusal for a self-exclusion still
+  recorded on its side.
+- **Sales are Poker's too.** Chip packs and premium goods (`api/internal/catalog`) are sold through **Billing** invoices
+  (`api/internal/purchasegw`, `api/internal/billingclient`): Poker opens the invoice, Billing collects by Pix and signs an
+  `invoice.paid` event to `POST /v1.0/webhooks/billing`, and Poker re-reads the invoice, checks the paid amount against the
+  catalogue price, then credits the Sandbox ledger or unlocks the good. A refund takes the credits back first (a refused
+  debit stops it before any money moves) and then refunds the invoice. The wallet sells nothing.
 
 Ordering is deliberate and asymmetric, because the two failure directions cost different things:
 **debit then seat** on buy-in (never hand out chips that were not paid for), **remove then credit**
