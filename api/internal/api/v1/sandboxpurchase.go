@@ -108,6 +108,10 @@ func (h *sandboxPurchaseHandlers) refund(c fiber.Ctx) error {
 	if errors.Is(err, sandboxpurchase.ErrNotFound) {
 		return problem.NotFound("purchase not found").Send(c)
 	}
+	if errors.Is(err, sandboxpurchase.ErrUsed) {
+		return problem.New(fiber.StatusConflict, "/problems/sandbox-purchase-used", "Sandbox Purchase Used",
+			"você já jogou com estas fichas; a compra não pode mais ser estornada").Send(c)
+	}
 	if err != nil {
 		return walletOrInternalProblem(err, "refund failed", c).Send(c)
 	}

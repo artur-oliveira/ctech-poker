@@ -299,3 +299,40 @@ func TestServiceCreateReleasesClaimWhenWalletPurchaseFails(t *testing.T) {
 		t.Fatalf("expected retry after release to succeed, got %v", err)
 	}
 }
+
+type fakeUsage struct {
+	used  bool
+	since time.Time
+}
+
+func (f *fakeUsage) PlayedSince(_ context.Context, _ string, since time.Time) (bool, error) {
+	f.since = since
+	return f.used, nil
+}
+
+// Chips bought, won back at the tables and refunded would be a free loan of chips: once the
+// player sat at a table after the chips arrived, the purchase is not refundable.
+func TestRefundIsRefusedOnceTheChipsWerePlayedAndNeverReachesTheWallet(t *testing.T) {
+	store := newFakeStore()
+	confirmed := "2026-10-15T20:00:00Z"
+	store.rows[key("p1", "snd_1")] = Record{PlayerID: "p1", PurchaseID: "snd_1", Status: "confirmed", CreatedAt: "2026-10-15T19:59:00Z", UpdatedAt: confirmed}
+	wallet := &fakeWallet{refundResult: &walletclient.SandboxPurchase{Status: "refunded"}}
+	usage := &fakeUsage{used: true}
+	svc := NewService(wallet, store).WithUsage(usage)
+
+	if _, err := svc.Refund(context.Background(), "p1", "snd_1", "k"); !errors.Is(err, ErrUsed) {
+		t.Fatalf("err = %v, want ErrUsed", err)
+	}
+	if want, _ := time.Parse(time.RFC3339, confirmed); !usage.since.Equal(want) {
+		t.Fatalf("usage measured since %v, want the moment the purchase was confirmed %v", usage.since, want)
+	}
+	if store.rows[key("p1", "snd_1")].Status != "confirmed" {
+		t.Fatal("a refused refund changed the purchase")
+	}
+
+	usage.used = false
+	rec, err := svc.Refund(context.Background(), "p1", "snd_1", "k")
+	if err != nil || rec.Status != "refunded" {
+		t.Fatalf("an unplayed purchase must refund: %+v %v", rec, err)
+	}
+}

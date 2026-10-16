@@ -18,17 +18,19 @@ import {useQuery, type QueryKey} from '@tanstack/react-query';
 // `refetchOnWindowFocus` gives exactly one catch-up read when the tab comes
 // back (`staleTime` below is what keeps it to one).
 
-/** First fallback gap, while the purchase is fresh. */
-export const PURCHASE_POLL_MS = 4000;
+/** First fallback gap, while the purchase is fresh. Long on purpose: Billing's `invoice.paid`
+ *  reaches the websocket within a few seconds of the Pix, so a poll sooner than this mostly
+ *  wins a race the frame was about to win, and costs a read each time. */
+export const PURCHASE_POLL_MS = 15_000;
 /** Ceiling the backoff grows to. */
-export const PURCHASE_POLL_MAX_MS = 30_000;
+export const PURCHASE_POLL_MAX_MS = 60_000;
 /** The gap doubles once per this many polls already spent. */
 export const PURCHASE_POLL_BACKOFF_EVERY = 5;
 /** Hard per-purchase deadline, for one the server never resolves and that
  *  carries no Pix window of its own: at most this many fallback polls, ever
- *  (~15 minutes with the backoff below). Past it only the websocket, a manual
- *  re-check or returning to the tab asks again. */
-export const PURCHASE_POLL_BUDGET = 40;
+ *  (~6 minutes with the backoff below, about a Pix window). Past it only the
+ *  websocket, a manual re-check or returning to the tab asks again. */
+export const PURCHASE_POLL_BUDGET = 12;
 
 // Not a beacon: the app has no metrics sink (`lib/telemetry.ts` is the
 // client-*error* sink and a poll is not an error), so this counter exists to be
@@ -55,8 +57,8 @@ export function purchaseActive(status?: string) {
 /** The gap before the next fallback poll, or `false` to stop polling.
  *
  * Growing gaps, because a payment that has not landed in the first twenty
- * seconds is unlikely to land in the next four: 4s while fresh, then doubling
- * every `PURCHASE_POLL_BACKOFF_EVERY` polls up to a 30s ceiling. A Pix window
+ * seconds is unlikely to land in the next four: 15s while fresh, then doubling
+ * every `PURCHASE_POLL_BACKOFF_EVERY` polls up to a 60s ceiling. A Pix window
  * that has closed (`remainingMs <= 0`) or the spent budget stops it outright.
  *
  * Counting polls rather than elapsed time is deliberate: it is the same
@@ -93,7 +95,7 @@ export function usePurchaseStatus<T extends TrackedPurchase>({queryKey, queryFn,
 }) {
   // Per-purchase poll budget: the module counter above is session-wide, this
   // one drives this purchase's backoff and deadline. Keyed on the query key so
-  // a second purchase in the same open dialog starts fresh at the 4s gap.
+  // a second purchase in the same open dialog starts fresh at the first gap.
   const spent = useRef({key: '', count: 0});
   const key = JSON.stringify(queryKey);
   return useQuery<T>({

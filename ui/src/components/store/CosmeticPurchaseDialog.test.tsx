@@ -4,6 +4,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {CosmeticPurchaseDialog} from './CosmeticPurchaseDialog';
+import {PURCHASE_POLL_MS} from '@/lib/hooks/usePurchaseStatus';
 import {ApiError} from '@/lib/api/client';
 import type {CosmeticCatalogEntry, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 
@@ -82,7 +83,7 @@ describe('CosmeticPurchaseDialog', () => {
         onCloseAction={vi.fn()}/>, {wrapper});
 
       expect(screen.getByText(/Aguardando confirmação do Pix/)).toBeInTheDocument();
-      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(PURCHASE_POLL_MS); });
       expect(getCosmeticPurchase).toHaveBeenCalledWith('felt', 'p1');
       await vi.waitFor(() => expect(screen.getByText('Pronto para a mesa')).toBeInTheDocument());
     } finally {

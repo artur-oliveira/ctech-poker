@@ -370,3 +370,32 @@ func TestCloseSessionRefreshesTTL(t *testing.T) {
 		t.Fatalf("expected TTL refreshed past the stale open-time value %d, got %d", staleTTL, sessions[0].TTL)
 	}
 }
+
+func TestPlayedSinceSeesASessionAfterOpenOrSpanningTheMoment(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	since := time.UnixMilli(1_000_000)
+
+	never := uniqueSessionPlayerID(t) + "-never"
+	if played, err := store.PlayedSince(ctx, never, since); err != nil || played {
+		t.Fatalf("no sessions: played=%v err=%v", played, err)
+	}
+
+	before := uniqueSessionPlayerID(t) + "-before"
+	_ = store.RecordSession(ctx, SessionItem{PK: before, TableID: "t1", JoinedAt: 100, EndedAt: 500})
+	if played, _ := store.PlayedSince(ctx, before, since); played {
+		t.Fatal("a session that ended before the moment counts as played since")
+	}
+
+	after := uniqueSessionPlayerID(t) + "-after"
+	_ = store.RecordSession(ctx, SessionItem{PK: after, TableID: "t1", JoinedAt: 2_000_000, EndedAt: 3_000_000})
+	if played, _ := store.PlayedSince(ctx, after, since); !played {
+		t.Fatal("a session after the moment was missed")
+	}
+
+	open := uniqueSessionPlayerID(t) + "-open"
+	_ = store.RecordSession(ctx, SessionItem{PK: open, TableID: "t1", JoinedAt: 100}) // still seated: rebuys use the new chips
+	if played, _ := store.PlayedSince(ctx, open, since); !played {
+		t.Fatal("a session still open counts as played since")
+	}
+}
