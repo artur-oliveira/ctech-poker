@@ -67,7 +67,7 @@ func (s *stub) last() call {
 func TestCreateInvoiceCarriesTheReferenceAsKeyAndOwnerAndWhatWasSold(t *testing.T) {
 	s, c := newStub(t)
 	s.on("POST /v1.0/invoices", 201, `{"id":"in_1","reference":"snd_1","status":"OPEN","total":500,"amount_paid":0,"checkout_url":"https://x/checkout?token=T","metadata":{"sku":"pack_500"}}`)
-	inv, err := c.CreateInvoice(context.Background(), "cus_1", "snd_1", "Compra de fichas", 500, map[string]string{MetadataSKU: "pack_500", MetadataUserID: "u1"})
+	inv, err := c.CreateInvoice(context.Background(), "cus_1", "snd_1", "Compra de fichas", "Pacote de 55.000 fichas", 500, time.Hour, map[string]string{MetadataSKU: "pack_500", MetadataUserID: "u1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,8 @@ func TestCreateInvoiceCarriesTheReferenceAsKeyAndOwnerAndWhatWasSold(t *testing.
 	}
 	var sent map[string]any
 	_ = json.Unmarshal(got.body, &sent)
-	if sent["owner_key"] != "poker" || sent["amount_cents"] != float64(500) || sent["reference"] != "snd_1" {
+	if sent["owner_key"] != "poker" || sent["amount_cents"] != float64(500) || sent["reference"] != "snd_1" ||
+		sent["payer_message"] != "Pacote de 55.000 fichas" || sent["pix_expires_in_seconds"] != float64(3600) {
 		t.Fatalf("body = %v", sent)
 	}
 	if inv.ID != "in_1" || inv.Reference != "snd_1" || inv.Metadata[MetadataSKU] != "pack_500" || inv.AmountCents != 500 {
@@ -88,7 +89,7 @@ func TestCreateInvoiceCarriesTheReferenceAsKeyAndOwnerAndWhatWasSold(t *testing.
 func TestACreatedInvoiceWithAnotherBodyIsAConflict(t *testing.T) {
 	s, c := newStub(t)
 	s.on("POST /v1.0/invoices", 409, `{"code":"idempotency_conflict","detail":"different body"}`)
-	if _, err := c.CreateInvoice(context.Background(), "cus_1", "snd_1", "x", 100, nil); !errors.Is(err, ErrConflict) {
+	if _, err := c.CreateInvoice(context.Background(), "cus_1", "snd_1", "x", "x", 100, time.Hour, nil); !errors.Is(err, ErrConflict) {
 		t.Fatalf("err = %v", err)
 	}
 }
