@@ -104,6 +104,14 @@ func (s *Service) ListSKUs(ctx context.Context) ([]walletclient.SandboxSKU, erro
 // Either claim is rolled back if the wallet call that follows never
 // succeeds, so a transient failure never permanently burns the promo.
 func (s *Service) Create(ctx context.Context, playerID, sku, promoCode, idemKey string) (Record, error) {
+	// A pack whose Pix is still open is the answer to asking for it again: a second click, a
+	// reopened store, a retry that got no response. Each fresh key would otherwise issue a
+	// second invoice for the same sale.
+	if promoCode == "" && sku != WelcomePackSKU {
+		if open := s.openPurchase(ctx, playerID, sku); open != nil {
+			return *open, nil
+		}
+	}
 	effectiveSKU := sku
 	var redeemedCode string
 
@@ -271,4 +279,23 @@ func (s *Service) ConfirmFromWebhook(ctx context.Context, purchaseID string) (Re
 	}
 	local.Status, local.UpdatedAt = purchase.Status, now
 	return *local, true, nil
+}
+
+// openPurchase is the player's pending, unexpired purchase of sku, if they have one.
+func (s *Service) openPurchase(ctx context.Context, playerID, sku string) *Record {
+	records, _, err := s.store.List(ctx, playerID, 50, nil)
+	if err != nil {
+		return nil // not knowing is not a reason to refuse the purchase
+	}
+	now := s.now()
+	for i := range records {
+		r := records[i]
+		if r.SKU != sku || r.Status != "pending" || r.PixCopiaECola == "" {
+			continue
+		}
+		if at, err := time.Parse(time.RFC3339, r.ExpiresAt); err == nil && now.Before(at) {
+			return &r
+		}
+	}
+	return nil
 }

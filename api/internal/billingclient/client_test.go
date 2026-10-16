@@ -46,7 +46,7 @@ func newStub(t *testing.T) (*stub, *Client) {
 		h(w, r, body)
 	}))
 	t.Cleanup(srv.Close)
-	return s, New(srv.URL, srv.URL, "poker", "s")
+	return s, New(srv.URL, srv.URL, "poker", "s", nil)
 }
 
 func (s *stub) on(route string, status int, body string) {

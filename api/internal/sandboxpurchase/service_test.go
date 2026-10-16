@@ -336,3 +336,39 @@ func TestRefundIsRefusedOnceTheChipsWerePlayedAndNeverReachesTheWallet(t *testin
 		t.Fatalf("an unplayed purchase must refund: %+v %v", rec, err)
 	}
 }
+
+// A second request for a pack whose Pix is still open returns that purchase instead of issuing a
+// second invoice for the same sale; an expired or paid one does not count.
+func TestAskingAgainForAPackWithAnOpenPixReturnsIt(t *testing.T) {
+	store := newFakeStore()
+	wallet := &fakeWallet{skus: []walletclient.SandboxSKU{{ID: "pack_100", PriceCents: 100}},
+		purchase: &walletclient.SandboxPurchase{PurchaseID: "snd_new", SKU: "pack_100", Status: "pending", PixCopiaECola: "0002"}}
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	svc := NewService(wallet, store)
+	svc.now = func() time.Time { return now }
+	live := now.Add(30 * time.Minute).Format(time.RFC3339)
+	store.rows[key("p1", "snd_open")] = Record{PlayerID: "p1", PurchaseID: "snd_open", SKU: "pack_100", Status: "pending", PixCopiaECola: "0001", ExpiresAt: live}
+
+	got, err := svc.Create(context.Background(), "p1", "pack_100", "", "k-2")
+	if err != nil || got.PurchaseID != "snd_open" || wallet.purchaseCalls != 0 {
+		t.Fatalf("got %+v err=%v calls=%d: an open Pix must be returned, not a second invoice", got, err, wallet.purchaseCalls)
+	}
+
+	for name, rec := range map[string]Record{
+		"expired": {Status: "pending", PixCopiaECola: "0001", ExpiresAt: now.Add(-time.Minute).Format(time.RFC3339)},
+		"paid":    {Status: "confirmed", PixCopiaECola: "0001", ExpiresAt: live},
+		"other":   {Status: "pending", PixCopiaECola: "0001", ExpiresAt: live, SKU: "pack_500"},
+	} {
+		rec.PlayerID, rec.PurchaseID = "p2", "snd_old"
+		if rec.SKU == "" {
+			rec.SKU = "pack_100"
+		}
+		store.rows[key("p2", "snd_old")] = rec
+		wallet.purchaseCalls = 0
+		got, err := svc.Create(context.Background(), "p2", "pack_100", "", "k-3")
+		if err != nil || got.PurchaseID != "snd_new" || wallet.purchaseCalls != 1 {
+			t.Errorf("%s: got %+v err=%v calls=%d, want a new purchase", name, got, err, wallet.purchaseCalls)
+		}
+		delete(store.rows, key("p2", "snd_new"))
+	}
+}
