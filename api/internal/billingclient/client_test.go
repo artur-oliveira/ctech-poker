@@ -86,6 +86,28 @@ func TestCreateInvoiceCarriesTheReferenceAsKeyAndOwnerAndWhatWasSold(t *testing.
 	}
 }
 
+func TestCreateInvoiceRepeatsTheReferenceInMetadata(t *testing.T) {
+	s, c := newStub(t)
+	s.on("POST /v1.0/invoices", 201, `{"id":"in_1","status":"OPEN","total":500,"metadata":{"sku":"pack_500","reference":"snd_1"}}`)
+	in := map[string]string{MetadataSKU: "pack_500"}
+	inv, err := c.CreateInvoice(context.Background(), "cus_1", "snd_1", "x", "x", 500, time.Hour, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sent struct{ Metadata map[string]string }
+	_ = json.Unmarshal(s.last().body, &sent)
+	if sent.Metadata[MetadataReference] != "snd_1" || sent.Metadata[MetadataSKU] != "pack_500" {
+		t.Fatalf("metadata sent = %v", sent.Metadata)
+	}
+	if _, ok := in[MetadataReference]; ok {
+		t.Fatal("the caller's map was written to")
+	}
+	// An invoice body without "reference" (GET /invoices/{id} before Billing sent it).
+	if inv.Reference != "snd_1" {
+		t.Fatalf("reference from metadata = %q", inv.Reference)
+	}
+}
+
 func TestACreatedInvoiceWithAnotherBodyIsAConflict(t *testing.T) {
 	s, c := newStub(t)
 	s.on("POST /v1.0/invoices", 409, `{"code":"idempotency_conflict","detail":"different body"}`)
