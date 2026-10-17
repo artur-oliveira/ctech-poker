@@ -41,6 +41,9 @@ const (
 	MetadataSKU    = "sku"
 	MetadataUserID = "user_id"
 	MetadataKind   = "kind"
+	// MetadataReference repeats the reference on the invoice itself: a delivery reads the
+	// invoice by id, and the purchase it belongs to is found from this alone.
+	MetadataReference = "reference"
 
 	// OwnerKey is the routing key of Poker's invoices, credentials and webhook endpoint.
 	OwnerKey = "poker"
@@ -224,6 +227,11 @@ func (j *invoiceJSON) invoice() *Invoice {
 		ID: j.ID, Status: j.Status, AmountCents: j.Total, PaidCents: j.AmountPaid,
 		Reference: j.Reference, Metadata: j.Metadata, CheckoutURL: j.CheckoutURL, PayerMatch: j.PayerMatch,
 	}
+	if inv.Reference == "" {
+		// GET /invoices/{id} did not carry the reference before Billing added it, and
+		// still does not for an invoice read from an older Billing.
+		inv.Reference = j.Metadata[MetadataReference]
+	}
 	if j.Payer != nil {
 		inv.Payer = &Payer{Name: j.Payer.Name, Document: j.Payer.Document, Institution: j.Payer.Institution}
 	}
@@ -236,10 +244,15 @@ func (j *invoiceJSON) invoice() *Invoice {
 // how long the Pix stays payable: a sale here is a quick one, and Billing cannot know that.
 func (c *Client) CreateInvoice(ctx context.Context, customerID, reference, description, payerMessage string, amountCents int64, pixLifetime time.Duration, metadata map[string]string) (*Invoice, error) {
 	var out invoiceJSON
+	withRef := make(map[string]string, len(metadata)+1)
+	for k, v := range metadata {
+		withRef[k] = v
+	}
+	withRef[MetadataReference] = reference
 	err := c.do(ctx, http.MethodPost, "/v1.0/invoices", reference, map[string]any{
 		"customer_id": customerID, "description": description, "amount_cents": amountCents,
 		"payer_message": payerMessage, "pix_expires_in_seconds": int(pixLifetime.Seconds()),
-		"reference": reference, "owner_key": OwnerKey, "metadata": metadata,
+		"reference": reference, "owner_key": OwnerKey, "metadata": withRef,
 	}, &out, true)
 	if err != nil {
 		return nil, err
