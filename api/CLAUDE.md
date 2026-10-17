@@ -1132,3 +1132,7 @@ is on (`ctech-wallet/docs/specs/2026-08-29-transaction-description.md`). The tex
 enters an idempotency key, and holds (`HoldGame`/`ReleaseHold`) take none. Each package keeps its texts as named
 constants next to the call (`descriptionBuyInFormat`, ...); `walletclient.Credit/Debit/DebitReal/CashoutGame/
 PurchaseSandbox/PurchaseProduct` take `description` as their last argument. No personal data in descriptions.
+
+- **Every new person-linked table decides its export too.** `userexport` (`api/internal/userexport/inventory.go`) classifies each
+  `poker_*` table as `exported` (add a source in `exporter.go`) or `excluded: <reason>`; the classification test fails otherwise.
+  Other players' names, avatars and chat must never reach the export (`scrub.go`).
