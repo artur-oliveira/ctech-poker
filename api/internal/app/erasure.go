@@ -90,7 +90,10 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 	// The personal-data export rides the same queue: account sends user.export with
 	// a presigned upload URL and poker answers with its part (spec 2026-10-17-data-export).
 	exportTokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.ErasureAckClientID, cfg.ErasureAckClientSecret, exportAckScope)
-	exporter := dataexport.NewHandler(erasureService, userexport.New(db, cfg.Env).Part, httpClient,
+	// The part is data (a hand history can reach megabytes) PUT to S3 over this
+	// client, so it gets a longer timeout than the saga's 10 s calls.
+	uploads := &http.Client{Timeout: 60 * time.Second}
+	exporter := dataexport.NewHandler(erasureService, userexport.New(db, cfg.Env).Part, uploads,
 		dataexport.NewAckClient(httpClient, account+"/v1.0/internal/export/ack", exportTokens))
 	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks).
 		OnLock(v1.CloseLockedSockets(reg)).
