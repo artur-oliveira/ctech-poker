@@ -15,6 +15,7 @@ import (
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/api-commons/dataexport"
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/oauth2client"
@@ -24,6 +25,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
+	"gopkg.aoctech.app/poker/api/internal/userexport"
 	"gopkg.aoctech.app/poker/api/internal/userpurge"
 )
 
@@ -36,6 +38,9 @@ const (
 	// erasureAckScope is the only scope of poker's dedicated ack client
 	// (ERASURE_ACK_CLIENT_ID), granted by an operator in ctech-account.
 	erasureAckScope = "internal:account:erasure-ack"
+	// exportAckScope is the extra scope the same client needs for the personal-data
+	// export (granted by an operator; until then the account never asks poker).
+	exportAckScope = "internal:account:export-ack"
 )
 
 // newErasureStore binds {env}_poker_erasure_state. The poker_ segment keeps it
@@ -82,8 +87,14 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 	acks := erasure.NewAckClient(httpClient, account+"/v1.0/internal/erasure/ack", tokens)
 	// OnLock fires only when a message really moves the sub to locked (not on
 	// redeliveries); it closes the user's sockets on every instance (R6).
+	// The personal-data export rides the same queue: account sends user.export with
+	// a presigned upload URL and poker answers with its part (spec 2026-10-17-data-export).
+	exportTokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.ErasureAckClientID, cfg.ErasureAckClientSecret, exportAckScope)
+	exporter := dataexport.NewHandler(erasureService, userexport.New(db, cfg.Env).Part, httpClient,
+		dataexport.NewAckClient(httpClient, account+"/v1.0/internal/export/ack", exportTokens))
 	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks).
-		OnLock(v1.CloseLockedSockets(reg))
+		OnLock(v1.CloseLockedSockets(reg)).
+		WithExporter(exporter.Handle)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

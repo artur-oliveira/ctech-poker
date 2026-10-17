@@ -85,6 +85,16 @@ account. The message arrives with no workspaces, so the purge removes the person
 workspaces' data alone; the same consumer clears the tombstone on `user.relinked` when the person comes back (`api-commons`
 ≥ v1.28.0, `Store.Relink`). Nothing in this repo changes for it. Spec: ctech-account `docs/specs/2026-10-17-service-unlink.md`.
 
+**Personal-data export (LGPD art. 18, V).** The same queue also carries `user.export` from ctech-account
+(`api-commons` ≥ v1.29.1, `dataexport.Handler` plugged in with `erasure.Consumer.WithExporter`). Poker builds one zip
+(`api/internal/userexport`): a JSON file per table that holds the person's own data plus a README, uploaded straight to
+the presigned S3 URL in the message, then acked to `/v1.0/internal/export/ack`. Other players appear only as opaque ids
+(names, avatars and chat dropped), and `userexport`'s inventory classifies every `poker_*` table as exported or excluded with a
+reason: `TestInventoryClassifiesEveryTable` fails for a new table, so **a new person-linked table must also decide its
+export, next to its erasure**. The ack client (`ERASURE_ACK_CLIENT_ID`) needs the extra scope
+`internal:account:export-ack`, and account asks poker only once `"export": true` is set on poker's entry in its
+`erasure-participants`. Spec: ctech-account `docs/specs/2026-10-17-data-export.md`.
+
 ## Relationship to other CTech services
 
 - **ctech-account** — OIDC auth for the SPA and the API (`sub` + `sid` claims, `jwtverify`).
