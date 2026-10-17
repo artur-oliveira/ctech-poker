@@ -77,7 +77,7 @@ func s(v string) types.AttributeValue { return &types.AttributeValueMemberS{Valu
 
 func TestPartHasOwnDataAndNoOneElsesPII(t *testing.T) {
 	db := &fakeDB{byTable: map[string][]map[string]types.AttributeValue{
-		"test_poker_player_profiles": {{"pk": s("alice"), "display_name": s("Alice")}},
+		"test_poker_player_profiles": {{"pk": s("alice"), "display_name": s("Alice"), "avatar_reporters": &types.AttributeValueMemberSS{Value: []string{"carol-the-reporter"}}}},
 		"test_poker_player_hands": {{"pk": s("alice"), "sk": s("real#h1"), "hole_cards": &types.AttributeValueMemberSS{Value: []string{"Ah", "Kd"}},
 			"commit_hash": s("fairness-proof"),
 			"opponents": &types.AttributeValueMemberL{Value: []types.AttributeValue{
@@ -110,6 +110,12 @@ func TestPartHasOwnDataAndNoOneElsesPII(t *testing.T) {
 	}
 	if _, ok := files["chat_prefs.json"]; ok {
 		t.Error("another person's row leaked into the part")
+	}
+	if strings.Contains(files["player_profiles.json"], "carol") || strings.Contains(files["player_profiles.json"], "avatar_reporters") {
+		t.Errorf("who reported the avatar is the reporters' data: %s", files["player_profiles.json"])
+	}
+	if !strings.Contains(files["player_profiles.json"], "Alice") {
+		t.Errorf("own profile missing: %s", files["player_profiles.json"])
 	}
 	hands := files["player_hands.json"]
 	if strings.Contains(hands, "Bob") || strings.Contains(hands, "bob.png") {

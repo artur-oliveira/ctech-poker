@@ -13,7 +13,10 @@ var othersPII = []string{"name", "avatar_url", "playstyle_badge", "message"}
 
 // secretFragments drop any attribute whose name contains one, at any depth: a
 // defensive net, poker stores none of these today.
-var secretFragments = []string{"password", "secret", "token", "cpf"}
+// "reporter" covers the anti-abuse records others filed about the person
+// (poker_player_profiles.avatar_reporters): those are the reporters' data, not
+// the person's.
+var secretFragments = []string{"password", "secret", "token", "cpf", "reporter"}
 
 func isSecret(key string) bool {
 	k := strings.ToLower(key)
