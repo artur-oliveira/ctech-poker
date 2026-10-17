@@ -21,7 +21,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/valkey-io/valkey-go v1.0.78
-	github.com/valyala/fasthttp v1.74.0
+	github.com/valyala/fasthttp v1.75.0
 	go.uber.org/fx v1.24.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.aoctech.app/api-commons v1.29.1
