@@ -19,11 +19,12 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/oklog/ulid/v2 v2.1.2
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/valkey-io/valkey-go v1.0.78
 	github.com/valyala/fasthttp v1.74.0
 	go.uber.org/fx v1.24.0
 	google.golang.org/protobuf v1.36.12
-	gopkg.aoctech.app/api-commons v1.27.2
+	gopkg.aoctech.app/api-commons v1.28.0
 )
 
 require (
@@ -50,7 +51,6 @@ require (
 	github.com/molecule-man/go-brrr v1.1.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/savsgio/gotils v0.0.0-20250924091648-bce9a52d7761 // indirect
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	go.uber.org/dig v1.19.0 // indirect
