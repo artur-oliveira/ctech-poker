@@ -312,6 +312,15 @@ body:has(.game) {
 :where(a, button, input, select, textarea) {
     -webkit-tap-highlight-color: transparent
 }
+/* iOS (Safari and Chrome) zooms the page when a focused field is under 16px.
+   !important: the fields are sized by utilities and by per-component rules
+   (`font: inherit` on a 14px body), all of which would otherwise win. Pinch-zoom
+   stays available. */
+@media (pointer: coarse), (max-width: 39.999rem) {
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea {
+        font-size: 1rem !important
+    }
+}
 .system-state {
     min-height: 100svh;
     display: grid;
