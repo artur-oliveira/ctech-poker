@@ -1,5 +1,13 @@
 # CLAUDE.md — ctech-poker (monorepo root)
 
+## CTech Standards (mandatory)
+
+Before writing, changing or reviewing any code or infra here, load the `ctech-dev-standards` skill (plugin
+`ctech-skills`, repo github.com/artur-oliveira/ctech-skills). It is the single source of truth for backend,
+frontend and infra (patterns, resilience, scale, cost). If anything in this file contradicts it, the skill
+wins and this file must be fixed. Install on a new machine:
+`/plugin marketplace add artur-oliveira/ctech-skills` then `/plugin install ctech-skills@ctech-skills`.
+
 Online Texas Hold'em poker for the CTech ecosystem — a Go game server (`api/`), a React/Next.js
 web client (`ui/`), a Go terminal client (`cli/`), shared wire schema (`proto/`), and AWS CDK
 infrastructure (`cdk/`). See `README.md` for status, `OVERVIEW.md` for product/game rules,
