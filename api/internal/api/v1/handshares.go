@@ -6,8 +6,8 @@ import (
 	"net/url"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -59,7 +59,7 @@ func (h *handShareHandlers) list(c fiber.Ctx) error {
 		c.Context(), c.Locals(localsUserID).(string), limitParam(c), decodeCursor(cursor),
 	)
 	if err != nil {
-		return problem.InternalServer("failed to list hand shares", c, err).Send(c)
+		return internalProblem("failed to list hand shares", err).Send(c)
 	}
 	out := make([]handShareSummary, 0, len(shares))
 	for _, share := range shares {
@@ -92,14 +92,14 @@ func (h *handShareHandlers) create(c fiber.Ctx) error {
 	}
 	source, err := h.hands.GetHand(c.Context(), ownerID, req.Mode, handID)
 	if err != nil {
-		return problem.InternalServer("failed to load hand", c, err).Send(c)
+		return internalProblem("failed to load hand", err).Send(c)
 	}
 	if source == nil {
 		return problem.NotFound("hand not found").Send(c)
 	}
 	entries, err := h.logs.LoadActionsSince(c.Context(), source.TableID, source.HandID, 0)
 	if err != nil {
-		return problem.InternalServer("failed to load replay frames", c, err).Send(c)
+		return internalProblem("failed to load replay frames", err).Send(c)
 	}
 	// Derived before the tail truncation below: the legacy fallback reads the
 	// hand's FIRST pre-flop frame, which is exactly what truncation drops.
@@ -125,7 +125,7 @@ func (h *handShareHandlers) create(c fiber.Ctx) error {
 	case errors.Is(err, handshare.ErrInvalidExpiry):
 		return problem.BadRequest("expiry_days must be between 1 and 30").Send(c)
 	case err != nil:
-		return problem.InternalServer("failed to create hand share", c, err).Send(c)
+		return internalProblem("failed to create hand share", err).Send(c)
 	default:
 		return c.Status(fiber.StatusCreated).JSON(created)
 	}
@@ -134,7 +134,7 @@ func (h *handShareHandlers) create(c fiber.Ctx) error {
 func (h *handShareHandlers) public(c fiber.Ctx) error {
 	share, err := h.shares.Get(c.Context(), c.Params("token"))
 	if err != nil {
-		return problem.InternalServer("failed to load hand share", c, err).Send(c)
+		return internalProblem("failed to load hand share", err).Send(c)
 	}
 	if share == nil {
 		return problem.NotFound("hand share not found").Send(c)
@@ -148,7 +148,7 @@ func (h *handShareHandlers) revoke(c fiber.Ctx) error {
 		return problem.NotFound("hand share not found").Send(c)
 	}
 	if err != nil {
-		return problem.InternalServer("failed to revoke hand share", c, err).Send(c)
+		return internalProblem("failed to revoke hand share", err).Send(c)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

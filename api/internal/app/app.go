@@ -3,7 +3,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -27,6 +26,7 @@ import (
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/accountclient"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
@@ -56,7 +56,6 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/promocode"
 	"gopkg.aoctech.app/poker/api/internal/purchasegw"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
@@ -187,15 +186,7 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 		TrustProxyConfig: fiber.TrustProxyConfig{
 			Proxies: cfg.TrustedProxies,
 		},
-		ErrorHandler: func(c fiber.Ctx, err error) error {
-			if p, ok := errors.AsType[*problem.Problem](err); ok {
-				return p.Send(c)
-			}
-			if fiberErr, ok := errors.AsType[*fiber.Error](err); ok {
-				return problem.FromError(fiberErr, c).Send(c)
-			}
-			return problem.InternalServer("an unexpected error occurred", c, err).Send(c)
-		},
+		ErrorHandler: problem.ErrorHandler,
 	})
 
 	app.Use(fiberobs.RequestID())

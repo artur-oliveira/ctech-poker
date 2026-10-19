@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/gofiber/fiber/v3"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
@@ -66,7 +65,7 @@ func (h *handHistoryHandlers) history(c fiber.Ctx) error {
 	handID := c.Params("handId")
 	actions, err := h.store.LoadActionsSince(c.Context(), tableID, handID, 0)
 	if err != nil {
-		return problem.InternalServer("failed to load hand history", c, err).Send(c)
+		return internalProblem("failed to load hand history", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "actions": actions})
 }
@@ -80,7 +79,7 @@ func (h *handHistoryHandlers) timeline(c fiber.Ctx) error {
 	handID := c.Params("handId")
 	events, err := h.store.LoadTimeline(c.Context(), tableID, handID)
 	if err != nil {
-		return problem.InternalServer("failed to load hand timeline", c, err).Send(c)
+		return internalProblem("failed to load hand timeline", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "events": events})
 }

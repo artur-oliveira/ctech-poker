@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type playerNoteStore interface {
@@ -60,7 +60,7 @@ func (h *playerNoteHandlers) list(c fiber.Ctx) error {
 		return problem.BadRequest("opponent_ids must contain between 1 and 25 ids").Send(c)
 	}
 	if err != nil {
-		return problem.InternalServer("failed to list private notes", c, err).Send(c)
+		return internalProblem("failed to list private notes", err).Send(c)
 	}
 	// Search runs in memory over the caller's own notes: List already reads
 	// the whole (bounded) partition in one Query, and a search that is always
@@ -115,7 +115,7 @@ func (h *playerNoteHandlers) save(c fiber.Ctx) error {
 	case errors.Is(err, playernotes.ErrNoteTooLong):
 		return problem.BadRequest("note must have at most 500 characters").Send(c)
 	case err != nil:
-		return problem.InternalServer("failed to save private note", c, err).Send(c)
+		return internalProblem("failed to save private note", err).Send(c)
 	}
 	if note == nil {
 		return c.JSON(fiber.Map{"deleted": true})

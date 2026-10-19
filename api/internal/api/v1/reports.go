@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/config"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 )
 
@@ -74,6 +74,6 @@ func reportProblem(err error, c fiber.Ctx) *problem.Problem {
 	case errors.Is(err, reports.ErrTargetNotFound):
 		return problem.NotFound("target player not found")
 	default:
-		return problem.InternalServer("failed to create report", c, err)
+		return internalProblem("failed to create report", err)
 	}
 }

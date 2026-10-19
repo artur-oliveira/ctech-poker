@@ -10,13 +10,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -168,7 +168,7 @@ func (h *playerHandlers) mySettlements(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	items, lastKey, err := h.settlements.ListForPlayer(c.Context(), userID, limitParam(c), decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("failed to list settlements", c, err).Send(c)
+		return internalProblem("failed to list settlements", err).Send(c)
 	}
 	views := make([]reconcile.SettlementView, 0, len(items))
 	for _, item := range items {
@@ -188,16 +188,16 @@ func (h *playerHandlers) avatarUploadURL(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	profile, err := h.players.GetOrCreate(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+		return internalProblem("failed to load player profile", err).Send(c)
 	}
 	version := profile.AvatarVersion + 1
 	uploadKey, err := avatar.UploadKey(userID, version)
 	if err != nil {
-		return problem.InternalServer("failed to authorize avatar upload", c, err).Send(c)
+		return internalProblem("failed to authorize avatar upload", err).Send(c)
 	}
 	upload, err := h.avatars.Presign(c.Context(), uploadKey)
 	if err != nil {
-		return problem.InternalServer("failed to authorize avatar upload", c, err).Send(c)
+		return internalProblem("failed to authorize avatar upload", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"url": upload.URL, "fields": upload.Fields, "version": version})
 }
@@ -213,7 +213,7 @@ func (h *playerHandlers) avatarConfirm(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	profile, err := h.players.GetOrCreate(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+		return internalProblem("failed to load player profile", err).Send(c)
 	}
 	if req.Version != profile.AvatarVersion+1 {
 		return problem.Conflict("avatar version is stale").Send(c)
@@ -221,7 +221,7 @@ func (h *playerHandlers) avatarConfirm(c fiber.Ctx) error {
 	uploadKey, uploadErr := avatar.UploadKey(userID, req.Version)
 	publishedKey, publishErr := avatar.PublishedKey(userID, req.Version)
 	if uploadErr != nil || publishErr != nil {
-		return problem.InternalServer("failed to derive avatar keys", c, errors.Join(uploadErr, publishErr)).Send(c)
+		return internalProblem("failed to derive avatar keys", errors.Join(uploadErr, publishErr)).Send(c)
 	}
 	if err := h.avatars.ValidateAndPublish(c.Context(), uploadKey, publishedKey); err != nil {
 		switch {
@@ -232,12 +232,12 @@ func (h *playerHandlers) avatarConfirm(c fiber.Ctx) error {
 		case errors.Is(err, avatar.ErrInvalidImage), errors.Is(err, avatar.ErrImageTooLarge):
 			return problem.New(http.StatusUnprocessableEntity, "/problems/avatar-invalid", "Invalid avatar", "a imagem não é um JPEG/PNG válido ou excede os limites").Send(c)
 		default:
-			return problem.InternalServer("failed to validate avatar", c, err).Send(c)
+			return internalProblem("failed to validate avatar", err).Send(c)
 		}
 	}
 	updated, err := h.players.SetAvatar(c.Context(), userID, publishedKey, req.Version)
 	if err != nil {
-		return problem.InternalServer("failed to update avatar", c, err).Send(c)
+		return internalProblem("failed to update avatar", err).Send(c)
 	}
 	h.avatars.DeleteBestEffort(c.Context(), uploadKey, profile.AvatarKey)
 	return c.JSON(h.responseWithBalance(c, updated))
@@ -250,11 +250,11 @@ func (h *playerHandlers) avatarDelete(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	profile, err := h.players.GetOrCreate(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+		return internalProblem("failed to load player profile", err).Send(c)
 	}
 	updated, err := h.players.ClearAvatar(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("failed to remove avatar", c, err).Send(c)
+		return internalProblem("failed to remove avatar", err).Send(c)
 	}
 	h.avatars.DeleteBestEffort(c.Context(), profile.AvatarKey)
 	return c.JSON(h.responseWithBalance(c, updated))
@@ -274,7 +274,7 @@ func (h *playerHandlers) avatarReport(c fiber.Ctx) error {
 		}
 	}
 	if err := h.players.ReportAvatar(c.Context(), targetID, reporterID); err != nil {
-		return problem.InternalServer("failed to report avatar", c, err).Send(c)
+		return internalProblem("failed to report avatar", err).Send(c)
 	}
 	return c.SendStatus(http.StatusNoContent)
 }
@@ -282,7 +282,7 @@ func (h *playerHandlers) avatarReport(c fiber.Ctx) error {
 func (h *playerHandlers) me(c fiber.Ctx) error {
 	profile, err := h.players.GetOrCreate(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+		return internalProblem("failed to load player profile", err).Send(c)
 	}
 	return c.JSON(h.responseWithBalance(c, profile))
 }
@@ -303,7 +303,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrEmptyName) {
 				return problem.BadRequest("name must not be empty").Send(c)
 			}
-			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+			return internalProblem("failed to update player profile", err).Send(c)
 		}
 		// The seat's name is a cache the table actor filled at join time and
 		// never re-reads, so a rename would otherwise stay invisible to
@@ -318,7 +318,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrInvalidWalletMode) {
 				return problem.BadRequest("wallet_mode must be sandbox or real").Send(c)
 			}
-			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+			return internalProblem("failed to update player profile", err).Send(c)
 		}
 	}
 	if req.DeckVariant != nil {
@@ -329,7 +329,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrCosmeticNotOwned) {
 				return problem.BadRequest("deck_variant is premium and not owned").Send(c)
 			}
-			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+			return internalProblem("failed to update player profile", err).Send(c)
 		}
 	}
 	if req.TableTheme != nil {
@@ -340,13 +340,13 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrCosmeticNotOwned) {
 				return problem.BadRequest("table_theme is premium and not owned").Send(c)
 			}
-			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+			return internalProblem("failed to update player profile", err).Send(c)
 		}
 	}
 	if req.ShowcasePublic != nil || req.PlaystylePublic != nil || req.TablePublic != nil || req.FeaturedAchievements != nil {
 		current, err := h.players.GetOrCreate(c.Context(), userID)
 		if err != nil {
-			return problem.InternalServer("failed to load player profile", c, err).Send(c)
+			return internalProblem("failed to load player profile", err).Send(c)
 		}
 		public := current.ShowcasePublic
 		playstylePublic := current.PlaystylePublic
@@ -368,7 +368,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrInvalidShowcase) {
 				return problem.BadRequest("featured_achievements must contain up to three valid unique keys").Send(c)
 			}
-			return problem.InternalServer("failed to update profile showcase", c, err).Send(c)
+			return internalProblem("failed to update profile showcase", err).Send(c)
 		}
 	}
 	if req.ShowcaseLayout != nil {
@@ -376,7 +376,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrInvalidShowcaseLayout) {
 				return problem.BadRequest("showcase_layout must order every section once and may not hide achievements").Send(c)
 			}
-			return problem.InternalServer("failed to update profile showcase layout", c, err).Send(c)
+			return internalProblem("failed to update profile showcase layout", err).Send(c)
 		}
 	}
 	if req.EquippedFrameID != nil {
@@ -387,7 +387,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrCosmeticNotOwned) {
 				return problem.BadRequest("equipped_frame_id is not owned").Send(c)
 			}
-			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+			return internalProblem("failed to update player profile", err).Send(c)
 		}
 	}
 	if req.EquippedBadgeIDs != nil {
@@ -398,7 +398,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrCosmeticNotOwned) {
 				return problem.BadRequest("equipped_badge_ids contains a badge that is not owned").Send(c)
 			}
-			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+			return internalProblem("failed to update player profile", err).Send(c)
 		}
 	}
 	if req.BetPresetMode != nil {
@@ -406,7 +406,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrInvalidBetPresetMode) {
 				return problem.BadRequest("bet_preset_mode must be one of bb, pot").Send(c)
 			}
-			return problem.InternalServer("failed to update bet preset mode", c, err).Send(c)
+			return internalProblem("failed to update bet preset mode", err).Send(c)
 		}
 	}
 	if req.FavoriteReactions != nil {
@@ -414,13 +414,13 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			if errors.Is(err, player.ErrInvalidFavoriteReactions) {
 				return problem.BadRequest("favorite_reactions must contain up to three valid unique reaction ids").Send(c)
 			}
-			return problem.InternalServer("failed to update favorite reactions", c, err).Send(c)
+			return internalProblem("failed to update favorite reactions", err).Send(c)
 		}
 	}
 
 	profile, err := h.players.GetOrCreate(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+		return internalProblem("failed to load player profile", err).Send(c)
 	}
 	return c.JSON(h.responseWithBalance(c, profile))
 }
@@ -428,7 +428,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 func (h *playerHandlers) acceptTerms(c fiber.Ctx) error {
 	profile, err := h.players.AcceptTerms(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("failed to accept poker terms", c, err).Send(c)
+		return internalProblem("failed to accept poker terms", err).Send(c)
 	}
 	return c.JSON(playerResponse(profile, h.avatarBaseURL()))
 }
@@ -438,7 +438,7 @@ func (h *playerHandlers) sessionHistory(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	sessions, lastKey, err := h.sessions.ListSessions(c.Context(), userID, 50, decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("failed to list sessions", c, err).Send(c)
+		return internalProblem("failed to list sessions", err).Send(c)
 	}
 	return sendPage(c, sessions, lastKey, cursor)
 }
@@ -459,7 +459,7 @@ func (h *playerHandlers) sessionRecap(c fiber.Ctx) error {
 	}
 	recap, err := h.sessions.SessionRecap(c.Context(), userID, currencyModeParam(c), sessionID)
 	if err != nil {
-		return problem.InternalServer("failed to build session recap", c, err).Send(c)
+		return internalProblem("failed to build session recap", err).Send(c)
 	}
 	if recap == nil {
 		return problem.NotFound("session not found").Send(c)
@@ -480,7 +480,7 @@ func (h *playerHandlers) myReports(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	page, err := h.reports.ListByReporter(c.Context(), userID, cursor, limitParam(c))
 	if err != nil {
-		return problem.InternalServer("failed to list reports", c, err).Send(c)
+		return internalProblem("failed to list reports", err).Send(c)
 	}
 	views := make([]reports.PlayerReportView, 0, len(page.Reports))
 	for _, r := range page.Reports {
@@ -498,19 +498,19 @@ func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 	if tableID := c.Query("table_id"); tableID != "" {
 		hands, lastKey, err := h.sessions.ListHandsByTable(c.Context(), userID, mode, tableID, limit, decodeCursor(cursor))
 		if err != nil {
-			return problem.InternalServer("failed to list hands", c, err).Send(c)
+			return internalProblem("failed to list hands", err).Send(c)
 		}
 		if err := h.resolveOpponentProfiles(c.Context(), hands); err != nil {
-			return problem.InternalServer("failed to resolve opponent profiles", c, err).Send(c)
+			return internalProblem("failed to resolve opponent profiles", err).Send(c)
 		}
 		return sendPage(c, hands, lastKey, cursor)
 	}
 	hands, lastKey, err := h.sessions.ListHands(c.Context(), userID, mode, limit, decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("failed to list hands", c, err).Send(c)
+		return internalProblem("failed to list hands", err).Send(c)
 	}
 	if err := h.resolveOpponentProfiles(c.Context(), hands); err != nil {
-		return problem.InternalServer("failed to resolve opponent profiles", c, err).Send(c)
+		return internalProblem("failed to resolve opponent profiles", err).Send(c)
 	}
 	return sendPage(c, hands, lastKey, cursor)
 }
@@ -526,13 +526,13 @@ func (h *playerHandlers) handByID(c fiber.Ctx) error {
 	}
 	hand, err := h.sessions.GetHand(c.Context(), userID, currencyModeParam(c), handID)
 	if err != nil {
-		return problem.InternalServer("failed to list hands", c, err).Send(c)
+		return internalProblem("failed to list hands", err).Send(c)
 	}
 	if hand == nil {
 		return problem.NotFound("hand not found").Send(c)
 	}
 	if err := h.resolveOpponentProfiles(c.Context(), []sessionlog.HandItem{*hand}); err != nil {
-		return problem.InternalServer("failed to resolve opponent profiles", c, err).Send(c)
+		return internalProblem("failed to resolve opponent profiles", err).Send(c)
 	}
 	return c.JSON(hand)
 }
@@ -596,7 +596,7 @@ func (h *playerHandlers) achievementProgress(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	progress, lastKey, err := h.achievements.ListAchievements(c.Context(), userID, currencyModeParam(c), 100, decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("failed to list achievements", c, err).Send(c)
+		return internalProblem("failed to list achievements", err).Send(c)
 	}
 	return sendPage(c, progress, lastKey, cursor)
 }
@@ -613,7 +613,7 @@ func (h *playerHandlers) achievementsSummary(c fiber.Ctx) error {
 	mode := currencyModeParam(c)
 	progress, err := h.achievements.AllAchievements(c.Context(), userID, mode)
 	if err != nil {
-		return problem.InternalServer("failed to load achievement summary", c, err).Send(c)
+		return internalProblem("failed to load achievement summary", err).Send(c)
 	}
 	return c.JSON(achievements.BuildSummary(mode, progress))
 }
@@ -628,11 +628,11 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		return problem.NotFound("profile showcase not found").Send(c)
 	}
 	if err != nil {
-		return problem.InternalServer("failed to load profile showcase", c, err).Send(c)
+		return internalProblem("failed to load profile showcase", err).Send(c)
 	}
 	progress, _, err := h.achievements.ListAchievements(c.Context(), playerID, roomstore.CurrencyModeSandbox, 100, nil)
 	if err != nil {
-		return problem.InternalServer("failed to load showcase achievements", c, err).Send(c)
+		return internalProblem("failed to load showcase achievements", err).Send(c)
 	}
 	counts := make(map[string]int, len(progress))
 	for _, item := range progress {
@@ -668,7 +668,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 	if profile.PlaystylePublic && h.stats != nil {
 		stats, statsErr := h.stats.Get(c.Context(), playerID, roomstore.CurrencyModeSandbox)
 		if statsErr != nil {
-			return problem.InternalServer("failed to load profile playstyle", c, statsErr).Send(c)
+			return internalProblem("failed to load profile playstyle", statsErr).Send(c)
 		}
 		if badges := pokerstats.StyleFor(stats, pokerstats.MinHandsPublic); len(badges) > 0 {
 			response["playstyle"] = badges

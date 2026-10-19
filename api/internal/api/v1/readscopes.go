@@ -5,7 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/jwtverify"
-	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/api-commons/problem"
 )
 
 // Public delegated and API-key scopes are intentionally read-only. There are

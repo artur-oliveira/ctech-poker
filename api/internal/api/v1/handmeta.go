@@ -6,8 +6,8 @@ import (
 	"net/url"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/handmeta"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type handMetaStore interface {
@@ -52,7 +52,7 @@ func (h *handMetaHandlers) getMeta(c fiber.Ctx) error {
 	}
 	meta, err := h.store.Get(c.Context(), c.Locals(localsUserID).(string), handID)
 	if err != nil {
-		return problem.InternalServer("failed to load hand metadata", c, err).Send(c)
+		return internalProblem("failed to load hand metadata", err).Send(c)
 	}
 	if meta == nil {
 		// No annotation saved yet — an empty, well-shaped record, not a 404:
@@ -86,7 +86,7 @@ func (h *handMetaHandlers) saveMeta(c fiber.Ctx) error {
 	case errors.Is(err, handmeta.ErrCollectionNameInvalid):
 		return problem.BadRequest("collection name is invalid").Send(c)
 	case err != nil:
-		return problem.InternalServer("failed to save hand metadata", c, err).Send(c)
+		return internalProblem("failed to save hand metadata", err).Send(c)
 	}
 	if meta == nil {
 		return c.JSON(fiber.Map{"hand_id": handID, "review_marked": false})
@@ -99,7 +99,7 @@ func (h *handMetaHandlers) saveMeta(c fiber.Ctx) error {
 func (h *handMetaHandlers) listMarked(c fiber.Ctx) error {
 	marked, err := h.store.ListMarked(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("failed to list marked hands", c, err).Send(c)
+		return internalProblem("failed to list marked hands", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"data": marked})
 }
@@ -107,7 +107,7 @@ func (h *handMetaHandlers) listMarked(c fiber.Ctx) error {
 func (h *handMetaHandlers) listFilters(c fiber.Ctx) error {
 	filters, err := h.store.ListSavedFilters(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("failed to list saved filters", c, err).Send(c)
+		return internalProblem("failed to list saved filters", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"data": filters})
 }
@@ -124,7 +124,7 @@ func (h *handMetaHandlers) saveFilters(c fiber.Ctx) error {
 	case errors.Is(err, handmeta.ErrFilterNameInvalid):
 		return problem.BadRequest("filter name is invalid").Send(c)
 	case err != nil:
-		return problem.InternalServer("failed to save filters", c, err).Send(c)
+		return internalProblem("failed to save filters", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"data": filters})
 }

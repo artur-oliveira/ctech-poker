@@ -2,9 +2,9 @@ package v1
 
 import (
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 // RegisterAvatarCosmeticsOwnership mounts the one read the seasonal
@@ -19,7 +19,7 @@ func RegisterAvatarCosmeticsOwnership(router fiber.Router, auth fiber.Handler, s
 		userID := c.Locals(localsUserID).(string)
 		owned, err := svc.OwnedIDs(c.Context(), userID, kind)
 		if err != nil {
-			return problem.InternalServer("list owned cosmetics failed", c, err).Send(c)
+			return internalProblem("list owned cosmetics failed", err).Send(c)
 		}
 		ids := make([]string, 0, len(owned))
 		for id := range owned {
