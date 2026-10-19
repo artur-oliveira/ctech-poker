@@ -181,7 +181,7 @@ test('subscribes a poker queue to the account user-erasure topic (account deleti
   const template = Template.fromStack(synthStack());
   template.hasResourceProperties('AWS::SQS::Queue', {
     QueueName: 'dev-poker-user-erasure',
-    VisibilityTimeout: 43200,
+    VisibilityTimeout: 900,
     RedrivePolicy: Match.objectLike({maxReceiveCount: 5}),
   });
   template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-user-erasure-dlq'});

@@ -194,10 +194,12 @@ export class PokerApiStack extends cdk.Stack {
     });
     const erasureQueue = new sqs.Queue(this, 'ErasureQueue', {
       queueName: `${environment}-poker-user-erasure`,
-      // One purge rewrites every hand the user played: the SQS maximum (plan
-      // ruling R14). The consumer extends it while it works (the API's
-      // ERASURE_QUEUE_VISIBILITY must equal it), so lowering it is now possible.
-      visibilityTimeout: cdk.Duration.hours(12),
+      // How long a crashed or restarted instance's message waits before another one
+      // retries it. The consumer extends it while a purge (every hand the user played,
+      // plan ruling R14) or an export runs, so it no longer has to outlast the slowest
+      // one (it was the SQS maximum, 12 h, when there was no heartbeat). The API's
+      // ERASURE_QUEUE_VISIBILITY must equal it.
+      visibilityTimeout: cdk.Duration.minutes(15),
       retentionPeriod: cdk.Duration.days(14),
       receiveMessageWaitTime: cdk.Duration.seconds(20),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
