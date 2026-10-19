@@ -2,6 +2,7 @@
 package problem
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,6 +69,7 @@ func TableFull() *Problem {
 	return New(http.StatusConflict, "/problems/table-full", "Table Full", "the last available seat was taken").
 		WithNextAction(common.NextActionRetry, 0)
 }
+
 // TooManyRequests carries retry_after_seconds set to the rate limiter's own
 // fixed window (#319), so the client knows how long to back off instead of
 // parsing a textual detail or guessing.
@@ -76,7 +78,18 @@ func TooManyRequests(retryAfterSeconds int) *Problem {
 }
 
 func InternalServer(detail string, c fiber.Ctx, err error) *Problem {
+	// The one place handlers turn an unexpected error into a response, so a call
+	// cut by the request's time budget answers a retryable 504 everywhere.
+	if errors.Is(err, context.DeadlineExceeded) {
+		return GatewayTimeout("the request took too long; try again").WithCause(err)
+	}
 	return wrap(common.InternalServer(detail)).WithCause(err)
+}
+
+// GatewayTimeout answers a request that used its whole time budget (REQUEST_TIMEOUT).
+// Retryable; for a write the outcome is unknown until it is read back.
+func GatewayTimeout(detail string) *Problem {
+	return &Problem{Problem: *common.New(http.StatusGatewayTimeout, "/problems/timeout", "Gateway Timeout", detail)}
 }
 
 func NotImplemented(detail string) *Problem {
@@ -96,6 +109,8 @@ func FromError(err error, c fiber.Ctx) *Problem {
 			return NotFound(fiberErr.Message).WithCause(fiberErr)
 		case http.StatusConflict:
 			return Conflict(fiberErr.Message).WithCause(fiberErr)
+		case http.StatusGatewayTimeout:
+			return GatewayTimeout("the request took too long; try again").WithCause(fiberErr)
 		default:
 			if fiberErr.Code >= 400 && fiberErr.Code < 500 {
 				return New(fiberErr.Code, "/problems/http-error", http.StatusText(fiberErr.Code), fiberErr.Message).WithCause(fiberErr)

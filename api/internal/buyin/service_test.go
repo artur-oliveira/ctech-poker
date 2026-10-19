@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1046,5 +1047,49 @@ func TestBuyInSkipsFeeForSandboxRooms(t *testing.T) {
 	}
 	if len(wallet.feeDebits) != 0 {
 		t.Fatalf("expected no fee debit for a sandbox room, got %+v", wallet.feeDebits)
+	}
+}
+
+// cancelAwareWallet refuses a Credit made with a cancelled context, as the real
+// wallet client does.
+type cancelAwareWallet struct{ raceWallet }
+
+func (f *cancelAwareWallet) Credit(ctx context.Context, userID string, amount int64, key, reason, description string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return f.fakeWallet.Credit(ctx, userID, amount, key, reason, description)
+}
+
+// A buy-in that fails because its request ran out of time must still be refunded:
+// the refund runs under its own context, not the expired one. With the request's
+// context the wallet call would fail and the player's chips would be lost.
+func TestBuyInRefundSurvivesTheRequestDeadline(t *testing.T) {
+	wallet := &cancelAwareWallet{raceWallet{firstStarted: make(chan struct{}), release: make(chan struct{})}}
+	mgr := testManager(t)
+	svc := NewService(wallet, mgr, testRoomLookup())
+	base := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(base, "room-1", seed); err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+
+	loserCtx, expire := context.WithCancel(base)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.BuyIn(loserCtx, "room-1", "user-1", 400, false, "nonce-a") }()
+
+	<-wallet.firstStarted
+	if err := svc.BuyIn(base, "room-1", "user-1", 400, false, "nonce-b"); err != nil {
+		t.Fatalf("winning buyin should succeed: %v", err)
+	}
+	expire() // the loser's request deadline passes while its debit is in flight
+	close(wallet.release)
+
+	if err := <-errCh; err == nil || strings.Contains(err.Error(), "refund failed") {
+		t.Fatalf("the loser must fail and be refunded, got %v", err)
+	}
+	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
+		t.Fatalf("expected one 400-chip refund despite the expired request context, got %+v", wallet.credits)
 	}
 }

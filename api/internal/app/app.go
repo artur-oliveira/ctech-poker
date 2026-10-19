@@ -22,6 +22,7 @@ import (
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/api-commons/deadline"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
@@ -220,6 +221,13 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 			return c.Path() == "/v1.0/health" || c.Path() == "/v1.0/health-check"
 		},
 	}))
+	// A time budget for every HTTP request, so a DynamoDB, Valkey or wallet call
+	// ends with it instead of outliving the client. The three websockets are exempt
+	// (the middleware skips an upgrade). Buy-in compensations run under their own
+	// context (buyin.compensationContext), so a cut request still refunds.
+	if cfg.RequestTimeout > 0 {
+		app.Use(deadline.New(cfg.RequestTimeout))
+	}
 	return app
 }
 
