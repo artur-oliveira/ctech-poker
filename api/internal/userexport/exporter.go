@@ -1,15 +1,15 @@
 // Package userexport builds poker's part of the personal-data export: a zip with
 // one JSON file per table that holds the person's own data, plus a README. It
-// is the dataexport.PartFunc of the poker service
+// is the dataexport.PartStreamFunc of the poker service
 // (ctech-account docs/specs/2026-10-17-data-export.md).
 package userexport
 
 import (
 	"archive/zip"
-	"bytes"
+	"cmp"
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -18,13 +18,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/dataexport"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 )
 
 // maxItems bounds one file. A hand history past it is cut and the file says so.
-// ponytail: 100k items per table covers any real player; stream to S3 in pages
-// if one ever outgrows it.
 const maxItems = 100_000
 
 // Query is the slice of the DynamoDB client the exporter uses.
@@ -78,57 +77,45 @@ type Exporter struct {
 	db  Query
 	env string
 	now func() time.Time
+	// maxItems overrides the package's maxItems (tests).
+	maxItems int
 }
 
 func New(db Query, env string) *Exporter { return &Exporter{db: db, env: env, now: time.Now} }
 
-// Part builds the zip for sub. It is idempotent: a redelivery builds it again.
-func (e *Exporter) Part(ctx context.Context, sub string) ([]byte, error) {
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	var truncated []string
-	var files []string
+// Write writes the zip for sub to w as it reads, a page of a table at a time, so
+// a long hand history costs one page of memory. It is idempotent: a redelivery
+// builds it again. It is the dataexport.PartStreamFunc of the poker service.
+func (e *Exporter) Write(ctx context.Context, sub string, w io.Writer) error {
+	zw := zip.NewWriter(w)
+	var truncated, files []string
 	for _, s := range sources {
-		items, cut, err := e.read(ctx, s, sub)
-		if err != nil {
-			return nil, err
-		}
-		if len(items) == 0 && !cut {
-			continue // nothing stored: no empty file
-		}
 		name := strings.TrimPrefix(s.table, "poker_") + ".json"
-		data, err := json.MarshalIndent(map[string]any{"table": s.table, "truncated": cut, "items": items}, "", "  ")
+		wrote, cut, err := e.write(ctx, zw, name, s, sub)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		w, err := zw.Create(name)
-		if err != nil {
-			return nil, err
+		if wrote {
+			files = append(files, name)
 		}
-		if _, err := w.Write(data); err != nil {
-			return nil, err
-		}
-		files = append(files, name)
 		if cut {
 			truncated = append(truncated, name)
 		}
 	}
 	sort.Strings(files)
-	w, err := zw.Create("README.txt")
+	rw, err := zw.Create("README.txt")
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if _, err := w.Write([]byte(readme(e.now(), files, truncated))); err != nil {
-		return nil, err
+	if _, err := rw.Write([]byte(readme(e.now(), files, truncated))); err != nil {
+		return err
 	}
-	if err := zw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return zw.Close()
 }
 
-func (e *Exporter) read(ctx context.Context, s source, sub string) ([]map[string]any, bool, error) {
-	var out []map[string]any
+// write streams one source into its file, up to maxItems rows over all its
+// partitions; nothing stored means no file.
+func (e *Exporter) write(ctx context.Context, zw *zip.Writer, name string, s source, sub string) (wrote, cut bool, err error) {
 	queries := []*dynamodb.QueryInput{}
 	if s.index != "" {
 		queries = append(queries, &dynamodb.QueryInput{
@@ -147,21 +134,30 @@ func (e *Exporter) read(ctx context.Context, s source, sub string) ([]map[string
 			})
 		}
 	}
+	var it *dataexport.Items
+	limit := cmp.Or(e.maxItems, maxItems)
 	for _, in := range queries {
 		for {
 			page, err := e.db.Query(ctx, in)
 			if err != nil {
-				return nil, false, fmt.Errorf("userexport: query %s: %w", s.table, err)
+				return false, false, fmt.Errorf("userexport: query %s: %w", s.table, err)
 			}
-			for _, it := range page.Items {
-				if len(out) >= maxItems {
-					return out, true, nil
+			for _, row := range page.Items {
+				if it != nil && it.Count() >= limit {
+					return true, true, it.End(true)
 				}
 				var m map[string]any
-				if err := attributevalue.UnmarshalMap(it, &m); err != nil {
-					return nil, false, fmt.Errorf("userexport: decode %s: %w", s.table, err)
+				if err := attributevalue.UnmarshalMap(row, &m); err != nil {
+					return false, false, fmt.Errorf("userexport: decode %s: %w", s.table, err)
 				}
-				out = append(out, scrub(m, sub).(map[string]any))
+				if it == nil {
+					if it, err = dataexport.BeginItems(zw, name); err != nil {
+						return false, false, err
+					}
+				}
+				if err := it.Add(scrub(m, sub)); err != nil {
+					return false, false, err
+				}
 			}
 			if len(page.LastEvaluatedKey) == 0 {
 				break
@@ -169,7 +165,10 @@ func (e *Exporter) read(ctx context.Context, s source, sub string) ([]map[string
 			in.ExclusiveStartKey = page.LastEvaluatedKey
 		}
 	}
-	return out, false, nil
+	if it == nil {
+		return false, false, nil
+	}
+	return true, false, it.End(false)
 }
 
 func readme(at time.Time, files, truncated []string) string {
@@ -178,7 +177,7 @@ func readme(at time.Time, files, truncated []string) string {
 	for _, f := range files {
 		b.WriteString("  " + f + "\n")
 	}
-	b.WriteString("\nEach file is {table, truncated, items}. Timestamps are epoch milliseconds or RFC3339 as stored.\n")
+	b.WriteString("\nEach file is {items, truncated}, named after its table. Timestamps are epoch milliseconds or RFC3339 as stored.\n")
 	b.WriteString("Other players appear only as opaque ids: their names, avatars and chat are not included.\n")
 	b.WriteString("Not included: notes others wrote about you, reports, other players' actions at shared tables, and passwords or tokens (poker holds none).\n")
 	b.WriteString("Payments are part of the CTech Ledger export.\n")

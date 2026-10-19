@@ -96,11 +96,12 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 	// The part is data (a hand history can reach megabytes) PUT to S3 over this
 	// client, so it gets a longer timeout than the saga's 10 s calls.
 	uploads := &http.Client{Timeout: 60 * time.Second}
-	exporter := dataexport.NewHandler(erasureService, userexport.New(db, cfg.Env).Part, uploads,
+	exporter := dataexport.NewStreamHandler(erasureService, userexport.New(db, cfg.Env).Write, uploads,
 		dataexport.NewAckClient(httpClient, account+"/v1.0/internal/export/ack", exportTokens))
 	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks).
 		OnLock(v1.CloseLockedSockets(reg)).
-		WithExporter(exporter.Handle)
+		WithExporter(exporter.Handle).
+		WithVisibilityHeartbeat(cfg.ErasureQueueVisibility)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

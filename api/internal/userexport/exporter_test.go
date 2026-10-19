@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"regexp"
@@ -89,10 +90,11 @@ func TestPartHasOwnDataAndNoOneElsesPII(t *testing.T) {
 	}}
 	e := New(db, "test")
 	e.now = func() time.Time { return time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC) }
-	data, err := e.Part(context.Background(), "alice")
-	if err != nil {
+	var out bytes.Buffer
+	if err := e.Write(context.Background(), "alice", &out); err != nil {
 		t.Fatal(err)
 	}
+	data := out.Bytes()
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
@@ -102,6 +104,11 @@ func TestPartHasOwnDataAndNoOneElsesPII(t *testing.T) {
 		r, _ := f.Open()
 		b, _ := io.ReadAll(r)
 		files[f.Name] = string(b)
+	}
+	for name, body := range files {
+		if strings.HasSuffix(name, ".json") && !json.Valid([]byte(body)) {
+			t.Errorf("%s is not valid JSON: %s", name, body)
+		}
 	}
 	for _, want := range []string{"player_profiles.json", "player_hands.json", "player_poker_stats.json", "README.txt"} {
 		if _, ok := files[want]; !ok {
@@ -133,5 +140,40 @@ func TestScrubDropsSecretsAtAnyDepth(t *testing.T) {
 	got := scrub(map[string]any{"a": 1, "password_hash": "x", "n": map[string]any{"api_token": "y", "ok": true}, "l": []any{map[string]any{"cpf": "1"}}}, "me").(map[string]any)
 	if _, ok := got["password_hash"]; ok || got["n"].(map[string]any)["api_token"] != nil || len(got["l"].([]any)[0].(map[string]any)) != 0 || got["n"].(map[string]any)["ok"] != true {
 		t.Fatalf("scrub=%v", got)
+	}
+}
+
+// A table longer than the cap is cut, says so in its own file and in the README,
+// and the file is still valid JSON.
+func TestWriteCutsALongTableAndSaysSo(t *testing.T) {
+	var rows []map[string]types.AttributeValue
+	for i := 0; i < 5; i++ {
+		rows = append(rows, map[string]types.AttributeValue{"pk": s("alice"), "sk": s(string(rune('a' + i)))})
+	}
+	e := New(&fakeDB{byTable: map[string][]map[string]types.AttributeValue{"test_poker_player_hands": rows}}, "test")
+	e.maxItems = 3
+	var out bytes.Buffer
+	if err := e.Write(context.Background(), "alice", &out); err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(out.Bytes()), int64(out.Len()))
+	files := map[string]string{}
+	for _, f := range zr.File {
+		r, _ := f.Open()
+		b, _ := io.ReadAll(r)
+		files[f.Name] = string(b)
+	}
+	var hands struct {
+		Items     []map[string]any `json:"items"`
+		Truncated bool             `json:"truncated"`
+	}
+	if err := json.Unmarshal([]byte(files["player_hands.json"]), &hands); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, files["player_hands.json"])
+	}
+	if len(hands.Items) != 3 || !hands.Truncated {
+		t.Fatalf("five rows cut at three: %d items, truncated %v", len(hands.Items), hands.Truncated)
+	}
+	if !strings.Contains(files["README.txt"], "player_hands.json") || !strings.Contains(files["README.txt"], "cut at 100000 items") {
+		t.Errorf("the README must name the cut file: %s", files["README.txt"])
 	}
 }

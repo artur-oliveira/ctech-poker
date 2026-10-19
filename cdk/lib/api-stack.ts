@@ -194,8 +194,9 @@ export class PokerApiStack extends cdk.Stack {
     });
     const erasureQueue = new sqs.Queue(this, 'ErasureQueue', {
       queueName: `${environment}-poker-user-erasure`,
-      // The consumer has no visibility heartbeat and one purge rewrites every
-      // hand the user played: the SQS maximum (plan ruling R14).
+      // One purge rewrites every hand the user played: the SQS maximum (plan
+      // ruling R14). The consumer extends it while it works (the API's
+      // ERASURE_QUEUE_VISIBILITY must equal it), so lowering it is now possible.
       visibilityTimeout: cdk.Duration.hours(12),
       retentionPeriod: cdk.Duration.days(14),
       receiveMessageWaitTime: cdk.Duration.seconds(20),
