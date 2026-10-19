@@ -16,6 +16,7 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/api-commons/ws"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
@@ -49,7 +50,7 @@ type roomHandlers struct {
 	buckets  bucketCache
 }
 
-func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, createLimiter, joinLimiter *RateLimiter) {
+func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, createLimiter, joinLimiter *ratelimit.Limiter) {
 	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, reg: reg, cfg: cfg, sessions: sessions}
 	g := router.Group("/rooms", auth)
 	g.Post("/", rateLimit(createLimiter, ipKey("rooms:create")), h.createRoom)

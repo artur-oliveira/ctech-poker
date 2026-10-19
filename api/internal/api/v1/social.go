@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/presence"
@@ -46,12 +47,12 @@ const (
 )
 
 type SocialLimiters struct {
-	MutationPlayer  *RateLimiter
-	MutationIP      *RateLimiter
-	RequestPlayer   *RateLimiter
-	RequestIP       *RateLimiter
-	InviteSender    *RateLimiter
-	InviteRecipient *RateLimiter
+	MutationPlayer  *ratelimit.Limiter
+	MutationIP      *ratelimit.Limiter
+	RequestPlayer   *ratelimit.Limiter
+	RequestIP       *ratelimit.Limiter
+	InviteSender    *ratelimit.Limiter
+	InviteRecipient *ratelimit.Limiter
 }
 
 // roomLookup is the slice of roomstore.Store the friends list needs to decide
@@ -68,7 +69,7 @@ type socialHandlers struct {
 	players                *player.Service
 	avatarBaseURL          string
 	graphEnabled           bool
-	inviteRecipientLimiter *RateLimiter
+	inviteRecipientLimiter *ratelimit.Limiter
 }
 
 type socialPlayerResponse struct {
@@ -317,10 +318,7 @@ func (h *socialHandlers) sendTableInvite(c fiber.Ctx) error {
 		return problem.BadRequest("target_player_id and room_id are required").Send(c)
 	}
 	if h.inviteRecipientLimiter != nil {
-		allowed, err := h.inviteRecipientLimiter.Allow(c.Context(), "rl:social:table-invite:recipient:"+body.TargetPlayerID)
-		if err != nil {
-			slog.Warn("invite recipient rate limiter failed open", "err", err)
-		} else if !allowed {
+		if !allowFailOpen(c.Context(), h.inviteRecipientLimiter, body.TargetPlayerID) {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{"error": "rate_limit_exceeded", "message": "too many invitations for this player"})
 		}
 	}

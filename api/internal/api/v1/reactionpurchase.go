@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 )
 
@@ -22,7 +23,7 @@ type ReactionPurchaseRefundRequest struct {
 	IdempotencyKey string `json:"idem_key,omitempty"`
 }
 
-func RegisterReactionPurchase(router fiber.Router, auth fiber.Handler, svc *reactionpurchase.Service, purchaseLimiter *RateLimiter) {
+func RegisterReactionPurchase(router fiber.Router, auth fiber.Handler, svc *reactionpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &reactionPurchaseHandlers{svc: svc}
 	g := router.Group("/wallet/reaction-purchase", auth)
 	g.Get("/catalog", h.catalog)

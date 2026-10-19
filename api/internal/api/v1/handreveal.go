@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 )
@@ -29,7 +30,7 @@ type handRevealHandlers struct {
 	svc      handRevealService
 }
 
-func RegisterHandReveal(router fiber.Router, auth fiber.Handler, sessions sessionLogReader, records handRevealStore, svc handRevealService, limiter *RateLimiter) {
+func RegisterHandReveal(router fiber.Router, auth fiber.Handler, sessions sessionLogReader, records handRevealStore, svc handRevealService, limiter *ratelimit.Limiter) {
 	h := &handRevealHandlers{sessions: sessions, records: records, svc: svc}
 	g := router.Group("/players/me/hands/:handId", auth)
 	g.Post("/reveal-winner", rateLimit(limiter, ipKey("handreveal:create")), h.reveal)

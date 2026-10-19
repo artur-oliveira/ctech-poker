@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
@@ -106,7 +107,7 @@ type leaderboardRanker interface {
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
 // terms acceptance, session/hand history, and achievement progress all live
 // under the same resource and share the same auth-derived playerID.
-func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter, stats pokerStatsReader, extras ...any) {
+func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *ratelimit.Limiter, stats pokerStatsReader, extras ...any) {
 	var reportSvc *reports.Service
 	var identity *tableIdentityPusher
 	var settlements settlementReader

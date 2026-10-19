@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 )
 
@@ -25,7 +26,7 @@ import (
 // caller, and the URL itself is the only capability. What is NOT public is the
 // bucket — the response is the object's bytes, never a redirect to a presigned
 // URL, so an avatar URL can never be traded for direct S3 access.
-func RegisterAvatars(router fiber.Router, avatars *avatar.Service, readLimiter *RateLimiter) {
+func RegisterAvatars(router fiber.Router, avatars *avatar.Service, readLimiter *ratelimit.Limiter) {
 	h := &avatarHandlers{avatars: avatars}
 	router.Get("/avatars/:userId/:file", rateLimit(readLimiter, ipKey("avatar-read")), h.read)
 }

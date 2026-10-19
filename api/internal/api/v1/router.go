@@ -108,8 +108,9 @@ func Register(
 	// reconnecting, used to get one fresh in-memory budget per connection
 	// (#43). 10 actions/sec/player is generous for a human, tight for a
 	// script; reactions stay at one per 2 s.
-	wsActionLimiter := NewRateLimiter(cacheBackend, 10, time.Second)
-	wsReactionLimiter := NewRateLimiter(cacheBackend, 1, 2*time.Second)
+	limiterCounter := newLimiterCounter(cacheBackend)
+	wsActionLimiter := newLimiter(limiterCounter, "ws-action", 10, time.Second)
+	wsReactionLimiter := newLimiter(limiterCounter, "ws-reaction", 1, 2*time.Second)
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore, wsActionLimiter, wsReactionLimiter, blocked)
 	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins, presenceSvc, blocked)
 	auth := authMiddleware(verifier, blocked)
@@ -122,27 +123,27 @@ func Register(
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.
-	createLimiter := NewRateLimiter(cacheBackend, 10, time.Minute)
-	joinLimiter := NewRateLimiter(cacheBackend, 30, time.Minute)
-	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
-	avatarLimiter := NewRateLimiter(cacheBackend, 5, time.Hour)
+	createLimiter := newLimiter(limiterCounter, "create", 10, time.Minute)
+	joinLimiter := newLimiter(limiterCounter, "join", 30, time.Minute)
+	spinLimiter := newLimiter(limiterCounter, "spin", 60, time.Minute)
+	avatarLimiter := newLimiter(limiterCounter, "avatar", 5, time.Hour)
 	// The public avatar READ path is limited separately and far more loosely:
 	// avatarLimiter's 5/hour guards uploads and reports, while a single table
 	// view legitimately fetches up to nine images. Keyed per IP, not per
 	// player — the route is unauthenticated.
-	avatarReadLimiter := NewRateLimiter(cacheBackend, 600, time.Minute)
+	avatarReadLimiter := newLimiter(limiterCounter, "avatar-read", 600, time.Minute)
 	// GET /leaderboard is public (see RegisterLeaderboard), so an IP limiter
 	// is the only thing standing between it and an unauthenticated scraper.
-	leaderboardReadLimiter := NewRateLimiter(cacheBackend, 120, time.Minute)
-	purchaseLimiter := NewRateLimiter(cacheBackend, 10, time.Minute)
-	socialMutationPlayerLimiter := NewRateLimiter(cacheBackend, 120, time.Minute)
-	socialMutationIPLimiter := NewRateLimiter(cacheBackend, 240, time.Minute)
-	friendRequestPlayerLimiter := NewRateLimiter(cacheBackend, 30, 24*time.Hour)
-	friendRequestIPLimiter := NewRateLimiter(cacheBackend, 100, 24*time.Hour)
-	inviteSenderLimiter := NewRateLimiter(cacheBackend, 20, time.Minute)
-	inviteRecipientLimiter := NewRateLimiter(cacheBackend, 5, time.Minute)
-	reportPlayerLimiter := NewRateLimiter(cacheBackend, 10, time.Hour)
-	reportIPLimiter := NewRateLimiter(cacheBackend, 50, time.Hour)
+	leaderboardReadLimiter := newLimiter(limiterCounter, "leaderboard-read", 120, time.Minute)
+	purchaseLimiter := newLimiter(limiterCounter, "purchase", 10, time.Minute)
+	socialMutationPlayerLimiter := newLimiter(limiterCounter, "social-mutation-player", 120, time.Minute)
+	socialMutationIPLimiter := newLimiter(limiterCounter, "social-mutation-ip", 240, time.Minute)
+	friendRequestPlayerLimiter := newLimiter(limiterCounter, "friend-request-player", 30, 24*time.Hour)
+	friendRequestIPLimiter := newLimiter(limiterCounter, "friend-request-ip", 100, 24*time.Hour)
+	inviteSenderLimiter := newLimiter(limiterCounter, "invite-sender", 20, time.Minute)
+	inviteRecipientLimiter := newLimiter(limiterCounter, "invite-recipient", 5, time.Minute)
+	reportPlayerLimiter := newLimiter(limiterCounter, "report-player", 10, time.Hour)
+	reportIPLimiter := newLimiter(limiterCounter, "report-ip", 50, time.Hour)
 
 	// Unauthenticated, unlike every Register* call below it.
 	RegisterAvatars(router, avatars, avatarReadLimiter)
