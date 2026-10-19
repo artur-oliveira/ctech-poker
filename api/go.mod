@@ -24,7 +24,7 @@ require (
 	github.com/valyala/fasthttp v1.74.0
 	go.uber.org/fx v1.24.0
 	google.golang.org/protobuf v1.36.12
-	gopkg.aoctech.app/api-commons v1.29.1
+	gopkg.aoctech.app/api-commons v1.30.0
 )
 
 require (
