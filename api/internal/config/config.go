@@ -91,11 +91,13 @@ type Config struct {
 	// topic; ActionLogArchiveBucket is the action-log S3 archive the purge
 	// rewrites. Both come from /etc/app-static.env (cdk/lib/api-stack.ts).
 	ErasureQueueURL string `env:"ERASURE_QUEUE_URL"`
-	// ErasureQueueVisibility is the queue's own visibility timeout
-	// (cdk/lib/api-stack.ts, 12 h). While a purge or an export runs, the consumer
-	// keeps the message invisible by setting that timeout again every third of it.
-	// Keep it equal to the queue's. Zero turns the heartbeat off.
-	ErasureQueueVisibility time.Duration `env:"ERASURE_QUEUE_VISIBILITY" envDefault:"12h"`
+	// ErasureQueueVisibility is how long a message being handled stays invisible: the
+	// consumer sets this timeout again every third of it while a purge or an export
+	// runs, so a crashed or restarted instance's message is retried after at most this
+	// long. It should equal the queue's own visibility timeout (cdk/lib/api-stack.ts).
+	// The heartbeat stops after 3 h (go-common), so a purge past that is retried while
+	// it still runs, which is safe: it is idempotent. Zero turns the heartbeat off.
+	ErasureQueueVisibility time.Duration `env:"ERASURE_QUEUE_VISIBILITY" envDefault:"15m"`
 	ActionLogArchiveBucket string        `env:"ACTION_LOG_ARCHIVE_BUCKET"`
 	// ErasureAckClientID/Secret are poker's dedicated confidential client for
 	// acks to ctech-account (scope internal:account:erasure-ack only). Kept
