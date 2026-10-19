@@ -17,11 +17,6 @@ export const AWS_REGION = 'us-east-1';
 export const CERT_ARN =
   'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
 
-// Account-wide CloudWatch alarms topic — owned by ctech-cdk, imported via
-// sns.Topic.fromTopicArn wherever an alarm needs an action. Never create a
-// new SNS topic for poker's own alarms (see issue #34).
-export const ALERTS_TOPIC_ARN = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
-
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 // Immutable numeric GitHub IDs for artur-oliveira/ctech-poker. GitHub now embeds
 // these in the OIDC `sub` claim (`repo:<owner>@<ownerId>/<repo>@<repoId>:...`)
@@ -87,9 +82,6 @@ export const S3_PREFIX = SERVICE;
 /** Key of the artifact new ASG instances bootstrap from. */
 export const API_CURRENT_ARTIFACT_KEY = `${S3_PREFIX}/current.zip`;
 
-export const API_MEMORY_PRESSURE_LOG_MESSAGE = 'ALARM: process memory pressure';
-export const API_MEMORY_METRIC_NAMESPACE = 'CTech/Poker';
-export const API_MEMORY_PRESSURE_METRIC_NAME = 'ProcessMemoryPressure';
 
 // ── Per-environment names ───────────────────────────────────────────────────
 export const asgName = (env: Environment) => `${env}-${SERVICE}`;

@@ -2,12 +2,9 @@ import * as cdk from 'aws-cdk-lib';
 import {RemovalPolicy} from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import {Billing} from 'aws-cdk-lib/aws-dynamodb';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
-import {ALERTS_TOPIC_ARN, DYNAMO_INDEX, DYNAMO_TABLE} from './constants';
+import {DYNAMO_INDEX, DYNAMO_TABLE} from './constants';
 
 // Tables on the hot commit path: every committed table action is a
 // TransactWriteItems touching poker_table_state + poker_action_log +
@@ -49,7 +46,6 @@ export type TableName =
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
-  cloudwatchAlarmsEnabled: boolean;
 }
 
 export class DynamoDBStack extends cdk.Stack {
@@ -58,7 +54,7 @@ export class DynamoDBStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
     super(scope, id, props);
     this.tables = new Map();
-    const {environment, cloudwatchAlarmsEnabled} = props;
+    const {environment} = props;
     const removalPolicy = environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
 
     // PITR (continuous backups) is per-table, not blanket-on. It earns its
@@ -92,67 +88,6 @@ export class DynamoDBStack extends cdk.Stack {
       return t;
     };
 
-    // Throttle alarm on the hot-path tables — wired to the existing
-    // account-wide alerts topic (never a new SNS topic; see #34). Fires on
-    // any read or write throttle event within the window: DynamoDB emits
-    // ReadThrottleEvents/WriteThrottleEvents in on-demand mode exactly as it
-    // does in provisioned mode, whether the throttle comes from the
-    // maxRead/WriteRequestUnits ceiling above or from a hot single-partition
-    // burst. CloudWatch alarms are ~$0.10/mo each on the standard tier — five
-    // hot-path tables is a negligible, predictable cost, not a metered spend
-    // that scales with traffic. Gated on `cloudwatchAlarmsEnabled` all the
-    // same — a cost lever to turn every alarm this app creates off at once.
-    const alertsTopic = cloudwatchAlarmsEnabled
-      ? sns.Topic.fromTopicArn(this, 'AlertsTopic', ALERTS_TOPIC_ARN) : undefined;
-    const addThrottleAlarm = (t: dynamodb.TableV2, name: TableName) => {
-      if (!alertsTopic) return;
-      const throttleEvents = new cloudwatch.MathExpression({
-        expression: 'reads + writes',
-        usingMetrics: {
-          reads: t.metric('ReadThrottleEvents', {statistic: 'sum'}),
-          writes: t.metric('WriteThrottleEvents', {statistic: 'sum'}),
-        },
-        period: cdk.Duration.minutes(5),
-      });
-      const alarm = new cloudwatch.Alarm(this, `${name}ThrottleAlarm`, {
-        alarmName: `${environment}-${name}-throttled-requests`,
-        alarmDescription: `${environment}_${name} is being throttled — see issue #34's per-table capacity review.`,
-        metric: throttleEvents,
-        threshold: 1,
-        evaluationPeriods: 3,
-        datapointsToAlarm: 3,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
-      alarm.addAlarmAction(new cloudwatchActions.SnsAction(alertsTopic));
-    };
-
-    // Sustained-write-volume alarm. The throttle alarm above never fired on
-    // 2026-09-02: on-demand scaled the write storm just fine, it just billed
-    // for it (docs/specs/2026-09-03-next-hand-rearm-storm.md). This one
-    // watches ConsumedWriteCapacityUnits directly — an active six-max table
-    // peaks near ~8k WCU/5min, the incident hit >200k. `threshold` is set per
-    // table well above a busy peak and well below a runaway loop; one 5-min
-    // breach pages, so a wedge is caught in minutes, not on the next bill.
-    const addWriteVolumeAlarm = (t: dynamodb.TableV2, name: TableName, threshold: number) => {
-      if (!alertsTopic) return;
-      const alarm = new cloudwatch.Alarm(this, `${name}WriteVolumeAlarm`, {
-        alarmName: `${environment}-${name}-write-volume`,
-        alarmDescription:
-          `${environment}_${name} consumed >${threshold} write units in 5 minutes — a runaway write path, ` +
-          'not organic play. See docs/specs/2026-09-03-next-hand-rearm-storm.md.',
-        metric: t.metric('ConsumedWriteCapacityUnits', {
-          statistic: 'sum', period: cdk.Duration.minutes(5),
-        }),
-        threshold,
-        evaluationPeriods: 1,
-        datapointsToAlarm: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
-      alarm.addAlarmAction(new cloudwatchActions.SnsAction(alertsTopic));
-    };
-
     // poker_table_state: the single authoritative item per table, versioned
     // (tablestore.CommitAction). Ephemeral — TTL'd (tablestore.stateTTLDays,
     // refreshed on every commit) so a dead table is reaped instead of lingering
@@ -168,8 +103,6 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: {name: 'last_action_at', type: dynamodb.AttributeType.NUMBER},
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
-    addThrottleAlarm(tableState, 'poker_table_state');
-    addWriteVolumeAlarm(tableState, 'poker_table_state', 40_000);
     // poker_table_state_history: append-only audit snapshot of each hand's
     // final state, written just before the table resets for the next hand —
     // pk is the table ID, sk is the unix-seconds capture time. Ephemeral audit
@@ -182,13 +115,11 @@ export class DynamoDBStack extends cdk.Stack {
     // PITR-off: S3 is already the durable copy, a second continuous backup of
     // the same rows buys nothing.
     const actionLog = table('poker_action_log', true, true, true, false);
-    addThrottleAlarm(actionLog, 'poker_action_log');
     // poker_action_guards: TTL'd (mirrors ctech-wallet's wallet_idempotency
     // table) — a guard only needs to outlive plausible client retries
     // (tablestore.guardTTLDays = 7 days). PITR-off: a lost idempotency crumb
     // is not worth restoring.
     const actionGuards = table('poker_action_guards', false, true, false, false);
-    addThrottleAlarm(actionGuards, 'poker_action_guards');
 
     // poker_rooms is lobby metadata only. The sparse indexes are populated by
     // roomstore for public rooms and private-room share codes respectively.
@@ -208,7 +139,6 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_bucket', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    addThrottleAlarm(rooms, 'poker_rooms');
     rooms.addGlobalSecondaryIndex({
       indexName: 'gsi_share_code',
       partitionKey: {name: 'gsi_share_code', type: dynamodb.AttributeType.STRING},
@@ -389,13 +319,11 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_status', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    addWriteVolumeAlarm(pendingCashouts, 'poker_pending_cashouts', 5_000);
     // poker_player_sessions: TTL'd — only tracks which table a player is
     // currently at (or was recently at); the durable per-hand history lives
     // in poker_player_hands instead. PITR-off: per-connection presence, not
     // history.
     const playerSessions = table('poker_player_sessions', true, true, false, false);
-    addThrottleAlarm(playerSessions, 'poker_player_sessions');
     // gsi_open_table is SPARSE: only an unclosed session carries
     // open_table_id (sessionlog.RecordSession derives it from ended_at, and
     // CloseSession's full-item put drops it), so this index holds just the

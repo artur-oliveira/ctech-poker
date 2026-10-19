@@ -215,7 +215,7 @@ deploying the new API stack; the new template only reads it and no longer owns i
 
 | Lambda | Trigger | Notes |
 |---|---|---|
-| `<env>-poker-action-log-archiver` | `poker_action_log` DynamoDB Stream | TRIM_HORIZON, batch 100, `retryAttempts: 3`, `bisectBatchOnError`, `onFailure: SqsDlq` → 14-day DLQ + depth alarm. **B10 is fixed.** |
+| `<env>-poker-action-log-archiver` | `poker_action_log` DynamoDB Stream | TRIM_HORIZON, batch 100, `retryAttempts: 3`, `bisectBatchOnError`, `onFailure: SqsDlq` → 14-day DLQ. **B10 is fixed.** |
 | `<env>-ctech-poker-reconcile` | EventBridge Scheduler `rate(5 minutes)` | Sweeps `poker_pending_cashouts`; needs 3 SSM params. ⚠️ no DLQ on the schedule |
 | `<env>-ctech-poker-tablecleanup` | EventBridge Scheduler `rate(30 minutes)` | Archives tables idle >15 min, refunds sandbox chips, deletes the room. ⚠️ no DLQ on the schedule |
 

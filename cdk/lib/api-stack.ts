@@ -3,8 +3,6 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as hooktargets from 'aws-cdk-lib/aws-autoscaling-hooktargets';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -13,14 +11,9 @@ import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import {Construct} from 'constructs';
 import {Ec2ScriptRunner, Environment, HaproxyEc2Service, SSM as CtechSSM} from '@aoctech/cdk';
-import {addHandPipelineBudgetAlarm} from './alarms';
 import {
   actionLogArchiveBucketName,
   API_CURRENT_ARTIFACT_KEY,
-  API_MEMORY_METRIC_NAMESPACE,
-  API_MEMORY_PRESSURE_LOG_MESSAGE,
-  API_MEMORY_PRESSURE_METRIC_NAME,
-  ALERTS_TOPIC_ARN,
   APP_PORT,
   APP_PORT_ALT,
   asgName,
@@ -54,8 +47,6 @@ interface ApiStackProps extends cdk.StackProps {
   legalSignoffRefParam: string;
   walletWebhookHmacSecretParam: string;
   socialGraphEnabledParam: string;
-  /** Enables billable custom metrics/alarms; off unless explicitly opted in. */
-  cloudwatchAlarmsEnabled?: boolean;
   // Session Manager. **On**: CI deploys over SSM RunCommand (/opt/app/deploy.sh),
   // and the termination-drain lifecycle hook stops the app through RunCommand
   // too — with the agent off, draining fails open and instances terminate
@@ -91,7 +82,6 @@ export class PokerApiStack extends cdk.Stack {
       avatarBaseUrlParam,
       walletWebhookHmacSecretParam,
       socialGraphEnabledParam,
-      cloudwatchAlarmsEnabled = false,
       enableSsmAgent = false,
       osFamily = 'alpine',
     } = props;
@@ -535,39 +525,6 @@ export class PokerApiStack extends cdk.Stack {
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
-
-    // The Go process emits this structured marker only after its runtime-
-    // managed resident memory reaches 85% of GOMEMLIMIT. Keep the alarm prod-
-    // only and behind the repository-wide explicit cost switch: non-prod hosts
-    // are ephemeral, and a deploy must not add custom-metric cost by default.
-    if (isProd && cloudwatchAlarmsEnabled) {
-      const pressure = service.appLogGroup.addMetricFilter('MemoryPressureMetric', {
-        metricNamespace: API_MEMORY_METRIC_NAMESPACE,
-        metricName: API_MEMORY_PRESSURE_METRIC_NAME,
-        metricValue: '1',
-        defaultValue: 0,
-        filterPattern: logs.FilterPattern.stringValue('$.msg', '=', API_MEMORY_PRESSURE_LOG_MESSAGE),
-      });
-      const alarm = new cloudwatch.Alarm(this, 'MemoryPressureAlarm', {
-        alarmName: `${environment}-${SERVICE}-process-memory-pressure`,
-        alarmDescription: 'A poker API process is operating near its Go memory limit.',
-        metric: pressure.metric({
-          statistic: cloudwatch.Stats.SUM,
-          period: cdk.Duration.minutes(1),
-        }),
-        threshold: 1,
-        evaluationPeriods: 1,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
-      alarm.addAlarmAction(new cloudwatchActions.SnsAction(
-        sns.Topic.fromTopicArn(this, 'MemoryPressureAlertsTopic', ALERTS_TOPIC_ARN),
-      ));
-    }
-
-    // Issue #290: a hand-pipeline budget violation is now alarmable from the
-    // runtime metric itself (internal/metrics's HandPipelineDuration), not
-    // only from TestHandPipelineDynamoBudget pinning the ceiling in CI.
-    addHandPipelineBudgetAlarm(this, environment, isProd && cloudwatchAlarmsEnabled);
 
     // ASG termination pauses before EC2 shutdown, asks systemd to stop both
     // app processes (each runs Fx OnStop -> DrainAndRelease, releasing every

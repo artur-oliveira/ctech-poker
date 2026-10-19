@@ -7,7 +7,6 @@ import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from './bundle';
 import {tableCleanupDlqName, tableCleanupJobName} from './constants';
-import {addLambdaDlqAlarms} from './alarms';
 
 const TABLE_CLEANUP_RATE_MINUTES = 30;
 
@@ -18,7 +17,6 @@ interface TableCleanupStackProps extends cdk.StackProps {
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
-  cloudwatchAlarmsEnabled: boolean;
 }
 
 /**
@@ -36,8 +34,7 @@ export class TableCleanupStack extends cdk.Stack {
       roomsTableArn,
       walletUrlParam,
       pokerClientIdParam,
-      pokerClientSecretParam,
-      cloudwatchAlarmsEnabled
+      pokerClientSecretParam
     } = props;
 
     const role = new iam.Role(this, 'TableCleanupRole', {
@@ -98,8 +95,6 @@ export class TableCleanupStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     dlq.grantSendMessages(schedulerRole);
-
-    addLambdaDlqAlarms(this, 'TableCleanup', fn, dlq, cloudwatchAlarmsEnabled);
 
     new scheduler.CfnSchedule(this, 'TableCleanupSchedule', {
       name: tableCleanupJobName(environment),

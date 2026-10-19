@@ -7,7 +7,6 @@ import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from "./bundle";
 import {reconcileDlqName, reconcileJobName} from './constants';
-import {addLambdaDlqAlarms} from './alarms';
 
 const RECONCILE_RATE_MINUTES = 5;
 
@@ -18,7 +17,6 @@ interface ReconcileStackProps extends cdk.StackProps {
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
-  cloudwatchAlarmsEnabled: boolean;
 }
 
 /**
@@ -30,7 +28,7 @@ export class ReconcileStack extends cdk.Stack {
     super(scope, id, props);
     const {
       environment, authDomainName, pendingCashoutsTableArn, walletUrlParam, pokerClientIdParam,
-      pokerClientSecretParam, cloudwatchAlarmsEnabled
+      pokerClientSecretParam
     } = props;
 
     const role = new iam.Role(this, 'ReconcileRole', {
@@ -88,8 +86,6 @@ export class ReconcileStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     dlq.grantSendMessages(schedulerRole);
-
-    addLambdaDlqAlarms(this, 'Reconcile', fn, dlq, cloudwatchAlarmsEnabled);
 
     new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
       name: reconcileJobName(environment),
