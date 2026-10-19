@@ -1,11 +1,13 @@
 package accountclient
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/api-commons/resilient"
 )
 
 func server(t *testing.T, status int, body string) *httptest.Server {
@@ -53,5 +55,23 @@ func TestAServerErrorFailsRatherThanReturningNoHash(t *testing.T) {
 	defer srv.Close()
 	if _, err := New(srv.URL, "poker", "secret", cache.NewMemoryBackend(4)).CPFHMAC(t.Context(), "user-1"); err == nil {
 		t.Fatal("a failing lookup must not look like \"no CPF\", or an exclusion would be skipped")
+	}
+}
+
+// While ctech-account is down five failures in a row open the circuit and the next call
+// is refused at once. It stays an ERROR: "no KYC record" is an empty answer with no
+// error, and an outage must never read as that.
+func TestADownAccountOpensTheCircuitAndIsNeverReadAsNoKYCRecord(t *testing.T) {
+	srv := server(t, http.StatusServiceUnavailable, `{}`)
+	defer srv.Close()
+	c := New(srv.URL, "poker", "secret", cache.NewMemoryBackend(4))
+	for i := 0; i < 5; i++ {
+		if got, err := c.CPFHMAC(t.Context(), "user-1"); err == nil || got != "" {
+			t.Fatalf("call %d against a down account: hash=%q err=%v", i, got, err)
+		}
+	}
+	got, err := c.CPFHMAC(t.Context(), "user-1")
+	if !errors.Is(err, resilient.ErrCircuitOpen) || got != "" {
+		t.Fatalf("hash=%q err=%v, want the open-circuit error and no hash", got, err)
 	}
 }
