@@ -24,6 +24,7 @@ import (
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
+	"gopkg.aoctech.app/api-commons/resilient"
 )
 
 const (
@@ -99,7 +100,8 @@ type Client struct {
 // endpoint). It makes no request: the token is fetched on first use, and shared through c (the
 // fleet's Valkey) so a replica reuses the token another one already fetched; nil keeps it per process.
 func New(base, ctechURL, clientID, clientSecret string, c cache.Backend) *Client {
-	h := &http.Client{Timeout: 8 * time.Second}
+	// A circuit per host: billing and the account (token) are separate hosts.
+	h := resilient.Client(8*time.Second, resilient.Config{})
 	ctech := strings.TrimRight(ctechURL, "/")
 	return &Client{
 		base:   strings.TrimRight(base, "/"),

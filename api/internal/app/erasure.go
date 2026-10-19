@@ -19,6 +19,7 @@ import (
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/oauth2client"
+	"gopkg.aoctech.app/api-commons/resilient"
 	"gopkg.aoctech.app/api-commons/ws"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/config"
@@ -81,7 +82,9 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 	purger := userpurge.NewPurger(db, objects, c, userpurge.Config{
 		Env: cfg.Env, AvatarBucket: cfg.AvatarBucket, ArchiveBucket: cfg.ActionLogArchiveBucket,
 	}, elig.Blockers).WithCarrier(rules.CarryOnErase)
-	httpClient := &http.Client{Timeout: 10 * time.Second}
+	// The account: acks and tokens. A circuit per host, so a down account is refused at once
+	// and the saga step waits in the queue instead of holding a goroutine.
+	httpClient := resilient.Client(10*time.Second, resilient.Config{})
 	account := strings.TrimRight(cfg.CtechURL, "/")
 	tokens := oauth2client.New(httpClient, c, account+"/v1.0/token", cfg.ErasureAckClientID, cfg.ErasureAckClientSecret, erasureAckScope)
 	acks := erasure.NewAckClient(httpClient, account+"/v1.0/internal/erasure/ack", tokens)

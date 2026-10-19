@@ -16,6 +16,7 @@ import (
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
+	"gopkg.aoctech.app/api-commons/resilient"
 )
 
 const (
@@ -36,7 +37,8 @@ type Client struct {
 
 // New builds the client. base is CTECH_URL; clientID/secret are Poker's M2M credentials.
 func New(base, clientID, clientSecret string, c cache.Backend) *Client {
-	httpClient := &http.Client{Timeout: 10 * time.Second}
+	// A circuit per host: a down account is refused at once (resilient.ErrCircuitOpen).
+	httpClient := resilient.Client(10*time.Second, resilient.Config{})
 	base = strings.TrimRight(base, "/")
 	return &Client{base: base, http: httpClient, tokens: oauth2client.New(httpClient, c, base+pathToken, clientID, clientSecret, scopeKYC)}
 }
