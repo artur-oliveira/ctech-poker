@@ -299,7 +299,10 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		// last of the window) or fails, the hold goes back and nobody is seated.
 		breach, meterErr := s.rules.RecordInflow(ctx, playerID, amount, key)
 		if meterErr != nil || breach != nil {
-			if relErr := mover.ReleaseHold(ctx, playerID, holdID, key+":release"); relErr != nil {
+			cctx, cancel := compensationContext(ctx)
+			relErr := mover.ReleaseHold(cctx, playerID, holdID, key+":release")
+			cancel()
+			if relErr != nil {
 				return fmt.Errorf("buyin: limit check failed AND release failed (manual reconciliation needed): check=%v/%v release=%w", meterErr, breach, relErr)
 			}
 			if breach != nil {
@@ -323,8 +326,10 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		// our own debit above moved real money that will never be seated, so
 		// it must be refunded like any other failed join, never silently
 		// dropped.
+		cctx, cancel := compensationContext(ctx)
+		defer cancel()
 		if mover == s.game {
-			if refundErr := mover.ReleaseHold(ctx, playerID, holdID, key+":release"); refundErr != nil {
+			if refundErr := mover.ReleaseHold(cctx, playerID, holdID, key+":release"); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND release failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
 		} else {
@@ -336,7 +341,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 			// in roomID, playerID and the nonce (itself playerID when idemKey is
 			// empty), so it is globally unique per refund while a genuine retry of
 			// the SAME failed buy-in still reproduces it and dedupes.
-			if refundErr := mover.Credit(ctx, playerID, amount, key+":refund", "poker_buyin_refund", fmt.Sprintf(descriptionBuyInRefundFormat, roomID)); refundErr != nil {
+			if refundErr := mover.Credit(cctx, playerID, amount, key+":refund", "poker_buyin_refund", fmt.Sprintf(descriptionBuyInRefundFormat, roomID)); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND refund failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
 		}
@@ -801,6 +806,18 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 	stack := <-stackCh
 	holdID := <-holdIDCh
 	return stack, s.settle(ctx, roomID, playerID, stack, holdID, mover, key)
+}
+
+// compensationTimeout bounds one wallet compensation (a hold release or a refund).
+const compensationTimeout = 5 * time.Second
+
+// compensationContext is the context a compensation runs under. It outlives the
+// request: a buy-in that failed because the request's deadline expired must still
+// give the player's money back, and a release made with that same expired context
+// would fail and leave the hold on the wallet. It keeps the request's values (ids,
+// logging) and gets its own short deadline.
+func compensationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), compensationTimeout)
 }
 
 // systemLeaveKey builds the poker_pending_cashouts idempotency key for one

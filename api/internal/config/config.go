@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"fmt"
 
 	"github.com/caarlos0/env/v11"
@@ -13,10 +15,14 @@ type Config struct {
 	Port int    `env:"PORT" envDefault:"8003"`
 	Env  string `env:"ENVIRONMENT" envDefault:"dev"`
 
-	ReadTimeout    int64    `env:"READ_TIMEOUT" envDefault:"10"`
-	IdleTimeout    int64    `env:"IDLE_TIMEOUT" envDefault:"60"`
-	WriteTimeout   int64    `env:"WRITE_TIMEOUT" envDefault:"10"`
-	TrustedProxies []string `env:"TRUSTED_PROXIES" envSeparator:","`
+	ReadTimeout  int64 `env:"READ_TIMEOUT" envDefault:"10"`
+	IdleTimeout  int64 `env:"IDLE_TIMEOUT" envDefault:"60"`
+	WriteTimeout int64 `env:"WRITE_TIMEOUT" envDefault:"10"`
+	// RequestTimeout is the time budget of one HTTP request: the context every
+	// DynamoDB, Valkey and wallet call is made with. Under WriteTimeout so the client
+	// gets a 504 instead of a cut connection. Websockets are exempt. Zero disables it.
+	RequestTimeout time.Duration `env:"REQUEST_TIMEOUT" envDefault:"8s"`
+	TrustedProxies []string      `env:"TRUSTED_PROXIES" envSeparator:","`
 
 	// Cache / table-lease (advisory cache-affinity hint only — never
 	// correctness-gating, ARCHITECTURE.md §2). Optional in dev — falls back
