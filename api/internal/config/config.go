@@ -90,8 +90,13 @@ type Config struct {
 	// ErasureQueueURL is poker's SQS queue on ctech-account's user-erasure
 	// topic; ActionLogArchiveBucket is the action-log S3 archive the purge
 	// rewrites. Both come from /etc/app-static.env (cdk/lib/api-stack.ts).
-	ErasureQueueURL        string `env:"ERASURE_QUEUE_URL"`
-	ActionLogArchiveBucket string `env:"ACTION_LOG_ARCHIVE_BUCKET"`
+	ErasureQueueURL string `env:"ERASURE_QUEUE_URL"`
+	// ErasureQueueVisibility is the queue's own visibility timeout
+	// (cdk/lib/api-stack.ts, 12 h). While a purge or an export runs, the consumer
+	// keeps the message invisible by setting that timeout again every third of it.
+	// Keep it equal to the queue's. Zero turns the heartbeat off.
+	ErasureQueueVisibility time.Duration `env:"ERASURE_QUEUE_VISIBILITY" envDefault:"12h"`
+	ActionLogArchiveBucket string        `env:"ACTION_LOG_ARCHIVE_BUCKET"`
 	// ErasureAckClientID/Secret are poker's dedicated confidential client for
 	// acks to ctech-account (scope internal:account:erasure-ack only). Kept
 	// apart from POKER_CLIENT_ID so the wallet credentials never carry it.
