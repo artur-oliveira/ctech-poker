@@ -1,5 +1,38 @@
 @import "tailwindcss";
 @import "./forms-and-gate.css";
+
+/* @aoctech/ui bridge (OfflineBanner, UnavailableScreen, ErrorState).
+   Poker is registered in the package's themes.css, but importing it would bring
+   approximate oklch values instead of this product's own palette. So only the
+   semantic roles those three components read are mapped here, to poker's tokens,
+   and only inside an element marked data-ctech-bridge: nothing else is repainted.
+   Tailwind does not scan node_modules, so only the three component files are
+   listed (not the whole package) to keep the CSS small. */
+@source "../../node_modules/@aoctech/ui/dist/components/button.js";
+@source "../../node_modules/@aoctech/ui/dist/components/error-state.js";
+@source "../../node_modules/@aoctech/ui/dist/components/network.js";
+@theme inline {
+    --color-background: var(--bridge-background);
+    --color-surface: var(--bridge-surface);
+    --color-foreground: var(--bridge-foreground);
+    --color-muted-foreground: var(--bridge-muted-foreground);
+    --color-border: var(--bridge-border);
+    --color-ring: var(--bridge-ring);
+    --color-warning: var(--bridge-warning);
+    --color-brand-600: var(--bridge-brand-600);
+    --color-brand-700: var(--bridge-brand-700);
+}
+[data-ctech-bridge] {
+    --bridge-background: var(--ink);
+    --bridge-surface: var(--surface-control);
+    --bridge-foreground: var(--paper);
+    --bridge-muted-foreground: var(--text-secondary);
+    --bridge-border: var(--white-12);
+    --bridge-ring: var(--focus-ring);
+    --bridge-warning: var(--gold);
+    --bridge-brand-600: var(--brand);
+    --bridge-brand-700: var(--wine);
+}
 :root {
     --brand: #af2a2f;
     --brand-bright: #d9464d;
@@ -337,96 +370,25 @@ body:has(.game) {
     min-height: 52px;
 }
 .system-state > section {
-    width: min(1040px, 100%);
+    width: min(720px, 100%);
     margin: auto;
-    display: grid;
-    grid-template-columns: minmax(240px, 380px) minmax(0, 1fr);
-    align-items: center;
-    gap: clamp(40px, 8vw, 96px);
 }
-.system-state-mark {
-    position: relative;
-    display: grid;
-    aspect-ratio: 1;
-    place-items: center;
-    border: 28px solid var(--table-rail);
-    border-radius: 50%;
-    color: var(--felt-text);
-    background: radial-gradient(circle, var(--table-felt-light), var(--table-felt-dark));
-    box-shadow: var(--shadow-table);
-}
-.system-state-mark svg {
-    width: 72px;
-    height: 72px;
-}
-.system-state-mark span {
-    position: absolute;
-    right: 16%;
-    bottom: 14%;
-    padding: 8px 12px;
-    border-radius: var(--rounded-control);
-    color: var(--gold);
-    background: var(--surface-seat);
-    box-shadow: var(--shadow-seat);
-    font: 700 var(--font-size-large)/1 var(--font-mono);
-}
-.system-state-copy > small {
-    color: var(--brand-bright-7);
-    font: 700 var(--font-size-mono)/1 var(--font-mono);
-    letter-spacing: .08em;
-}
-.system-state-copy h1 {
-    max-width: 12ch;
-    margin: 16px 0;
-    font-size: clamp(2.375rem, 5vw, 3.875rem);
-    line-height: 1.02;
-    letter-spacing: -.035em;
-}
-.system-state-copy p {
-    max-width: 58ch;
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: var(--font-size-subtitle);
-    line-height: 1.55;
-}
-.system-state-copy > span {
-    display: block;
-    margin-top: 12px;
+.system-state-detail {
+    margin: -24px 0 0;
     color: var(--muted);
     line-height: 1.5;
+    text-align: center;
 }
 .system-state-actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 30px;
+    justify-content: center;
+    margin-top: -16px;
 }
 .system-state footer {
     padding-top: 20px;
     color: var(--muted);
     font-size: var(--font-size-body);
     text-align: center;
-}
-@media (max-width: 720px) {
-.system-state > section {
-        grid-template-columns: 1fr;
-        gap: 36px;
-        padding-block: 44px;
-    }
-.system-state-mark {
-        width: min(240px, 68vw);
-        margin-inline: auto;
-        border-width: 20px;
-    }
-.system-state-copy {
-        text-align: center;
-    }
-.system-state-copy h1, .system-state-copy p {
-        margin-inline: auto;
-    }
-.system-state-actions {
-        justify-content: center;
-    }
 }
 @media (prefers-reduced-motion: reduce) {
 .system-state * {

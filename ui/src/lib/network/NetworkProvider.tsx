@@ -1,114 +1,63 @@
 'use client';
 
 import React, {useEffect, useRef, useSyncExternalStore} from 'react';
-import {CloudOff, RefreshCw, WifiOff} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {OfflineBanner, type NetworkStatus} from '@aoctech/ui';
 import {useQueryClient} from '@tanstack/react-query';
 import {
-  checkApiLiveness,
   getApiLivenessSnapshot,
   getServerApiLivenessSnapshot,
-  livenessPollDelay,
-  markApiOffline,
+  liveness,
   navigateToUnavailable,
-  SERVER_OUTAGE_ESCALATION_THRESHOLD,
   subscribeApiLiveness,
 } from './liveness';
+
+export const networkLabels = {
+  offline: 'Você está sem internet',
+  offlineHint: 'A mesa será reconectada quando sua conexão voltar.',
+  unavailable: 'Servidor temporariamente indisponível',
+  unavailableHint: 'Seus dados continuam seguros. Estamos verificando a conexão sem sobrecarregar o servidor.',
+  retry: 'Verificar agora',
+};
 
 export function useApiLiveness() {
   return useSyncExternalStore(subscribeApiLiveness, getApiLivenessSnapshot, getServerApiLivenessSnapshot);
 }
 
+/**
+ * Starts the app's single probe and shows the package banner. The package's own
+ * NetworkProvider would create a second probe, and the api client and sockets
+ * must share this one, so the instance is owned by `liveness.ts`.
+ */
 export function NetworkProvider({children}: { children: React.ReactNode }) {
-  const state = useApiLiveness();
   const queryClient = useQueryClient();
-  const checkNowRef = useRef<() => void>(() => undefined);
-  const banner = state.status === 'unavailable'
-    && (typeof window === 'undefined' || window.location.pathname !== '/unavailable');
+  const {status} = useSyncExternalStore(liveness.subscribe, liveness.getSnapshot, liveness.getSnapshot);
+  // The product only ever showed offline/unavailable: one failed probe (degraded) stays silent.
+  const shown: NetworkStatus = status === 'degraded' ? 'online' : status;
+  const previous = useRef<NetworkStatus>('online');
 
-  // The notice is a strip that reserves its own height rather than a card
-  // floating over the page, so navigation and the table's Lobby/Sair controls
-  // stay reachable exactly when recovery matters. The height itself lives in
-  // CSS (--api-bar-h); this only says whether the strip is up.
+  useEffect(() => liveness.start(), []);
+
+  // The strip reserves its own height (--api-bar-h) rather than floating over the
+  // page, so the table's Lobby/Sair controls stay reachable. CSS owns the height.
   useEffect(() => {
     const root = document.documentElement;
-    if (banner) root.dataset.apiOffline = 'true';
+    if (shown !== 'online') root.dataset.apiOffline = 'true';
     else delete root.dataset.apiOffline;
-  }, [banner]);
+    return () => { delete root.dataset.apiOffline; };
+  }, [shown]);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let failures = 0;
-    // Counts consecutive *poll cycles* published as reason:'server' — distinct
-    // from the retries checkApiLiveness() already exhausts internally before
-    // publishing one such result. A device-offline outage (reason:'offline')
-    // resets this and never escalates; only a server-shaped outage does.
-    let consecutiveServerOutages = 0;
-    let cancelled = false;
-    async function runCheck() {
-      if (timer) clearTimeout(timer);
-      const wasUnavailable = getApiLivenessSnapshot().status === 'unavailable';
-      const available = await checkApiLiveness();
-      if (cancelled) return;
-      failures = available ? 0 : failures + 1;
-      if (available && wasUnavailable) void queryClient.refetchQueries({type: 'active'});
-      const isServerOutage = !available && getApiLivenessSnapshot().reason === 'server';
-      consecutiveServerOutages = isServerOutage ? consecutiveServerOutages + 1 : 0;
-      if (consecutiveServerOutages >= SERVER_OUTAGE_ESCALATION_THRESHOLD) {
-        // The thin strip is not prominent enough for a confirmed total
-        // outage: escalate to the same full-bleed screen a 503 gets. This
-        // unmounts the app (navigation), so there is nothing left to poll.
-        navigateToUnavailable();
-        return;
-      }
-      timer = setTimeout(() => void runCheck(), livenessPollDelay(failures));
-    }
-    checkNowRef.current = () => void runCheck();
-    void runCheck();
-    const onOnline = () => void runCheck();
-    const onOffline = () => {
-      if (timer) clearTimeout(timer);
-      markApiOffline();
-      failures += 1;
-      timer = setTimeout(() => void runCheck(), livenessPollDelay(failures));
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible' && getApiLivenessSnapshot().status !== 'available') void runCheck();
-    };
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      cancelled = true;
-      checkNowRef.current = () => undefined;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [queryClient]);
+    if (shown === 'unavailable') navigateToUnavailable();
+    // Back online after an outage (link or server): refresh what is on screen.
+    if (shown === 'online' && previous.current !== 'online') void queryClient.refetchQueries({type: 'active'});
+    previous.current = shown;
+  }, [shown, queryClient]);
 
   return <>
     {children}
-    {banner && <NetworkStatusBanner
-      offline={state.reason === 'offline'}
-      onRetryAction={() => checkNowRef.current()}
-    />}
-  </>;
-}
-
-function NetworkStatusBanner({offline, onRetryAction}: { offline: boolean; onRetryAction: () => void }) {
-  const Icon = offline ? WifiOff : CloudOff;
-  return <aside className="network-status" role="status" aria-live="polite">
-    <Icon aria-hidden="true"/>
-    <div>
-      <strong>{offline ? 'Você está sem internet' : 'Servidor temporariamente indisponível'}</strong>
-      <span>{offline
-        ? 'A mesa será reconectada quando sua conexão voltar.'
-        : 'Seus dados continuam seguros. Estamos verificando a conexão sem sobrecarregar o servidor.'}</span>
+    <div data-ctech-bridge="">
+      <OfflineBanner className="network-status" status={shown} labels={networkLabels}
+                     onRetry={() => void liveness.check()}/>
     </div>
-    <Button type="button" size="sm" variant="outline" onClick={onRetryAction}>
-      <RefreshCw aria-hidden="true"/> Verificar agora
-    </Button>
-  </aside>;
+  </>;
 }

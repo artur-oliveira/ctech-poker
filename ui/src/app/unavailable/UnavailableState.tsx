@@ -1,8 +1,13 @@
 'use client';
 
-import {useEffect, useRef, useState} from 'react';
-import {SystemState} from '@/components/SystemState';
-import {checkApiLiveness, livenessPollDelay} from '@/lib/network/liveness';
+import Link from 'next/link';
+import {NetworkProvider, UnavailableScreen} from '@aoctech/ui';
+import {House} from 'lucide-react';
+import {Button} from '@/components/ui/button';
+import {PokerLogo} from '@/components/PokerLogo';
+import {HTTP_TIMEOUT_MS} from '@/lib/network/liveness';
+import {USE_MOCK} from '@/lib/mockConfig';
+import {networkLabels} from '@/lib/network/NetworkProvider';
 
 const RETURN_AFTER_OUTAGE = 'poker:return-after-outage';
 
@@ -18,74 +23,37 @@ function returnDestination() {
 }
 
 /**
- * `NetworkProvider` is mounted by the `(app)` layout, which this ungrouped
- * route deliberately sits outside of — so this screen owns its own liveness
- * loop. It reuses `livenessPollDelay`'s backoff, states the outcome of every
- * check (with the wall-clock time it ran), counts down to the next automatic
- * attempt, and navigates back to the interrupted route the moment one
- * succeeds, whether the player tapped anything or not.
+ * The `(app)` layout's probe is not mounted on this ungrouped route, so the
+ * package's own `NetworkProvider` owns the poll here (backoff, visibility,
+ * online/offline) and `UnavailableScreen` sends the player back to the
+ * interrupted route the moment the API answers, whether anything was tapped or not.
  */
 export function UnavailableState() {
-  const [checking, setChecking] = useState(true);
-  const [failedAt, setFailedAt] = useState<number | null>(null);
-  const [retryInSeconds, setRetryInSeconds] = useState<number | null>(null);
-  const checkNowRef = useRef<() => void>(() => undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let countdown: ReturnType<typeof setInterval> | null = null;
-    let failures = 0;
-
-    function stopTimers() {
-      if (timer) clearTimeout(timer);
-      if (countdown) clearInterval(countdown);
-      timer = null;
-      countdown = null;
-    }
-
-    async function run() {
-      if (cancelled) return;
-      stopTimers();
-      setChecking(true);
-      setRetryInSeconds(null);
-      const available = await checkApiLiveness();
-      if (cancelled) return;
-      setChecking(false);
-      if (available) {
-        window.location.replace(returnDestination());
-        return;
-      }
-      failures += 1;
-      setFailedAt(Date.now());
-      const delay = livenessPollDelay(failures);
-      setRetryInSeconds(Math.max(1, Math.round(delay / 1_000)));
-      countdown = setInterval(
-        () => setRetryInSeconds(value => value === null ? null : Math.max(0, value - 1)), 1_000);
-      timer = setTimeout(() => void run(), delay);
-    }
-
-    checkNowRef.current = () => void run();
-    void run();
-    return () => {
-      cancelled = true;
-      checkNowRef.current = () => undefined;
-      stopTimers();
-    };
-  }, []);
-
-  const detail = checking ? 'Verificando se o serviço já voltou…'
-    : failedAt !== null
-      ? `Ainda fora do ar. Última verificação às ${new Date(failedAt).toLocaleTimeString('pt-BR')}${
-        retryInSeconds !== null ? ` · nova tentativa automática em ${retryInSeconds}s` : ''}`
-      : 'Você pode verificar novamente sem recarregar a partida às cegas.';
-
-  return <SystemState
-    code="503"
-    title="A mesa volta em breve."
-    description="O servidor não respondeu, mas suas fichas e seu histórico continuam seguros."
-    detail={detail}
-    retryPending={checking}
-    onRetryAction={() => checkNowRef.current()}
-  />;
+  return <main className="system-state">
+    <nav>
+      <Link href="/" className="brand"><span className="brand-mark"><PokerLogo priority/></span>CTech <b>Poker</b></Link>
+    </nav>
+    <section data-ctech-bridge="">
+      <NetworkProvider
+        url={`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')}/v1.0/health`}
+        timeoutMs={HTTP_TIMEOUT_MS}
+        fetch={USE_MOCK ? () => Promise.resolve({ok: true} as Response) : undefined}
+        banner={false}
+        locale="pt-BR"
+        labels={{...networkLabels, retry: 'Tentar novamente'}}
+      >
+        <UnavailableScreen
+          locale="pt-BR"
+          labels={{...networkLabels, retry: 'Tentar novamente'}}
+          title="A mesa volta em breve."
+          description="O servidor não respondeu, mas suas fichas e seu histórico continuam seguros."
+          onRecovered={() => window.location.replace(returnDestination())}
+        />
+      </NetworkProvider>
+      <div className="system-state-actions">
+        <Button size="lg" variant="outline" render={<Link href="/"/>}><House/> Ir para o início</Button>
+      </div>
+    </section>
+    <footer>Suas fichas e seu histórico permanecem seguros.</footer>
+  </main>;
 }

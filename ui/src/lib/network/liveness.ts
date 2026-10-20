@@ -1,21 +1,7 @@
+import {createLiveness, type LivenessSnapshot} from '@aoctech/ui';
 import {USE_MOCK} from '@/lib/mockConfig';
+
 export const HTTP_TIMEOUT_MS = 3_000;
-export const HEALTHY_POLL_INTERVAL_MS = 30_000;
-export const MAX_UNAVAILABLE_POLL_INTERVAL_MS = 30_000;
-/** A single timed-out or failed /health probe is not proof the API is down —
- * it retries this many times (with a short backoff) before the outage is
- * published. Only once every attempt is exhausted does the app go offline. */
-export const HEALTH_PROBE_ATTEMPTS = 3;
-export const HEALTH_PROBE_RETRY_MS = 600;
-/** A single published `reason: 'server'` outage already survived
- * `HEALTH_PROBE_ATTEMPTS` failures inside one `checkApiLiveness()` call. This
- * is how many *additional*, separately-scheduled poll cycles must also come
- * back `reason: 'server'` before `NetworkProvider` escalates past the thin
- * status strip to the full-bleed `/unavailable` screen — bounding a
- * total-outage-shaped-as-network-errors to a handful of seconds without
- * escalating on one slow response. A device-offline outage never escalates:
- * only `reason === 'server'` counts. */
-export const SERVER_OUTAGE_ESCALATION_THRESHOLD = 2;
 
 export type ApiLivenessStatus = 'checking' | 'available' | 'unavailable';
 export type ApiUnavailableReason = 'offline' | 'server' | null;
@@ -33,130 +19,61 @@ export class ApiUnavailableError extends Error {
   }
 }
 
+/**
+ * The one probe of `/v1.0/health` for the app (api client, sockets, banner).
+ * Three consecutive failed probes (the package's backoff between them) are a
+ * server outage; a device that is offline never escalates. Mock mode has no API
+ * to probe, so it answers OK (offline is still reported, so the banner works).
+ */
+export const liveness = createLiveness({
+  url: `${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')}/v1.0/health`,
+  timeoutMs: HTTP_TIMEOUT_MS,
+  failuresToUnavailable: 3,
+  fetch: USE_MOCK ? () => Promise.resolve({ok: true} as Response) : undefined,
+});
+
 const INITIAL_SNAPSHOT: ApiLivenessSnapshot = {status: 'checking', reason: null, checkedAt: null};
 
-let snapshot = INITIAL_SNAPSHOT;
-let inFlightCheck: Promise<boolean> | null = null;
-const listeners = new Set<() => void>();
+let last: {source: LivenessSnapshot; derived: ApiLivenessSnapshot} | null = null;
 
-function apiURL(path: string) {
-  const base = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
-  return `${base}${path}`;
-}
-
-function publish(next: ApiLivenessSnapshot) {
-  if (snapshot.status === next.status && snapshot.reason === next.reason && snapshot.checkedAt === next.checkedAt) return;
-  snapshot = next;
-  listeners.forEach(listener => listener());
-}
-
-function browserIsOffline() {
-  return typeof navigator !== 'undefined' && !navigator.onLine;
-}
-
-export function getApiLivenessSnapshot() {
-  return snapshot;
+/** The product's three-state view of the package snapshot (degraded still counts as available: the outage is only published at the threshold). Referentially stable for useSyncExternalStore. */
+export function getApiLivenessSnapshot(): ApiLivenessSnapshot {
+  const source = liveness.getSnapshot();
+  if (source.checkedAt === null) return INITIAL_SNAPSHOT;
+  if (last?.source === source) return last.derived;
+  const derived: ApiLivenessSnapshot = source.status === 'offline' ? {status: 'unavailable', reason: 'offline', checkedAt: source.checkedAt}
+    : source.status === 'unavailable' ? {status: 'unavailable', reason: 'server', checkedAt: source.checkedAt}
+      : {status: 'available', reason: null, checkedAt: source.checkedAt};
+  last = {source, derived};
+  return derived;
 }
 
 export function getServerApiLivenessSnapshot() {
   return INITIAL_SNAPSHOT;
 }
 
-export function subscribeApiLiveness(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+export const subscribeApiLiveness = liveness.subscribe;
 
-export function markApiOffline() {
-  publish({status: 'unavailable', reason: 'offline', checkedAt: Date.now()});
-}
-
-/**
- * The dependency-free liveness endpoint is the only request allowed while the
- * Poker API is unavailable. A fetch rejection is intentionally equivalent to
- * a failed response: a dead HAProxy can omit CORS headers, so browsers expose
- * that outage as a TypeError rather than an HTTP status.
- */
-function probeHealthOnce(): Promise<boolean> {
-  // Mock mode has no API to probe. Without this the whole app escalates to
-  // /unavailable a few seconds after boot, which made `npm run dev:mock`
-  // (and therefore `og:capture` and the visual-regression suite) depend on a
-  // real backend listening on the dev proxy's port.
-  if (USE_MOCK) return Promise.resolve(true);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
-  return fetch(apiURL('/v1.0/health'), {
-    method: 'GET',
-    cache: 'no-store',
-    credentials: 'omit',
-    headers: {Accept: 'application/json'},
-    signal: controller.signal,
-  }).then(response => response.ok).catch(() => false).finally(() => clearTimeout(timeout));
-}
-
-const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-
-export function checkApiLiveness(): Promise<boolean> {
-  if (browserIsOffline()) {
-    markApiOffline();
-    return Promise.resolve(false);
-  }
-  if (inFlightCheck) return inFlightCheck;
-
-  inFlightCheck = (async () => {
-    // A dead HAProxy times out or omits CORS headers, so both a rejected
-    // fetch and a non-OK response mean "could not confirm healthy". Retry a
-    // few times before concluding the API is actually down — a single slow
-    // response must not black out the whole app.
-    for (let attempt = 1; attempt <= HEALTH_PROBE_ATTEMPTS; attempt++) {
-      if (browserIsOffline()) {
-        markApiOffline();
-        return false;
-      }
-      if (await probeHealthOnce()) {
-        publish({status: 'available', reason: null, checkedAt: Date.now()});
-        return true;
-      }
-      if (attempt < HEALTH_PROBE_ATTEMPTS) await wait(HEALTH_PROBE_RETRY_MS);
-    }
-    // Every attempt failed while the browser still believed it was online:
-    // treat it as a server-side outage (a genuine offline drop is caught at
-    // the top of the loop and reported as such).
-    publish({status: 'unavailable', reason: 'server', checkedAt: Date.now()});
-    return false;
-  })().finally(() => {
-    inFlightCheck = null;
-  });
-  return inFlightCheck;
-}
+export const checkApiLiveness = () => liveness.check();
 
 /** Normal API calls wait for the first health result and then fail fast while
- * unavailable. This makes the health probe—not every screen query—the retry
+ * unavailable. This makes the health probe, not every screen query, the retry
  * loop responsible for discovering recovery. */
 export async function requireApiLiveness() {
+  const snapshot = getApiLivenessSnapshot();
   if (snapshot.status === 'available') return;
-  if (snapshot.status === 'unavailable') {
-    throw new ApiUnavailableError(snapshot.reason || 'server');
-  }
-  if (!await checkApiLiveness()) throw new ApiUnavailableError(snapshot.reason || 'server');
-}
-
-export function livenessPollDelay(failureCount: number, random = Math.random) {
-  if (failureCount <= 0) return HEALTHY_POLL_INTERVAL_MS;
-  const ceiling = Math.min(MAX_UNAVAILABLE_POLL_INTERVAL_MS, 1_000 * 2 ** (failureCount - 1));
-  // Equal jitter avoids both a near-zero busy loop and synchronized clients.
-  return Math.floor(ceiling / 2 + random() * ceiling / 2);
+  if (snapshot.status === 'unavailable') throw new ApiUnavailableError(snapshot.reason || 'server');
+  if (!await checkApiLiveness()) throw new ApiUnavailableError(getApiLivenessSnapshot().reason || 'server');
 }
 
 const RETURN_AFTER_OUTAGE_KEY = 'poker:return-after-outage';
 
 /**
  * Navigates to the full-bleed `/unavailable` screen, saving the interrupted
- * route first so `UnavailableState` can restore it once the health probe
- * recovers. Shared by the explicit-503 path (`redirectOnServiceUnavailable`)
- * and by any caller escalating a confirmed server-side outage (a run of
- * network-error-shaped health probes, an unrecoverable OAuth callback) to the
- * same prominent UI a 503 gets — no-op once already there.
+ * route first so it can be restored once the health probe recovers. Shared by
+ * the explicit-503 path (`redirectOnServiceUnavailable`), by a confirmed
+ * outage from the probe and by an unrecoverable OAuth callback; no-op once
+ * already there.
  */
 export function navigateToUnavailable(): boolean {
   if (typeof window === 'undefined' || window.location.pathname === '/unavailable') return false;
@@ -167,11 +84,4 @@ export function navigateToUnavailable(): boolean {
   }
   window.location.replace('/unavailable');
   return true;
-}
-
-/** Test-only reset kept explicit so runtime code cannot accidentally hide an outage. */
-export function resetApiLivenessForTests() {
-  snapshot = INITIAL_SNAPSHOT;
-  inFlightCheck = null;
-  listeners.clear();
 }
