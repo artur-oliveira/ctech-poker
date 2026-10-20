@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 )
@@ -27,7 +28,7 @@ type CosmeticPurchaseRefundRequest struct {
 // RegisterReactionPurchase's catalog/create/list/get/refund route shape. The
 // :kind path param is validated against cosmetics.KindDeck/KindFelt before
 // any service call.
-func RegisterCosmeticPurchase(router fiber.Router, auth fiber.Handler, svc *cosmeticpurchase.Service, purchaseLimiter *RateLimiter) {
+func RegisterCosmeticPurchase(router fiber.Router, auth fiber.Handler, svc *cosmeticpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &cosmeticPurchaseHandlers{svc: svc}
 	g := router.Group("/wallet/cosmetic-purchase/:kind", auth, validCosmeticKind)
 	g.Get("/catalog", h.catalog)

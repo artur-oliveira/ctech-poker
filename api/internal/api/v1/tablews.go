@@ -34,6 +34,7 @@ import (
 	fws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v3"
 	"github.com/valyala/fasthttp"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 
 	goproto "google.golang.org/protobuf/proto"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
@@ -237,8 +238,8 @@ func RegisterTableWS(
 	cfg *config.Config,
 	players *player.Service,
 	stats pokerStatsReader,
-	actionLimiter *RateLimiter,
-	reactionLimiter *RateLimiter,
+	actionLimiter *ratelimit.Limiter,
+	reactionLimiter *ratelimit.Limiter,
 	blocked BlockedFunc,
 ) {
 	connectionTracker := newTableConnectionTracker()
@@ -506,7 +507,7 @@ func RegisterTableWS(
 				if err := goproto.Unmarshal(msg, &m); err != nil {
 					continue
 				}
-				if rateLimitedTableMessage(m.Type) && !actionLimiter.AllowFailOpen(ctx, wsActionKey(playerID)) {
+				if rateLimitedTableMessage(m.Type) && !allowFailOpen(ctx, actionLimiter, playerID) {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited", ActionId: m.ActionId})
 					continue
 				}
@@ -779,7 +780,7 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_reaction", ActionId: m.ActionId})
 						continue
 					}
-					if !reactionLimiter.AllowFailOpen(ctx, wsReactionKey(playerID)) {
+					if !allowFailOpen(ctx, reactionLimiter, playerID) {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "reaction_rate_limited", ActionId: m.ActionId})
 						continue
 					}

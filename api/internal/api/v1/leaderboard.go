@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 )
@@ -44,7 +45,7 @@ func boardParam(c fiber.Ctx) leaderboard.Board {
 	}
 }
 
-func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service, readLimiter *RateLimiter) {
+func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service, readLimiter *ratelimit.Limiter) {
 	h := &leaderboardHandlers{svc: svc, players: players}
 	router.Get("/leaderboard", rateLimit(readLimiter, ipKey("leaderboard:top")), h.top)
 	router.Get("/leaderboard/me", auth, h.me)

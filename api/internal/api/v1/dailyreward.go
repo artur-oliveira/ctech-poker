@@ -3,12 +3,13 @@ package v1
 import (
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 )
 
 type dailyRewardHandlers struct{ svc *dailyreward.Service }
 
-func RegisterDailyReward(router fiber.Router, auth fiber.Handler, svc *dailyreward.Service, spinLimiter *RateLimiter) {
+func RegisterDailyReward(router fiber.Router, auth fiber.Handler, svc *dailyreward.Service, spinLimiter *ratelimit.Limiter) {
 	h := &dailyRewardHandlers{svc: svc}
 	g := router.Group("/sandbox-credits", auth)
 	g.Post("/", rateLimit(spinLimiter, ipKey("dailyreward:spin")), h.spin)

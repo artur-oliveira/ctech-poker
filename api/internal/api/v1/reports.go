@@ -2,17 +2,17 @@ package v1
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 )
 
-type ReportLimiters struct{ Player, IP *RateLimiter }
+type ReportLimiters struct{ Player, IP *ratelimit.Limiter }
 
 type reportRequest struct {
 	TargetPlayerID string           `json:"target_player_id"`
@@ -50,17 +50,12 @@ func RegisterReports(router fiber.Router, auth fiber.Handler, svc *reports.Servi
 		})
 }
 
-func reportRateLimit(limiter *RateLimiter, keyFn func(fiber.Ctx) string, cfg *config.Config) fiber.Handler {
+func reportRateLimit(limiter *ratelimit.Limiter, keyFn func(fiber.Ctx) string, cfg *config.Config) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if limiter == nil {
 			return c.Next()
 		}
-		allowed, err := limiter.Allow(c.Context(), keyFn(c))
-		if err != nil {
-			slog.Warn("report rate limiter backend error; allowing request", "err", err)
-			return c.Next()
-		}
-		if allowed {
+		if allowFailOpen(c.Context(), limiter, keyFn(c)) {
 			return c.Next()
 		}
 		return problem.New(http.StatusTooManyRequests, "/problems/report-rate-limited", "Report Rate Limited", "too many reports; try again later").Send(c)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/promocode"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 )
@@ -28,7 +29,7 @@ type SandboxPurchaseRefundRequest struct {
 	IdempotencyKey string `json:"idem_key,omitempty"`
 }
 
-func RegisterSandboxPurchase(router fiber.Router, auth fiber.Handler, svc *sandboxpurchase.Service, purchaseLimiter *RateLimiter) {
+func RegisterSandboxPurchase(router fiber.Router, auth fiber.Handler, svc *sandboxpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &sandboxPurchaseHandlers{svc: svc}
 	g := router.Group("/wallet/sandbox-purchase", auth)
 	g.Get("/skus", h.listSkus)

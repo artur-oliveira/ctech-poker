@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -142,15 +143,15 @@ func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
 }
 
 func TestReactionLimiterAllowsOnlyOneBurstPerWindow(t *testing.T) {
-	limiter := NewRateLimiter(nil, 1, 2*time.Second)
+	limiter := newLimiter(ratelimit.NewMemoryCounter(), "ws-reaction", 1, 2*time.Second)
 	ctx := context.Background()
-	if !limiter.AllowFailOpen(ctx, wsReactionKey("p1")) {
+	if !allowFailOpen(ctx, limiter, "p1") {
 		t.Fatal("first reaction should be allowed")
 	}
-	if limiter.AllowFailOpen(ctx, wsReactionKey("p1")) {
+	if allowFailOpen(ctx, limiter, "p1") {
 		t.Fatal("second reaction in the same window should be blocked")
 	}
-	if !limiter.AllowFailOpen(ctx, wsReactionKey("p2")) {
+	if !allowFailOpen(ctx, limiter, "p2") {
 		t.Fatal("one player's reaction limit must not block another player")
 	}
 }
