@@ -2,8 +2,8 @@ package v1
 
 import (
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type dailyRewardHandlers struct{ svc *dailyreward.Service }
@@ -30,7 +30,7 @@ func (h *dailyRewardHandlers) spin(c fiber.Ctx) error {
 	}
 	status, err := h.svc.Status(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("spin failed", c, err).Send(c)
+		return internalProblem("spin failed", err).Send(c)
 	}
 	return c.JSON(spinResponse{Amount: amount, Status: status})
 }
@@ -45,7 +45,7 @@ type spinResponse struct {
 func (h *dailyRewardHandlers) cooldown(c fiber.Ctx) error {
 	status, err := h.svc.Status(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("cooldown check failed", c, err).Send(c)
+		return internalProblem("cooldown check failed", err).Send(c)
 	}
 	return c.JSON(status)
 }
@@ -56,8 +56,8 @@ func (h *dailyRewardHandlers) cooldown(c fiber.Ctx) error {
 // mode" that the frontend needs to see and act on) — anything else (store
 // failures, tier-pick failures) stays a generic internal error.
 func walletOrInternalProblem(err error, detail string, c fiber.Ctx) *problem.Problem {
-	if p, ok := problem.FromWalletError(err); ok {
+	if p, ok := walletProblem(err); ok {
 		return p
 	}
-	return problem.InternalServer(detail, c, err)
+	return internalProblem(detail, err)
 }

@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type pokerStatsReader interface {
@@ -62,7 +62,7 @@ func RegisterPokerStats(router fiber.Router, auth fiber.Handler, store pokerStat
 	router.Get("/players/me/poker-stats", auth, func(c fiber.Ctx) error {
 		stats, err := store.Get(c.Context(), c.Locals(localsUserID).(string), currencyModeParam(c))
 		if err != nil {
-			return problem.InternalServer("failed to load poker stats", c, err).Send(c)
+			return internalProblem("failed to load poker stats", err).Send(c)
 		}
 		return c.JSON(statsResponse(stats, nil, false))
 	})
@@ -74,11 +74,11 @@ func RegisterPokerStats(router fiber.Router, auth fiber.Handler, store pokerStat
 		userID := c.Locals(localsUserID).(string)
 		stats, err := store.Get(c.Context(), userID, currencyModeParam(c))
 		if err != nil {
-			return problem.InternalServer("failed to load poker stats", c, err).Send(c)
+			return internalProblem("failed to load poker stats", err).Send(c)
 		}
 		profile, err := players.GetOrCreate(c.Context(), userID)
 		if err != nil {
-			return problem.InternalServer("failed to load player profile", c, err).Send(c)
+			return internalProblem("failed to load player profile", err).Send(c)
 		}
 		return c.JSON(statsResponse(stats, profile.StatsGoals, true))
 	})
@@ -94,11 +94,11 @@ func RegisterPokerStats(router fiber.Router, auth fiber.Handler, store pokerStat
 			if errors.Is(err, player.ErrInvalidStatsGoals) {
 				return problem.BadRequest("goals keys must be one of vpip_rate, pfr_rate, three_bet_rate").Send(c)
 			}
-			return problem.InternalServer("failed to update stats goals", c, err).Send(c)
+			return internalProblem("failed to update stats goals", err).Send(c)
 		}
 		stats, err := store.Get(c.Context(), userID, currencyModeParam(c))
 		if err != nil {
-			return problem.InternalServer("failed to load poker stats", c, err).Send(c)
+			return internalProblem("failed to load poker stats", err).Send(c)
 		}
 		return c.JSON(statsResponse(stats, profile.StatsGoals, true))
 	})

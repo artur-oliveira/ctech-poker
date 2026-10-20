@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 // Public avatar reads.

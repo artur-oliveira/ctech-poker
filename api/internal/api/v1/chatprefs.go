@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/observability"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/chatprefs"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type chatPrefsStore interface {
@@ -48,12 +48,12 @@ func RegisterChatPrefs(router fiber.Router, auth fiber.Handler, store chatPrefsS
 
 func (h *chatPrefsHandlers) get(c fiber.Ctx) error {
 	if h.store == nil {
-		return problem.InternalServer("chat preferences unavailable", c, errors.New("no store wired")).Send(c)
+		return internalProblem("chat preferences unavailable", errors.New("no store wired")).Send(c)
 	}
 	viewerID := c.Locals(localsUserID).(string)
 	prefs, err := h.store.Get(c.Context(), viewerID)
 	if err != nil {
-		return problem.InternalServer("failed to load chat preferences", c, err).Send(c)
+		return internalProblem("failed to load chat preferences", err).Send(c)
 	}
 	if prefs == nil {
 		return c.JSON(fiber.Map{"extra_words": []string{}})
@@ -63,7 +63,7 @@ func (h *chatPrefsHandlers) get(c fiber.Ctx) error {
 
 func (h *chatPrefsHandlers) save(c fiber.Ctx) error {
 	if h.store == nil {
-		return problem.InternalServer("chat preferences unavailable", c, errors.New("no store wired")).Send(c)
+		return internalProblem("chat preferences unavailable", errors.New("no store wired")).Send(c)
 	}
 	var req chatPrefsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -79,7 +79,7 @@ func (h *chatPrefsHandlers) save(c fiber.Ctx) error {
 	case errors.Is(err, chatprefs.ErrInvalidPlayer):
 		return problem.BadRequest("player is invalid").Send(c)
 	case err != nil:
-		return problem.InternalServer("failed to save chat preferences", c, err).Send(c)
+		return internalProblem("failed to save chat preferences", err).Send(c)
 	}
 	if h.invalidator != nil {
 		if err := h.invalidator.Invalidate(c.Context(), viewerID); err != nil {

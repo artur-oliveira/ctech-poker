@@ -5,8 +5,8 @@ import (
 	"net/url"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 )
 
@@ -42,14 +42,14 @@ func (h *handRevealHandlers) loadEligibleRecord(c fiber.Ctx, playerID, handID st
 	// create handler, which does the same lookup for the same reason).
 	participant, err := h.sessions.GetHand(c.Context(), playerID, roomstore.CurrencyModeSandbox, handID)
 	if err != nil {
-		return nil, problem.InternalServer("failed to load hand", c, err)
+		return nil, internalProblem("failed to load hand", err)
 	}
 	if participant == nil {
 		return nil, problem.NotFound("hand not found")
 	}
 	record, err := h.records.Get(c.Context(), handID)
 	if err != nil {
-		return nil, problem.InternalServer("failed to load hand reveal", c, err)
+		return nil, internalProblem("failed to load hand reveal", err)
 	}
 	if record == nil {
 		return nil, problem.NotFound("hand reveal not available")
@@ -75,7 +75,7 @@ func (h *handRevealHandlers) reveal(c fiber.Ctx) error {
 	}
 	paid, err := h.svc.HasPaid(c.Context(), handID, playerID)
 	if err != nil {
-		return problem.InternalServer("failed to check payment", c, err).Send(c)
+		return internalProblem("failed to check payment", err).Send(c)
 	}
 	if paid {
 		return problem.BadRequest("already purchased").Send(c)
@@ -99,7 +99,7 @@ func (h *handRevealHandlers) check(c fiber.Ctx) error {
 	}
 	paid, err := h.svc.HasPaid(c.Context(), handID, playerID)
 	if err != nil {
-		return problem.InternalServer("failed to check payment", c, err).Send(c)
+		return internalProblem("failed to check payment", err).Send(c)
 	}
 	resp := fiber.Map{"fee": record.BigBlind, "already_paid": paid}
 	if paid {

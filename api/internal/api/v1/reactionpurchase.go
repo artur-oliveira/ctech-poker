@@ -6,7 +6,7 @@ import (
 	"uuid"
 
 	"github.com/gofiber/fiber/v3"
-	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 )
 
@@ -78,7 +78,7 @@ func (h *reactionPurchaseHandlers) list(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	records, lastKey, err := h.svc.List(c.Context(), userID, limitParam(c), decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("list reaction purchases failed", c, err).Send(c)
+		return internalProblem("list reaction purchases failed", err).Send(c)
 	}
 	return sendPage(c, records, lastKey, cursor)
 }

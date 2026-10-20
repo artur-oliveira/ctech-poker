@@ -2,7 +2,7 @@ package v1
 
 import (
 	"github.com/gofiber/fiber/v3"
-	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/api-commons/problem"
 )
 
 // WalletAlertPrefsRequest is the body for PUT /players/me/wallet-alerts.
@@ -19,7 +19,7 @@ func (h *playerHandlers) walletAlertsGet(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	prefs, err := h.walletAlerts.Get(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("load wallet alert prefs failed", c, err).Send(c)
+		return internalProblem("load wallet alert prefs failed", err).Send(c)
 	}
 	if prefs == nil {
 		return c.JSON(fiber.Map{"min_sandbox_balance": 0, "max_purchase_cents": 0})
@@ -41,7 +41,7 @@ func (h *playerHandlers) walletAlertsPut(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	prefs, err := h.walletAlerts.Set(c.Context(), userID, req.MinSandboxBalance, req.MaxPurchaseCents)
 	if err != nil {
-		return problem.InternalServer("save wallet alert prefs failed", c, err).Send(c)
+		return internalProblem("save wallet alert prefs failed", err).Send(c)
 	}
 	return c.JSON(prefs)
 }
@@ -52,7 +52,7 @@ func (h *playerHandlers) walletAlertsDelete(c fiber.Ctx) error {
 	}
 	userID := c.Locals(localsUserID).(string)
 	if err := h.walletAlerts.Delete(c.Context(), userID); err != nil {
-		return problem.InternalServer("delete wallet alert prefs failed", c, err).Send(c)
+		return internalProblem("delete wallet alert prefs failed", err).Send(c)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/player"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type reactionWheelRequest struct {
@@ -20,7 +20,7 @@ func RegisterReactionWheel(router fiber.Router, auth fiber.Handler, players *pla
 	g.Get("", func(c fiber.Ctx) error {
 		profile, err := players.GetOrCreate(c.Context(), c.Locals(localsUserID).(string))
 		if err != nil {
-			return problem.InternalServer("failed to load reaction wheel", c, err).Send(c)
+			return internalProblem("failed to load reaction wheel", err).Send(c)
 		}
 		return c.JSON(fiber.Map{"reaction_ids": profile.ReactionWheel})
 	})
@@ -38,7 +38,7 @@ func RegisterReactionWheel(router fiber.Router, auth fiber.Handler, players *pla
 			case errors.Is(err, player.ErrReactionNotOwned):
 				return problem.BadRequest("reaction_ids includes a premium reaction you do not own").Send(c)
 			}
-			return problem.InternalServer("failed to update reaction wheel", c, err).Send(c)
+			return internalProblem("failed to update reaction wheel", err).Send(c)
 		}
 		return c.JSON(fiber.Map{"reaction_ids": profile.ReactionWheel})
 	})

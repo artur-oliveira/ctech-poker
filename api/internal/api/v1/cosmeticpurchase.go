@@ -6,9 +6,9 @@ import (
 	"uuid"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type cosmeticPurchaseHandlers struct{ svc *cosmeticpurchase.Service }
@@ -93,7 +93,7 @@ func (h *cosmeticPurchaseHandlers) list(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	records, lastKey, err := h.svc.List(c.Context(), userID, cosmetics.Kind(c.Params("kind")), limitParam(c), decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("list cosmetic purchases failed", c, err).Send(c)
+		return internalProblem("list cosmetic purchases failed", err).Send(c)
 	}
 	return sendPage(c, records, lastKey, cursor)
 }

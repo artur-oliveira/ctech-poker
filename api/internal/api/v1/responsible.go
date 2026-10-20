@@ -7,7 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/responsible"
 )
 
@@ -48,10 +48,10 @@ func RegisterResponsible(router fiber.Router, auth fiber.Handler, svc responsibl
 }
 
 func (h *responsibleHandlers) fail(c fiber.Ctx, err error, msg string) error {
-	if p, ok := problem.FromResponsibleError(err); ok {
+	if p, ok := responsibleProblem(err); ok {
 		return p.Send(c)
 	}
-	return problem.InternalServer(msg, c, err).Send(c)
+	return internalProblem(msg, err).Send(c)
 }
 
 func userOf(c fiber.Ctx) string { return c.Locals(localsUserID).(string) }

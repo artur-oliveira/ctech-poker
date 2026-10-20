@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/api-commons/jwtverify"
-	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/api-commons/problem"
 )
 
 // ScopeErasureEligibility is carried by the service token ctech-account
@@ -26,11 +26,11 @@ func RegisterErasure(router fiber.Router, verifier *jwtverify.Verifier, accountC
 	router.Get("/internal/erasure/eligibility/:sub", func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			return problem.Unauthorized("missing bearer token").Send(c)
+			return unauthorizedProblem("missing bearer token").Send(c)
 		}
 		claims, err := verifier.VerifyClaims(c.Context(), strings.TrimPrefix(authHeader, "Bearer "))
 		if err != nil || claims == nil {
-			return problem.Unauthorized("invalid credentials").Send(c)
+			return unauthorizedProblem("invalid credentials").Send(c)
 		}
 		if accountClientID == "" || claims.SID != "" || claims.AZP != accountClientID || !claims.HasScope(ScopeErasureEligibility) {
 			return problem.Forbidden("erasure eligibility is reserved to ctech-account").Send(c)

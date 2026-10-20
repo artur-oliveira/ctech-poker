@@ -11,7 +11,7 @@ import (
 	"github.com/valkey-io/valkey-go"
 	"gopkg.aoctech.app/api-commons/cache"
 
-	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/api-commons/problem"
 )
 
 // incrAndBoundTTLScript atomically increments key and guarantees it carries a
@@ -149,7 +149,7 @@ func rateLimit(rl *RateLimiter, keyFn func(c fiber.Ctx) string) fiber.Handler {
 			// #319: retry_after_seconds is the limiter's own fixed window —
 			// the window that was just hit, not a per-request remaining-time
 			// estimate (the backend, Redis or in-memory, doesn't track that).
-			return problem.TooManyRequests(int(rl.window.Seconds())).Send(c)
+			return problem.TooManyRequestsAfter(limiterTooManyRequestsDetail, int(rl.window.Seconds())).Send(c)
 		}
 		return c.Next()
 	}

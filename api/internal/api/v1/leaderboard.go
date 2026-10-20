@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type leaderboardHandlers struct {
@@ -85,7 +85,7 @@ func (h *leaderboardHandlers) top(c fiber.Ctx) error {
 		return problem.BadRequest(err.Error()).Send(c)
 	}
 	if err := h.resolveNames(c.Context(), entries); err != nil {
-		return problem.InternalServer("failed to resolve player names", c, err).Send(c)
+		return internalProblem("failed to resolve player names", err).Send(c)
 	}
 	return sendPage(c, entries, lastKey, cursor)
 }
@@ -111,7 +111,7 @@ func (h *leaderboardHandlers) me(c fiber.Ctx) error {
 	}
 	entries := []leaderboard.Entry{info.Entry}
 	if err := h.resolveNames(c.Context(), entries); err != nil {
-		return problem.InternalServer("failed to resolve player names", c, err).Send(c)
+		return internalProblem("failed to resolve player names", err).Send(c)
 	}
 	return c.JSON(meResponse{Ranked: true, Rank: &info.Rank, Total: &info.Total, Entry: &entries[0]})
 }

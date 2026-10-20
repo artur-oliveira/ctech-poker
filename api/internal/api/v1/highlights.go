@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type highlightsReader interface {
@@ -26,14 +26,14 @@ func RegisterHighlights(router fiber.Router, auth fiber.Handler, sessions tableS
 		userID := c.Locals(localsUserID).(string)
 		hasSession, err := sessions.HasSessionAtTable(c.Context(), userID, tableID)
 		if err != nil {
-			return problem.InternalServer("failed to check table session", c, err).Send(c)
+			return internalProblem("failed to check table session", err).Send(c)
 		}
 		if !hasSession {
 			return problem.NotFound("highlight not found").Send(c)
 		}
 		highlight, err := store.GetToday(c.Context(), tableID)
 		if err != nil {
-			return problem.InternalServer("failed to load highlight", c, err).Send(c)
+			return internalProblem("failed to load highlight", err).Send(c)
 		}
 		if highlight == nil {
 			return problem.NotFound("highlight not found").Send(c)

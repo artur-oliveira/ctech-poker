@@ -5,8 +5,8 @@ import (
 	"net/url"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/matchup"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type matchupReader interface {
@@ -26,7 +26,7 @@ func RegisterMatchups(router fiber.Router, auth fiber.Handler, store matchupRead
 		}
 		pair, err := store.Get(c.Context(), currencyModeParam(c), viewerID, opponentID)
 		if err != nil {
-			return problem.InternalServer("failed to load matchup stats", c, err).Send(c)
+			return internalProblem("failed to load matchup stats", err).Send(c)
 		}
 		// pair.Stats is always idLow/idHigh-relative; remap to
 		// viewer/opponent here, once, rather than in storage.

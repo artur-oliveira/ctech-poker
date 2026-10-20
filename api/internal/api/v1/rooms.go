@@ -15,12 +15,12 @@ import (
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/api-commons/observability"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/api-commons/ws"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
@@ -127,7 +127,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	}
 	userID, ok := c.Locals(localsUserID).(string)
 	if !ok || userID == "" {
-		return problem.Unauthorized("invalid credentials").Send(c)
+		return unauthorizedProblem("invalid credentials").Send(c)
 	}
 	equity := true
 	if req.EquityDisplayEnabled != nil {
@@ -166,7 +166,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility == "private" {
 		shareCode, err := newShareCode()
 		if err != nil {
-			return problem.InternalServer("failed to create room", c, err).Send(c)
+			return internalProblem("failed to create room", err).Send(c)
 		}
 		room.ShareCode = shareCode
 		room.BlindEscalation = req.BlindEscalation
@@ -176,7 +176,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	}
 	if h.rooms != nil {
 		if err := h.rooms.Create(c.Context(), room); err != nil {
-			return problem.InternalServer("failed to create room", c, err).Send(c)
+			return internalProblem("failed to create room", err).Send(c)
 		}
 		h.broadcastRoomCreated(c, room)
 	}
@@ -211,7 +211,7 @@ func (h *roomHandlers) listPublic(c fiber.Ctx) error {
 	cursor := c.Query("cursor")
 	rooms, lastKey, err := h.rooms.ListPublic(c.Context(), 50, decodeCursor(cursor))
 	if err != nil {
-		return problem.InternalServer("failed to list rooms", c, err).Send(c)
+		return internalProblem("failed to list rooms", err).Send(c)
 	}
 	return sendPage(c, rooms, lastKey, cursor)
 }
@@ -232,7 +232,7 @@ func (h *roomHandlers) listBuckets(c fiber.Ctx) error {
 		return aggregateBuckets(rooms, mode), nil
 	})
 	if err != nil {
-		return problem.InternalServer("failed to list rooms", c, err).Send(c)
+		return internalProblem("failed to list rooms", err).Send(c)
 	}
 	return c.JSON(fiber.Map{"data": buckets})
 }
@@ -358,7 +358,7 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	}
 	userID, ok := c.Locals(localsUserID).(string)
 	if !ok || userID == "" {
-		return problem.Unauthorized("invalid credentials").Send(c)
+		return unauthorizedProblem("invalid credentials").Send(c)
 	}
 
 	// A retry of this same click (or a second tab) must land on the seat the
@@ -380,7 +380,7 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	// never the whole public directory (#213).
 	rooms, err := h.rooms.ListBucket(c.Context(), req.CurrencyMode, req.SmallBlind, req.BigBlind, req.MaxSeats)
 	if err != nil {
-		return problem.InternalServer("failed to list rooms", c, err).Send(c)
+		return internalProblem("failed to list rooms", err).Send(c)
 	}
 	roomID, created, err := seatInBucket(
 		openRoomsInBucket(rooms, req),
@@ -393,10 +393,10 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 		if errors.Is(err, buyin.ErrTermsNotAccepted) {
 			return problem.Forbidden(err.Error()).Send(c)
 		}
-		if p, ok := problem.FromResponsibleError(err); ok {
+		if p, ok := responsibleProblem(err); ok {
 			return p.Send(c)
 		}
-		if p, ok := problem.FromWalletError(err); ok {
+		if p, ok := walletProblem(err); ok {
 			return p.Send(c)
 		}
 		return problem.Conflict(err.Error()).Send(c)
@@ -508,7 +508,7 @@ func (h *roomHandlers) broadcastRoomCreated(c fiber.Ctx, room roomstore.Room) {
 func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 	room, err := h.rooms.Get(c.Context(), c.Params("id"))
 	if err != nil {
-		return problem.InternalServer("failed to get room", c, err).Send(c)
+		return internalProblem("failed to get room", err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
@@ -516,7 +516,7 @@ func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 	userID, _ := c.Locals(localsUserID).(string)
 	allowed, err := h.privateAccessAllowed(c.Context(), room, userID, "")
 	if err != nil {
-		return problem.InternalServer("failed to validate private room access", c, err).Send(c)
+		return internalProblem("failed to validate private room access", err).Send(c)
 	}
 	if !allowed {
 		return problem.Forbidden("private room access required").Send(c)
@@ -529,7 +529,7 @@ func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
 	room, err := h.rooms.GetByShareCode(c.Context(), c.Params("code"))
 	if err != nil {
-		return problem.InternalServer("failed to get room", c, err).Send(c)
+		return internalProblem("failed to get room", err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
@@ -546,7 +546,7 @@ func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
 func (h *roomHandlers) seated(c fiber.Ctx) error {
 	room, err := h.rooms.Get(c.Context(), c.Params("id"))
 	if err != nil {
-		return problem.InternalServer("failed to get room", c, err).Send(c)
+		return internalProblem("failed to get room", err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
@@ -554,13 +554,13 @@ func (h *roomHandlers) seated(c fiber.Ctx) error {
 	userID, _ := c.Locals(localsUserID).(string)
 	seated, stack, err := h.buyin.Seated(c.Context(), c.Params("id"), userID)
 	if err != nil {
-		return problem.InternalServer("failed to check seat", c, err).Send(c)
+		return internalProblem("failed to check seat", err).Send(c)
 	}
 	resp := fiber.Map{"seated": seated, "stack": stack}
 	if room.CurrencyMode == roomstore.CurrencyModeReal && room.EntryFeeCents > 0 {
 		feeDue, expiresAt, err := h.buyin.FeeStatus(c.Context(), room, userID)
 		if err != nil {
-			return problem.InternalServer("failed to check entry fee status", c, err).Send(c)
+			return internalProblem("failed to check entry fee status", err).Send(c)
 		}
 		resp["entry_fee_cents"] = room.EntryFeeCents
 		resp["fee_due"] = feeDue
@@ -611,7 +611,7 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 	}
 	room, err := h.rooms.Get(c.Context(), c.Params("id"))
 	if err != nil {
-		return problem.InternalServer("failed to get room", c, err).Send(c)
+		return internalProblem("failed to get room", err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
@@ -625,7 +625,7 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 	userID, _ := c.Locals(localsUserID).(string)
 	allowed, err := h.privateAccessAllowed(c.Context(), room, userID, req.ShareCode)
 	if err != nil {
-		return problem.InternalServer("failed to validate private room access", c, err).Send(c)
+		return internalProblem("failed to validate private room access", err).Send(c)
 	}
 	if !allowed {
 		return problem.Forbidden("share code required to join a private room").Send(c)
@@ -635,12 +635,12 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 			return problem.Forbidden(err.Error()).Send(c)
 		}
 		if errors.Is(err, table.ErrNoSeatsAvailable) {
-			return problem.TableFull().Send(c)
+			return tableFullProblem().Send(c)
 		}
-		if p, ok := problem.FromResponsibleError(err); ok {
+		if p, ok := responsibleProblem(err); ok {
 			return p.Send(c)
 		}
-		if p, ok := problem.FromWalletError(err); ok {
+		if p, ok := walletProblem(err); ok {
 			return p.Send(c)
 		}
 		return problem.Conflict(err.Error()).Send(c)
@@ -656,7 +656,7 @@ func (h *roomHandlers) leave(c fiber.Ctx) error {
 	userID, _ := c.Locals(localsUserID).(string)
 	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID, req.IdempotencyKey)
 	if err != nil {
-		if p, ok := problem.FromWalletError(err); ok {
+		if p, ok := walletProblem(err); ok {
 			return p.Send(c)
 		}
 		return problem.Conflict(err.Error()).Send(c)

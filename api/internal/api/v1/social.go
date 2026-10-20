@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/presence"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/social"
@@ -228,7 +228,7 @@ func (h *socialHandlers) listInbox(c fiber.Ctx) error {
 	}
 	result, err := h.hydrateInboxActors(c.Context(), actorID(c), events)
 	if err != nil {
-		return problem.InternalServer("failed to hydrate inbox", c, err).Send(c)
+		return internalProblem("failed to hydrate inbox", err).Send(c)
 	}
 	return sendPage(c, result, lastKey, cursor)
 }
@@ -346,7 +346,7 @@ type rematchInviteBody struct {
 // notification plumbing.
 func (h *socialHandlers) rematchInvite(c fiber.Ctx) error {
 	if h.recent == nil || h.rooms == nil {
-		return problem.InternalServer("rematch is unavailable", c, errors.New("recent players or rooms unavailable")).Send(c)
+		return internalProblem("rematch is unavailable", errors.New("recent players or rooms unavailable")).Send(c)
 	}
 	key, p := socialIdempotencyKey(c)
 	if p != nil {
@@ -369,7 +369,7 @@ func (h *socialHandlers) rematchInvite(c fiber.Ctx) error {
 	// excludes anyone blocked in either direction (recentplayers.Service.List).
 	page, err := h.recent.List(c.Context(), viewer, nil, rematchScanLimit)
 	if err != nil {
-		return problem.InternalServer("failed to resolve recent opponent", c, err).Send(c)
+		return internalProblem("failed to resolve recent opponent", err).Send(c)
 	}
 	var match *recentplayers.Player
 	for i := range page.Players {
@@ -388,7 +388,7 @@ func (h *socialHandlers) rematchInvite(c fiber.Ctx) error {
 	}
 	room, err := h.rooms.Get(c.Context(), roomID)
 	if err != nil {
-		return problem.InternalServer("failed to resolve rematch table", c, err).Send(c)
+		return internalProblem("failed to resolve rematch table", err).Send(c)
 	}
 	if room == nil || (room.Status != "waiting" && room.Status != "active") || room.SeatsTaken >= room.MaxSeats {
 		if body.RoomID != "" {
@@ -454,7 +454,7 @@ func (h *socialHandlers) listFriends(c fiber.Ctx) error {
 	}
 	players, err := h.hydrate(c, edges, false, true)
 	if err != nil {
-		return problem.InternalServer("failed to hydrate friends", c, err).Send(c)
+		return internalProblem("failed to hydrate friends", err).Send(c)
 	}
 	return sendPage(c, players, lastKey, cursor)
 }
@@ -471,7 +471,7 @@ func (h *socialHandlers) listRequests(c fiber.Ctx) error {
 	}
 	players, err := h.hydrate(c, edges, false, false)
 	if err != nil {
-		return problem.InternalServer("failed to hydrate friend requests", c, err).Send(c)
+		return internalProblem("failed to hydrate friend requests", err).Send(c)
 	}
 	return sendPage(c, players, lastKey, cursor)
 }
@@ -484,7 +484,7 @@ func (h *socialHandlers) listBlocked(c fiber.Ctx) error {
 	}
 	players, err := h.hydrate(c, edges, false, false)
 	if err != nil {
-		return problem.InternalServer("failed to hydrate blocked players", c, err).Send(c)
+		return internalProblem("failed to hydrate blocked players", err).Send(c)
 	}
 	return sendPage(c, players, lastKey, cursor)
 }
@@ -521,7 +521,7 @@ func (h *socialHandlers) relationship(c fiber.Ctx) error {
 	}
 	profile, err := h.players.Get(c.Context(), targetID)
 	if err != nil {
-		return problem.InternalServer("failed to load player relationship", c, err).Send(c)
+		return internalProblem("failed to load player relationship", err).Send(c)
 	}
 	if profile == nil {
 		return problem.NotFound("player not found").Send(c)
@@ -678,12 +678,12 @@ func (h *socialHandlers) hydrate(c fiber.Ctx, edges []social.Edge, includeFriend
 
 func (h *socialHandlers) listRecent(c fiber.Ctx) error {
 	if h.recent == nil {
-		return problem.InternalServer("recent players are unavailable", c, errors.New("recent players service unavailable")).Send(c)
+		return internalProblem("recent players are unavailable", errors.New("recent players service unavailable")).Send(c)
 	}
 	cursor := c.Query("cursor")
 	page, err := h.recent.List(c.Context(), actorID(c), decodeCursor(cursor), limitParam(c))
 	if err != nil {
-		return problem.InternalServer("failed to list recent players", c, err).Send(c)
+		return internalProblem("failed to list recent players", err).Send(c)
 	}
 	ids := make([]string, 0, len(page.Players))
 	for _, item := range page.Players {
@@ -691,7 +691,7 @@ func (h *socialHandlers) listRecent(c fiber.Ctx) error {
 	}
 	profiles, err := h.players.GetMany(c.Context(), ids)
 	if err != nil {
-		return problem.InternalServer("failed to hydrate recent players", c, err).Send(c)
+		return internalProblem("failed to hydrate recent players", err).Send(c)
 	}
 	edges, err := h.svc.Relationships(c.Context(), actorID(c), ids)
 	if err != nil {
@@ -707,7 +707,7 @@ func (h *socialHandlers) listRecent(c fiber.Ctx) error {
 	if len(friendIDs) > 0 && h.presence != nil {
 		statuses, err = h.presence.GetMany(c.Context(), friendIDs)
 		if err != nil {
-			return problem.InternalServer("failed to hydrate recent presence", c, err).Send(c)
+			return internalProblem("failed to hydrate recent presence", err).Send(c)
 		}
 	}
 	result := make([]socialPlayerResponse, 0, len(page.Players))
@@ -786,7 +786,7 @@ func socialProblem(err error, c fiber.Ctx) *problem.Problem {
 	case errors.Is(err, social.ErrInviteExpired):
 		return problem.New(http.StatusConflict, "/problems/invite-expired", "Invite Expired", "the table invite has expired")
 	case errors.Is(err, social.ErrRoomFull):
-		return problem.TableFull()
+		return tableFullProblem()
 	case errors.Is(err, social.ErrRoomClosed):
 		return problem.New(http.StatusConflict, "/problems/room-closed", "Room Closed", "the room is no longer available")
 	case errors.Is(err, social.ErrInviteAlreadySent):
@@ -802,8 +802,8 @@ func socialProblem(err error, c fiber.Ctx) *problem.Problem {
 	case errors.Is(err, player.ErrFriendCodeCollision):
 		return problem.New(http.StatusServiceUnavailable, "/problems/friend-code-unavailable", "Friend Code Unavailable", "friend code is temporarily unavailable")
 	case err != nil:
-		return problem.InternalServer("social operation failed", c, err)
+		return internalProblem("social operation failed", err)
 	default:
-		return problem.InternalServer("social operation failed", c, errors.New("unknown social error"))
+		return internalProblem("social operation failed", errors.New("unknown social error"))
 	}
 }

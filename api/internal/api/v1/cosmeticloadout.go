@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticloadout"
-	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
 type cosmeticLoadoutHandlers struct{ svc *cosmeticloadout.Service }
@@ -46,7 +46,7 @@ func (h *cosmeticLoadoutHandlers) list(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	loadouts, err := h.svc.List(c.Context(), userID)
 	if err != nil {
-		return problem.InternalServer("list cosmetic loadouts failed", c, err).Send(c)
+		return internalProblem("list cosmetic loadouts failed", err).Send(c)
 	}
 	// A bounded (max 5) per-player set — same permanently-one-page envelope
 	// RegisterCosmeticPurchase's catalog endpoint uses.
@@ -81,6 +81,6 @@ func cosmeticLoadoutProblem(err error) *problem.Problem {
 	case errors.Is(err, cosmeticloadout.ErrLoadoutLimit):
 		return problem.Conflict(err.Error())
 	default:
-		return problem.InternalServer("cosmetic loadout operation failed", nil, err)
+		return internalProblem("cosmetic loadout operation failed", err)
 	}
 }
