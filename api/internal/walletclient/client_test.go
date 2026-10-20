@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
@@ -31,7 +30,6 @@ func TestIdempotentMovementRetriesTransientFailure(t *testing.T) {
 	defer srv.Close()
 	client := New(&config.Config{Env: "test", WalletURL: srv.URL, CtechURL: srv.URL,
 		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
-	client.retryDelay = func(time.Duration) {}
 
 	if err := client.Credit(t.Context(), "user-1", 100, "stable-key", "test", "Descricao de teste"); err != nil {
 		t.Fatalf("credit after retry: %v", err)
@@ -237,5 +235,54 @@ func TestDebitRealSendsExpectedRequestBody(t *testing.T) {
 	}
 	if gotBody.Description != "Taxa de entrada, mesa #t1" {
 		t.Fatalf("description on the wire = %q", gotBody.Description)
+	}
+}
+
+func TestKeyedMovementDoesNotRetryTooManyRequests(t *testing.T) {
+	var attempts atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/sandbox/credit", func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL,
+		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
+
+	if err := client.Credit(t.Context(), "user-1", 100, "stable-key", "test", "d"); err == nil {
+		t.Fatal("expected 429 to surface")
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("429 retried %d times", attempts.Load())
+	}
+}
+
+func TestReleaseHoldRetriesWithoutCallerKey(t *testing.T) {
+	var attempts atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/holds/h1/release", func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) < 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL,
+		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
+
+	if err := client.ReleaseHold(t.Context(), "user-1", "h1", ""); err != nil {
+		t.Fatalf("release after retry: %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts.Load())
 	}
 }

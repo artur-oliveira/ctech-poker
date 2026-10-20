@@ -8,21 +8,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
 	"gopkg.aoctech.app/api-commons/observability"
+	"gopkg.aoctech.app/api-commons/resilient"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
@@ -110,23 +106,13 @@ type Client struct {
 	gameStatusTokens  *oauth2client.TokenManager
 	balanceTokens     *oauth2client.TokenManager
 	env               string
-	breakersMu        sync.Mutex
-	breakers          map[string]breakerState
-	retryDelay        func(time.Duration)
-}
-
-type breakerState struct {
-	failures  int
-	openUntil time.Time
 }
 
 const (
-	maxWalletAttempts = 3
-	breakerThreshold  = 5
-	breakerCooldown   = 15 * time.Second
+	walletTimeout       = 6 * time.Second
+	walletDialTimeout   = 2 * time.Second
+	walletHeaderTimeout = 3 * time.Second
 )
-
-var errCircuitOpen = errors.New("walletclient: circuit open")
 
 // Balances is ctech-wallet's M2M balance snapshot (GET
 // /internal/wallet/balance/:user_id) — real is deliberately never exposed
@@ -140,17 +126,13 @@ type Balances struct {
 // ctech-wallet's own kycclient pattern of one scope per token manager — a
 // credit-scoped token must never be reused for a debit call or vice versa.
 func New(cfg *config.Config, cacheB cache.Backend) *Client {
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 2 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   2 * time.Second,
-		ResponseHeaderTimeout: 3 * time.Second,
-		ExpectContinueTimeout: time.Second,
-		IdleConnTimeout:       60 * time.Second,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   20,
-	}
-	httpClient := &http.Client{Timeout: 6 * time.Second, Transport: transport}
+	// Retry only when the request carries an Idempotency-Key (see send); a circuit
+	// per endpoint so one failing route does not cut off its siblings.
+	httpClient := resilient.NewHTTPClient(
+		resilient.WithTimeout(walletTimeout),
+		resilient.WithDialTimeouts(walletDialTimeout, walletDialTimeout, walletHeaderTimeout),
+		resilient.WithPerEndpointCircuit(),
+	)
 	baseAuth := strings.TrimRight(cfg.CtechURL, "/")
 	base := strings.TrimRight(cfg.WalletURL, "/")
 	return &Client{
@@ -164,8 +146,6 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 		gameStatusTokens:  oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
 		balanceTokens:     oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
 		env:               cfg.Env,
-		breakers:          make(map[string]breakerState),
-		retryDelay:        time.Sleep,
 	}
 }
 
@@ -257,93 +237,24 @@ func jwtGrantedScope(token, want string) (granted bool, ok bool) {
 	return false, true
 }
 
-func retryableStatus(status int) bool {
-	switch status {
-	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests,
-		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return true
-	default:
-		return false
+// send runs one wallet request through the resilient client. The client retries
+// a transport error or 5xx only for a safe method or a request carrying an
+// Idempotency-Key, so a non-empty key is what makes a POST retry-safe here; an
+// empty key sends the request exactly once. (408/425/429 are never retried.)
+func (c *Client) send(req *http.Request, idempotencyKey string) (*http.Response, error) {
+	if idempotencyKey != "" {
+		req.Header.Set(resilient.HeaderIdempotencyKey, idempotencyKey)
 	}
+	return c.http.Do(req)
 }
 
-func retryAfter(resp *http.Response, fallback time.Duration) time.Duration {
-	if resp == nil {
-		return fallback
+// releaseRetryKey keeps ReleaseHold retry-safe (the wallet replays a release by
+// hold) even when the caller passes no key.
+func releaseRetryKey(key, userID, holdID string) string {
+	if key != "" {
+		return key
 	}
-	value := strings.TrimSpace(resp.Header.Get("Retry-After"))
-	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
-		return min(2*time.Second, time.Duration(seconds)*time.Second)
-	}
-	if at, err := http.ParseTime(value); err == nil {
-		return min(2*time.Second, max(0, time.Until(at)))
-	}
-	return fallback
-}
-
-func (c *Client) breakerAllows(endpoint string, now time.Time) bool {
-	c.breakersMu.Lock()
-	defer c.breakersMu.Unlock()
-	state := c.breakers[endpoint]
-	return state.openUntil.IsZero() || !now.Before(state.openUntil)
-}
-
-func (c *Client) recordResult(endpoint string, transientFailure bool) {
-	c.breakersMu.Lock()
-	defer c.breakersMu.Unlock()
-	if !transientFailure {
-		delete(c.breakers, endpoint)
-		return
-	}
-	state := c.breakers[endpoint]
-	state.failures++
-	if state.failures >= breakerThreshold {
-		state.openUntil = time.Now().Add(breakerCooldown)
-	}
-	c.breakers[endpoint] = state
-}
-
-// do executes one wallet request with a bounded retry budget. Callers may set
-// retrySafe only when the operation is intrinsically idempotent (GET/release)
-// or carries a non-empty idempotency key.
-func (c *Client) do(req *http.Request, retrySafe bool) (*http.Response, error) {
-	endpoint := req.URL.Path
-	if !c.breakerAllows(endpoint, time.Now()) {
-		return nil, errCircuitOpen
-	}
-	for attempt := 0; attempt < maxWalletAttempts; attempt++ {
-		current := req
-		if attempt > 0 {
-			current = req.Clone(req.Context())
-			if req.GetBody != nil {
-				body, err := req.GetBody()
-				if err != nil {
-					return nil, err
-				}
-				current.Body = body
-			}
-		}
-		resp, err := c.http.Do(current)
-		transient := err != nil || (resp != nil && retryableStatus(resp.StatusCode))
-		if !transient {
-			c.recordResult(endpoint, false)
-			return resp, err
-		}
-		if !retrySafe || attempt == maxWalletAttempts-1 || req.Context().Err() != nil {
-			c.recordResult(endpoint, true)
-			return resp, err
-		}
-		ceiling := min(800*time.Millisecond, 100*time.Millisecond*(1<<attempt))
-		delay := retryAfter(resp, time.Duration(rand.Int64N(int64(ceiling)+1)))
-		if resp != nil {
-			if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, 4096)); copyErr != nil {
-				observability.Warn(req.Context(), "wallet retry response drain failed", copyErr, "endpoint", endpoint)
-			}
-			closeResponseBody(req.Context(), resp.Body)
-		}
-		c.retryDelay(delay)
-	}
-	return nil, errors.New("walletclient: retry loop exhausted")
+	return resilient.DeterministicKey("release", userID, holdID)
 }
 
 func closeResponseBody(ctx context.Context, body io.ReadCloser) {
@@ -403,7 +314,7 @@ func (c *Client) HoldGame(ctx context.Context, userID string, amount int64, tabl
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.do(req, idempotencyKey != "")
+	resp, err := c.send(req, idempotencyKey)
 	if err != nil {
 		return "", fmt.Errorf("walletclient: request: %w", err)
 	}
@@ -439,7 +350,7 @@ func (c *Client) ReleaseHold(ctx context.Context, userID, holdID, idempotencyKey
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.do(req, true)
+	resp, err := c.send(req, releaseRetryKey(idempotencyKey, userID, holdID))
 	if err != nil {
 		return fmt.Errorf("walletclient: request: %w", err)
 	}
@@ -477,7 +388,7 @@ func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, t
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.do(req, idempotencyKey != "")
+	resp, err := c.send(req, idempotencyKey)
 	if err != nil {
 		return fmt.Errorf("walletclient: request: %w", err)
 	}
@@ -503,7 +414,7 @@ func (c *Client) Balances(ctx context.Context, userID string) (*Balances, error)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := c.do(req, true)
+	resp, err := c.send(req, "")
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
@@ -540,7 +451,7 @@ func (c *Client) movementWithResponse(ctx context.Context, url string, tokens *o
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.do(req, idempotencyKey != "")
+	resp, err := c.send(req, idempotencyKey)
 	if err != nil {
 		return "", fmt.Errorf("walletclient: request: %w", err)
 	}
