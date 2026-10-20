@@ -2,7 +2,7 @@ import {App} from 'aws-cdk-lib';
 import {Match, Template} from 'aws-cdk-lib/assertions';
 import {ReconcileStack} from '../lib/reconcile-stack';
 
-function buildStack(cloudwatchAlarmsEnabled = true) {
+function buildStack() {
   const app = new App();
   return Template.fromStack(new ReconcileStack(app, 'TestReconcileStack', {
     environment: 'dev',
@@ -11,11 +11,10 @@ function buildStack(cloudwatchAlarmsEnabled = true) {
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/client-id',
     pokerClientSecretParam: '/ctech/dev/poker/client-secret',
-    cloudwatchAlarmsEnabled,
   }));
 }
 
-test('protects scheduled reconciliation with retry, DLQ and an errors alarm', () => {
+test('protects scheduled reconciliation with retry and a DLQ', () => {
   const template = buildStack();
   template.hasResourceProperties('AWS::Scheduler::Schedule', {
     Name: 'dev-ctech-poker-reconcile',
@@ -36,33 +35,9 @@ test('protects scheduled reconciliation with retry, DLQ and an errors alarm', ()
       })]),
     }),
   });
-  // #30: DLQ-depth + Lambda-errors alarms, both notifying the existing
-  // ctech-prod-alerts topic (imported, not created here).
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
-  template.resourceCountIs('AWS::SNS::Topic', 0);
-  const alerts = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/SQS',
-    MetricName: 'ApproximateNumberOfMessagesVisible',
-    Threshold: 1,
-    ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-    TreatMissingData: 'notBreaching',
-    AlarmActions: [alerts],
-    OKActions: [alerts],
-  });
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/Lambda',
-    MetricName: 'Errors',
-    AlarmActions: [alerts],
-    OKActions: [alerts],
-  });
-});
-
-test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
-  const template = buildStack(false);
+  // Poker creates no CloudWatch alarms and no SNS topic.
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
-  // The schedule and its DLQ are unaffected by the flag.
-  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-ctech-poker-reconcile-dlq'});
+  template.resourceCountIs('AWS::SNS::Topic', 0);
 });
 
 // cmd/reconcile only Querys gsi_status and UpdateItems the row it resolved; there is no

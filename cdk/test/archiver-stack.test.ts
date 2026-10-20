@@ -13,7 +13,7 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
   });
 
   const stack = new ArchiverStack(app, 'TestArchiverStack', {
-    environment: 'dev', actionLogTable: table, cloudwatchAlarmsEnabled: true
+    environment: 'dev', actionLogTable: table
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::S3::Bucket', 1);
@@ -29,39 +29,8 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
     BisectBatchOnFunctionError: true,
     DestinationConfig: {OnFailure: {Destination: {'Fn::GetAtt': [Match.stringLikeRegexp('ArchiverDLQ'), 'Arn']}}},
   });
-  // #30: DLQ-depth + Lambda-errors alarms notifying the existing
-  // ctech-prod-alerts topic (imported via fromTopicArn, not created here).
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  // Poker creates no CloudWatch alarms and no SNS topic.
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
   template.resourceCountIs('AWS::SNS::Topic', 0);
-  const alerts = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/SQS',
-    MetricName: 'ApproximateNumberOfMessagesVisible',
-    TreatMissingData: 'notBreaching',
-    AlarmActions: [alerts],
-    OKActions: [alerts],
-  });
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/Lambda',
-    MetricName: 'Errors',
-    AlarmActions: [alerts],
-    OKActions: [alerts],
-  });
 });
 
-test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
-  const app = new App();
-  const tableStack = new Stack(app, 'TestTableStack2');
-  const table = new dynamodb.TableV2(tableStack, 'TestActionLog2', {
-    partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
-    sortKey: {name: 'sk', type: dynamodb.AttributeType.STRING},
-    dynamoStream: dynamodb.StreamViewType.NEW_IMAGE,
-  });
-  const stack = new ArchiverStack(app, 'TestArchiverNoAlarmsStack', {
-    environment: 'dev', actionLogTable: table, cloudwatchAlarmsEnabled: false
-  });
-  const template = Template.fromStack(stack);
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
-  // The DLQ itself (B10) is unaffected by the flag.
-  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-action-log-archiver-dlq'});
-});

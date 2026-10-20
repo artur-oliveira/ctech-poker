@@ -38,9 +38,7 @@ type Event struct {
 }
 
 // Consumer is one derived writer reacting to a completed hand. Name is the
-// step name used for logging and metrics dimensions, so it must come from a
-// small fixed set (a hand or table id here would be one custom metric per
-// table — see internal/metrics).
+// step name used in logs, so it must come from a small fixed set.
 type Consumer struct {
 	Name string
 	Run  func(ctx context.Context, ev Event) error

@@ -75,9 +75,8 @@ func (a *Actor) budgetFor(cmd Command) time.Duration {
 	}
 }
 
-// budgetCounters is the only observability this has: there is no
-// internal/metrics in this service (#279), so these are asserted in tests and
-// logged at WARN when they move, rather than emitted anywhere.
+// budgetCounters is the only observability this has: they are asserted in
+// tests and logged at WARN when they move, rather than emitted anywhere.
 type budgetCounters struct {
 	// queueSaturations counts commands rejected because the mailbox stayed
 	// full for the whole queue budget.

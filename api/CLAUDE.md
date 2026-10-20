@@ -82,40 +82,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   and `run` returns an aggregated error — failing the invocation so the message lands in the DLQ. Early-attempt failures
   are still counted + logged (`slog.Warn`) and retried next run without failing the invocation. `run` processes the
   whole batch before returning, so one poison entry never blocks the rest.
-- As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a DLQ-depth alarm
-  (`ApproximateNumberOfMessagesVisible >= 1`) + a Lambda-`Errors` alarm on the `ctech-prod-alerts` SNS topic
-  (`cdk/lib/alarms.ts`, `addLambdaDlqAlarms`).
+- No CloudWatch alarms and no custom metrics (removed): the Lambdas keep their DLQs; check them by hand.
 
 ## Conventions (follow these)
 
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
-- **Emission to CloudWatch is disabled (2026-09-05, `internal/metrics/metrics.go`'s `emitDisabled = true`).** #290's
-  own per-step latency + sampled `DynamoConsumedCapacity` work pushed the projected custom-metric series count to
-  ~100-150 (`DynamoConsumedCapacity`'s `Table`×`Operation` dimension alone, ~29 tables × up to 5 ops) on top of the
-  ~36 fixed series from the rest of the package — at CloudWatch's ~$0.30/series/month, an unbudgeted recurring cost
-  nobody signed off on. `metrics.Record` callers are untouched and still accumulate into buckets; `emitLine` now
-  returns before marshalling or writing, so nothing reaches stdout and nothing is ever extracted as a CloudWatch
-  metric. Flip `emitDisabled` back to `false` only alongside a cost review, or once a self-hosted sink (e.g.
-  Prometheus/VictoriaMetrics on the existing EC2 fleet) replaces CloudWatch EMF.
-- **There is exactly one way to emit a metric: `metrics.Record(name, unit, dims, value)` (`internal/metrics`).**
-  Added by #279, after seven performance issues (#204, #207, #218, #220, #221, #222, #233) each shipped their cost
-  reduction pinned by a test and left their production-signal acceptance criterion unmet, every one of them
-  deliberately declining to leave a seventh ad-hoc collector behind. **The mechanism is CloudWatch's embedded metric
-  format**, chosen over a metrics SDK and over OTel because it adds nothing to the runtime: `cmd/server` already logs
-  JSON with `slog` to stdout, `ctech-ec2-agent logs-tail` already ships `/var/log/app/app.log` to the app log group
-  (`cdk/lib/api-stack.ts`), and CloudWatch Logs extracts metrics from any ingested log event carrying an `_aws` node.
-  No SDK, no `PutMetricData` on a hot path, no agent config, no collector to operate. **Everything is a
-  distribution** — CloudWatch derives Sum, SampleCount, Min, Max and percentiles from the values array, so a counter
-  is `Record(name, metrics.Count, dims, 1)` read back as Sum, and there is deliberately no counter/gauge/histogram
-  API. **`Record` never writes a line of its own:** it accumulates into a bucket keyed by (name, unit, dimensions)
-  and emits one EMF document per bucket per flush — every minute, or as soon as a bucket reaches EMF's 100-value
-  array limit. That is not an optimisation, it is the same rule the `tablestore` breaker's transition-only logging
-  follows: the 2026-09-02 storm's symptom was 5,779 lines for one table, and a per-occurrence metric reproduces it on
-  the bill as well as in the log. **Dimension values must come from a bounded set** (an outcome, a step name, an
-  action) — never a table, hand or player id, since every dimension combination is a separate custom metric;
-  `maxSeries` (256) drops the excess and says so once per flush if that rule is broken anyway. Ids stay in the
-  `slog` line next to the `Record` call, which is where a specific table is identified.
+- **No custom metrics.** `internal/metrics` (CloudWatch EMF) and every `metrics.Record` call are gone; signals are `slog`
+  lines (ids stay in the log line). Do not add a metric collector; a self-hosted sink would replace it, not a new CloudWatch series.
 - **Every new user write path goes through the erasure lock.** HTTP routes get it from `authMiddleware`; anything that
   writes per-user rows outside it (a webhook, a background consumer) must call the `BlockedFunc`
   (`erasure.Store.Blocked`) and drop work for a locked or erased user, or the account-deletion purge is undone
@@ -241,27 +215,7 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   queueing trades a bounded loss of gamification for unbounded memory plus a write burst arriving long after the hand.
   Every step is already idempotent per `(table, hand)` or a plain overwrite, so a dropped or timed-out run is the same
   failure mode the pipeline has always tolerated (the process dying mid-flight — see the known gap above).
-  **Instrumented since #279**, through `internal/metrics` (the one metric path — see below): `HandPipelineQueueDepth`
-  on every dispatch (the Maximum statistic against `maxQueuedHandPipelines` is the saturation alarm),
-  `HandPipelineDropped` when the queue cap is actually hit, `HandPipelineDuration` measured from dispatch — queueing
-  included — against `handPipelineTimeout`, `HandPipelinePanics`, and `HandPipelineStepFailures` dimensioned by
-  `Step` (`stepFailed(...)` next to each of the pipeline's existing `slog.Error` sites, so a failing hook is
-  identifiable without reading logs). The ERROR line and `handPipelineQueueDepth()` are unchanged.
-  **#204's remaining two items shipped in #290:** `HandPipelineStepDuration`, dimensioned by the exact same `Step`
-  values `stepFailed` uses, measured around each step's own DynamoDB call (never the surrounding CPU-only work —
-  `pokerstats.Analyze`, the peek/time-bank scan — so a step's number is about the store round trip, not the pipeline's
-  bookkeeping). And sampled `ReturnConsumedCapacity`, which needed the DynamoDB call path itself wrapped, not the
-  pipeline: it lives in `gopkg.aoctech.app/api-commons/dynamo` (`SetCapacityRecorder`/`SetCapacitySampleRate`, 5%
-  default), because that package — not this repo — is where every `Query`/`GetItem`/`BatchGetItem`/`UpdateItem`/
-  `TransactWrite` call actually happens, and it is shared with ctech-account/ctech-wallet, which have the same gap.
-  It cannot itself depend on this service's `internal/metrics`, so it exposes the recorder as a hook instead;
-  `wireCapacityMetrics` (`internal/app/app.go`) is the one place that wires it to `metrics.Record`, emitting
-  `DynamoConsumedCapacity` dimensioned by `(Table, Operation)` — the physical table name, never a row's own key, so
-  the dimension set stays bounded the same way every other metric here does. A runtime alarm now backs the pipeline's
-  own budget too: `HandPipelineDuration`'s p95 sustained over 80% of `handPipelineTimeout` for three 5-minute periods
-  pages (`cdk/lib/alarms.ts`'s `addHandPipelineBudgetAlarm`, gated the same `cloudwatchAlarmsEnabled` way as every
-  other alarm here) — a budget violation is now visible from the metric, not only from
-  `TestHandPipelineDynamoBudget` pinning the ceiling in CI.
+  Failures and drops are `slog.Error` lines; `handPipelineQueueDepth()` is what the budget test asserts on.
 - **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
   fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
   comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach

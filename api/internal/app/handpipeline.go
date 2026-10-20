@@ -17,7 +17,6 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/matchup"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
@@ -59,51 +58,8 @@ var (
 )
 
 // handPipelineQueueDepth reports how many hand pipelines are queued or
-// running right now. It is what the budget test asserts on; the same number is
-// emitted as HandPipelineQueueDepth on every dispatch.
+// running right now. It is what the budget test asserts on.
 func handPipelineQueueDepth() int64 { return handPipelineDepth.Load() }
-
-// #204 asked for runtime instrumentation of this pipeline and a runtime alert
-// for a budget violation, which had nowhere to go until #279. These four are
-// what the budget is actually made of:
-//
-//	HandPipelineQueueDepth   saturation — the Maximum statistic is the alarm,
-//	                         since maxQueuedHandPipelines is the hard ceiling
-//	HandPipelineDropped      the ceiling actually being hit: bookkeeping lost
-//	HandPipelineDuration     p95 against handPipelineTimeout
-//	HandPipelineStepFailures which hook is failing, dimensioned by Step
-//	HandPipelineStepDuration how long each hook takes, same Step dimension
-//	                         (#290 follow-up to #204/#279)
-//
-// Sampled ReturnConsumedCapacity — the other half of #204's ask — lives one
-// level down, in gopkg.aoctech.app/api-commons/dynamo (SetCapacityRecorder),
-// wired in internal/app/app.go.
-const (
-	metricQueueDepth   = "HandPipelineQueueDepth"
-	metricDropped      = "HandPipelineDropped"
-	metricDuration     = "HandPipelineDuration"
-	metricStepFailures = "HandPipelineStepFailures"
-	metricStepDuration = "HandPipelineStepDuration"
-	metricPanics       = "HandPipelinePanics"
-)
-
-// stepFailed counts one failed step of the post-hand pipeline. Step values come
-// from the fixed set below; the table and hand ids stay in the log line next to
-// the call and never become dimensions (internal/metrics, "Dimensions are
-// money").
-func stepFailed(step string) {
-	metrics.Record(metricStepFailures, metrics.Count, metrics.Dims{"Step": step}, 1)
-}
-
-// recordStepDuration reports how long one pipeline step took, dimensioned by
-// the exact same Step values stepFailed uses — so a step that is slow and a
-// step that is failing show up under the same name. Call with the step's own
-// start time, measured around the DynamoDB call itself rather than the whole
-// enclosing function, so CPU-only work (pokerstats.Analyze, the peek scan)
-// doesn't inflate a step that is really about the store round trip.
-func recordStepDuration(step string, started time.Time) {
-	metrics.Record(metricStepDuration, metrics.Milliseconds, metrics.Dims{"Step": step}, float64(time.Since(started).Milliseconds()))
-}
 
 // dispatchGamificationPipeline detaches a completed hand's gamification
 // bookkeeping (pipeline) onto its own goroutine so the table actor's own
@@ -118,23 +74,16 @@ func recordStepDuration(step string, started time.Time) {
 // load is this queue, not the table (#204).
 func dispatchGamificationPipeline(tableID, handID string, pipeline func(context.Context)) {
 	depth := handPipelineDepth.Add(1)
-	metrics.Record(metricQueueDepth, metrics.Count, nil, float64(depth))
 	if depth > maxQueuedHandPipelines {
 		handPipelineDepth.Add(-1)
-		metrics.Record(metricDropped, metrics.Count, nil, 1)
 		slog.Error("gamification: pipeline queue saturated, dropping hand bookkeeping",
 			"table", tableID, "hand", handID, "queued", depth-1, "limit", maxQueuedHandPipelines)
 		return
 	}
-	// Measured from dispatch, not from the moment a slot is granted: what #204
-	// cares about is how long a hand's bookkeeping takes to land, and queueing
-	// behind maxConcurrentHandPipelines is part of that.
-	started := time.Now()
 	go func() {
 		defer handPipelineDepth.Add(-1)
 		defer func() {
 			if r := recover(); r != nil {
-				metrics.Record(metricPanics, metrics.Count, nil, 1)
 				slog.Error("gamification: onHandComplete panic recovered", "table", tableID, "hand", handID, "panic", r)
 			}
 		}()
@@ -143,7 +92,6 @@ func dispatchGamificationPipeline(tableID, handID string, pipeline func(context.
 		ctx, cancel := context.WithTimeout(context.Background(), handPipelineTimeout)
 		defer cancel()
 		pipeline(ctx)
-		metrics.Record(metricDuration, metrics.Milliseconds, nil, float64(time.Since(started).Milliseconds()))
 	}()
 }
 
@@ -180,12 +128,9 @@ func (p *handPipeline) persistHandHistory(ctx context.Context, tableID, handID, 
 	// (internal/buyin/service.go). Participants missing from the batch
 	// (deleted profile, or a partial failure) simply get no avatar, the
 	// same fallback the per-player GetOrCreate error path had.
-	profileStart := time.Now()
 	profiles, profileErr := p.players.GetMany(ctx, outcome.Participants)
-	recordStepDuration("profiles", profileStart)
 	avatarURLs := make(map[string]string, len(outcome.Participants))
 	if profileErr != nil {
-		stepFailed("profiles")
 		slog.Error("sessionlog: batch resolve participant avatars failed", "table", tableID, "hand", handID, "err", profileErr)
 	} else {
 		for id, profile := range profiles {
@@ -202,11 +147,8 @@ func (p *handPipeline) persistHandHistory(ctx context.Context, tableID, handID, 
 	// One BatchWriteItem for every participant's row — see
 	// sessionlog.Store.RecordHands for why the history stays N redacted
 	// per-player copies rather than one canonical hand record.
-	writeStart := time.Now()
 	err := p.sessions.RecordHands(ctx, items)
-	recordStepDuration("handhistory", writeStart)
 	if err != nil {
-		stepFailed("handhistory")
 		slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "err", err)
 	}
 }
@@ -218,10 +160,8 @@ func (p *handPipeline) persistHandReveal(ctx context.Context, tableID, handID, m
 	if !outcome.WonWithoutShowdown || len(outcome.Winners) != 1 {
 		return
 	}
-	defer func(started time.Time) { recordStepDuration("reveal", started) }(time.Now())
 	room, err := p.rooms.Get(ctx, tableID)
 	if err != nil || room == nil {
-		stepFailed("reveal")
 		slog.Error("handreveal: load room for big blind failed", "table", tableID, "hand", handID, "err", err)
 		return
 	}
@@ -236,7 +176,6 @@ func (p *handPipeline) persistHandReveal(ctx context.Context, tableID, handID, m
 		PlayerHands: playerHands, EndedAt: time.Now().UnixMilli(),
 	}
 	if err := p.handReveals.Put(ctx, record); err != nil {
-		stepFailed("reveal")
 		slog.Error("handreveal: record hand failed", "table", tableID, "hand", handID, "err", err)
 	}
 }
@@ -259,11 +198,8 @@ func (p *handPipeline) persistHandReveal(ctx context.Context, tableID, handID, m
 // own, so they are additionally gated behind achievements.ClaimHandCounters
 // (issue #66).
 func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
-	roomStart := time.Now()
 	mode, err := tableCurrencyMode(ctx, p.rooms, tableID)
-	recordStepDuration("room", roomStart)
 	if err != nil {
-		stepFailed("room")
 		slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
 		return
 	}
@@ -276,19 +212,13 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 	// depend only on the outcome, not on any metrics computed below.
 	p.persistHandHistory(ctx, tableID, handID, mode, outcome, names)
 	p.persistHandReveal(ctx, tableID, handID, mode, outcome)
-	highlightsStart := time.Now()
 	err = p.highlights.RecordHand(ctx, tableID, handID, outcome, names)
-	recordStepDuration("highlights", highlightsStart)
 	if err != nil {
-		stepFailed("highlights")
 		slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
 	}
 	var metrics []pokerstats.HandMetric
-	actionsStart := time.Now()
 	actions, metricsErr := p.tables.LoadActionsSince(ctx, tableID, handID, 0)
-	recordStepDuration("actions", actionsStart)
 	if metricsErr != nil {
-		stepFailed("actions")
 		slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
 	} else {
 		metrics = pokerstats.Analyze(outcome.Participants, actions)
@@ -331,20 +261,14 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 	// matchup/pokerstats/sessionlog/highlights/recent players are
 	// unaffected: they stay outside this guard exactly as before, since
 	// each is already idempotent on its own.
-	counterguardStart := time.Now()
 	claimed, err := p.achievements.ClaimHandCounters(ctx, tableID, handID)
-	recordStepDuration("counterguard", counterguardStart)
 	if err != nil {
-		stepFailed("counterguard")
 		slog.Error("gamification: hand counter guard failed, skipping achievement/leaderboard increments", "table", tableID, "hand", handID, "err", err)
 	} else if !claimed {
 		slog.Info("gamification: hand counters already claimed for this hand, skipping duplicate achievement/leaderboard increments", "table", tableID, "hand", handID)
 	} else {
-		achievementsStart := time.Now()
 		unlocks, err := p.achievements.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
-		recordStepDuration("achievements", achievementsStart)
 		if err != nil {
-			stepFailed("achievements")
 			slog.Error("achievements record hand failed", "table", tableID, "err", err)
 		}
 		for _, unlock := range unlocks {
@@ -357,33 +281,23 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 				p.reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
 			}
 		}
-		leaderboardStart := time.Now()
 		unlocksErr := p.leaderboard.RecordUnlocks(ctx, mode, unlocks)
 		handErr := p.leaderboard.RecordHand(ctx, mode, outcome, names)
-		recordStepDuration("leaderboard", leaderboardStart)
 		if unlocksErr != nil {
-			stepFailed("leaderboard")
 			slog.Error("leaderboard achievement points failed", "table", tableID, "err", unlocksErr)
 		}
 		if handErr != nil {
-			stepFailed("leaderboard")
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", handErr)
 		}
 	}
 	if metricsErr == nil {
-		pokerstatsStart := time.Now()
 		err := p.pokerStats.RecordHand(ctx, mode, tableID, handID, metrics)
-		recordStepDuration("pokerstats", pokerstatsStart)
 		if err != nil {
-			stepFailed("pokerstats")
 			slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 	}
-	matchupStart := time.Now()
 	err = p.matchups.RecordHand(ctx, mode, tableID, handID, outcome)
-	recordStepDuration("matchup", matchupStart)
 	if err != nil {
-		stepFailed("matchup")
 		slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
 	}
 	// Everything above is ordered on purpose (see the player-visible-first
@@ -403,13 +317,9 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 	}, p.consumers, observeConsumer)
 }
 
-// observeConsumer gives every registered consumer the same duration/failure
-// instrumentation the hardcoded steps above have, keyed by the consumer's own
-// fixed Name.
+// observeConsumer logs a failed registered consumer under its own fixed Name.
 func observeConsumer(name string, started time.Time, err error) {
-	recordStepDuration(name, started)
 	if err != nil {
-		stepFailed(name)
 		slog.Error("gamification: post-hand consumer failed", "consumer", name, "err", err)
 	}
 }

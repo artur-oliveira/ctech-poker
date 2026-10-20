@@ -61,24 +61,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   defaulting to `false` — enabling real money is a parameter change plus an instance refresh.
 - **Three Lambdas**: the archiver (DynamoDB Stream → S3, with an SQS DLQ), plus
   `reconcile` (`rate(5 minutes)`) and `tablecleanup` (`rate(30 minutes)`) on EventBridge Scheduler.
-  **Each Lambda has two CloudWatch alarms** (#30, `lib/alarms.ts` `addLambdaDlqAlarms`): DLQ
-  `ApproximateNumberOfMessagesVisible >= 1` and Lambda `Errors >= 1` (both 5-min period, 1
-  datapoint, `treatMissingData: NOT_BREACHING`, ALARM + OK actions). All six point at the
-  **existing** shared topic `arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts`
-  (`ALERTS_TOPIC_ARN`), imported with `sns.Topic.fromTopicArn` — CDK creates no topic and no
-  subscription. The earlier throttle/missed-run alarms removed 2026-08-17/08-19 were not restored.
-- **DynamoDB throttle alarms exist** (2026-09-02, #34): `dynamodb-stack.ts` puts a
-  `ReadThrottleEvents + WriteThrottleEvents` CloudWatch alarm on each hot-path table
-  (`poker_table_state`, `poker_action_log`, `poker_action_guards`, `poker_rooms`,
-  `poker_player_sessions`), wired to the same `ALERTS_TOPIC_ARN` (`constants.ts`, imported with
-  `sns.Topic.fromTopicArn` — never a new topic).
-- **Every alarm above is gated by one flag** (2026-09-02): `cloudwatchAlarmsEnabled: boolean`,
-  threaded from `bin/poker.ts`'s `CLOUDWATCH_ALARMS_ENABLED` (env var, **defaults to `false`**) into
-  `DynamoDBStack`/`ArchiverStack`/`ReconcileStack`/`TableCleanupStack`. `addLambdaDlqAlarms` and
-  `dynamodb-stack.ts`'s `addThrottleAlarm` both no-op when it's off — the DLQs, the schedules and
-  the Lambdas themselves are unaffected, only the ~$0.10/mo-each CloudWatch alarms disappear. Set
-  `CLOUDWATCH_ALARMS_ENABLED=true` before `cdk deploy` once the shared alerts topic should actually
-  page on this app.
+  There are **no CloudWatch alarms** (removed with the `CLOUDWATCH_ALARMS_ENABLED` flag and `lib/alarms.ts`); the DLQs stay, check them by hand.
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
   **Being retired** — the app deploys to Cloudflare Workers Static Assets from
@@ -125,8 +108,6 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   Application-side, `internal/table/actor.go`'s commit-time duplicate-seat guard
   (`docs/specs/2026-09-01-duplicate-seat-commit-guard.md`) remains the backstop for whatever gap is
   left.
-- As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a `messages-visible`
-  (DLQ-depth) alarm and an `errors` alarm on the `ctech-prod-alerts` SNS topic (`cdk/lib/alarms.ts`).
   The EventBridge Scheduler → Lambda delivery hop itself still has no separate scheduler-target DLQ.
 - **`oidc-stack.ts` (issue #41, 2026-09-02; trust revised 2026-09-06)**: OIDC trust pins identity
   with `StringEquals` on the immutable numeric claims `repository_owner_id` (`48974094`) +
@@ -147,7 +128,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   instances tagged `Project=ctech-poker` + the `AWS-RunShellScript` document;
   `autoscaling:StartInstanceRefresh` pinned to `*-ctech-poker` ASGs. Covered by `test/oidc-stack.test.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`,
-  and (#30) a DLQ-depth + `Errors` alarm on `ctech-prod-alerts`.
+  and an SQS DLQ.
 - **`poker_rooms` has three GSIs** (#213): `gsi_public` (the whole public directory, still what the
   lobby's cross-bucket aggregate walks), **`gsi_bucket`** (one partition per
   `public#<currency_mode>#<sb>#<bb>#<seats>`, written by `roomstore.BucketKey` — this is what makes

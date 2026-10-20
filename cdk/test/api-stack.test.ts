@@ -16,7 +16,7 @@ test('keeps one minimum API instance in every environment', () => {
 // values throughout; ec2.Vpc.fromLookup falls back to CDK's built-in dummy
 // VPC data when no cdk.context.json cache entry exists, so this does not
 // attempt a real AWS lookup.
-function synthStack(overrides: Partial<{environment: Environment; cloudwatchAlarmsEnabled: boolean}> = {}) {
+function synthStack(overrides: Partial<{environment: Environment}> = {}) {
   const app = new App();
   return new PokerApiStack(app, 'TestPokerApiStack', {
     env: {account: '123456789012', region: 'us-east-1'},
@@ -108,21 +108,6 @@ test('synthesizes without error and declares exactly one ASG', () => {
   template.resourceCountIs('AWS::ElasticLoadBalancingV2::ListenerRule', 0);
   expect(rendered).toContain('autoscaling:CompleteLifecycleAction');
   expect(rendered).toContain('ssm:SendCommand');
-});
-
-test('hand-pipeline duration budget alarm exists only when prod + cloudwatchAlarmsEnabled (#290)', () => {
-  const off = Template.fromStack(synthStack());
-  off.resourceCountIs('AWS::CloudWatch::Alarm', 0);
-
-  const on = Template.fromStack(synthStack({environment: 'prod', cloudwatchAlarmsEnabled: true}));
-  on.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    AlarmName: 'prod-hand-pipeline-duration-budget',
-    Namespace: 'CTechPoker',
-    MetricName: 'HandPipelineDuration',
-    Dimensions: Match.arrayWith([Match.objectLike({Name: 'Environment', Value: 'prod'})]),
-    ExtendedStatistic: 'p95',
-    Threshold: 24_000,
-  });
 });
 
 test('ASG is pinned to a single AZ (no inter-AZ transfer cost)', () => {

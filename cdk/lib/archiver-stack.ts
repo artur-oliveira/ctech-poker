@@ -13,7 +13,6 @@ import {StartingPosition} from 'aws-cdk-lib/aws-lambda';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from "./bundle";
-import {addLambdaDlqAlarms} from './alarms';
 import {actionLogArchiveBucketName} from './constants';
 
 // localGoBundling builds the archiver binary with the host's own Go
@@ -27,13 +26,12 @@ import {actionLogArchiveBucketName} from './constants';
 interface ArchiverStackProps extends cdk.StackProps {
   environment: Environment;
   actionLogTable: dynamodb.ITableV2;
-  cloudwatchAlarmsEnabled: boolean;
 }
 
 export class ArchiverStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ArchiverStackProps) {
     super(scope, id, props);
-    const {environment, actionLogTable, cloudwatchAlarmsEnabled} = props;
+    const {environment, actionLogTable} = props;
 
     const bucket = new s3.Bucket(this, 'ActionLogArchive', {
       bucketName: actionLogArchiveBucketName(environment),
@@ -77,7 +75,5 @@ export class ArchiverStack extends cdk.Stack {
       bisectBatchOnError: true,
       onFailure: new SqsDlq(dlq),
     }));
-
-    addLambdaDlqAlarms(this, 'Archiver', fn, dlq, cloudwatchAlarmsEnabled);
   }
 }

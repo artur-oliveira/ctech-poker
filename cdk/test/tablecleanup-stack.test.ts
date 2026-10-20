@@ -2,7 +2,7 @@ import {App} from 'aws-cdk-lib';
 import {Match, Template} from 'aws-cdk-lib/assertions';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
 
-function buildStack(cloudwatchAlarmsEnabled = true) {
+function buildStack() {
   const app = new App();
   const stack = new TableCleanupStack(app, 'TestTableCleanupStack', {
     environment: 'dev',
@@ -11,7 +11,6 @@ function buildStack(cloudwatchAlarmsEnabled = true) {
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/client-id',
     pokerClientSecretParam: '/ctech/dev/poker/client-secret',
-    cloudwatchAlarmsEnabled,
   });
   return Template.fromStack(stack);
 }
@@ -39,31 +38,9 @@ test('schedules the sweep every 30 minutes', () => {
     QueueName: 'dev-ctech-poker-tablecleanup-dlq',
     MessageRetentionPeriod: 1209600,
   });
-  // #30: DLQ-depth + Lambda-errors alarms notifying the existing
-  // ctech-prod-alerts topic (imported, not created here).
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
-  template.resourceCountIs('AWS::SNS::Topic', 0);
-  const alerts = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/SQS',
-    MetricName: 'ApproximateNumberOfMessagesVisible',
-    TreatMissingData: 'notBreaching',
-    AlarmActions: [alerts],
-    OKActions: [alerts],
-  });
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    Namespace: 'AWS/Lambda',
-    MetricName: 'Errors',
-    AlarmActions: [alerts],
-    OKActions: [alerts],
-  });
-});
-
-test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
-  const template = buildStack(false);
+  // Poker creates no CloudWatch alarms and no SNS topic.
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
-  // The schedule and its DLQ are unaffected by the flag.
-  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-ctech-poker-tablecleanup-dlq'});
+  template.resourceCountIs('AWS::SNS::Topic', 0);
 });
 
 test('the Lambda role can Query the table-state index but never Scan it', () => {
