@@ -30,13 +30,17 @@
     box-shadow: 0 4px 8px var(--black-0b);
     overflow: hidden;
 }
-.network-status > svg {
-    width: 22px;
-    height: 22px;
-    flex: 0 0 auto;
-    color: var(--danger-soft)
+.network-status:empty {
+    border: 0;
+    box-shadow: none
 }
 .network-status > div {
+    min-width: 0;
+    width: 100%;
+    max-width: 64rem
+}
+.network-status p {
+    margin: 0;
     min-width: 0;
     display: grid;
     gap: 1px
@@ -54,8 +58,7 @@
     line-height: 1.4
 }
 .network-status button {
-    flex: 0 0 auto;
-    color: var(--paper)
+    flex: 0 0 auto
 }
 .loading-screen {
     height: 100vh;

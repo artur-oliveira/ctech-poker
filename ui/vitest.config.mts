@@ -8,6 +8,9 @@ export default defineConfig({
     },
   },
   test: {
+    // @aoctech/ui ships ESM with extensionless relative imports, which Node's
+    // resolver rejects: let Vite process it.
+    server: {deps: {inline: ['@aoctech/ui']}},
     environment: 'jsdom',
     globals: true,
     testTimeout: 10_000,
