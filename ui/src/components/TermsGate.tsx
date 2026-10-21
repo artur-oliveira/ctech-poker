@@ -8,7 +8,7 @@ import {getOrRefreshSession} from '@/lib/auth/session';
 import {getAccessToken, getUsername, setAccessToken, setPlayerId, subscribeAccessToken} from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mockConfig';
 import {Button} from '@/components/ui/button';
-import {Checkbox} from '@/components/ui/checkbox';
+import {Checkbox} from '@aoctech/ui';
 
 const POKER_TERMS_URL = 'https://accounts.aoctech.app/products/poker';
 const POKER_PRIVACY_URL = 'https://accounts.aoctech.app/products/poker-privacy';

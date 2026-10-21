@@ -1,6 +1,6 @@
 'use client';
 import {Label} from '@/components/ui/label';
-import {Switch} from '@/components/ui/switch';
+import {Switch} from '@aoctech/ui';
 import {DeckPicker} from '@/components/profile/DeckPicker';
 import {type PlayerProfile, type WalletMode} from '@/lib/api/player';
 import {availableWalletMode, REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
