@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "./forms-and-gate.css";
+/* Compact density: touch.css only (styles.css would bring themes.css and repaint the app). */
+@import "@aoctech/ui/touch.css";
 
 /* @aoctech/ui bridge (OfflineBanner, UnavailableScreen, ErrorState).
    Poker is registered in the package's themes.css, but importing it would bring
@@ -11,6 +13,8 @@
 @source "../../node_modules/@aoctech/ui/dist/components/button.js";
 @source "../../node_modules/@aoctech/ui/dist/components/error-state.js";
 @source "../../node_modules/@aoctech/ui/dist/components/network.js";
+@source "../../node_modules/@aoctech/ui/dist/components/switch.js";
+@source "../../node_modules/@aoctech/ui/dist/components/checkbox.js";
 @theme inline {
     --color-background: var(--bridge-background);
     --color-surface: var(--bridge-surface);
@@ -21,7 +25,11 @@
     --color-warning: var(--bridge-warning);
     --color-brand-600: var(--bridge-brand-600);
     --color-brand-700: var(--bridge-brand-700);
+    --color-success: var(--bridge-success);
+    --color-danger: var(--bridge-danger);
+    --color-danger-strong: var(--bridge-danger-strong);
 }
+:root,
 [data-ctech-bridge] {
     --bridge-background: var(--ink);
     --bridge-surface: var(--surface-control);
@@ -32,6 +40,19 @@
     --bridge-warning: var(--gold);
     --bridge-brand-600: var(--brand);
     --bridge-brand-700: var(--wine);
+    --bridge-success: var(--success);
+    --bridge-danger: var(--danger);
+    --bridge-danger-strong: #b91c1c;
+}
+/* The package thumb is bg-background (ink here): on the dark track it would vanish. */
+[data-slot="switch"] > span {
+    background: var(--paper);
+}
+/* Unchecked controls keep the old contrast on the dark page (package default is --white-12 on --surface-control). */
+[data-slot="switch"]:not([data-checked]),
+[data-slot="checkbox"]:not([data-checked]) {
+    background: #ffffff1f;
+    border-color: #ffffff40;
 }
 :root {
     --brand: #af2a2f;
