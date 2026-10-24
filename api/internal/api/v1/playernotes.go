@@ -94,8 +94,8 @@ func (h *playerNoteHandlers) save(c fiber.Ctx) error {
 		return problem.BadRequest("opponent id is invalid").Send(c)
 	}
 	var req playerNoteRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	note, err := h.store.Save(
 		c.Context(),

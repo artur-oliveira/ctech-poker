@@ -45,8 +45,8 @@ func (h *reactionPurchaseHandlers) catalog(c fiber.Ctx) error {
 
 func (h *reactionPurchaseHandlers) create(c fiber.Ctx) error {
 	var req ReactionPurchaseCreateRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.ReactionID == "" {
 		return problem.BadRequest("reaction_id is required").Send(c)
@@ -98,8 +98,8 @@ func (h *reactionPurchaseHandlers) get(c fiber.Ctx) error {
 
 func (h *reactionPurchaseHandlers) refund(c fiber.Ctx) error {
 	var req ReactionPurchaseRefundRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {

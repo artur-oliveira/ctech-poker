@@ -68,8 +68,8 @@ func (h *handMetaHandlers) saveMeta(c fiber.Ctx) error {
 		return problem.BadRequest("hand id is invalid").Send(c)
 	}
 	var req handMetaRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	// playerID always comes from the auth context, never the body — no
 	// caller may write another player's annotation (IDOR).
@@ -114,8 +114,8 @@ func (h *handMetaHandlers) listFilters(c fiber.Ctx) error {
 
 func (h *handMetaHandlers) saveFilters(c fiber.Ctx) error {
 	var req savedFiltersRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	filters, err := h.store.SaveFilters(c.Context(), c.Locals(localsUserID).(string), req.Filters)
 	switch {

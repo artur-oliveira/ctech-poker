@@ -73,8 +73,8 @@ func (h *handShareHandlers) list(c fiber.Ctx) error {
 
 func (h *handShareHandlers) create(c fiber.Ctx) error {
 	var req createHandShareRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.ExpiryDays == 0 {
 		req.ExpiryDays = 7

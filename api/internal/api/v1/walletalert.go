@@ -32,8 +32,8 @@ func (h *playerHandlers) walletAlertsPut(c fiber.Ctx) error {
 		return problem.NotFound("wallet alerts not available").Send(c)
 	}
 	var req WalletAlertPrefsRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.MinSandboxBalance < 0 || req.MaxPurchaseCents < 0 {
 		return problem.BadRequest("thresholds must not be negative").Send(c)

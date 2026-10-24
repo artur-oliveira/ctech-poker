@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/validation"
 )
 
 // PaginatedResponse is the standard envelope for every list endpoint.
@@ -93,4 +95,12 @@ func sendPage(c fiber.Ctx, data any, lastEvaluatedKey map[string]types.Attribute
 		HasPrevious:    incomingCursor != "",
 		PreviousCursor: prevCursor,
 	})
+}
+
+// bindBody strictly decodes the JSON request body into dst (go-common
+// validation: unknown fields, trailing data and >1 MiB are rejected) and runs
+// the struct's `validate` tags. Field rules that predate the tags stay in the
+// handlers.
+func bindBody[T any](c fiber.Ctx, dst *T) *problem.Problem {
+	return validation.BindJSON(c.Body(), dst)
 }

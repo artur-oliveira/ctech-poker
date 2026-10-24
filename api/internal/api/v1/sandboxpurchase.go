@@ -51,8 +51,8 @@ func (h *sandboxPurchaseHandlers) listSkus(c fiber.Ctx) error {
 
 func (h *sandboxPurchaseHandlers) create(c fiber.Ctx) error {
 	var req SandboxPurchaseCreateRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.SKU == "" {
 		return problem.BadRequest("sku is required").Send(c)
@@ -97,8 +97,8 @@ func (h *sandboxPurchaseHandlers) get(c fiber.Ctx) error {
 
 func (h *sandboxPurchaseHandlers) refund(c fiber.Ctx) error {
 	var req SandboxPurchaseRefundRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {

@@ -86,7 +86,7 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 ## Conventions (follow these)
 
-- **Background loops run under the go-common `supervisor`** (`newSupervisor` in `internal/app`: pub/sub listeners, spot poll, memory monitor, erasure consumer). Panics restart with backoff, shutdown cancels and awaits them; no bare `go loop(context.Background())`. Per-hand fire-and-forget goroutines are not workers.
+- **Request bodies bind through `bindBody`** (go-common `validation.BindJSON`: unknown fields, trailing data and >1 MiB are 400/413, no body echo); never `c.Bind().Body`.
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
 - **`Idempotency-Key` on chip/money POSTs** goes through go-common `idempotency` (`newIdempotency` in `internal/api/v1`,

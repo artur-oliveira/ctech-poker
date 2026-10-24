@@ -290,7 +290,7 @@ func (h *socialHandlers) markInboxRead(c fiber.Ctx) error {
 		return p.Send(c)
 	}
 	var body inboxReadBody
-	if err := c.Bind().Body(&body); err != nil || len(body.EventIDs) == 0 || len(body.EventIDs) > 100 {
+	if p := bindBody(c, &body); p != nil || len(body.EventIDs) == 0 || len(body.EventIDs) > 100 {
 		return problem.BadRequest("event_ids must contain between 1 and 100 ids").Send(c)
 	}
 	for _, id := range body.EventIDs {
@@ -310,8 +310,8 @@ func (h *socialHandlers) sendTableInvite(c fiber.Ctx) error {
 		return p.Send(c)
 	}
 	var body tableInviteBody
-	if err := c.Bind().Body(&body); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &body); p != nil {
+		return p.Send(c)
 	}
 	body.TargetPlayerID, body.RoomID = strings.TrimSpace(body.TargetPlayerID), strings.TrimSpace(body.RoomID)
 	if body.TargetPlayerID == "" || body.RoomID == "" || len(body.TargetPlayerID) > maxSocialPlayerIDSize || len(body.RoomID) > maxSocialPlayerIDSize {
@@ -356,8 +356,8 @@ func (h *socialHandlers) rematchInvite(c fiber.Ctx) error {
 		return problem.BadRequest("opponent id is invalid").Send(c)
 	}
 	var body rematchInviteBody
-	if err := c.Bind().Body(&body); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &body); p != nil {
+		return p.Send(c)
 	}
 	body.RoomID = strings.TrimSpace(body.RoomID)
 
@@ -567,8 +567,8 @@ func (h *socialHandlers) requestFriend(c fiber.Ctx) error {
 		return p.Send(c)
 	}
 	var body friendRequestBody
-	if err := c.Bind().Body(&body); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &body); p != nil {
+		return p.Send(c)
 	}
 	if (strings.TrimSpace(body.TargetPlayerID) == "") == (strings.TrimSpace(body.FriendCode) == "") {
 		return problem.BadRequest("provide exactly one of target_player_id or friend_code").Send(c)

@@ -208,7 +208,7 @@ func (h *playerHandlers) avatarConfirm(c fiber.Ctx) error {
 		return problem.New(http.StatusServiceUnavailable, "/problems/avatar-disabled", "Avatar unavailable", "avatar uploads are disabled").Send(c)
 	}
 	var req confirmAvatarRequest
-	if err := c.Bind().Body(&req); err != nil || req.Version < 1 {
+	if p := bindBody(c, &req); p != nil || req.Version < 1 {
 		return problem.BadRequest("version is required").Send(c)
 	}
 	userID := c.Locals(localsUserID).(string)
@@ -294,8 +294,8 @@ func (h *playerHandlers) me(c fiber.Ctx) error {
 // with no name set, or whenever the user edits their profile.
 func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 	var req UpdatePlayerRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	userID := c.Locals(localsUserID).(string)
 
