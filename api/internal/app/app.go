@@ -26,6 +26,7 @@ import (
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	"gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/api-commons/supervisor"
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/accountclient"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
@@ -88,6 +89,7 @@ var Module = fx.Options(
 		newCacheBackend,
 		newRealtimeValkeyClient,
 		newVerifier,
+		newSupervisor,
 		newWsRegistry,
 		newTableLeaseService,
 		newDynamoClient,
@@ -661,7 +663,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache) *tablemanager.Manager {
+func newTableManager(lc fx.Lifecycle, sup *supervisor.Supervisor, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -731,8 +733,10 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		listenCtx, cancelListen := context.WithCancel(context.Background())
 		lc.Append(fx.Hook{
 			OnStart: func(context.Context) error {
-				go mgr.ListenForExternalChanges(listenCtx, notifier)
-				return nil
+				return sup.Run(listenCtx, "table-external-changes", func(ctx context.Context) error {
+					mgr.ListenForExternalChanges(ctx, notifier)
+					return nil
+				})
 			},
 			OnStop: func(context.Context) error {
 				cancelListen()
@@ -750,8 +754,10 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		handoffListenCtx, cancelHandoffListen := context.WithCancel(context.Background())
 		lc.Append(fx.Hook{
 			OnStart: func(context.Context) error {
-				go mgr.ListenForHandoffCloses(handoffListenCtx, handoff, func(connIDs []string) { wsdrain.CloseByConnID(connIDs) })
-				return nil
+				return sup.Run(handoffListenCtx, "table-handoff-closes", func(ctx context.Context) error {
+					mgr.ListenForHandoffCloses(ctx, handoff, func(connIDs []string) { wsdrain.CloseByConnID(connIDs) })
+					return nil
+				})
 			},
 			OnStop: func(context.Context) error {
 				cancelHandoffListen()
@@ -1167,7 +1173,18 @@ const (
 	spotDrainTimeout = 30 * time.Second
 )
 
-func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
+// newSupervisor owns every long-lived background loop of the process: panics
+// are contained and restarted with backoff, and shutdown cancels and awaits
+// them. No Locker: every instance runs every worker (each is per-instance work:
+// pub/sub listeners, spot poll, memory monitor, one SQS consumer per replica).
+// Registered first, so its OnStop runs last, after the loops' own cancels.
+func newSupervisor(lc fx.Lifecycle) *supervisor.Supervisor {
+	sup := supervisor.New(context.Background(), supervisor.Config{})
+	lc.Append(fx.Hook{OnStop: sup.Shutdown})
+	return sup
+}
+
+func startServer(lc fx.Lifecycle, sup *supervisor.Supervisor, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
 	pollCtx, cancelPoll := context.WithCancel(context.Background())
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
@@ -1178,7 +1195,12 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 					slog.Error("server stopped", "err", err)
 				}
 			}()
-			go monitorMemoryPressure(pollCtx)
+			if err := sup.Run(pollCtx, "memory-pressure", func(ctx context.Context) error {
+				monitorMemoryPressure(ctx)
+				return nil
+			}); err != nil {
+				return err
+			}
 			// Reduce reliance on the ASG lifecycle hook + drain Lambda alone
 			// (#33): during the 2026-09-01 spot rebalance storm it fired for
 			// only 3 of at least 4-5 real terminations, stranding leases the
@@ -1191,7 +1213,12 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 			// skip it elsewhere so dev/test never spend a background
 			// goroutine polling a link-local address that doesn't exist.
 			if cfg.Env == "prod" {
-				go pollSpotTermination(pollCtx, manager, &http.Client{Timeout: spotPollTimeout})
+				if err := sup.Run(pollCtx, "spot-termination", func(ctx context.Context) error {
+					pollSpotTermination(ctx, manager, &http.Client{Timeout: spotPollTimeout})
+					return nil
+				}); err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -1246,7 +1273,9 @@ func pollSpotTermination(ctx context.Context, manager *tablemanager.Manager, cli
 				continue
 			}
 			slog.Warn("spot termination notice detected via instance metadata, draining proactively ahead of the lifecycle hook")
-			drainCtx, cancel := context.WithTimeout(context.Background(), spotDrainTimeout)
+			// WithoutCancel: a shutdown that cancels the poller must not abort a drain
+			// already under way (DrainAndRelease is idempotent either way).
+			drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), spotDrainTimeout)
 			// Same heads-up as the OnStop path (issue #354): the sockets stay
 			// open here (OnStop closes them later) but the actors are about to
 			// stop, so warn players their table is moving before the drain.
