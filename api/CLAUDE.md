@@ -87,6 +87,7 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 ## Conventions (follow these)
 
 - **Request bodies bind through `bindBody`** (go-common `validation.BindJSON`: unknown fields, trailing data and >1 MiB are 400/413, no body echo); never `c.Bind().Body`.
+- **HTTP wiring takes one `v1.Deps` struct** (`v1.Register(app, Deps{...})`) and the container is split into per-domain `fx.Module`s in `internal/app/module.go`. A new dependency is a `Deps` field plus a provider in the matching module, never a new positional parameter.
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
 - **`Idempotency-Key` on chip/money POSTs** goes through go-common `idempotency` (`newIdempotency` in `internal/api/v1`,

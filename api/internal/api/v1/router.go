@@ -44,54 +44,96 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/walletalert"
 )
 
-// Register mounts poker's routes under /v1.0. seed builds a brand-new
-// hand.Table the first time a given table ID is ever acquired (see
-// tablemanager.Manager.GetOrCreateActor) — passed straight through to the WS
-// gateway. Any instance may accept any table's connection directly under
+// Deps is everything Register wires into the routes (it replaced a 41-parameter
+// signature). Seed builds a brand-new hand.Table the first time a table ID is
+// acquired (see tablemanager.Manager.GetOrCreateActor). Nil members are the
+// narrow construction seams of internal/app's tests.
+type Deps struct {
+	Cfg                  *config.Config
+	DB                   *dynamodb.Client
+	Verifier             *jwtverify.Verifier
+	Manager              *tablemanager.Manager
+	Reg                  ws.Registry
+	Seed                 func(string) func() *hand.Table
+	CacheBackend         cache.Backend
+	Rooms                *roomstore.Store
+	BuyinSvc             *buyin.Service
+	Players              *player.Service
+	LeaderboardSvc       *leaderboard.Service
+	DailyRewardSvc       *dailyreward.Service
+	TableStore           *tablestore.Store
+	SessionStore         *sessionlog.Store
+	AchievementStore     *achievements.Store
+	PlayerNoteStore      *playernotes.Store
+	HandMetaStore        *handmeta.Store
+	HandShareStore       *handshare.Store
+	HandRevealStore      *handreveal.Store
+	HandRevealSvc        *handreveal.Service
+	PokerStatsStore      *pokerstats.Store
+	MatchupStore         *matchup.Store
+	HighlightsStore      *highlights.Store
+	Avatars              *avatar.Service
+	SandboxPurchaseSvc   *sandboxpurchase.Service
+	ReactionPurchaseSvc  *reactionpurchase.Service
+	CosmeticPurchaseSvc  *cosmeticpurchase.Service
+	SocialSvc            *social.Service
+	PresenceSvc          *presence.Service
+	RecentSvc            *recentplayers.Service
+	ReportSvc            *reports.Service
+	Pending              *reconcile.PendingStore
+	WalletAlertSvc       *walletalert.Service
+	ChatPrefsStore       *chatprefs.Store
+	ChatPrefsCache       *chatprefs.ExtraWordsCache
+	ResponsibleSvc       *responsible.Service
+	Billing              *billingclient.Client
+	BotCheckContestStore *botcheck.ContestStore
+	CosmeticLoadoutSvc   *cosmeticloadout.Service
+	Blocked              BlockedFunc
+}
+
+// Register mounts poker's routes under /v1.0. Any instance may accept any table's connection directly under
 // ARCHITECTURE.md §2's revised model — there is no proxy route.
-func Register(
-	app *fiber.App,
-	cfg *config.Config,
-	db *dynamodb.Client,
-	verifier *jwtverify.Verifier,
-	manager *tablemanager.Manager,
-	reg ws.Registry,
-	seed func(string) func() *hand.Table,
-	cacheBackend cache.Backend,
-	rooms *roomstore.Store,
-	buyinSvc *buyin.Service,
-	players *player.Service,
-	leaderboardSvc *leaderboard.Service,
-	dailyRewardSvc *dailyreward.Service,
-	tableStore *tablestore.Store,
-	sessionStore *sessionlog.Store,
-	achievementStore *achievements.Store,
-	playerNoteStore *playernotes.Store,
-	handMetaStore *handmeta.Store,
-	handShareStore *handshare.Store,
-	handRevealStore *handreveal.Store,
-	handRevealSvc *handreveal.Service,
-	pokerStatsStore *pokerstats.Store,
-	matchupStore *matchup.Store,
-	highlightsStore *highlights.Store,
-	avatars *avatar.Service,
-	sandboxPurchaseSvc *sandboxpurchase.Service,
-	reactionPurchaseSvc *reactionpurchase.Service,
-	cosmeticPurchaseSvc *cosmeticpurchase.Service,
-	socialSvc *social.Service,
-	presenceSvc *presence.Service,
-	recentSvc *recentplayers.Service,
-	reportSvc *reports.Service,
-	pending *reconcile.PendingStore,
-	walletAlertSvc *walletalert.Service,
-	chatPrefsStore *chatprefs.Store,
-	chatPrefsCache *chatprefs.ExtraWordsCache,
-	responsibleSvc *responsible.Service,
-	billing *billingclient.Client,
-	botCheckContestStore *botcheck.ContestStore,
-	cosmeticLoadoutSvc *cosmeticloadout.Service,
-	blocked BlockedFunc,
-) {
+func Register(app *fiber.App, d Deps) {
+	cfg := d.Cfg
+	db := d.DB
+	verifier := d.Verifier
+	manager := d.Manager
+	reg := d.Reg
+	seed := d.Seed
+	cacheBackend := d.CacheBackend
+	rooms := d.Rooms
+	buyinSvc := d.BuyinSvc
+	players := d.Players
+	leaderboardSvc := d.LeaderboardSvc
+	dailyRewardSvc := d.DailyRewardSvc
+	tableStore := d.TableStore
+	sessionStore := d.SessionStore
+	achievementStore := d.AchievementStore
+	playerNoteStore := d.PlayerNoteStore
+	handMetaStore := d.HandMetaStore
+	handShareStore := d.HandShareStore
+	handRevealStore := d.HandRevealStore
+	handRevealSvc := d.HandRevealSvc
+	pokerStatsStore := d.PokerStatsStore
+	matchupStore := d.MatchupStore
+	highlightsStore := d.HighlightsStore
+	avatars := d.Avatars
+	sandboxPurchaseSvc := d.SandboxPurchaseSvc
+	reactionPurchaseSvc := d.ReactionPurchaseSvc
+	cosmeticPurchaseSvc := d.CosmeticPurchaseSvc
+	socialSvc := d.SocialSvc
+	presenceSvc := d.PresenceSvc
+	recentSvc := d.RecentSvc
+	reportSvc := d.ReportSvc
+	pending := d.Pending
+	walletAlertSvc := d.WalletAlertSvc
+	chatPrefsStore := d.ChatPrefsStore
+	chatPrefsCache := d.ChatPrefsCache
+	responsibleSvc := d.ResponsibleSvc
+	billing := d.Billing
+	botCheckContestStore := d.BotCheckContestStore
+	cosmeticLoadoutSvc := d.CosmeticLoadoutSvc
+	blocked := d.Blocked
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
 
