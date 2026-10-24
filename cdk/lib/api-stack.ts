@@ -16,6 +16,7 @@ import {
   API_CURRENT_ARTIFACT_KEY,
   APP_PORT,
   APP_PORT_ALT,
+  alertsTopicParam,
   asgName,
   HEALTH_CHECK_PATH,
   instanceRoleName,
@@ -196,6 +197,9 @@ export class PokerApiStack extends cdk.Stack {
       enforceSSL: true,
       deadLetterQueue: {queue: erasureDlq, maxReceiveCount: 5},
     });
+    // go-common alerts: failed erasure purges are reported to the shared topic.
+    const alertsTopicArn = ssm.StringParameter.valueForStringParameter(this, alertsTopicParam(environment));
+    instanceRole.addToPolicy(new iam.PolicyStatement({actions: ['sns:Publish'], resources: [alertsTopicArn]}));
     sns.Topic.fromTopicArn(this, 'AccountUserErasureTopic',
       ssm.StringParameter.valueForStringParameter(this, account.erasureTopicArn),
     ).addSubscription(new snsSubscriptions.SqsSubscription(erasureQueue, {
@@ -320,6 +324,7 @@ export class PokerApiStack extends cdk.Stack {
       `TRUSTED_PROXIES=127.0.0.1`,
       `AVATAR_BUCKET=${avatarsBucketName}`,
       `ERASURE_QUEUE_URL=${erasureQueue.queueUrl}`,
+      `ALERTS_TOPIC_ARN=${alertsTopicArn}`,
       `ACTION_LOG_ARCHIVE_BUCKET=${archiveBucket}`,
       `ENV`,
     );

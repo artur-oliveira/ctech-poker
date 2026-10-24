@@ -91,6 +91,8 @@ type Config struct {
 	// topic; ActionLogArchiveBucket is the action-log S3 archive the purge
 	// rewrites. Both come from /etc/app-static.env (cdk/lib/api-stack.ts).
 	ErasureQueueURL string `env:"ERASURE_QUEUE_URL"`
+	// AlertsTopicARN is the shared ctech-{env}-alerts SNS topic (empty = no alerts).
+	AlertsTopicARN string `env:"ALERTS_TOPIC_ARN"`
 	// ErasureQueueVisibility is how long a message being handled stays invisible: the
 	// consumer sets this timeout again every third of it while a purge or an export
 	// runs, so a crashed or restarted instance's message is retried after at most this

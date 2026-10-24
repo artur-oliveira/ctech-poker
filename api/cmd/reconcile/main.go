@@ -16,8 +16,10 @@ import (
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"gopkg.aoctech.app/api-commons/alerts"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/opsalert"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
@@ -186,7 +188,16 @@ func handler(ctx context.Context) error {
 	db := dynamodb.NewFromConfig(awsCfg)
 	pendingStore := reconcile.NewPendingStore(db, cfg.Env)
 	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
-	return run(ctx, pendingStore, wallet, wallet, wallet)
+	err = run(ctx, pendingStore, wallet, wallet, wallet)
+	if err != nil {
+		// A quarantined or unpersistable cash-out is money in limbo: tell a human.
+		opsalert.Send(ctx, opsalert.New(ctx, os.Getenv("AWS_REGION"), os.Getenv("ALERTS_TOPIC_ARN"), cfg.Env), alerts.Alert{
+			Job:     "poker-reconcile",
+			Summary: "Cash-out reconcile has entries that need manual attention.",
+			Err:     err,
+		})
+	}
+	return err
 }
 
 func main() {

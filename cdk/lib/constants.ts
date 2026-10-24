@@ -17,6 +17,9 @@ export const AWS_REGION = 'us-east-1';
 export const CERT_ARN =
   'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
 
+// Shared SNS topic for operator alerts (go-common alerts); written by ctech-cdk's AlertsStack.
+export const alertsTopicParam = (env: Environment) => `/ctech/${env}/alerts/topic-arn`;
+
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 // Immutable numeric GitHub IDs for artur-oliveira/ctech-poker. GitHub now embeds
 // these in the OIDC `sub` claim (`repo:<owner>@<ownerId>/<repo>@<repoId>:...`)
