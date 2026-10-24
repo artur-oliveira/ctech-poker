@@ -12,6 +12,7 @@ Online Texas Hold'em poker for the CTech ecosystem — a Go game server (`api/`)
 web client (`ui/`), a Go terminal client (`cli/`), shared wire schema (`proto/`), and AWS CDK
 infrastructure (`cdk/`). See `README.md` for status, `OVERVIEW.md` for product/game rules,
 `ARCHITECTURE.md` for technical design, and `docs/README.md` for the implemented-vs-designed index.
+- **Standards gate:** `scripts/standards-check.sh` (canonical copy in ctech-skills, identical bytes; CI job "Family standards"; reads `FAMILY_GOCOMMON_MINOR`, default v1.38, bump it on a go-common minor). Debt hidden: none via STANDARDS_SKIP; user-purge and responsible-gaming export Scans and best-effort rollback/health `|| true` are allow-listed. One-off lines carry a trailing `standards:allow <reason>`.
 
 ## Projects
 

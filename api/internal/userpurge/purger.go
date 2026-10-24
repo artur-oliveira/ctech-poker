@@ -225,7 +225,7 @@ func (r *run) actorEvents(ctx context.Context, recipient string) error {
 // notesAboutUser erases notes others wrote about the user (sk = sub, no index).
 func (r *run) notesAboutUser(ctx context.Context) error {
 	var keys []item
-	if err := r.p.eachScan(ctx, &dynamodb.ScanInput{
+	if err := r.p.eachScan(ctx, &dynamodb.ScanInput{ // standards:allow user purge scan
 		TableName:                 aws.String(r.p.table(TablePlayerNotes)),
 		FilterExpression:          aws.String("sk = :sub"),
 		ExpressionAttributeValues: item{":sub": str(r.sub)},
@@ -243,7 +243,7 @@ func (r *run) notesAboutUser(ctx context.Context) error {
 // avatarReports erases the avatar-report guard rows by or about the user and
 // removes the user from the legacy avatar_reporters sets (no index: scan).
 func (r *run) avatarReports(ctx context.Context) error {
-	return r.p.eachScan(ctx, &dynamodb.ScanInput{
+	return r.p.eachScan(ctx, &dynamodb.ScanInput{ // standards:allow user purge scan
 		TableName:                 aws.String(r.p.table(TablePlayerProfiles)),
 		FilterExpression:          aws.String("(begins_with(pk, :guard) AND (target_id = :sub OR reporter_id = :sub)) OR contains(avatar_reporters, :sub)"),
 		ExpressionAttributeValues: item{":guard": str("avreport#"), ":sub": str(r.sub)},

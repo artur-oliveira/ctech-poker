@@ -45,7 +45,7 @@ func (w WalletTable) ResponsibleExport(ctx context.Context, cursor string) (*Exp
 	if err != nil {
 		return nil, err
 	}
-	out, err := w.DB.Scan(ctx, &dynamodb.ScanInput{TableName: aws.String(w.Table), ExclusiveStartKey: start, Limit: aws.Int32(walletPageSize)})
+	out, err := w.DB.Scan(ctx, &dynamodb.ScanInput{TableName: aws.String(w.Table), ExclusiveStartKey: start, Limit: aws.Int32(walletPageSize)}) // standards:allow paginated responsible-gaming export
 	if err != nil {
 		return nil, fmt.Errorf("responsible: scanning %s: %w", w.Table, err)
 	}
