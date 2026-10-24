@@ -1,0 +1,15 @@
+version: "2"
+linters:
+  exclusions:
+    rules:
+      # Baseline: unchecked errors in test helpers/handlers (w.Write, Close, dispatch)
+      # predate the CI gate and are harmless in tests; production code is checked.
+      - path: _test\.go
+        linters:
+          - errcheck
+  settings:
+    staticcheck:
+      # QF* are quickfix style suggestions (De Morgan rewrites); CI's staticcheck
+      # step already gates correctness, and rewriting hand-engine conditions
+      # for style is not worth the risk.
+      checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022", "-QF1001"]

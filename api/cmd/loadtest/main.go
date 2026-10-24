@@ -191,7 +191,7 @@ func loadTokens(file, csv string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var out []string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
@@ -421,7 +421,7 @@ func (c *client) httpBuyIn(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("buyin http %d", resp.StatusCode)
 	}
@@ -443,7 +443,7 @@ func (c *client) session(ctx context.Context) error {
 		c.m.connectFail.Add(1)
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Auth frame: protobuf ClientMessage with the token.
 	authFrame, _ := goproto.Marshal(&pokerproto.ClientMessage{Type: "auth", Token: c.token})
