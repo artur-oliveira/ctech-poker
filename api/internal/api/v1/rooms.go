@@ -69,8 +69,8 @@ func RegisterRooms(router fiber.Router, auth, idem fiber.Handler, rooms *roomsto
 
 func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	var req CreateRoomRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.Visibility != "public" && req.Visibility != "private" {
 		return problem.BadRequest("visibility must be public or private").Send(c)
@@ -333,8 +333,8 @@ func aggregateBuckets(rooms []roomstore.Room, mode string) []RoomBucket {
 // of surfacing later as a buy-in error on the table page (#76).
 func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 	var req JoinOrCreateRoomRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.CurrencyMode == "" {
 		req.CurrencyMode = roomstore.CurrencyModeSandbox
@@ -607,8 +607,8 @@ func (h *roomHandlers) privateAccessAllowed(ctx context.Context, room *roomstore
 
 func (h *roomHandlers) join(c fiber.Ctx) error {
 	var req JoinRoomRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	room, err := h.rooms.Get(c.Context(), c.Params("id"))
 	if err != nil {
@@ -651,8 +651,8 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 
 func (h *roomHandlers) leave(c fiber.Ctx) error {
 	var req LeaveRoomRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid request body").WithCause(err).Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	userID, _ := c.Locals(localsUserID).(string)
 	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID, req.IdempotencyKey)

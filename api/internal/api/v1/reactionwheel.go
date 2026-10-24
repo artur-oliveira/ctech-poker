@@ -26,8 +26,8 @@ func RegisterReactionWheel(router fiber.Router, auth fiber.Handler, players *pla
 	})
 	g.Put("", func(c fiber.Ctx) error {
 		var req reactionWheelRequest
-		if err := c.Bind().Body(&req); err != nil {
-			return problem.BadRequest("invalid body").Send(c)
+		if p := bindBody(c, &req); p != nil {
+			return p.Send(c)
 		}
 		userID := c.Locals(localsUserID).(string)
 		profile, err := players.SetReactionWheel(c.Context(), userID, req.ReactionIDs)

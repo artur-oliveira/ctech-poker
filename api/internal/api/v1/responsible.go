@@ -86,8 +86,8 @@ func (h *responsibleHandlers) accept(c fiber.Ctx) error {
 
 func (h *responsibleHandlers) setLimits(c fiber.Ctx) error {
 	var req setLimitsRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	lim, err := h.svc.SetLimits(c.Context(), userOf(c), req.Daily, req.Weekly, req.Monthly)
 	if err != nil {
@@ -110,8 +110,8 @@ func (h *responsibleHandlers) cancelPending(c fiber.Ctx) error {
 
 func (h *responsibleHandlers) selfExclude(c fiber.Ctx) error {
 	var req selfExcludeRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if _, err := responsible.ExclusionUntil(req.Period, time.Now()); err != nil {
 		return problem.BadRequest(err.Error()).Send(c)

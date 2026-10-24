@@ -31,8 +31,8 @@ func RegisterCosmeticLoadouts(router fiber.Router, auth fiber.Handler, svc *cosm
 
 func (h *cosmeticLoadoutHandlers) create(c fiber.Ctx) error {
 	var req CosmeticLoadoutCreateRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	userID := c.Locals(localsUserID).(string)
 	loadout, err := h.svc.Create(c.Context(), userID, req.Name, req.Selections)

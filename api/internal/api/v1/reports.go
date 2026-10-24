@@ -36,8 +36,8 @@ func RegisterReports(router fiber.Router, auth fiber.Handler, svc *reports.Servi
 				return p.Send(c)
 			}
 			var body reportRequest
-			if err := c.Bind().Body(&body); err != nil {
-				return problem.BadRequest("invalid body").Send(c)
+			if p := bindBody(c, &body); p != nil {
+				return p.Send(c)
 			}
 			created, err := svc.Create(c.Context(), actorID(c), key, reports.CreateInput{
 				TargetPlayerID: strings.TrimSpace(body.TargetPlayerID), Category: body.Category, Surface: body.Surface,

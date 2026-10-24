@@ -85,8 +85,8 @@ func RegisterPokerStats(router fiber.Router, auth fiber.Handler, store pokerStat
 
 	router.Post("/players/me/stats/goals", auth, func(c fiber.Ctx) error {
 		var req statsGoalRequest
-		if err := c.Bind().Body(&req); err != nil {
-			return problem.BadRequest("invalid body").Send(c)
+		if p := bindBody(c, &req); p != nil {
+			return p.Send(c)
 		}
 		userID := c.Locals(localsUserID).(string)
 		profile, err := players.SetStatsGoals(c.Context(), userID, req.Goals)

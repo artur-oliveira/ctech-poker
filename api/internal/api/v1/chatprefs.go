@@ -66,8 +66,8 @@ func (h *chatPrefsHandlers) save(c fiber.Ctx) error {
 		return internalProblem("chat preferences unavailable", errors.New("no store wired")).Send(c)
 	}
 	var req chatPrefsRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	viewerID := c.Locals(localsUserID).(string)
 	prefs, err := h.store.Save(c.Context(), viewerID, req.ExtraWords)

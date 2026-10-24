@@ -60,8 +60,8 @@ func (h *cosmeticPurchaseHandlers) catalog(c fiber.Ctx) error {
 func (h *cosmeticPurchaseHandlers) create(c fiber.Ctx) error {
 	kind := cosmetics.Kind(c.Params("kind"))
 	var req CosmeticPurchaseCreateRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	if req.ItemID == "" {
 		return problem.BadRequest("item_id is required").Send(c)
@@ -113,8 +113,8 @@ func (h *cosmeticPurchaseHandlers) get(c fiber.Ctx) error {
 
 func (h *cosmeticPurchaseHandlers) refund(c fiber.Ctx) error {
 	var req CosmeticPurchaseRefundRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {

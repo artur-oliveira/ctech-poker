@@ -49,8 +49,8 @@ func (h *botCheckContestHandlers) file(c fiber.Ctx) error {
 		return internalProblem("bot-challenge contests unavailable", errors.New("no store wired")).Send(c)
 	}
 	var req botCheckContestRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return problem.BadRequest("invalid body").Send(c)
+	if p := bindBody(c, &req); p != nil {
+		return p.Send(c)
 	}
 	contest, err := h.store.Record(c.Context(), c.Locals(localsUserID).(string), req.TableID, req.Reason)
 	switch {
