@@ -306,7 +306,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | Method & path                                | Auth            | Notes                                                                                      |
 |----------------------------------------------|-----------------|--------------------------------------------------------------------------------------------|
 | `GET /health`                                | none            | liveness                                                                                   |
-| `GET /health-check`                          | none            | RFC-health detail (uptime, CPU, memory, `DescribeTable`); ALB target group accepts 200/207 |
+| `GET /health-check`                          | none            | go-common `health` report (uptime, CPU, memory, `DescribeTable`); only DynamoDB 503s; ALB accepts 200/207|
 | `GET /tables/:id/ws`                         | first-frame JWT | table WebSocket (above)                                                                    |
 | `GET /ws`                                    | first-frame JWT | lobby/user WebSocket; registers `lobby` + `user#<id>`                                      |
 | `POST /rooms/`                               | JWT             | create room; takes `currency_mode` + `entry_fee_cents`; rate-limited 10/min/IP             |

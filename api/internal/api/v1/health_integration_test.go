@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/health"
 )
 
 func TestDynamoDBHealthDescribesExpectedTable(t *testing.T) {
@@ -30,8 +31,10 @@ func TestDynamoDBHealthDescribesExpectedTable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry := checkDynamoDB(context.Background(), db, table, time.Now().UTC().Format(time.RFC3339Nano))
-	if entry.Status != statusPass || entry.ComponentName != componentDynamoDB || entry.ObservedUnit != unitMillisecond {
-		t.Fatalf("entry=%+v", entry)
+	if _, err := health.DynamoDB(db, table, true).Probe(context.Background()); err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if _, err := health.DynamoDB(db, table+"_missing", true).Probe(context.Background()); err == nil {
+		t.Fatal("missing table must fail the probe")
 	}
 }
