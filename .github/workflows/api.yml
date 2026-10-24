@@ -209,7 +209,7 @@ jobs:
           ROLLBACK_KEY="ctech-poker/rollback-${GITHUB_RUN_ID}.zip"
           aws s3 cp \
             "s3://${DEPLOYMENTS_BUCKET}/ctech-poker/current.zip" \
-            "s3://${DEPLOYMENTS_BUCKET}/${ROLLBACK_KEY}" || true
+            "s3://${DEPLOYMENTS_BUCKET}/${ROLLBACK_KEY}" || true  # standards:allow best-effort rollback artifact copy
           echo "ROLLBACK_KEY=${ROLLBACK_KEY}" >> "$GITHUB_ENV"
 
           # Overwrite current.zip so new ASG instances bootstrap this version
@@ -248,7 +248,7 @@ jobs:
             # jq exits non-zero on a non-JSON body (an HTML block page), and the
             # step runs under `bash -e`, so this must not be allowed to abort
             # the retry loop.
-            RELEASE=$(jq -r '.releaseId // empty' < /tmp/health.body 2>/dev/null || true)
+            RELEASE=$(jq -r '.releaseId // empty' < /tmp/health.body 2>/dev/null || true)  # standards:allow jq on non-JSON body must not abort retry loop
             if [ "$RELEASE" = "$VERSION" ]; then
               echo "Release $VERSION is live"
               exit 0
@@ -265,7 +265,7 @@ jobs:
             # server/cf-ray identify the edge that answered; a 403 carrying them
             # with no app headers means the request never reached the API.
             grep -iE '^(server|cf-ray|cf-mitigated|x-request-id|retry-after|content-type):' \
-              /tmp/health.head | sed 's/^/  /' || true
+              /tmp/health.head | sed 's/^/  /' || true  # standards:allow best-effort diagnostics
             sleep 5
           done
           echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
