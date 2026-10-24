@@ -81,88 +81,6 @@ import (
 	goproto "google.golang.org/protobuf/proto"
 )
 
-// Module is the root Fx module for the poker API.
-var Module = fx.Options(
-	fx.Provide(
-		config.Load,
-		newFiberApp,
-		newCacheBackend,
-		newRealtimeValkeyClient,
-		newVerifier,
-		newSupervisor,
-		newWsRegistry,
-		newTableLeaseService,
-		newDynamoClient,
-		newErasureStore,
-		newEligibility,
-		newAvatarService,
-		newTableStore,
-		newRoomStore,
-		newPlayerStore,
-		newCosmeticsEntitlementStore,
-		newCosmeticsPurchaseStore,
-		newCosmeticsPurchaseService,
-		newCosmeticLoadoutStore,
-		newCosmeticLoadoutService,
-		newPlayerService,
-		newPlayerNoteStore,
-		newHandMetaStore,
-		newHandShareStore,
-		newHandRevealStore,
-		newHandRevealPaymentStore,
-		newHandRevealService,
-		newPokerStatsStore,
-		newMatchupStore,
-		newHighlightsStore,
-		newAchievementStore,
-		newAchievementService,
-		newLeaderboardStore,
-		newLeaderboardService,
-		newRouletteStore,
-		newRouletteService,
-		newSandboxPurchaseStore,
-		newPromoCodeStore,
-		newSandboxPurchaseService,
-		newWalletAlertStore,
-		newWalletAlertService,
-		newReactionEntitlementStore,
-		newReactionPurchaseStore,
-		newReactionPurchaseService,
-		newReactionOwnershipCache,
-		newSessionStore,
-		newSocialStore,
-		newSocialEventStore,
-		newSocialService,
-		newPresenceStore,
-		newPresenceService,
-		newRecentPlayersStore,
-		newRecentPlayersService,
-		newReportStore,
-		newReportService,
-		newChatPrefsStore,
-		newBillingClient,
-		newPurchaseWallet,
-		newResponsibleStore,
-		newResponsibleService,
-		newChatPrefsCache,
-		newBotCheckContestStore,
-		walletclient.New,
-		newBuyinService,
-		newPendingStore,
-		newEntitlementStore,
-		newTableManager,
-	),
-	fx.Invoke(wirePlayerRemovedHook),
-	fx.Invoke(wireAutoRebuyHook),
-	fx.Invoke(wireCosmeticCurrentSelection),
-	fx.Invoke(wireCosmeticLoadoutApply),
-	fx.Invoke(validateWalletScopes),
-	fx.Invoke(registerRoutesWithSocialRuntime),
-	fx.Invoke(registerErasureRoutes),
-	fx.Invoke(startErasureConsumer),
-	fx.Invoke(startServer),
-)
-
 func newFiberApp(cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName: fmt.Sprintf("CTech Poker - %s - %s", cfg.Env, cfg.AppVersion),
@@ -1027,49 +945,95 @@ func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
 	}
 }
 
-func registerRoutesWithSocialRuntime(
-	app *fiber.App,
-	cfg *config.Config,
-	db *dynamodb.Client,
-	verifier *jwtverify.Verifier,
-	manager *tablemanager.Manager,
-	reg ws.Registry,
-	cacheBackend cache.Backend,
-	rooms *roomstore.Store,
-	buyinSvc *buyin.Service,
-	players *player.Service,
-	leaderboardSvc *leaderboard.Service,
-	dailyRewardSvc *dailyreward.Service,
-	tableStore *tablestore.Store,
-	sessionStore *sessionlog.Store,
-	achievementStore *achievements.Store,
-	playerNoteStore *playernotes.Store,
-	handMetaStore *handmeta.Store,
-	handShareStore *handshare.Store,
-	handRevealStore *handreveal.Store,
-	handRevealSvc *handreveal.Service,
-	pokerStatsStore *pokerstats.Store,
-	matchupStore *matchup.Store,
-	highlightsStore *highlights.Store,
-	avatars *avatar.Service,
-	sandboxPurchaseSvc *sandboxpurchase.Service,
-	reactionPurchaseSvc *reactionpurchase.Service,
-	cosmeticPurchaseSvc *cosmeticpurchase.Service,
-	socialSvc *social.Service,
-	presenceSvc *presence.Service,
-	recentSvc *recentplayers.Service,
-	reportSvc *reports.Service,
-	pending *reconcile.PendingStore,
-	walletAlertSvc *walletalert.Service,
-	chatPrefsStore *chatprefs.Store,
-	chatPrefsCache *chatprefs.ExtraWordsCache,
-	responsibleSvc *responsible.Service,
-	billing *billingclient.Client,
-	botCheckContestStore *botcheck.ContestStore,
-	cosmeticLoadoutSvc *cosmeticloadout.Service,
-	erasureStore *erasure.Store,
-) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc, pending, walletAlertSvc, chatPrefsStore, chatPrefsCache, responsibleSvc, billing, botCheckContestStore, cosmeticLoadoutSvc, erasureStore.Blocked)
+// routeParams collects what the HTTP routes need from the container; the
+// field names mirror v1.Deps.
+type routeParams struct {
+	fx.In
+	App                  *fiber.App
+	Cfg                  *config.Config
+	DB                   *dynamodb.Client
+	Verifier             *jwtverify.Verifier
+	Manager              *tablemanager.Manager
+	Reg                  ws.Registry
+	CacheBackend         cache.Backend
+	Rooms                *roomstore.Store
+	BuyinSvc             *buyin.Service
+	Players              *player.Service
+	LeaderboardSvc       *leaderboard.Service
+	DailyRewardSvc       *dailyreward.Service
+	TableStore           *tablestore.Store
+	SessionStore         *sessionlog.Store
+	AchievementStore     *achievements.Store
+	PlayerNoteStore      *playernotes.Store
+	HandMetaStore        *handmeta.Store
+	HandShareStore       *handshare.Store
+	HandRevealStore      *handreveal.Store
+	HandRevealSvc        *handreveal.Service
+	PokerStatsStore      *pokerstats.Store
+	MatchupStore         *matchup.Store
+	HighlightsStore      *highlights.Store
+	Avatars              *avatar.Service
+	SandboxPurchaseSvc   *sandboxpurchase.Service
+	ReactionPurchaseSvc  *reactionpurchase.Service
+	CosmeticPurchaseSvc  *cosmeticpurchase.Service
+	SocialSvc            *social.Service
+	PresenceSvc          *presence.Service
+	RecentSvc            *recentplayers.Service
+	ReportSvc            *reports.Service
+	Pending              *reconcile.PendingStore
+	WalletAlertSvc       *walletalert.Service
+	ChatPrefsStore       *chatprefs.Store
+	ChatPrefsCache       *chatprefs.ExtraWordsCache
+	ResponsibleSvc       *responsible.Service
+	Billing              *billingclient.Client
+	BotCheckContestStore *botcheck.ContestStore
+	CosmeticLoadoutSvc   *cosmeticloadout.Service
+	ErasureStore         *erasure.Store
+}
+
+func registerRoutesWithSocialRuntime(p routeParams) {
+	v1.Register(p.App, v1.Deps{
+		Cfg:                  p.Cfg,
+		DB:                   p.DB,
+		Verifier:             p.Verifier,
+		Manager:              p.Manager,
+		Reg:                  p.Reg,
+		CacheBackend:         p.CacheBackend,
+		Rooms:                p.Rooms,
+		BuyinSvc:             p.BuyinSvc,
+		Players:              p.Players,
+		LeaderboardSvc:       p.LeaderboardSvc,
+		DailyRewardSvc:       p.DailyRewardSvc,
+		TableStore:           p.TableStore,
+		SessionStore:         p.SessionStore,
+		AchievementStore:     p.AchievementStore,
+		PlayerNoteStore:      p.PlayerNoteStore,
+		HandMetaStore:        p.HandMetaStore,
+		HandShareStore:       p.HandShareStore,
+		HandRevealStore:      p.HandRevealStore,
+		HandRevealSvc:        p.HandRevealSvc,
+		PokerStatsStore:      p.PokerStatsStore,
+		MatchupStore:         p.MatchupStore,
+		HighlightsStore:      p.HighlightsStore,
+		Avatars:              p.Avatars,
+		SandboxPurchaseSvc:   p.SandboxPurchaseSvc,
+		ReactionPurchaseSvc:  p.ReactionPurchaseSvc,
+		CosmeticPurchaseSvc:  p.CosmeticPurchaseSvc,
+		SocialSvc:            p.SocialSvc,
+		PresenceSvc:          p.PresenceSvc,
+		RecentSvc:            p.RecentSvc,
+		ReportSvc:            p.ReportSvc,
+		Pending:              p.Pending,
+		WalletAlertSvc:       p.WalletAlertSvc,
+		ChatPrefsStore:       p.ChatPrefsStore,
+		ChatPrefsCache:       p.ChatPrefsCache,
+		ResponsibleSvc:       p.ResponsibleSvc,
+		Billing:              p.Billing,
+		BotCheckContestStore: p.BotCheckContestStore,
+		CosmeticLoadoutSvc:   p.CosmeticLoadoutSvc,
+		Seed:                 roomBackedSeed(p.Rooms),
+		Blocked:              p.ErasureStore.Blocked,
+	})
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -1085,7 +1049,14 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	v1.Register(app, v1.Deps{
+		Cfg: cfg, DB: db, Verifier: verifier, Manager: manager, Reg: reg, Seed: roomBackedSeed(rooms), CacheBackend: cacheBackend,
+		Rooms: rooms, BuyinSvc: buyinSvc, Players: players, LeaderboardSvc: leaderboardSvc, DailyRewardSvc: dailyRewardSvc,
+		TableStore: tableStore, SessionStore: sessionStore, AchievementStore: achievementStore, PlayerNoteStore: playerNoteStore,
+		HandMetaStore: handMetaStore, HandShareStore: handShareStore, PokerStatsStore: pokerStatsStore, HighlightsStore: highlightsStore,
+		Avatars: avatars, SandboxPurchaseSvc: sandboxPurchaseSvc, ReactionPurchaseSvc: reactionPurchaseSvc,
+		CosmeticPurchaseSvc: cosmeticPurchaseSvc, SocialSvc: socialSvc,
+	})
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so
