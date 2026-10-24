@@ -64,7 +64,7 @@ func newHandRevealApp(playerID string, sessions sessionLogReader, records handRe
 		c.Locals(localsUserID, playerID)
 		return c.Next()
 	}
-	RegisterHandReveal(app.Group("/v1.0"), auth, sessions, records, svc, nil)
+	RegisterHandReveal(app.Group("/v1.0"), auth, nil, sessions, records, svc, nil)
 	return app
 }
 

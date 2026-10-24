@@ -50,19 +50,19 @@ type roomHandlers struct {
 	buckets  bucketCache
 }
 
-func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, createLimiter, joinLimiter *ratelimit.Limiter) {
+func RegisterRooms(router fiber.Router, auth, idem fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, createLimiter, joinLimiter *ratelimit.Limiter) {
 	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, reg: reg, cfg: cfg, sessions: sessions}
 	g := router.Group("/rooms", auth)
 	g.Post("/", rateLimit(createLimiter, ipKey("rooms:create")), h.createRoom)
 	// Both must be declared before "/:id", which would otherwise match them.
-	g.Post("/join-or-create", rateLimit(joinLimiter, ipKey("rooms:join")), h.joinOrCreate)
+	g.Post("/join-or-create", optional(idem), rateLimit(joinLimiter, ipKey("rooms:join")), h.joinOrCreate)
 	g.Get("/buckets", h.listBuckets)
 	g.Get("/", h.listPublic)
 	g.Get("/stakes", h.listStakes)
 	g.Get("/code/:code", h.getByShareCode)
 	g.Get("/:id", h.getRoom)
 	g.Get("/:id/seated", h.seated)
-	g.Post("/:id/join", rateLimit(joinLimiter, ipKey("rooms:join")), h.join)
+	g.Post("/:id/join", optional(idem), rateLimit(joinLimiter, ipKey("rooms:join")), h.join)
 	g.Post("/:id/leave", h.leave)
 	g.Post("/:id/ready", h.ready)
 }

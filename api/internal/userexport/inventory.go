@@ -44,5 +44,6 @@ var inventory = map[string]string{
 	"poker_social_events":         "exported: own inbox",
 	"poker_player_reports":        "excluded: anti-abuse records that hold the reporters' and reported players' data; to be confirmed with the DPO",
 	"poker_erasure_state":         "excluded: the deletion saga's own lock/tombstone",
+	"poker_idempotency":           "excluded: transient replay cache of answers already exported from their own tables; expires within 24 h",
 	"poker_responsible":           "exported: consent, limits, counters, audit and inflow markers",
 }

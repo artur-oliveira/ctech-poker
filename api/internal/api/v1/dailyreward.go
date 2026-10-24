@@ -9,9 +9,9 @@ import (
 
 type dailyRewardHandlers struct{ svc *dailyreward.Service }
 
-func RegisterDailyReward(router fiber.Router, auth fiber.Handler, svc *dailyreward.Service, spinLimiter *ratelimit.Limiter) {
+func RegisterDailyReward(router fiber.Router, auth, idem fiber.Handler, svc *dailyreward.Service, spinLimiter *ratelimit.Limiter) {
 	h := &dailyRewardHandlers{svc: svc}
-	g := router.Group("/sandbox-credits", auth)
+	g := router.Group("/sandbox-credits", auth, optional(idem))
 	g.Post("/", rateLimit(spinLimiter, ipKey("dailyreward:spin")), h.spin)
 	g.Get("/", h.cooldown)
 }

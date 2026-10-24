@@ -41,7 +41,7 @@ export type TableName =
   'poker_promo_codes' | 'poker_promo_redemptions' |
   'poker_table_entitlements' | 'poker_table_highlights' |
   'poker_hand_reveals' | 'poker_hand_reveal_payments' | 'poker_erasure_state' |
-  'poker_responsible' |
+  'poker_responsible' | 'poker_idempotency' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -214,6 +214,11 @@ export class DynamoDBStack extends cdk.Stack {
     // erasure.Store. PITR stays on: a lost tombstone lets a late message
     // resurrect an erased user.
     table('poker_erasure_state', false, true);
+    // poker_idempotency: `Idempotency-Key` claims and replayable answers of the
+    // chip/money POSTs. Schema owned by api-commons idempotency.DynamoStore
+    // (pk IDEM#<player>, sk KEY#<key>, TTL `ttl`: 24 h answers, 2 min unanswered
+    // claims). Ephemeral: PITR off. Covered by the API role's `<env>_poker*` grant.
+    table('poker_idempotency', true, true, false, false);
     // poker_responsible (P4): responsible-gambling state. pk = player id, sk = STATE
     // (consent, personal limits, inflow counters, self-exclusion; one item, versioned)
     // | AUDIT#<ts>#<id> (append-only) | INFLOW#<buy-in key> (idempotency marker, TTL).

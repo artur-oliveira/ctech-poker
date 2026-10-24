@@ -50,7 +50,7 @@ func newReactionPurchaseApp(svc *reactionpurchase.Service) *fiber.App {
 		c.Locals(localsUserID, "player-1")
 		return c.Next()
 	}
-	RegisterReactionPurchase(app.Group("/v1.0"), auth, svc, nil)
+	RegisterReactionPurchase(app.Group("/v1.0"), auth, nil, svc, nil)
 	return app
 }
 
