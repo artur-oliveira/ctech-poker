@@ -4,6 +4,7 @@ import {SITE_URL} from '@/lib/routeMetadata';
 import {ClientErrorReporter} from '@/components/ClientErrorReporter';
 import {Notifier} from '@/components/Notifier';
 import {RouteAnnouncer} from '@/components/RouteAnnouncer';
+import {DensityScope} from '@aoctech/ui';
 import './base.css';
 import React from "react";
 
@@ -83,7 +84,7 @@ export default function Layout({children}: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">
     <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
-    {children}<Notifier/><RouteAnnouncer/><ClientErrorReporter/></body>
+    <DensityScope density="compact">{children}<Notifier/><RouteAnnouncer/><ClientErrorReporter/></DensityScope></body>
     </html>
   );
 }

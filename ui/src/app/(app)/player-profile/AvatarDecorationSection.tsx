@@ -3,7 +3,7 @@ import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Ban, Frame as FrameIcon, Medal} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {Checkbox} from '@/components/ui/checkbox';
+import {Checkbox} from '@aoctech/ui';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {avatarBadgeLabel, avatarFrameLabel, listOwnedAvatarCosmetics} from '@/lib/avatarCosmetics';

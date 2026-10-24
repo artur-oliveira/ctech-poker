@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {useMutation, useQueryClient} from '@tanstack/react-query';
 import {ArrowDown, ArrowUp, Copy, Eye, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {Switch} from '@/components/ui/switch';
+import {Switch} from '@aoctech/ui';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {FeaturedAchievementCarousel} from '@/components/achievements/FeaturedAchievementCarousel';
 import {useAchievementsSummary} from '@/lib/hooks/useAchievementsSummary';
