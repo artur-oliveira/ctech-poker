@@ -407,8 +407,8 @@ func (c *client) run(ctx context.Context) {
 
 func (c *client) httpBuyIn(ctx context.Context) error {
 	body, _ := json.Marshal(map[string]any{
-		"amount":          c.cfg.buyInAmount,
-		"idempotency_key": fmt.Sprintf("loadtest-%s-%d", c.tableID, time.Now().UnixNano()),
+		"amount":   c.cfg.buyInAmount,
+		"idem_key": fmt.Sprintf("loadtest-%s-%d", c.tableID, time.Now().UnixNano()),
 	})
 	url := fmt.Sprintf("%s/v1.0/rooms/%s/join", c.cfg.baseURL, c.tableID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))

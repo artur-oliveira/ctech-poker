@@ -651,8 +651,11 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 
 func (h *roomHandlers) leave(c fiber.Ctx) error {
 	var req LeaveRoomRequest
-	if p := bindBody(c, &req); p != nil {
-		return p.Send(c)
+	// The body only carries an optional idem_key; the CLI posts none at all.
+	if len(c.Body()) > 0 {
+		if p := bindBody(c, &req); p != nil {
+			return p.Send(c)
+		}
 	}
 	userID, _ := c.Locals(localsUserID).(string)
 	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID, req.IdempotencyKey)

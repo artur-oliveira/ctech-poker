@@ -32,3 +32,20 @@ func TestBindBodyIsStrict(t *testing.T) {
 		}
 	}
 }
+
+func TestLeaveAcceptsEmptyBody(t *testing.T) {
+	var req LeaveRoomRequest
+	app := fiber.New()
+	app.Post("/leave", func(c fiber.Ctx) error {
+		if len(c.Body()) > 0 {
+			if p := bindBody(c, &req); p != nil {
+				return p.Send(c)
+			}
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/leave", nil))
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("resp=%v err=%v", resp, err)
+	}
+}
