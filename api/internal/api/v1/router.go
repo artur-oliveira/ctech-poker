@@ -114,6 +114,7 @@ func Register(
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore, wsActionLimiter, wsReactionLimiter, blocked)
 	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins, presenceSvc, blocked)
 	auth := authMiddleware(verifier, blocked)
+	idem := newIdempotency(cfg, db)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
 	RegisterAchievementCatalog(router)
 	RegisterWalletWebhook(router, cfg.WalletWebhookHMACSecret, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, reg, blocked)
@@ -147,7 +148,7 @@ func Register(
 
 	// Unauthenticated, unlike every Register* call below it.
 	RegisterAvatars(router, avatars, avatarReadLimiter)
-	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, sessionStore, createLimiter, joinLimiter)
+	RegisterRooms(router, auth, idem, rooms, buyinSvc, manager, reg, cfg, sessionStore, createLimiter, joinLimiter)
 	identityPusher := &tableIdentityPusher{
 		manager: manager, seed: seed, presence: presenceSvc,
 		players: players, stats: pokerStatsStore, cfg: cfg,
@@ -160,15 +161,15 @@ func Register(
 	RegisterBotCheckContest(router, auth, botCheckContestStore)
 	RegisterHandMeta(router, auth, handMetaStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
-	RegisterHandReveal(router, auth, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)
+	RegisterHandReveal(router, auth, idem, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)
 	RegisterHighlights(router, auth, sessionStore, highlightsStore)
 	RegisterPokerStats(router, auth, pokerStatsStore, players)
 	RegisterMatchups(router, auth, matchupStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc, players, leaderboardReadLimiter)
-	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
-	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
-	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)
-	RegisterCosmeticPurchase(router, auth, cosmeticPurchaseSvc, purchaseLimiter)
+	RegisterDailyReward(router, auth, idem, dailyRewardSvc, spinLimiter)
+	RegisterSandboxPurchase(router, auth, idem, sandboxPurchaseSvc, purchaseLimiter)
+	RegisterReactionPurchase(router, auth, idem, reactionPurchaseSvc, purchaseLimiter)
+	RegisterCosmeticPurchase(router, auth, idem, cosmeticPurchaseSvc, purchaseLimiter)
 	RegisterAvatarCosmeticsOwnership(router, auth, cosmeticPurchaseSvc)
 	// nil in the narrower test-only wiring (app.registerRoutes).
 	if cosmeticLoadoutSvc != nil {

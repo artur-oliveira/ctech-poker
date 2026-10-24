@@ -28,9 +28,9 @@ type CosmeticPurchaseRefundRequest struct {
 // RegisterReactionPurchase's catalog/create/list/get/refund route shape. The
 // :kind path param is validated against cosmetics.KindDeck/KindFelt before
 // any service call.
-func RegisterCosmeticPurchase(router fiber.Router, auth fiber.Handler, svc *cosmeticpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
+func RegisterCosmeticPurchase(router fiber.Router, auth, idem fiber.Handler, svc *cosmeticpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &cosmeticPurchaseHandlers{svc: svc}
-	g := router.Group("/wallet/cosmetic-purchase/:kind", auth, validCosmeticKind)
+	g := router.Group("/wallet/cosmetic-purchase/:kind", auth, optional(idem), validCosmeticKind)
 	g.Get("/catalog", h.catalog)
 	g.Post("/", rateLimit(purchaseLimiter, ipKey("cosmeticpurchase:create")), h.create)
 	g.Get("/", h.list)

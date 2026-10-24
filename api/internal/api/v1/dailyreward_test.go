@@ -73,7 +73,7 @@ func TestDailyRewardPostRetriesPendingClaim(t *testing.T) {
 	store := &fakeDailyStore{claims: map[string]dailyreward.DailyRewardRecord{}}
 	app := fiber.New()
 	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "player-1"); return c.Next() }
-	RegisterDailyReward(app.Group("/v1.0"), auth, dailyreward.NewService(wallet, store), nil)
+	RegisterDailyReward(app.Group("/v1.0"), auth, nil, dailyreward.NewService(wallet, store), nil)
 
 	if code, _ := postDailyReward(t, app); code == http.StatusOK {
 		t.Fatal("first claim should fail on the wallet")

@@ -37,7 +37,7 @@ func newSandboxPurchaseApp(svc *sandboxpurchase.Service) *fiber.App {
 		c.Locals(localsUserID, "player-1")
 		return c.Next()
 	}
-	RegisterSandboxPurchase(app.Group("/v1.0"), auth, svc, nil)
+	RegisterSandboxPurchase(app.Group("/v1.0"), auth, nil, svc, nil)
 	return app
 }
 

@@ -303,6 +303,13 @@ Auth column: **JWT** means `authMiddleware` (bearer token, `sub` + `sid` require
 require their exact public `poker:*:read` permission. HTTP mutations require `azp=poker`, so API-key and other OAuth
 clients stay read-only even though the first-party SPA requests those same read scopes.
 
+`Idempotency-Key` (optional, up to 128 visible ASCII chars; go-common `idempotency`, table `{env}_poker_idempotency`, scoped
+per player) is honored on the chip/money POSTs: sandbox/reaction/cosmetic purchase create and refund, `POST /sandbox-credits/`,
+`POST /players/me/hands/:handId/reveal-winner`, `POST /rooms/:id/join` and `/rooms/join-or-create`. Same key and body replays the
+first answer with `Idempotent-Replay: true`; same key with another body is 409 `/problems/idempotency-conflict`; a retry while
+the first is running is 409 `/problems/idempotency-in-progress`; an unreachable store is 503 (fail closed). The body
+`idem_key` still drives the wallet-side idempotency of the purchase saga; the header protects the HTTP answer.
+
 | Method & path                                | Auth            | Notes                                                                                      |
 |----------------------------------------------|-----------------|--------------------------------------------------------------------------------------------|
 | `GET /health`                                | none            | liveness                                                                                   |

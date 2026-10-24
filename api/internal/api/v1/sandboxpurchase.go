@@ -29,9 +29,9 @@ type SandboxPurchaseRefundRequest struct {
 	IdempotencyKey string `json:"idem_key,omitempty"`
 }
 
-func RegisterSandboxPurchase(router fiber.Router, auth fiber.Handler, svc *sandboxpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
+func RegisterSandboxPurchase(router fiber.Router, auth, idem fiber.Handler, svc *sandboxpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &sandboxPurchaseHandlers{svc: svc}
-	g := router.Group("/wallet/sandbox-purchase", auth)
+	g := router.Group("/wallet/sandbox-purchase", auth, optional(idem))
 	g.Get("/skus", h.listSkus)
 	g.Post("/", rateLimit(purchaseLimiter, ipKey("sandboxpurchase:create")), h.create)
 	g.Get("/", h.list)

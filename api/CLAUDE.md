@@ -88,6 +88,9 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
+- **`Idempotency-Key` on chip/money POSTs** goes through go-common `idempotency` (`newIdempotency` in `internal/api/v1`,
+  table `poker_idempotency`), mounted after auth on the purchase, refund, spin, reveal and join routes. Do not hand-roll a header check;
+  a new route that moves chips or money mounts `optional(idem)` after `auth`. The wallet-side `idem_key` is separate.
 - **No custom metrics.** `internal/metrics` (CloudWatch EMF) and every `metrics.Record` call are gone; signals are `slog`
   lines (ids stay in the log line). Do not add a metric collector; a self-hosted sink would replace it, not a new CloudWatch series.
 - **Every new user write path goes through the erasure lock.** HTTP routes get it from `authMiddleware`; anything that

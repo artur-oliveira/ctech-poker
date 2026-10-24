@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 38);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 39);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -392,6 +392,18 @@ test('poker_responsible holds the responsible-gambling state (pk+sk, TTL)', () =
   const template = Template.fromStack(new DynamoDBStack(new App(), 'TestResponsible', {environment: 'dev'}));
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_responsible',
+    KeySchema: [{AttributeName: 'pk', KeyType: 'HASH'}, {AttributeName: 'sk', KeyType: 'RANGE'}],
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+  });
+});
+
+test('poker_idempotency holds Idempotency-Key claims (pk+sk, TTL, no PITR)', () => {
+  const template = Template.fromStack(new DynamoDBStack(new App(), 'TestIdempotency', {environment: 'prod'}));
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'prod_poker_idempotency',
+    Replicas: Match.arrayWith([
+      Match.objectLike({PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: false}}),
+    ]),
     KeySchema: [{AttributeName: 'pk', KeyType: 'HASH'}, {AttributeName: 'sk', KeyType: 'RANGE'}],
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
   });

@@ -23,9 +23,9 @@ type ReactionPurchaseRefundRequest struct {
 	IdempotencyKey string `json:"idem_key,omitempty"`
 }
 
-func RegisterReactionPurchase(router fiber.Router, auth fiber.Handler, svc *reactionpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
+func RegisterReactionPurchase(router fiber.Router, auth, idem fiber.Handler, svc *reactionpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &reactionPurchaseHandlers{svc: svc}
-	g := router.Group("/wallet/reaction-purchase", auth)
+	g := router.Group("/wallet/reaction-purchase", auth, optional(idem))
 	g.Get("/catalog", h.catalog)
 	g.Post("/", rateLimit(purchaseLimiter, ipKey("reactionpurchase:create")), h.create)
 	g.Get("/", h.list)
