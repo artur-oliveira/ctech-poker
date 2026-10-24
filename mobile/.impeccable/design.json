@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-14T23:15:27.135622+00:00",
+  "title": "Design System: CTech Poker Mobile",
+  "extensions": {
+    "motion": [
+      {
+        "name": "seat-state",
+        "value": "180ms; 0ms with disableAnimations",
+        "purpose": "Informar mudança de turno no assento."
+      }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "The Living Table",
+    "overview": "Adaptação nativa da identidade aprovada do Web; tokens normativos em DESIGN.md.",
+    "keyCharacteristics": [
+      "Sala vinho escura",
+      "Ação principal vermelha",
+      "Dourado para valor",
+      "IBM Plex e monograma original"
+    ],
+    "rules": [
+      {
+        "name": "Mesma marca",
+        "body": "Usar o SVG e os tokens existentes do cliente web.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Validar com o tema real de produção e fontes do bundle."
+    ],
+    "donts": [
+      "Não derivar uma paleta alternativa por seed."
+    ]
+  }
+}

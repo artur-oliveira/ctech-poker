@@ -52,12 +52,14 @@ func hasPokerScope(claims *jwtverify.Claims) bool {
 
 // firstPartyPokerClientIDs are the OAuth clients whose user tokens may perform
 // interactive (non-GET) poker operations. "poker" is the web SPA; "poker-cli"
-// is the terminal client (docs/specs/2026-09-05-poker-cli.md). Both still
+// is the terminal client (docs/specs/2026-09-05-poker-cli.md); "poker-mobile"
+// is the native Android/iOS client (mobile/README.md). All still
 // require a real user session (non-empty SID) — the M2M guard is unchanged,
 // so a client_credentials token for either id is still rejected.
 var firstPartyPokerClientIDs = map[string]struct{}{
 	firstPartyPokerClientID: {},
 	"poker-cli":             {},
+	"poker-mobile":          {},
 }
 
 func isFirstPartyPokerSession(claims *jwtverify.Claims) bool {
