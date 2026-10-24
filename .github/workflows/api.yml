@@ -98,6 +98,12 @@ jobs:
         # the first master commit that can. Move back to a tag once one ships.
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45 ./...
 
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: api
+
       - name: Vulnerability scan
         working-directory: api
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...

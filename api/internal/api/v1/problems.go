@@ -70,7 +70,7 @@ func walletProblem(err error) (p *problem.Problem, ok bool) {
 	p = problem.New(werr.Status, werr.Type, werr.Title, werr.Detail)
 	// #319: propagate the wallet's own next_action/retry_after_seconds verbatim.
 	if werr.NextAction != "" {
-		p.WithNextAction(werr.NextAction, werr.RetryAfterSeconds)
+		p = p.WithNextAction(werr.NextAction, werr.RetryAfterSeconds)
 	}
 	return p, true
 }

@@ -1273,7 +1273,7 @@ func spotTerminationNoticed(ctx context.Context, client *http.Client) (bool, err
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return true, nil

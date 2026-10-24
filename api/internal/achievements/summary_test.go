@@ -50,8 +50,7 @@ func TestBuildSummaryFoldsWholeCatalog(t *testing.T) {
 		t.Fatalf("revealed secret = %+v", secret)
 	}
 
-	untouched := byKey[KeyWins] // sanity: an untouched key is still listed at zero
-	untouched = byKey["won_heads_up"]
+	untouched := byKey["won_heads_up"]
 	if untouched.Unlocked || untouched.Progress != 0 || untouched.NextTarget == nil {
 		t.Fatalf("untouched = %+v", untouched)
 	}
