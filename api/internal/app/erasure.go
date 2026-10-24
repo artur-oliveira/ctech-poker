@@ -20,6 +20,7 @@ import (
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/oauth2client"
 	"gopkg.aoctech.app/api-commons/resilient"
+	"gopkg.aoctech.app/api-commons/supervisor"
 	"gopkg.aoctech.app/api-commons/ws"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/config"
@@ -63,7 +64,7 @@ func registerErasureRoutes(app *fiber.App, cfg *config.Config, verifier *jwtveri
 // user.locked/user.unlocked itself and calls Purger.Purge on user.erase, then
 // acks to ctech-account. Every replica runs one; SQS hands each message to
 // one of them, and the purge is idempotent.
-func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Client, c cache.Backend, store *erasure.Store, elig *userpurge.Eligibility, reg ws.Registry, rules *responsible.Service) error {
+func startErasureConsumer(lc fx.Lifecycle, sup *supervisor.Supervisor, cfg *config.Config, db *dynamodb.Client, c cache.Backend, store *erasure.Store, elig *userpurge.Eligibility, reg ws.Registry, rules *responsible.Service) error {
 	if cfg.ErasureQueueURL == "" {
 		slog.Warn("ERASURE_QUEUE_URL empty: account-deletion consumer disabled (dev only; config.Load refuses this in prod)")
 		return nil
@@ -104,23 +105,19 @@ func startErasureConsumer(lc fx.Lifecycle, cfg *config.Config, db *dynamodb.Clie
 		WithVisibilityHeartbeat(cfg.ErasureQueueVisibility)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
-			go func() {
-				defer close(done)
-				_ = consumer.Run(ctx)
-			}()
-			return nil
+			// A crash or error restarts the consumer with backoff; a nil return
+			// (ctx cancelled) ends it.
+			return sup.Run(ctx, "erasure-consumer", func(ctx context.Context) error {
+				return consumer.Run(ctx)
+			})
 		},
 		// A purge cut short here is redelivered after the visibility timeout
-		// and resumes: every step re-reads from scratch.
-		OnStop: func(stopCtx context.Context) error {
+		// and resumes: every step re-reads from scratch. The supervisor's own
+		// OnStop (registered first, so it runs last) waits for the loop to exit.
+		OnStop: func(context.Context) error {
 			cancel()
-			select {
-			case <-done:
-			case <-stopCtx.Done():
-			}
 			return nil
 		},
 	})

@@ -86,6 +86,7 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 ## Conventions (follow these)
 
+- **Background loops run under the go-common `supervisor`** (`newSupervisor` in `internal/app`: pub/sub listeners, spot poll, memory monitor, erasure consumer). Panics restart with backoff, shutdown cancels and awaits them; no bare `go loop(context.Background())`. Per-hand fire-and-forget goroutines are not workers.
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
 - **No custom metrics.** `internal/metrics` (CloudWatch EMF) and every `metrics.Record` call are gone; signals are `slog`
