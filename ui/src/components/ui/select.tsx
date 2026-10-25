@@ -1,5 +1,7 @@
 'use client';
 
+// standards:allow @aoctech/ui Select takes plain label options: no rich items (swatches, lock icon) and no items rendered as a link (DeckPicker store link). Gap in ctech-ui: Select option content and render-as-link.
+
 import {Select as SelectPrimitive} from '@base-ui/react/select';
 import {Check, ChevronDown} from 'lucide-react';
 import {cn} from '@/lib/utils';

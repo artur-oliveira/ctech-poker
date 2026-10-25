@@ -1,3 +1,5 @@
+// standards:allow @aoctech/ui Skeleton is a bare block: no LoadingRegion/SkeletonList/StatCardsSkeleton (role=status + sr-only label) and no shimmer. Gap in ctech-ui: loading region and list skeleton helpers.
+
 import type {CSSProperties, ReactNode} from 'react';
 
 // A single shimmering placeholder bar. Purely decorative: the surrounding

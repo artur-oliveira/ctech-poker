@@ -1,3 +1,5 @@
+// standards:allow @aoctech/ui Button lacks loading (spinner, aria-busy, disabled), the light variant and the lg size used across poker. Gap in ctech-ui: Button loading/light/lg.
+
 import {Button as Primitive} from '@base-ui/react/button';
 import {cva, type VariantProps} from 'class-variance-authority';
 import {LoaderCircle} from 'lucide-react';

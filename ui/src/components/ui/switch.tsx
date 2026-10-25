@@ -1,4 +1,6 @@
 'use client';
+
+// standards:allow @aoctech/ui Switch has no 44px hit area outside a wrapping label (the table toggles use aria-labelledby siblings), unlike .switch-hit here. Gap in ctech-ui: touch target on Switch.
 import {Switch as Primitive} from '@base-ui/react/switch';
 import {cn} from '@/lib/utils';
 
