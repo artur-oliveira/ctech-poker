@@ -11,7 +11,7 @@ Queues (CDK; `{env}` = `prod`):
 
 ## Alert
 
-None fires on DLQ depth: the family declined CloudWatch alarms (poker #427). A stuck erasure shows as a deletion in `purging` in ctech-account; for the other three, read the DLQ depth after a Lambda error in its log group.
+None fires on DLQ depth: the family declined CloudWatch alarms (poker #427). A failed erasure purge alerts to `ctech-{env}-alerts` (`erasure-purge-failed`, each redelivery) and also shows as a deletion in `purging` in ctech-account. The `reconcile` and `tablecleanup` Lambdas alert on a quarantined cash-out or a failed stale-table refund (`poker-reconcile`, `poker-tablecleanup-refund`, `poker-tablecleanup-settlement`); for the archiver DLQ, read the depth after a Lambda error in its log group.
 
 ## Inspect
 

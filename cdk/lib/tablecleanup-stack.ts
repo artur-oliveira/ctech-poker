@@ -3,10 +3,11 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from './bundle';
-import {tableCleanupDlqName, tableCleanupJobName} from './constants';
+import {tableCleanupDlqName, tableCleanupJobName, alertsTopicParam} from './constants';
 
 const TABLE_CLEANUP_RATE_MINUTES = 30;
 
@@ -60,6 +61,10 @@ export class TableCleanupStack extends cdk.Stack {
       ],
     }));
 
+    // go-common alerts: the job reports its own failures to the shared topic.
+    const alertsTopicArn = ssm.StringParameter.valueForStringParameter(this, alertsTopicParam(environment));
+    role.addToPolicy(new iam.PolicyStatement({actions: ['sns:Publish'], resources: [alertsTopicArn]}));
+
     const fn = new lambda.Function(this, 'TableCleanupFunction', {
       functionName: tableCleanupJobName(environment),
       runtime: lambda.Runtime.PROVIDED_AL2023,
@@ -80,6 +85,7 @@ export class TableCleanupStack extends cdk.Stack {
         WALLET_URL_PARAM: walletUrlParam,
         POKER_CLIENT_ID_PARAM: pokerClientIdParam,
         POKER_CLIENT_SECRET_PARAM: pokerClientSecretParam,
+        ALERTS_TOPIC_ARN: alertsTopicArn,
       },
     });
 

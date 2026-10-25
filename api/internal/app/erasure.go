@@ -24,6 +24,7 @@ import (
 	"gopkg.aoctech.app/api-commons/ws"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/opsalert"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -99,7 +100,7 @@ func startErasureConsumer(lc fx.Lifecycle, sup *supervisor.Supervisor, cfg *conf
 	uploads := &http.Client{Timeout: 60 * time.Second}
 	exporter := dataexport.NewStreamHandler(erasureService, userexport.New(db, cfg.Env).Write, uploads,
 		dataexport.NewAckClient(httpClient, account+"/v1.0/internal/export/ack", exportTokens))
-	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, purger.Purge, acks).
+	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, opsalert.AlertingPurge(purger.Purge, opsalert.New(context.Background(), cfg.AWSRegion, cfg.AlertsTopicARN, cfg.Env)), acks).
 		OnLock(v1.CloseLockedSockets(reg)).
 		WithExporter(exporter.Handle).
 		WithVisibilityHeartbeat(cfg.ErasureQueueVisibility)

@@ -17,8 +17,10 @@ import (
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"gopkg.aoctech.app/api-commons/alerts"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/opsalert"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -71,6 +73,9 @@ type pendingRecorder interface {
 }
 
 // timeNowFunc is overridden in tests that need a deterministic cutoff.
+// notify reports failed refunds; handler sets it from the environment. Nop in tests.
+var notify alerts.Publisher = alerts.Nop{}
+
 var timeNowFunc = time.Now
 
 func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandboxCredit, game gameCashout, pending pendingRecorder, cutoff time.Duration) error {
@@ -129,6 +134,12 @@ func refundSandboxAndArchive(ctx context.Context, stale staleQuerier, rooms room
 		key := fmt.Sprintf("%s#%s#stale_archive_refund", st.TableID, p.ID)
 		if err := wallet.Credit(ctx, p.ID, p.Stack, key, "poker_stale_table_refund", fmt.Sprintf(descriptionStaleRefundFormat, st.TableID)); err != nil {
 			slog.Error("ALARM: tablecleanup refund failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
+			opsalert.Send(ctx, notify, alerts.Alert{
+				Job:     "poker-tablecleanup-refund",
+				Summary: "A stale-table refund failed; the table stays active and is retried next sweep.",
+				Err:     err,
+				Detail:  fmt.Sprintf("table_id: %s player: %s amount: %d", st.TableID, p.ID, p.Stack),
+			})
 			refundFailed = true
 			continue
 		}
@@ -171,6 +182,12 @@ func settleRealMoneyAndArchive(ctx context.Context, stale staleQuerier, rooms ro
 			HoldIDs: holdIDs, TableRef: st.TableID, IdempotencyKey: key,
 		}); err != nil {
 			slog.Error("ALARM: tablecleanup real-money settlement record failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
+			opsalert.Send(ctx, notify, alerts.Alert{
+				Job:     "poker-tablecleanup-settlement",
+				Summary: "A real-money settlement record failed; the table stays active and is retried next sweep.",
+				Err:     err,
+				Detail:  fmt.Sprintf("table_id: %s player: %s amount: %d", st.TableID, p.ID, p.Stack),
+			})
 			recordFailed = true
 			continue
 		}
@@ -251,6 +268,7 @@ func handler(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	notify = opsalert.New(ctx, os.Getenv("AWS_REGION"), os.Getenv("ALERTS_TOPIC_ARN"), cfg.Env)
 	db := dynamodb.NewFromConfig(awsCfg)
 	store := tablestore.NewStore(db, cfg.Env)
 	rooms := roomstore.NewStore(db, cfg.Env)
