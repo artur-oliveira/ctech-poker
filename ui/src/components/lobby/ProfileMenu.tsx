@@ -19,10 +19,8 @@ import {
 import {getMe, type WalletMode} from '@/lib/api/player';
 import {endSession, logout} from '@/lib/auth/oauth';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
+import {Button, Input, Skeleton} from '@aoctech/ui';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import {Skeleton} from '@/components/ui/skeleton';
 import {ProfilePhotoEditor, ProfilePhotoRemoveButton} from '@/components/profile/ProfilePhoto';
 import {SelfHudDialog} from '@/components/lobby/SelfHudDialog';
 import {chipsExact, moneyExact} from '@/lib/chips';

@@ -3,7 +3,7 @@ import {useEffect, useId, useMemo, useState, type CSSProperties} from 'react';
 import {
   ChevronLeft, ChevronRight, Coins, GraduationCap, Pause, Play, RotateCcw, Sparkles
 } from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {TableStage} from '@/components/table/TableStage';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {RevealWinnerButton} from '@/components/hands/RevealWinnerButton';

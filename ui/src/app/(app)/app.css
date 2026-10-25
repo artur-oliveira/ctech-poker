@@ -120,12 +120,8 @@
         background: var(--gold) !important
     }
 }
-.table-theme-option {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px
-}
-.table-theme-option > span {
+.table-theme-swatch {
+    display: block;
     width: 28px;
     height: 18px;
     border: 2px solid var(--white-22);

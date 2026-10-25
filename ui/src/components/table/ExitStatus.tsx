@@ -1,6 +1,6 @@
 'use client';
 import {DoorOpen} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 
 // isViewerTurn true means the seat's own turn-countdown ring (rendered
 // elsewhere on the seat) is already showing the real, deterministic

@@ -1,7 +1,6 @@
 'use client';
 import {ArrowRight, Gift, Sparkles} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {SkeletonList} from '@/components/ui/skeleton';
+import {Button, SkeletonList} from '@aoctech/ui';
 import {WELCOME_PACK_SKU, type SandboxSKU} from '@/lib/api/wallet';
 import {moneyExact} from '@/lib/chips';
 

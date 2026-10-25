@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {DoorOpen} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,
@@ -37,7 +37,7 @@ export function LeaveDialog({stack, pending, onRequestExitAction}: {
       <DialogFooter>
         <Button type="button" variant="ghost" disabled={pending} onClick={() => setOpen(false)}>Continuar
           jogando</Button>
-        <Button type="button" variant="destructive" disabled={pending} onClick={() => {
+        <Button type="button" variant="danger" disabled={pending} onClick={() => {
           onRequestExitAction();
           setOpen(false);
         }}>

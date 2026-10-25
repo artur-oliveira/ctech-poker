@@ -7,11 +7,11 @@ off by default — do not build UI that assumes real money is on.
 ## Conventions
 
 - **`@aoctech/ui` first (gate rule `uidup`).** Do not add a local file named like an `@aoctech/ui`
-  export; import it (`Checkbox` already comes from there). These stay local with a
-  `standards:allow <reason>` comment until ctech-ui closes the gap: `NetworkProvider` (external
-  liveness instance), `switch` (44px hit area), `skeleton` (LoadingRegion/SkeletonList),
-  `select` (rich items, link items), `input` (compact-density opt-out), `field` (control-props
-  wiring), `button` (`loading`, `light`, `lg`). Delete the allow comment when the file goes.
+  export; import it (`Button`, `Field`, `Input`, `Select`, `Switch`, `Skeleton` and friends all come
+  from there; `Select` takes an `options` array with `icon`, `trailing`, `hint`, `href`). Table
+  controls that must stay 44px pass `compact={false}` to `Input`. The one local file that keeps a
+  `standards:allow <reason>` comment is `lib/network/NetworkProvider.tsx` (wraps the package
+  provider; see the reason in the file). Delete the allow comment when the file goes.
 - **Reuse shared CTech client libraries:** `@aoctech/auth-client` (OAuth) and
   `@aoctech/ws-client` (WebSocket). Do NOT hand-roll auth or socket clients. (The design
   docs mention `ctech-oauth-client`; the code uses `@aoctech/auth-client` — trust the code.)

@@ -1,9 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
-import {Field} from '@/components/ui/field';
-import {Input} from '@/components/ui/input';
+import {Button, Field, Input} from '@aoctech/ui';
 import {
   acceptGamblingAddendum,
   cancelPendingLimits,

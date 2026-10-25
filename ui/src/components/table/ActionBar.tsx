@@ -4,8 +4,7 @@ import {
   useCallback, useEffect, useRef, useState
 } from 'react';
 import {CircleAlert, Clock3, LoaderCircle, Minus, Plus, X} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
+import {Button, Input} from '@aoctech/ui';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
 import {betShortcutAmount, clampSnapRaise, FAST_STEP_STRIDE, stageBetPresets} from '@/lib/betShortcuts';
@@ -480,7 +479,7 @@ function RaiseControl({
                                             aria-label={`${preset.label}: aumentar para ${exact(preset.value)}`}
                                             onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
       </div>
-      <Input id="raise-amount" className="bet-range" aria-describedby="action-context" type="range"
+      <Input id="raise-amount" compact={false} surface="transparent" className="bet-range" aria-describedby="action-context" type="range"
              aria-keyshortcuts={shortcutsEnabled ? 'a h ArrowUp ArrowDown ArrowLeft ArrowRight' : undefined}
              min={minRaise} max={maxRaise} step={raiseStep} value={safeAmount}
              disabled={inactive}

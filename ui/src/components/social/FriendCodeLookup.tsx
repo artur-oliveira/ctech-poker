@@ -2,9 +2,7 @@
 import {useState} from 'react';
 import {Check, Copy, Search, UserPlus} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
-import {Field} from '@/components/ui/field';
-import {Input} from '@/components/ui/input';
+import {Button, Field, Input} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {getMe} from '@/lib/api/player';
 import {lookupFriendCode, type SocialPlayer} from '@/lib/api/social';
@@ -59,7 +57,7 @@ export function FriendCodeLookup({actions}: { actions: SocialActionState }) {
       </Button>
     </div>
     <Field className="friend-code-search" label="Código de um amigo" error={error}
-           description="O nome de exibição não é único; só o código encontra alguém.">
+           hint="O nome de exibição não é único; só o código encontra alguém.">
       {control => <div className="friend-code-search-row">
         <Input {...control} value={code} placeholder="PKR-XXXX-XXXX-XXXX" autoComplete="off"
                onChange={event => setCode(event.target.value)}

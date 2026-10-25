@@ -1,8 +1,7 @@
 'use client';
 import {memo, SyntheticEvent, useEffect, useId, useRef, useState} from 'react';
 import {MessageCircle, Send, X} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
+import {Button, Input} from '@aoctech/ui';
 import type {SeatIdentity} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
@@ -89,7 +88,7 @@ function ChatImpl({items, onSendAction, connected = true, viewerId, seats = [], 
       </div>
       <form onSubmit={submit}>
         <label className="sr-only" htmlFor={inputId}>Mensagem para a mesa</label>
-        <Input id={inputId} ref={inputRef} maxLength={CHAT_MESSAGE_MAX_LENGTH} value={text} disabled={!connected}
+        <Input id={inputId} ref={inputRef} compact={false} surface="surface" maxLength={CHAT_MESSAGE_MAX_LENGTH} value={text} disabled={!connected}
                onChange={event => {
                  setText(event.target.value);
                  if (sendError) setSendError('');

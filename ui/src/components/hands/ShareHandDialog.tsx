@@ -3,7 +3,7 @@ import {useState} from 'react';
 import {
   Check, CircleAlert, Clock3, Copy, HeartCrack, LoaderCircle, Share2, ShieldCheck, ShieldOff, Trophy
 } from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,
@@ -150,7 +150,7 @@ export function ShareHandDialog({handId, outcome, mode = 'sandbox'}: {
         {error && <p className="share-hand-error" role="alert"><CircleAlert aria-hidden="true"/>{error}</p>}
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Fechar</Button>
-          {url && <Button type="button" variant="destructive" disabled={revoking} onClick={revoke}>
+          {url && <Button type="button" variant="danger" disabled={revoking} onClick={revoke}>
             {revoking ? <LoaderCircle className="spin"/> : <ShieldOff/>} {revoking ? 'Revogando…' : 'Revogar'}
           </Button>}
           {!url && <Button type="button" disabled={pending} onClick={create}>

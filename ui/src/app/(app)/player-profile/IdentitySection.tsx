@@ -1,8 +1,6 @@
 'use client';
 import {useState} from 'react';
-import {Button} from '@/components/ui/button';
-import {Field} from '@/components/ui/field';
-import {Input} from '@/components/ui/input';
+import {Button, Field, Input} from '@aoctech/ui';
 import {ProfilePhotoEditor, ProfilePhotoRemoveButton} from '@/components/profile/ProfilePhoto';
 import {type PlayerProfile} from '@/lib/api/player';
 import {useProfileNameSave} from '@/lib/hooks/useProfileEdits';
@@ -34,7 +32,7 @@ export function IdentitySection({me}: {me: PlayerProfile}) {
         event.preventDefault();
         if (changed) save.saveName(name);
       }}>
-        <Field label="Nome de exibição" description={`Até ${NAME_MAX_LENGTH} caracteres.`}>
+        <Field label="Nome de exibição" hint={`Até ${NAME_MAX_LENGTH} caracteres.`}>
           {control => <Input {...control} value={name} maxLength={NAME_MAX_LENGTH}
                              placeholder="Como quer ser chamado na mesa"
                              onChange={event => setName(event.target.value)}/>}

@@ -1,7 +1,7 @@
 'use client';
 import {type KeyboardEvent, useRef, useState} from 'react';
 import {Check, ChevronLeft, ChevronRight} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   AchievementCompactCard, achievementSummaryLabel, achievementSummaryView
 } from '@/components/achievements/AchievementCompactCard';

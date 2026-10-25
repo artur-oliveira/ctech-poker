@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Flame, RotateCcw} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {type DailyRewardStatus, getCooldown, spin} from '@/lib/api/dailyReward';
 import {BALANCE_QUERY_KEY} from '@/lib/api/player';
 import {pushNotification} from '@/lib/notify';
@@ -100,7 +100,7 @@ export function DailyRewardPanel() {
             ? `Dia ${status.cycle_day} de ${status.cycle_length} garantido. Próximo resgate em ${formatDuration(remainingMs)}.`
             : `${lostNote}Dia ${status.cycle_day} de ${status.cycle_length} liberado: ${chips(todayReward)} fichas esperando por você.${coverNote}`}</p>
       </div>
-      <Button type="button" variant={claimed ? 'outline' : 'default'} disabled={!status}
+      <Button type="button" variant={claimed ? 'outline' : 'brand'} disabled={!status}
               onClick={() => setOpen(true)}>
         {claimed ? 'Ver trilha' : 'Abrir e resgatar'}
       </Button>

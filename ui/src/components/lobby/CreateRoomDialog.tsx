@@ -7,7 +7,7 @@ import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Controller, useForm, useWatch} from 'react-hook-form';
 import {z} from 'zod';
-import {Button} from '@/components/ui/button';
+import {Button, Label, Checkbox} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,
@@ -17,8 +17,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import {Label} from '@/components/ui/label';
-import {Checkbox} from '@aoctech/ui';
 import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
 import {buyInRange} from '@/lib/pokerRules';

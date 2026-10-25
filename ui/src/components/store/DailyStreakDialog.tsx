@@ -1,6 +1,6 @@
 'use client';
 import {Check, Flame, Gift, Shield, ShieldCheck, Trophy} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import type {DailyRewardStatus, DailyStreakDay} from '@/lib/api/dailyReward';
 import {formatDuration} from './useCountdown';

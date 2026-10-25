@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useState} from 'react';
 import {Receipt} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,

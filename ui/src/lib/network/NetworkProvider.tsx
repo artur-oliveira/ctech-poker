@@ -1,9 +1,9 @@
 'use client';
 
-// standards:allow @aoctech/ui NetworkProvider creates its own liveness probe and cannot take the app's shared instance (api client and sockets must share one). Gap in ctech-ui: accept an external liveness.
+// standards:allow Wrapper around @aoctech/ui NetworkProvider (shared liveness injected). Remaining local gap: the package banner also shows `degraded` (poker keeps one failed probe silent) and does not set the --api-bar-h html flag, so the banner is drawn here with the product's labels.
 
 import React, {useEffect, useRef, useSyncExternalStore} from 'react';
-import {OfflineBanner, type NetworkStatus} from '@aoctech/ui';
+import {NetworkProvider as PackageNetworkProvider, OfflineBanner, useNetwork, type NetworkStatus} from '@aoctech/ui';
 import {useQueryClient} from '@tanstack/react-query';
 import {
   getApiLivenessSnapshot,
@@ -26,18 +26,23 @@ export function useApiLiveness() {
 }
 
 /**
- * Starts the app's single probe and shows the package banner. The package's own
- * NetworkProvider would create a second probe, and the api client and sockets
- * must share this one, so the instance is owned by `liveness.ts`.
+ * The package provider, fed the app's single probe (api client and sockets
+ * share it, owned by `liveness.ts`). It starts the probe and escalates a
+ * confirmed outage; the strip and the refetch live in `ApiStatus` below.
  */
 export function NetworkProvider({children}: { children: React.ReactNode }) {
+  return <PackageNetworkProvider liveness={liveness} banner={false} onUnavailable={navigateToUnavailable}>
+    {children}
+    <ApiStatus/>
+  </PackageNetworkProvider>;
+}
+
+function ApiStatus() {
   const queryClient = useQueryClient();
-  const {status} = useSyncExternalStore(liveness.subscribe, liveness.getSnapshot, liveness.getSnapshot);
+  const {status, retry} = useNetwork();
   // The product only ever showed offline/unavailable: one failed probe (degraded) stays silent.
   const shown: NetworkStatus = status === 'degraded' ? 'online' : status;
   const previous = useRef<NetworkStatus>('online');
-
-  useEffect(() => liveness.start(), []);
 
   // The strip reserves its own height (--api-bar-h) rather than floating over the
   // page, so the table's Lobby/Sair controls stay reachable. CSS owns the height.
@@ -48,18 +53,13 @@ export function NetworkProvider({children}: { children: React.ReactNode }) {
     return () => { delete root.dataset.apiOffline; };
   }, [shown]);
 
+  // Back online after an outage (link or server): refresh what is on screen.
   useEffect(() => {
-    if (shown === 'unavailable') navigateToUnavailable();
-    // Back online after an outage (link or server): refresh what is on screen.
     if (shown === 'online' && previous.current !== 'online') void queryClient.refetchQueries({type: 'active'});
     previous.current = shown;
   }, [shown, queryClient]);
 
-  return <>
-    {children}
-    <div data-ctech-bridge="">
-      <OfflineBanner className="network-status" status={shown} labels={networkLabels}
-                     onRetry={() => void liveness.check()}/>
-    </div>
-  </>;
+  return <div data-ctech-bridge="">
+    <OfflineBanner className="network-status" status={shown} labels={networkLabels} onRetry={retry}/>
+  </div>;
 }

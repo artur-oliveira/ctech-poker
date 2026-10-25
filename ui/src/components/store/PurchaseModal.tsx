@@ -2,7 +2,7 @@
 import {type RefObject, useEffect, useState} from 'react';
 import {Check, LoaderCircle, RefreshCw} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getPurchase, sandboxPurchaseKey, type SandboxPurchase} from '@/lib/api/wallet';
 import {BALANCE_QUERY_KEY} from '@/lib/api/player';

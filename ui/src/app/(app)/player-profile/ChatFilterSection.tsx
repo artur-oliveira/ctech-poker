@@ -1,10 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {X} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
-import {Skeleton} from '@/components/ui/skeleton';
+import {Button, Input, Label, Skeleton} from '@aoctech/ui';
 import {CHAT_PREFS_MAX_WORD_LENGTH, CHAT_PREFS_MAX_WORDS} from '@/lib/api/chatPrefs';
 import {useChatPrefs} from '@/lib/hooks/useChatPrefs';
 

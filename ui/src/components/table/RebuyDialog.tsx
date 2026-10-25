@@ -3,9 +3,7 @@ import {useEffect, useId, useState} from 'react';
 import Link from 'next/link';
 import {Gift, RefreshCw, Wallet} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
-import {Label} from '@/components/ui/label';
-import {Switch} from '@/components/ui/switch';
+import {Button, Label, Switch} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,

@@ -4,14 +4,16 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
 import {LockKeyhole} from 'lucide-react';
-import {Label} from '@/components/ui/label';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
+import {Label, Select, type RenderLink} from '@aoctech/ui';
 import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT, PREMIUM_DECK_IDS} from '@/lib/cardVariants';
 import {useTablePreferenceSave} from '@/lib/hooks/useProfileEdits';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
+
+// next/link for the locked decks' store link (client navigation, no reload).
+const renderStoreLink: RenderLink = ({href, ...props}) => <Link href={href} {...props}/>;
 
 /**
  * The whole deck setting: label, four-ace preview, the variant list with its
@@ -46,43 +48,34 @@ export function DeckPicker({deckVariant, className}: {deckVariant?: DeckVariantI
         {ACES.map(card => <Image key={card} src={cardPath(card, variant)} alt="" width={20} height={28}/>)}
       </span>
     </div>
-    <Select value={variant} onValueChange={(value: DeckVariantId | null) => {
-      if (!value) return;
-      // Locked items render as a Link to the store instead (below) and never
-      // reach this branch on a real click, but guard the value change too in
-      // case selection is ever driven by keyboard/programmatically.
-      if (PREMIUM_DECK_IDS.has(value) && !ownedDecks.has(value)) return;
-      save.mutate({deck_variant: value});
-    }}>
-      <SelectTrigger aria-labelledby={labelId} disabled={save.isPending}>
-        <SelectValue>
-          {(value: DeckVariantId) => DECK_VARIANTS[value]?.label ?? DECK_VARIANTS[DEFAULT_DECK_VARIANT].label}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent className="profile-deck-options" align="end">
-        {Object.entries(DECK_VARIANTS).map(([id, deck]) => {
-          const premium = PREMIUM_DECK_IDS.has(id as DeckVariantId);
-          // Same beat as the felt picker: until the catalog lands a premium
-          // deck is neither known-locked nor selectable, so it waits in the
-          // Select's disabled state instead of flashing a padlock (and a
-          // store link) at a player who already owns it.
-          const locked = premium && !deckCatalogLoading && !ownedDecks.has(id as DeckVariantId);
-          const price = deckPrices.get(id);
-          return <SelectItem key={id} value={id as DeckVariantId} label={deck.label}
-                             disabled={premium && deckCatalogLoading}
-                             {...(locked ? {render: <Link href="/store#decks"/>} : {})}>
-            <span className={`deck-variant-option${locked ? ' locked' : ''}`}>
-              <span className="deck-variant-option-cards">
-                {ACES.map(card => <Image key={card} src={cardPath(card, id as DeckVariantId)} alt=""
-                                         height={0} width={0} style={{width: '20px', height: 'auto'}}/>)}
-              </span>
-              {deck.label}
-              {locked && <LockKeyhole aria-label={`Baralho premium bloqueado${
-                price ? ` · ${price.toLocaleString('pt-BR')} fichas` : ''} · Ver na loja`}/>}
-            </span>
-          </SelectItem>;
-        })}
-      </SelectContent>
-    </Select>
+    <Select aria-labelledby={labelId} value={variant} disabled={save.isPending}
+            renderLink={renderStoreLink}
+            onValueChange={value => {
+              // Locked items are links to the store (href below) and never reach
+              // here on a real click, but guard the value change too in case
+              // selection is ever driven by keyboard/programmatically.
+              if (PREMIUM_DECK_IDS.has(value as DeckVariantId) && !ownedDecks.has(value as DeckVariantId)) return;
+              save.mutate({deck_variant: value as DeckVariantId});
+            }}
+            options={Object.entries(DECK_VARIANTS).map(([id, deck]) => {
+              const premium = PREMIUM_DECK_IDS.has(id as DeckVariantId);
+              // Same beat as the felt picker: until the catalog lands a premium
+              // deck is neither known-locked nor selectable, so it waits in the
+              // Select's disabled state instead of flashing a padlock (and a
+              // store link) at a player who already owns it.
+              const locked = premium && !deckCatalogLoading && !ownedDecks.has(id as DeckVariantId);
+              const price = deckPrices.get(id);
+              return {
+                value: id, label: deck.label, disabled: premium && deckCatalogLoading,
+                icon: <span className="deck-variant-option-cards">
+                  {ACES.map(card => <Image key={card} src={cardPath(card, id as DeckVariantId)} alt=""
+                                           height={0} width={0} style={{width: '20px', height: 'auto'}}/>)}
+                </span>,
+                ...(locked ? {
+                  href: '/store#decks', trailing: <LockKeyhole/>,
+                  hint: `Baralho premium bloqueado${price ? ` · ${price.toLocaleString('pt-BR')} fichas` : ''} · Ver na loja`,
+                } : {}),
+              };
+            })}/>
   </div>;
 }

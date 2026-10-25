@@ -1,9 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Field} from '@/components/ui/field';
-import {Input} from '@/components/ui/input';
-import {Button} from '@/components/ui/button';
+import {Field, Input, Button} from '@aoctech/ui';
 import {
   deleteWalletAlertPrefs,
   getWalletAlertPrefs,
@@ -75,11 +73,11 @@ function WalletAlertsForm({prefs}: {prefs: WalletAlertPrefs}) {
     event.preventDefault();
     save.mutate({min_sandbox_balance: minBalanceValue, max_purchase_cents: maxPurchaseCentsValue});
   }}>
-    <Field label="Avisar quando o saldo de fichas cair abaixo de" description="Deixe em 0 para desligar este alerta.">
+    <Field label="Avisar quando o saldo de fichas cair abaixo de" hint="Deixe em 0 para desligar este alerta.">
       {control => <Input {...control} type="number" inputMode="numeric" min={0} step={1} value={minBalance}
                          placeholder="0" onChange={event => setMinBalance(event.target.value)}/>}
     </Field>
-    <Field label="Avisar quando uma compra passar de (R$)" description="Deixe em 0 para desligar este alerta.">
+    <Field label="Avisar quando uma compra passar de (R$)" hint="Deixe em 0 para desligar este alerta.">
       {control => <Input {...control} type="number" inputMode="decimal" min={0} step="0.01" value={maxPurchase}
                          placeholder="0,00" onChange={event => setMaxPurchase(event.target.value)}/>}
     </Field>

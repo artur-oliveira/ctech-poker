@@ -351,15 +351,6 @@
     display: grid;
     gap: 8px
 }
-.table-theme-option.locked {
-    color: var(--text-secondary)
-}
-.table-theme-option.locked svg {
-    width: 13px;
-    height: 13px;
-    margin-inline-start: auto;
-    color: var(--text-secondary)
-}
 .table-preference-toggle {
     display: flex;
     align-items: center;
@@ -1058,23 +1049,10 @@
     height: 76px;
     margin-right: -12px
 }
-.deck-variant-option {
-    display: flex;
-    align-items: center;
-    gap: 8px
-}
 .deck-variant-option-cards {
     display: flex;
+    flex: none;
     gap: 2px
-}
-.deck-variant-option.locked {
-    color: var(--text-secondary)
-}
-.deck-variant-option.locked svg {
-    width: 13px;
-    height: 13px;
-    margin-inline-start: auto;
-    color: var(--text-secondary)
 }
 /* connecting/reconnecting keep the existing gold: both mean "still trying",
    same signal the header already trained players on. disconnected/error are
@@ -7809,7 +7787,7 @@ html:has(.has-tab-bar) {
     color: var(--paper);
     font-size: var(--font-size-body)
 }
-.profile-deck-loading > .skeleton {
+.profile-deck-loading > [data-slot='skeleton'] {
     border-radius: var(--rounded-control)
 }
 .profile-deck-label label {
@@ -7845,23 +7823,6 @@ html:has(.has-tab-bar) {
 .profile-deck-preview img:nth-child(4) { --card-index: 3 }
 .profile-deck-setting [data-slot='select-trigger'] {
     width: 100%
-}
-.profile-deck-options.profile-deck-options {
-    width: min(230px, calc(100vw - 24px));
-    min-width: 0
-}
-.profile-deck-options [data-slot='select-item'] {
-    min-width: 0
-}
-.profile-deck-options [data-slot='select-item'] > span:first-child,
-.profile-deck-options .deck-variant-option {
-    min-width: 0
-}
-.profile-deck-options .deck-variant-option-cards {
-    flex: none
-}
-.profile-deck-options .deck-variant-option {
-    white-space: nowrap
 }
 .profile-wallet {
     display: flex;

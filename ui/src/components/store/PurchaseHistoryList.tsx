@@ -1,8 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {ChevronDown, ChevronUp, QrCode, RotateCcw} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {SkeletonList} from '@/components/ui/skeleton';
+import {Button, SkeletonList} from '@aoctech/ui';
 import type {SandboxPurchase} from '@/lib/api/wallet';
 import {moneyExact} from '@/lib/chips';
 

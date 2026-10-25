@@ -3,8 +3,7 @@ import {useEffect, useRef, useState} from 'react';
 import Link from 'next/link';
 import {LoaderCircle, ShieldCheck} from 'lucide-react';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
-import {Button} from '@/components/ui/button';
-import {Label} from '@/components/ui/label';
+import {Button, Label} from '@aoctech/ui';
 import {BOT_CHECK_CONTEST_MAX_REASON_LENGTH, fileBotCheckContest} from '@/lib/api/botCheckContest';
 
 const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-script';

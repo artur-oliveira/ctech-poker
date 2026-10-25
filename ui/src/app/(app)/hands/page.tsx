@@ -19,11 +19,11 @@ import {HAND_COLLECTIONS_KEY, listHandCollections} from '@/lib/api/handMeta';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
-import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
+import {SkeletonList, Button} from '@aoctech/ui';
+import {StatsBarSkeleton} from '@/components/StatsBarSkeleton';
 import {TermsGate} from '@/components/TermsGate';
 import {bestHandCategory} from '@/lib/pokerRules';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
-import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {MyHandSharesPanel} from '@/components/hands/MyHandSharesPanel';
@@ -266,7 +266,7 @@ export default function HandsHistory() {
       />
       <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
 
-      {history.isLoading ? <StatCardsSkeleton label="Somando as mãos carregadas…" count={3}/> : stats && (
+      {history.isLoading ? <StatsBarSkeleton label="Somando as mãos carregadas…" count={3}/> : stats && (
         <div className="hands-totals">
           <div className="hands-stats-bar" aria-label="Resumo das mãos nesta lista">
             <div className="stat-card">

@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import {Lock} from 'lucide-react';
 import {useState} from 'react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 
 // Room configuration brings React Hook Form and Zod with it. Players scan and
 // join public tables far more often than they create a private one, so keep

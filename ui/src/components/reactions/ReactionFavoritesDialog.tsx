@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {Check, LockKeyhole, Star} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';

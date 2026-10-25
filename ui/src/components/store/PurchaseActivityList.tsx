@@ -1,7 +1,6 @@
 'use client';
 import type {ReactNode} from 'react';
-import {Button} from '@/components/ui/button';
-import {SkeletonList} from '@/components/ui/skeleton';
+import {Button, SkeletonList} from '@aoctech/ui';
 
 export interface ActivityRow {
   id: string;

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {startOAuthFlow} from '@/lib/auth/oauth';
 import {useOptimisticSession} from '@/lib/auth/session';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {cardPath} from '@/lib/cards';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
@@ -71,14 +71,18 @@ const features = [
  * a player without a session signs in on the way to the lobby, a player who
  * already has one just goes. `.cta-swap` cross-fades the label (opacity only)
  * on the rare correction from the optimistic state to the confirmed one. */
-function PlayCta({authed, variant}: { authed: boolean; variant?: 'default' | 'light' }) {
+function PlayCta({authed, light}: { authed: boolean; light?: boolean }) {
+  // The package's light variant paints the page background; the landing's
+  // closing band wants paper on wine, so the colours stay with this call site.
+  const variant = light ? 'light' : 'brand';
+  const className = light ? 'bg-[var(--paper)] text-[var(--wine)] hover:bg-[var(--on-brand)]' : undefined;
   if (authed) return (
-    <Button variant={variant} size="lg" render={<Link href="/lobby"/>}>
+    <Button variant={variant} className={className} size="lg" render={<Link href="/lobby"/>}>
       <span key="authed" className="cta-swap">Voltar ao lobby</span> <ArrowRight/>
     </Button>
   );
   return (
-    <Button variant={variant} size="lg" onClick={() => startOAuthFlow('/lobby')}>
+    <Button variant={variant} className={className} size="lg" onClick={() => startOAuthFlow('/lobby')}>
       <span key="anon" className="cta-swap">Jogar agora</span> <ArrowRight/>
     </Button>
   );
@@ -265,7 +269,7 @@ export default function Home() {
         <h2>Abra sua mesa em segundos.</h2>
         <p>Entre com sua conta CTech e jogue de graça com seus amigos.</p>
       </div>
-      <PlayCta authed={authed} variant="light"/>
+      <PlayCta authed={authed} light/>
     </section>
     <footer className="footer shell">
       <div className="brand"><span className="brand-mark"><PokerLogo/></span><span>CTech <b>Poker</b></span></div>
