@@ -3,9 +3,8 @@ import React, {useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button, SkeletonList} from '@aoctech/ui';
 import {listRoomBuckets, listStakes, type RoomBucket} from '@/lib/api/rooms';
-import {SkeletonList} from '@/components/ui/skeleton';
 import {BUY_IN_MAX_BB, BUY_IN_MIN_BB, buyInRange} from '@/lib/pokerRules';
 import {ROOM_BUCKETS_QUERY_KEY, tableBucketHref} from '@/lib/lobbyBuckets';
 

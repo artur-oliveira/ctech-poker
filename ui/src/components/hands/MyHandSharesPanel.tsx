@@ -2,9 +2,8 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Check, ChevronDown, Clock3, Copy, HeartCrack, LoaderCircle, Link2, ShieldOff, Trophy} from 'lucide-react';
 import {useState} from 'react';
-import {Button} from '@/components/ui/button';
+import {Button, SkeletonList} from '@aoctech/ui';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
-import {SkeletonList} from '@/components/ui/skeleton';
 import {
   HAND_SHARES_QUERY_KEY, type HandShareSummary, listMyHandShares, revokeHandShare
 } from '@/lib/api/handShares';
@@ -53,7 +52,7 @@ function ShareRow({share, onRevokeAction, revoking}: {
         {copied ? <Check aria-hidden="true"/> : <Copy aria-hidden="true"/>}
         {copied ? 'Copiado' : 'Copiar link'}
       </Button>
-      <Button type="button" variant="destructive" size="sm" disabled={revoking}
+      <Button type="button" variant="danger" size="sm" disabled={revoking}
               onClick={() => onRevokeAction(share.token)}>
         {revoking ? <LoaderCircle className="spin" aria-hidden="true"/> : <ShieldOff aria-hidden="true"/>}
         {revoking ? 'Revogando…' : 'Revogar'}

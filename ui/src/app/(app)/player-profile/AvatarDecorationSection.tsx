@@ -2,9 +2,7 @@
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Ban, Frame as FrameIcon, Medal} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Checkbox} from '@aoctech/ui';
-import {SkeletonList} from '@/components/ui/skeleton';
+import {Button, Checkbox, SkeletonList} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {avatarBadgeLabel, avatarFrameLabel, listOwnedAvatarCosmetics} from '@/lib/avatarCosmetics';
 import {type PlayerProfile, updateMe} from '@/lib/api/player';

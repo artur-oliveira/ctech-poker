@@ -2,7 +2,7 @@
 import {type RefObject, useEffect, useRef, useState} from 'react';
 import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,

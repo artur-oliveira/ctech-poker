@@ -4,10 +4,10 @@ import {useQuery} from '@tanstack/react-query';
 import {Sparkles, Star, Trophy} from 'lucide-react';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
 import {RecentUnlocksRail} from '@/components/achievements/RecentUnlocksRail';
-import {Button} from '@/components/ui/button';
+import {Button, SkeletonList} from '@aoctech/ui';
+import {StatsBarSkeleton} from '@/components/StatsBarSkeleton';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
-import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
 import {achievementProgress, getAchievementCatalog} from '@/lib/api/achievements';
 import {achievementLabel, achievementValueFormat, achievementWalletMode} from '@/lib/achievements';
 import {byRecencyFirst, recentUnlocks, takeAchievementUnlock} from '@/lib/achievementRecency';
@@ -125,7 +125,7 @@ export default function Achievements() {
       {authed && <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>}
       
       {authed && !stats && !catalog.isError && !mine.isError
-        ? <StatCardsSkeleton label="Calculando seu progresso…" count={4}/>
+        ? <StatsBarSkeleton label="Calculando seu progresso…" count={4}/>
         : stats && (
         <section className="achievement-overview" aria-label="Resumo das conquistas">
           <div className="achievement-overview-main">

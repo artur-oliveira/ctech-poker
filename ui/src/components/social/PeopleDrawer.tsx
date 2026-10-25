@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import Link from 'next/link';
 import {ArrowRight, Users} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger} from '@/components/ui/dialog';
 import {PeopleList} from '@/components/social/PeopleList';
 import {PeopleNavBadge} from '@/components/social/PeopleNavBadge';

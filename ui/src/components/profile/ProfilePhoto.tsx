@@ -1,7 +1,7 @@
 'use client';
 import {type ComponentProps, useRef} from 'react';
 import {Camera, LoaderCircle, Trash2} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {useAvatarRemove, useAvatarUpload} from '@/lib/hooks/useProfileEdits';
 

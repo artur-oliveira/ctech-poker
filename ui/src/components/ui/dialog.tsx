@@ -2,7 +2,7 @@
 import {Dialog as Primitive} from '@base-ui/react/dialog';
 import {X} from 'lucide-react';
 import {cn} from '@/lib/utils';
-import {Button} from './button';
+import {Button} from '@aoctech/ui';
 
 const Dialog = Primitive.Root, DialogTrigger = Primitive.Trigger, DialogClose = Primitive.Close;
 

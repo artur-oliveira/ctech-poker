@@ -1,4 +1,4 @@
-import {createContext, type ReactNode, useContext} from 'react';
+import type {ReactNode} from 'react';
 import {render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
@@ -40,25 +40,16 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogDescription: ({children}: React.PropsWithChildren) => <p>{children}</p>,
 }));
 
-vi.mock('@/components/ui/select', () => {
-  const ChangeContext = createContext<(value: string | null) => void>(() => undefined);
-  return {
-    Select: ({children, onValueChange}: React.PropsWithChildren<{ onValueChange: (value: never) => void }>) =>
-      <ChangeContext.Provider value={onValueChange as unknown as (value: string | null) => void}>
-        {children}
-      </ChangeContext.Provider>,
-    SelectTrigger: ({children, ...props}: React.PropsWithChildren) => <div {...props}>{children}</div>,
-    SelectValue: ({children}: { children: (value: never) => React.ReactNode }) =>
-      <>{children('classic' as never)}</>,
-    SelectContent: ({children}: React.PropsWithChildren) => <div>{children}</div>,
-    SelectItem: ({children, value}: React.PropsWithChildren<{ value: string }>) => {
-      const change = useContext(ChangeContext);
-      return <button type="button" onClick={() => change(value)}>{children}</button>;
-    },
-  };
-});
-
-vi.mock('@/components/ui/switch', () => ({
+// The package Select is a portal'd Base UI popup; the dialog only needs "the
+// options are listed and choosing one reports its value".
+vi.mock('@aoctech/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@aoctech/ui')>(),
+  Select: ({options, onValueChange}: {
+    options: { value: string; label: string; hint?: string; disabled?: boolean }[];
+    onValueChange: (value: string) => void;
+  }) => <div>{options.map(option =>
+    <button key={option.value} type="button" disabled={option.disabled}
+            onClick={() => onValueChange(option.value)}>{option.label}{option.hint && <small>{option.hint}</small>}</button>)}</div>,
   Switch: ({checked, onCheckedChange, ...props}: {
     checked: boolean;
     onCheckedChange: (checked: boolean) => void;
@@ -158,7 +149,7 @@ describe('TablePreferencesDialog', () => {
     renderDialog();
 
     const midnight = await screen.findByRole('button', {name: 'Meia-noite'});
-    expect(within(midnight).queryByLabelText(/Premium bloqueado/)).not.toBeInTheDocument();
+    expect(within(midnight).queryByText(/Premium bloqueado/)).not.toBeInTheDocument();
   });
 
   test('shows the run-it-twice choice only when the room allows it', async () => {
@@ -206,7 +197,7 @@ describe('TablePreferencesDialog', () => {
     const onLockedFeltAction = vi.fn();
     renderDialog({onLockedFeltAction});
     const midnight = await screen.findByRole('button', {name: /Meia-noite/});
-    expect(within(midnight).getByLabelText(/Premium bloqueado/)).toBeInTheDocument();
+    expect(within(midnight).getByText(/Premium bloqueado/)).toBeInTheDocument();
 
     await userEvent.click(midnight);
     expect(onLockedFeltAction).toHaveBeenCalledWith('midnight');
@@ -218,7 +209,7 @@ describe('TablePreferencesDialog', () => {
     const onLockedFeltAction = vi.fn();
     renderDialog({onLockedFeltAction});
     const midnight = await screen.findByRole('button', {name: 'Meia-noite'});
-    expect(within(midnight).queryByLabelText(/Premium bloqueado/)).not.toBeInTheDocument();
+    expect(within(midnight).queryByText(/Premium bloqueado/)).not.toBeInTheDocument();
 
     await userEvent.click(midnight);
     expect(updateMe).toHaveBeenCalledWith({table_theme: 'midnight'}, expect.anything());

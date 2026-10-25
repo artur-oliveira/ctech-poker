@@ -15,8 +15,7 @@ import {
 import {getViewerId, playerName} from '@/lib/utils';
 import {useOptionalSession} from "@/lib/auth/session";
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
-import {SkeletonList} from '@/components/ui/skeleton';
-import {Button} from '@/components/ui/button';
+import {SkeletonList, Button} from '@aoctech/ui';
 import {RecoveryState} from '@/components/RecoveryState';
 import type {WalletMode} from '@/lib/api/player';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';

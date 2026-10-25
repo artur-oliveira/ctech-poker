@@ -1,9 +1,8 @@
 'use client';
 import Link from 'next/link';
 import {Check, RotateCw, UserPlus, X} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button, SkeletonList} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
-import {SkeletonList} from '@/components/ui/skeleton';
 import type {ReportSurface, SocialPlayer} from '@/lib/api/social';
 import type {SocialActionState} from '@/lib/hooks/useSocialActions';
 import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';

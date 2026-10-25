@@ -7,7 +7,7 @@ import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} fro
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
-import {SkeletonList} from '@/components/ui/skeleton';
+import {SkeletonList} from '@aoctech/ui';
 import {useState} from 'react';
 import type {WalletMode} from '@/lib/api/player';
 

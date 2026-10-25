@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import {NetworkProvider, UnavailableScreen} from '@aoctech/ui';
+import {NetworkProvider, UnavailableScreen, Button} from '@aoctech/ui';
 import {House} from 'lucide-react';
-import {Button} from '@/components/ui/button';
 import {PokerLogo} from '@/components/PokerLogo';
 import {HTTP_TIMEOUT_MS} from '@/lib/network/liveness';
 import {USE_MOCK} from '@/lib/mockConfig';

@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import Image from 'next/image';
 import {Check, Copy, ShieldCheck} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {formatDuration, useCountdownMs} from './useCountdown';
 import {moneyExact} from '@/lib/chips';
 

@@ -1,6 +1,6 @@
 import {render} from '@testing-library/react';
 import {describe, expect, test, vi} from 'vitest';
-import {Button} from './ui/button';
+import {Button} from '@aoctech/ui';
 import {RecoveryState} from './RecoveryState';
 import {SystemState} from './SystemState';
 import {expectNoAxeViolations} from '@/test/axe';

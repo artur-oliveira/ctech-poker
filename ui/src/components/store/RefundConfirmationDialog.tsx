@@ -2,7 +2,7 @@
 import type {RefObject} from 'react';
 import {useState} from 'react';
 import {Check, CircleAlert, Coins, LoaderCircle, RotateCcw} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
@@ -87,7 +87,7 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, finalFocusRe
         {state === 'success'
           ? <Button type="button" onClick={onCloseAction}>Concluir</Button>
           : <><Button type="button" variant="ghost" disabled={pending} onClick={onCloseAction}>Manter compra</Button>
-            <Button type="button" variant="destructive" disabled={pending} onClick={() => void confirm()}>
+            <Button type="button" variant="danger" disabled={pending} onClick={() => void confirm()}>
               {pending ? <LoaderCircle className="store-refund-spinner" aria-hidden="true"/> : <RotateCcw aria-hidden="true"/>}
               {pending ? 'Verificando elegibilidade…' : `Solicitar estorno de ${moneyExact(purchase.price_cents)}`}
             </Button></>}

@@ -2,7 +2,7 @@
 import {useQuery} from '@tanstack/react-query';
 import {useRouter} from 'next/navigation';
 import {Undo2} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {getSessions} from '@/lib/api/player';
 
 export function ActiveTableBanner() {

@@ -1,8 +1,7 @@
 'use client';
 import {LockKeyhole, QrCode, RotateCcw, Sparkles} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button, SkeletonList} from '@aoctech/ui';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
-import {SkeletonList} from '@/components/ui/skeleton';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {PurchaseActivityList, type ActivityRow} from '@/components/store/PurchaseActivityList';
 import {currentReactionPurchase} from '@/lib/api/reactionPurchases';

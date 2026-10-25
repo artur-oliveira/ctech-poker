@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {LoaderCircle, LockKeyhole} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button, Label} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-import {Label} from '@/components/ui/label';
 import {PLAYER_NOTE_TAGS, type PlayerNote, type PlayerNoteTag, savePlayerNote} from '@/lib/api/playerNotes';
 import {pushNotification} from '@/lib/notify';
 import {PlayerAvatar} from '@/components/ui/player-avatar';

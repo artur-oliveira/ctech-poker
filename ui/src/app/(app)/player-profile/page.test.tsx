@@ -347,7 +347,7 @@ describe('/player-profile', () => {
     const golden = await screen.findByRole('option', {name: /Dourado/});
     expect(golden.tagName).toBe('A');
     expect(golden).toHaveAttribute('href', '/store#decks');
-    expect(golden.querySelector('svg[aria-label*="500.000 fichas"]')).not.toBeNull();
+    expect(golden).toHaveTextContent('500.000 fichas');
     expect(mocks.mutate).not.toHaveBeenCalledWith(expect.objectContaining({deck_variant: 'golden'}));
   });
 

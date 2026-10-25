@@ -2,7 +2,7 @@
 import {AudioLines, Keyboard, Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Button} from '@/components/ui/button';
+import {Button, Label, Select, Switch} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,
@@ -11,9 +11,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import {Label} from '@/components/ui/label';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
-import {Switch} from '@/components/ui/switch';
 import {type BetPresetMode, betPresetMode, getMe, updateMe} from '@/lib/api/player';
 import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {PREMIUM_FELT_IDS, TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
@@ -96,45 +93,28 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
       <div className="table-preferences">
         <div>
           <Label id="table-theme-label">Tema do feltro</Label>
-          <Select value={theme} onValueChange={chooseTheme}>
-            <SelectTrigger aria-labelledby="table-theme-label" disabled={save.isPending}>
-              <SelectValue>
-                {(value: TableThemeId) => TABLE_THEMES[value]?.label ?? TABLE_THEMES.classic.label}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(TABLE_THEMES).map(([id, feltTheme]) => {
-                const premium = PREMIUM_FELT_IDS.has(id as TableThemeId);
-                const locked = premium && ownershipKnown && !owned.has(id as TableThemeId);
-                return <SelectItem key={id} value={id as TableThemeId} label={feltTheme.label}
-                                   disabled={premium && !ownershipKnown}>
-                  <span className={`table-theme-option${locked ? ' locked' : ''}`}>
-                    <span aria-hidden="true"
-                          style={{'--theme-a': feltTheme.colors[0], '--theme-b': feltTheme.colors[1]} as React.CSSProperties}/>
-                    {feltTheme.label}
-                    {locked && <LockKeyhole aria-label={`Premium bloqueado${
-                      prices.get(id) ? ` · ${prices.get(id)!.toLocaleString('pt-BR')} fichas` : ''}`}/>}
-                  </span>
-                </SelectItem>;
-              })}
-            </SelectContent>
-          </Select>
+          <Select aria-labelledby="table-theme-label" value={theme} disabled={save.isPending}
+                  onValueChange={value => chooseTheme(value as TableThemeId)}
+                  options={Object.entries(TABLE_THEMES).map(([id, feltTheme]) => {
+                    const premium = PREMIUM_FELT_IDS.has(id as TableThemeId);
+                    const locked = premium && ownershipKnown && !owned.has(id as TableThemeId);
+                    const price = prices.get(id);
+                    return {
+                      value: id, label: feltTheme.label, disabled: premium && !ownershipKnown,
+                      icon: <span className="table-theme-swatch"
+                                  style={{'--theme-a': feltTheme.colors[0], '--theme-b': feltTheme.colors[1]} as React.CSSProperties}/>,
+                      ...(locked ? {
+                        trailing: <LockKeyhole/>,
+                        hint: `Premium bloqueado${price ? ` · ${price.toLocaleString('pt-BR')} fichas` : ''}`,
+                      } : {}),
+                    };
+                  })}/>
         </div>
         <div>
           <Label id="bet-preset-mode-label">Presets de aposta</Label>
-          <Select value={presetMode} disabled={save.isPending}
-                  onValueChange={value => value && save.mutate({bet_preset_mode: value as BetPresetMode})}>
-            <SelectTrigger aria-labelledby="bet-preset-mode-label" disabled={save.isPending}>
-              <SelectValue>
-                {(value: BetPresetMode) =>
-                  BET_PRESET_OPTIONS.find(option => option.value === value)?.label ?? BET_PRESET_OPTIONS[0].label}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {BET_PRESET_OPTIONS.map(option =>
-                <SelectItem key={option.value} value={option.value} label={option.label}>{option.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Select aria-labelledby="bet-preset-mode-label" value={presetMode} disabled={save.isPending}
+                  onValueChange={value => save.mutate({bet_preset_mode: value as BetPresetMode})}
+                  options={BET_PRESET_OPTIONS}/>
           <small className="table-preference-hint">Pote sugere frações do pote em todas as rodadas; Big blind,
             múltiplos do big blind. {save.isError && <b role="alert">Não foi possível salvar. Tente de novo.</b>}</small>
         </div>
@@ -186,18 +166,9 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
         </dl>}
         <div>
           <Label id="reality-check-label">Lembrete de sessão</Label>
-          <Select value={String(preferences.realityCheckMinutes)}
-                  onValueChange={value => value !== null && update({realityCheckMinutes: Number(value)})}>
-            <SelectTrigger aria-labelledby="reality-check-label">
-              <SelectValue>
-                {(value: string) => REALITY_OPTIONS.find(option => option.value === value)?.label}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {REALITY_OPTIONS.map(option =>
-                <SelectItem key={option.value} value={option.value} label={option.label}>{option.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Select aria-labelledby="reality-check-label" value={String(preferences.realityCheckMinutes)}
+                  onValueChange={value => update({realityCheckMinutes: Number(value)})}
+                  options={REALITY_OPTIONS}/>
         </div>
       </div>
     </DialogContent>

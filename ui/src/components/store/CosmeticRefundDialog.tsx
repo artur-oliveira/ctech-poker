@@ -3,7 +3,7 @@ import type {RefObject} from 'react';
 import {useState} from 'react';
 import Image from 'next/image';
 import {Check, CircleAlert, LoaderCircle, RotateCcw} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {ApiError} from '@/lib/api/client';
 import type {CosmeticKind, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
@@ -79,7 +79,7 @@ export function CosmeticRefundDialog({kind, purchase, finalFocusRef, onCloseActi
       <DialogFooter>
         {state === 'success' ? <Button onClick={onCloseAction}>Concluir</Button> : <>
           <Button variant="ghost" disabled={state === 'pending'} onClick={onCloseAction}>Manter item</Button>
-          <Button variant="destructive" disabled={state === 'pending'} onClick={() => void confirm()}>
+          <Button variant="danger" disabled={state === 'pending'} onClick={() => void confirm()}>
             {state === 'pending' ? <LoaderCircle className="spin" aria-hidden="true"/> : <RotateCcw aria-hidden="true"/>}
             {state === 'pending' ? 'Verificando uso…' : `Estornar ${valueLabel(purchase)}`}
           </Button>

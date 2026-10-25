@@ -1,11 +1,10 @@
 'use client';
 import {useId, useState} from 'react';
 import {Flag} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button, Label} from '@aoctech/ui';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
-import {Label} from '@/components/ui/label';
 import {REPORT_CATEGORIES, type ReportCategory, type ReportSurface, reportPlayer} from '@/lib/api/social';
 import {socialErrorMessage} from '@/lib/social';
 import {playerName} from '@/lib/utils';

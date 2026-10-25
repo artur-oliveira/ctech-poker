@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {Compass, X} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {hasSeenOnboarding, markOnboardingSeen} from '@/lib/onboarding';
 
 export function OnboardingIntro() {

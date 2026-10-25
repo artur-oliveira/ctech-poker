@@ -3,7 +3,7 @@
 /* Compact density: touch.css only (styles.css would bring themes.css and repaint the app). */
 @import "@aoctech/ui/touch.css";
 
-/* @aoctech/ui bridge (OfflineBanner, UnavailableScreen, ErrorState).
+/* @aoctech/ui bridge (Button, Field, Input, Select, Switch, Checkbox, Skeleton, OfflineBanner, UnavailableScreen, ErrorState).
    Poker is registered in the package's themes.css, but importing it would bring
    approximate oklch values instead of this product's own palette. So only the
    semantic roles those three components read are mapped here, to poker's tokens,
@@ -15,6 +15,10 @@
 @source "../../node_modules/@aoctech/ui/dist/components/network.js";
 @source "../../node_modules/@aoctech/ui/dist/components/switch.js";
 @source "../../node_modules/@aoctech/ui/dist/components/checkbox.js";
+@source "../../node_modules/@aoctech/ui/dist/components/field.js";
+@source "../../node_modules/@aoctech/ui/dist/components/input.js";
+@source "../../node_modules/@aoctech/ui/dist/components/select.js";
+@source "../../node_modules/@aoctech/ui/dist/components/skeleton.js";
 @theme inline {
     --color-background: var(--bridge-background);
     --color-surface: var(--bridge-surface);
@@ -422,25 +426,6 @@ button, a {
 :where(a, button):focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px
-}
-.switch-thumb {
-    position: absolute;
-    top: 50%;
-    left: 3px;
-    transform: translateY(-50%);
-    transition: transform 180ms var(--ease-out-quart)
-}
-.switch-thumb[data-checked] {
-    transform: translate(20px, -50%)
-}
-/* The visible track is 24px tall; padding here pads the invisible hit box
-   out to the 44px touch-target floor without growing the track itself. */
-.switch-hit {
-    padding-block: 10px;
-    margin-block: -10px
-}
-.switch-hit[data-checked] .switch-track {
-    background: var(--brand)
 }
 .sr-only {
     position: absolute;
@@ -941,7 +926,7 @@ h1 em {
 }
 /* The spinner survives only where the wait has no shape to promise: the OAuth
    exchange, the terms gate, and the table socket handshake. Every surface whose
-   layout is already known loads as a skeleton instead (see `.skeleton` below). */
+   layout is already known loads as a skeleton instead (see Skeleton loading below). */
 .loader {
     width: 32px;
     height: 32px;
@@ -950,53 +935,8 @@ h1 em {
     border-radius: 50%;
     animation: spin .7s linear infinite
 }
-/* Skeleton loading. One primitive: a block tinted a step above its surface,
-   swept by a soft highlight. Sizes come from the caller so each skeleton claims
-   exactly the space its real content will, which is the whole point — no
-   layout shift when the data lands. */
-.skeleton {
-    display: block;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-    border-radius: var(--rounded-control);
-    background: var(--white-0c);
-    animation: skeleton-pulse 1.6s var(--ease-out-quart) infinite
-}
-.skeleton::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, var(--white-1c), transparent);
-    animation: skeleton-sweep 1.6s var(--ease-out-quart) infinite;
-    animation-delay: inherit
-}
-@keyframes skeleton-pulse {
-    0%, 100% {
-        background-color: var(--white-0c)
-    }
-    50% {
-        background-color: var(--white-13)
-    }
-}
-@keyframes skeleton-sweep {
-    from {
-        transform: translateX(-100%)
-    }
-    to {
-        transform: translateX(100%)
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-/* the global reduce rule freezes the sweep mid-track; settle it into a
-       steady tint so the block still reads as "content pending" */
-    .skeleton {
-        background: var(--white-12)
-    }
-.skeleton::after {
-        display: none
-    }
-}
+/* Skeleton loading: the block itself (shimmer, reduced motion) is the package's
+   Skeleton; only the product's geometry hooks stay here. */
 .skeleton-stat-label {
     width: 60%;
     height: 11px;
@@ -1014,9 +954,9 @@ h1 em {
     flex-direction: column;
     gap: 12px
 }
-.people-suspense-skeleton .skeleton:nth-child(1) {
+.people-suspense-skeleton [data-slot='skeleton']:nth-child(1) {
     height: 52px
 }
-.people-suspense-skeleton .skeleton:nth-child(n + 2) {
+.people-suspense-skeleton [data-slot='skeleton']:nth-child(n + 2) {
     height: 88px
 }

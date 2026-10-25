@@ -9,7 +9,7 @@ import {
   Trophy
 } from 'lucide-react';
 import {useState} from 'react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 
 export type TableUtility = 'rankings' | 'chat' | 'reactions' | 'winners' | 'equity' | 'preferences' | 'share';

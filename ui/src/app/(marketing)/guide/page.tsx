@@ -15,7 +15,7 @@ import {
   UserRound
 } from 'lucide-react';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {useOptionalSession} from '@/lib/auth/session';
 
 const TOPICS = [

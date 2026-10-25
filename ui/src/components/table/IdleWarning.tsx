@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useState} from 'react';
 import {ClockAlert} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
 
 /** The last-minute "you are about to be removed for inactivity" alert.

@@ -1,6 +1,6 @@
 'use client';
 import {Download} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import type {HandItem} from '@/lib/api/player';
 import type {HandHistoryAction} from '@/lib/api/table';
 import {serializeHand} from '@/lib/handExport';

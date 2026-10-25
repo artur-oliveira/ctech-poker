@@ -1,6 +1,6 @@
 'use client';
 import {CircleHelp} from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,

@@ -4,11 +4,8 @@ import {useRef, useState} from 'react';
 import Image from 'next/image';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Bookmark, Check, LoaderCircle, PlayCircle, Sparkles, Trash2} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
+import {Button, Input, Label, SkeletonList} from '@aoctech/ui';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
-import {SkeletonList} from '@/components/ui/skeleton';
 import {ApiError} from '@/lib/api/client';
 import {
   applyCosmeticLoadout, createCosmeticLoadout, deleteCosmeticLoadout, listCosmeticLoadouts,
@@ -193,7 +190,7 @@ function LoadoutActionDialog({mode, loadout, finalFocusRef, onCloseAction, onCon
           <Button type="button" variant="ghost" disabled={state === 'pending'} onClick={onCloseAction}>
             {mode === 'apply' ? 'Agora não' : 'Manter combo'}
           </Button>
-          <Button type="button" variant={mode === 'delete' ? 'destructive' : 'default'} disabled={state === 'pending'}
+          <Button type="button" variant={mode === 'delete' ? 'danger' : 'brand'} disabled={state === 'pending'}
                   onClick={() => void confirm()}>
             {state === 'pending' ? <LoaderCircle className="spin" aria-hidden="true"/>
               : mode === 'apply' ? <PlayCircle aria-hidden="true"/> : <Trash2 aria-hidden="true"/>}

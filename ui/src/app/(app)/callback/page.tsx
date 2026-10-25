@@ -7,7 +7,7 @@ import {setAccessToken, setUsername} from '@/lib/api/client';
 import {rememberSessionHint} from '@/lib/auth/sessionHint';
 import {navigateToUnavailable} from '@/lib/network/liveness';
 import {reportClientError} from '@/lib/telemetry';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 
 type CallbackFailure = {
   // 'unavailable' never reaches state: it navigates away instead (see below).

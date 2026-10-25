@@ -2,6 +2,7 @@
 import {Suspense, useState} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {Users} from 'lucide-react';
+import {LoadingRegion, Skeleton} from '@aoctech/ui';
 import {TermsGate} from '@/components/TermsGate';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {FilterGroup} from '@/components/FilterGroup';
@@ -106,9 +107,9 @@ function PeopleFallback() {
       <AppPageHeader icon={Users} eyebrow="PESSOAS"
                      title="Seus amigos, solicitações e adversários recentes."
                      description="Carregando suas conexões…"/>
-      <div className="people-suspense-skeleton" aria-label="Carregando pessoas">
-        <span className="skeleton"/><span className="skeleton"/><span className="skeleton"/>
-      </div>
+      <LoadingRegion label="Carregando pessoas" className="people-suspense-skeleton">
+        <Skeleton/><Skeleton/><Skeleton/>
+      </LoadingRegion>
     </AppPageBody>
   </AppPage>;
 }

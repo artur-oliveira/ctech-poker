@@ -4,7 +4,7 @@ import {BookOpen, ShieldCheck} from 'lucide-react';
 import {HandRankings} from '@/components/HandRankings';
 import {useOptionalSession} from "@/lib/auth/session";
 import {AppPage, AppPageBody, AppPageHeader} from "@/components/AppPageChrome";
-import {Button} from "@/components/ui/button";
+import {Button} from "@aoctech/ui";
 
 const SECTIONS = [
   {id: 'maos', label: 'Mãos'},

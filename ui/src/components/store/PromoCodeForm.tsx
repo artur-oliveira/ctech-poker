@@ -1,9 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {Ticket} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Field} from '@/components/ui/field';
-import {Input} from '@/components/ui/input';
+import {Button, Field, Input} from '@aoctech/ui';
 import {createPurchase, promoRedeemErrorMessage, type SandboxPurchase} from '@/lib/api/wallet';
 
 /**
@@ -37,7 +35,7 @@ export function PromoCodeForm({onRedeemedAction}: {onRedeemedAction: (purchase: 
   }
 
   return <form className="store-promo-form" onSubmit={event => void submit(event)}>
-    <Field label="Código promocional" description="Opcional. O pacote e o preço são definidos pelo código.">
+    <Field label="Código promocional" hint="Opcional. O pacote e o preço são definidos pelo código.">
       {control => <div className="store-promo-row">
         <Input {...control} value={code} placeholder="Ex.: BEMVINDO10"
                autoComplete="off" autoCapitalize="characters"

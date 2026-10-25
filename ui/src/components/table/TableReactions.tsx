@@ -4,7 +4,7 @@ import {type CSSProperties, memo, useCallback, useEffect, useRef, useState} from
 import {
   Crosshair, Eye, EyeOff, LockKeyhole, SmilePlus, Sparkles, Star, UserRound, X
 } from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesDialog';
 import type {SeatIdentity} from '@/lib/api/table';

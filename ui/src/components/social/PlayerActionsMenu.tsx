@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   BellOff, Flag, MoreVertical, NotebookPen, ShieldBan, ShieldCheck, UserMinus, UserPlus, UserRoundSearch, Volume2
 } from 'lucide-react';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import type {ReportSurface, SocialRelationship} from '@/lib/api/social';
 import type {SocialActionKind, SocialActionState} from '@/lib/hooks/useSocialActions';

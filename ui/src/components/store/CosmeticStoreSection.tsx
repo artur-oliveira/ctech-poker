@@ -2,8 +2,7 @@
 import type {ReactNode} from 'react';
 import Image from 'next/image';
 import {LockKeyhole, QrCode, RotateCcw, Sparkles} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {SkeletonList} from '@/components/ui/skeleton';
+import {Button, SkeletonList} from '@aoctech/ui';
 import type {CosmeticCatalogEntry, CosmeticKind, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 import type {ActivityRow} from '@/components/store/PurchaseActivityList';
 import {currentCosmeticPurchase} from '@/lib/api/cosmeticPurchases';

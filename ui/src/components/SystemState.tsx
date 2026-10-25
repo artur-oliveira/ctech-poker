@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import {ErrorState} from '@aoctech/ui';
+import {ErrorState, Button} from '@aoctech/ui';
 import {House, RefreshCw} from 'lucide-react';
-import {Button} from '@/components/ui/button';
 import {PokerLogo} from '@/components/PokerLogo';
 
 type SystemStateProps = {
@@ -30,7 +29,7 @@ export function SystemState({code, title, description, detail, onRetryAction, re
           {onRetryAction && <Button size="lg" loading={retryPending} onClick={onRetryAction}>
             {!retryPending && <RefreshCw/>} {retryPending ? 'Verificando…' : 'Tentar novamente'}
           </Button>}
-          <Button size="lg" variant={onRetryAction ? 'outline' : 'default'} render={<Link href="/"/>}>
+          <Button size="lg" variant={onRetryAction ? 'outline' : 'brand'} render={<Link href="/"/>}>
             <House/> Ir para o início
           </Button>
           {code === '404' && <Button size="lg" variant="ghost" render={<Link href="/lobby"/>}>Voltar ao lobby</Button>}

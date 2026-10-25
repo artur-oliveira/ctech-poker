@@ -25,7 +25,7 @@ import {TableUtilityMenu} from '@/components/table/TableUtilityMenu';
 import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
-import {Button} from '@/components/ui/button';
+import {Button} from '@aoctech/ui';
 import {pushNotification} from '@/lib/notify';
 import {betPresetMode, updateMe} from '@/lib/api/player';
 import {ChipFormatContext} from '@/lib/chipFormat';
