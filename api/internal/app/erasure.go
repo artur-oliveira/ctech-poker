@@ -100,7 +100,9 @@ func startErasureConsumer(lc fx.Lifecycle, sup *supervisor.Supervisor, cfg *conf
 	uploads := &http.Client{Timeout: 60 * time.Second}
 	exporter := dataexport.NewStreamHandler(erasureService, userexport.New(db, cfg.Env).Write, uploads,
 		dataexport.NewAckClient(httpClient, account+"/v1.0/internal/export/ack", exportTokens))
-	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, opsalert.AlertingPurge(purger.Purge, opsalert.New(context.Background(), cfg.AWSRegion, cfg.AlertsTopicARN, cfg.Env)), acks).
+	pub := opsalert.New(context.Background(), cfg.AWSRegion, cfg.AlertsTopicARN, cfg.Env)
+	consumer := erasure.NewConsumer(queue, cfg.ErasureQueueURL, erasureService, store, erasure.AlertingPurge(purger.Purge, pub), acks).
+		OnFailure(erasure.AlertFailures(pub)).
 		OnLock(v1.CloseLockedSockets(reg)).
 		WithExporter(exporter.Handle).
 		WithVisibilityHeartbeat(cfg.ErasureQueueVisibility)
