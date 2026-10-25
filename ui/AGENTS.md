@@ -6,6 +6,7 @@ exists, but the backend gate is off by default — never ship UI that assumes re
 ## Hard rules
 
 1. **Reuse `@aoctech/auth-client` and `@aoctech/ws-client`** — no hand-rolled OAuth/socket code.
+   Same for UI: import `@aoctech/ui` components (rule `uidup`); local copies need `standards:allow <reason>` (see CLAUDE.md Conventions).
 2. **Static export only.** No server routes, server actions, or image optimization; everything is
    client-side talking to `/v1.0/*` (dev proxy in `next.config.ts`, `NEXT_PUBLIC_API_URL` in
    prod). New SPA routes must be exportable. Anything that needs a server belongs in `api/`.

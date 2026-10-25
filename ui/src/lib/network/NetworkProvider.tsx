@@ -1,5 +1,7 @@
 'use client';
 
+// standards:allow @aoctech/ui NetworkProvider creates its own liveness probe and cannot take the app's shared instance (api client and sockets must share one). Gap in ctech-ui: accept an external liveness.
+
 import React, {useEffect, useRef, useSyncExternalStore} from 'react';
 import {OfflineBanner, type NetworkStatus} from '@aoctech/ui';
 import {useQueryClient} from '@tanstack/react-query';

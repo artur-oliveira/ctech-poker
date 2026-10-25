@@ -1,3 +1,5 @@
+// standards:allow @aoctech/ui Input shrinks to 32px under compact density (the app runs compact), which table controls (chat, raise slider) must not do, and paints bg-background instead of the table surface. Gap in ctech-ui: density opt-out on Input.
+
 import {cn} from '@/lib/utils';
 
 export function Input({className, ...props}: React.ComponentProps<'input'>) {

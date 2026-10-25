@@ -18,7 +18,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog';
 import {Label} from '@/components/ui/label';
-import {Checkbox} from '@/components/ui/checkbox';
+import {Checkbox} from '@aoctech/ui';
 import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
 import {buyInRange} from '@/lib/pokerRules';

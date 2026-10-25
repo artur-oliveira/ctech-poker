@@ -1,4 +1,6 @@
 'use client';
+
+// standards:allow @aoctech/ui Field is label+htmlFor only: no render-prop wiring of id, aria-describedby, aria-invalid and aria-errormessage, and hint and error are exclusive. Gap in ctech-ui: Field control-props wiring.
 import {useId} from 'react';
 import {Label} from '@/components/ui/label';
 import {cn} from '@/lib/utils';
