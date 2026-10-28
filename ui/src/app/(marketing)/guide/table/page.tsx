@@ -35,6 +35,8 @@ export default function TableGuide() {
         <GuideTerm term="Mais ações da mesa">Reúne Ranking de mãos, Últimos vencedores e Preferências, mais Treinador e
           Convidar quando a mesa oferece os dois. Em telas largas esses itens também aparecem soltos no
           cabeçalho.</GuideTerm>
+        <GuideTerm term="Copiar link de convite">Aparece no centro da mesa quando você está sentado sozinho e
+          copia o link da mesa para você chamar alguém.</GuideTerm>
         <GuideTerm term="Sentar fora / Voltar a jogar">Pausa ou retoma sua participação a partir da próxima
           mão.</GuideTerm>
         <GuideTerm term="Sair da mesa">Pede a saída e devolve a pilha à carteira usada no buy-in.</GuideTerm>

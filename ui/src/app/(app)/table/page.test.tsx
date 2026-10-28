@@ -114,6 +114,7 @@ vi.mock('@/components/table/InviteDialog', () => ({
     mocks.inviteProps = props;
     return <span>invite:{String(props.url)}</span>;
   },
+  InviteLinkCta: ({url}: { url: string }) => <button>Copiar link de convite {url}</button>,
 }));
 vi.mock('@/components/table/LeaveDialog', () => ({
   LeaveDialog: ({onRequestExitAction}: { onRequestExitAction: () => boolean }) =>

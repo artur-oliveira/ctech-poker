@@ -24,6 +24,9 @@ import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 import {chipsExact, moneyExact} from '@/lib/chips';
 
 const MAX_SEATS_OPTIONS = [6, 9] as const;
+// The API lists stakes from the lowest up; the first few are what private
+// tables actually use. The rest sits behind "Mais stakes".
+const COMMON_STAKES = 4;
 
 const schema = z.object({
   stakeIndex: z.number().int().min(0),
@@ -53,6 +56,7 @@ function radioGroupKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: num
 
 export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean}) {
   const [open, setOpen] = useState(initialOpen);
+  const [showAllStakes, setShowAllStakes] = useState(false);
   const router = useRouter();
   const {data: sandboxStakes = []} = useQuery({queryKey: ['stakes'], queryFn: () => listStakes()});
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
@@ -68,6 +72,11 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
   });
   const currencyMode = useWatch({control: form.control, name: 'currencyMode'});
   const stakes = currencyMode === 'real' ? realStakes : sandboxStakes;
+  const stakeIndex = useWatch({control: form.control, name: 'stakeIndex'});
+  // Indices into `stakes` that are shown; the selected one is always among them.
+  const visibleStakes = stakes.map((_, index) => index)
+    .filter(index => showAllStakes || index < COMMON_STAKES || index === stakeIndex);
+  const hiddenStakes = stakes.length - visibleStakes.length;
   
   async function submit(values: Values) {
     const stake = stakes[values.stakeIndex];
@@ -145,20 +154,24 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
             className="flex flex-wrap gap-2"
             role="radiogroup"
             aria-labelledby="stake-label">
-            {stakes.map((stake, index) =>
-              <button type="button"
+            {visibleStakes.map((index, position) => {
+              const stake = stakes[index];
+              return <button type="button"
                       key={`${stake.small_blind}-${stake.big_blind}`}
                       role="radio"
                       aria-checked={field.value === index}
                       tabIndex={field.value === index ? 0 : -1}
                       className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
                       onClick={() => field.onChange(index)}
-                      onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>
+                      onKeyDown={e => radioGroupKeyDown(e, position, visibleStakes.length, next => field.onChange(visibleStakes[next]))}>
                 {formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}
                 {currencyMode === 'real' && stake.fee_cents ? <><br/><small
                   className="opacity-80">taxa {formatStake(stake.fee_cents, 'real')}</small></> : null}
-              </button>)}
-          </div>}/>{!stakes.length &&
+              </button>;
+            })}
+          </div>}/>{hiddenStakes > 0 &&
+            <Button type="button" variant="ghost" onClick={() => setShowAllStakes(true)}>Mais stakes
+              ({hiddenStakes})</Button>}{!stakes.length &&
             <p className="form-error">Nenhum stake disponível no momento.</p>}
           {form.formState.errors.stakeIndex &&
               <p className="form-error">{form.formState.errors.stakeIndex.message}</p>}</div>
@@ -198,7 +211,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
                 </span>
               </label>}/>}
         {form.formState.errors.root && <p className="form-error" role="alert">{form.formState.errors.root.message}</p>}
-        <DialogFooter><Button type="submit" size="lg"
+        <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-white/10 bg-[var(--surface-control)] px-6 py-4"><Button type="submit" size="lg"
                               aria-busy={form.formState.isSubmitting}
                               disabled={form.formState.isSubmitting || !stakes.length}>{form.formState.isSubmitting ? 'Criando…' : 'Criar mesa privada'}</Button></DialogFooter>
       </form>

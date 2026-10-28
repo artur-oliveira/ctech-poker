@@ -62,6 +62,11 @@ typography:
     fontSize: "0.875rem"
     fontWeight: 600
     lineHeight: 1.2
+  note:
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 400
+    lineHeight: 1.4
   readout:
     fontFamily: "IBM Plex Mono, ui-monospace, SFMono-Regular, monospace"
     fontSize: "0.75rem"
@@ -281,6 +286,7 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 - **Title** (typography.title): dialogs, panels, room names, and prominent values.
 - **Body** (typography.body): instructions, descriptions, chat, and supporting content. Long prose stays near 65–75 characters per line.
 - **Label** (typography.label): buttons, navigation, form labels, and actions.
+- **Note** (typography.note, `--font-size-note`, 13px): the real step between Body (14px) and Readout (12px) that dense operational surfaces already use about 18 times (list meta, history rows, helper lines, mono sub-readouts). New secondary text of that weight takes this step instead of inventing a one-off px value. The existing literals are left as they are and migrate to the token when their rule is next touched.
 - **Readout** (typography.readout): live or aligned numeric state, with tabular numerals when values change.
 - **Compact / Tiny** (typography.compact, typography.tiny): closed-vocabulary table labels and dense status only; never general prose.
 
@@ -342,7 +348,7 @@ Motion reinforces the same layer model. Most state changes complete in 120–250
 
 ## Shapes
 
-The system uses compact, gently curved geometry. Playing-card thumbnails use 2px corners, physical cards 6px, small controls 8px, standard controls 12px, seats 14px, and panels or dialogs 16px. Pills are reserved for categorical filters, compact statuses, and values that benefit from a continuous capsule. Avatars and icon-only voice controls are circular.
+The system uses compact, gently curved geometry. Playing-card thumbnails use 2px corners, physical cards 6px, small controls 8px, standard controls 12px, seats 14px, and panels or dialogs 16px. Pills are reserved for categorical filters, compact statuses, and values that benefit from a continuous capsule. Avatars and icon-only voice controls are circular. One documented off-scale value: the 10px corner on `.hand-history-seat-identity` (the seat-identity link in hand history); it sits between `sm` and `control` and is not a new step.
 
 Borders are single low-contrast hairlines at rest. Active, viewer, winner, error, or focus states may replace the whole border or add a complete ring. Thick side accents, stacked ornamental borders, and oversized 32px-plus radii do not belong to this system. Playing cards and the oval table are the two signature silhouettes; generic content containers should not imitate either.
 

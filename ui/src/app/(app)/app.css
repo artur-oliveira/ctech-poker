@@ -2777,6 +2777,32 @@
 .game-loading h2 {
     margin: 0
 }
+/* Buy-in / rebuy auto-rebuy row: the centred `.buyin` ceremony text must not
+   leak into the toggle. Icon + text on the left (icon on the title row), the
+   switch on the right with a 44px hit area. */
+.buyin-control.table-preference-toggle {
+    text-align: left;
+    align-items: flex-start
+}
+.buyin-control.table-preference-toggle > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: flex-start
+}
+.buyin-control.table-preference-toggle svg {
+    flex: none;
+    width: 20px;
+    height: 20px
+}
+.buyin-control.table-preference-toggle label {
+    line-height: 20px
+}
+.buyin-control.table-preference-toggle > button {
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    margin-block: -12px -12px
+}
 .onboarding-intro {
     position: relative;
     display: flex;
@@ -4177,8 +4203,8 @@
 }
 @media (max-width: 600px) {
 .stake-options {
-        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
-        mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%)
+        -webkit-mask-image: linear-gradient(90deg, var(--black) 0, var(--black) calc(100% - 24px), transparent 100%);
+        mask-image: linear-gradient(90deg, var(--black) 0, var(--black) calc(100% - 24px), transparent 100%)
     }
 }
 /* Hand history: /hands list */

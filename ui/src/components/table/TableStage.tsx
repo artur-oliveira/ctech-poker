@@ -264,6 +264,8 @@ type Props = {
   targetedReactionLabel?: string;
   onTargetPlayerAction?: (playerId: string) => void;
   announcement?: string;
+  // Shown under the street label while nobody else is seated (waiting_for_players).
+  waitingAction?: ReactNode;
   chatBubbles?: Record<string, { id: string; message: string }>;
   // Live table only: builds the per-seat player menu. Replay passes nothing.
   renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number]) => ReactNode;
@@ -301,6 +303,7 @@ function TableStageImpl({
                              targetedReactionLabel,
                              onTargetPlayerAction,
                              announcement,
+                             waitingAction,
                              chatBubbles,
                              renderPlayerActionsAction
                            }: Props) {
@@ -377,14 +380,20 @@ function TableStageImpl({
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
                        rake={snapshot.rake} bigBlind={bigBlind} rabbit={rabbit}/>;
+  // "Aguardando jogadores" is already the street label under the board; the
+  // dealer pill must not say it a second time.
+  const stageLabel = (STAGE_LABELS[snapshot.stage] || '').toLowerCase();
+  const echoesStage = Boolean(announcement) && snapshot.stage === 'waiting_for_players' &&
+    calloutCopy(announcement!).replace(/[.\s]+$/, '').toLowerCase() === stageLabel;
   const feltContent = <>
     <span key={`${snapshot.hand_id || 'waiting'}:${snapshot.stage}`} className="table-street-wash" aria-hidden="true"/>
-    {announcement && snapshot.stage !== 'complete' && <div key={announcement} className="table-callout"
+    {announcement && snapshot.stage !== 'complete' && !echoesStage && <div key={announcement} className="table-callout"
       aria-hidden="true"><span>D</span><p>{calloutCopy(announcement)}</p></div>}
     {/* The street rail hangs off the board rather than off the felt's bottom
         edge: down there it sat in the lane the bottom-row seats' bet chips
         travel through, so a raise from the viewer's own seat covered it. */}
-    <div className="felt-center"><FeltWordmark/>{board}<StreetProgress stage={snapshot.stage}/></div>
+    <div className="felt-center"><FeltWordmark/>{board}<StreetProgress stage={snapshot.stage}/>
+      {snapshot.stage === 'waiting_for_players' && waitingAction}</div>
   </>;
 
   if (!vertical && !compactLandscape) return (
