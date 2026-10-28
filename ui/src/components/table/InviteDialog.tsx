@@ -17,6 +17,31 @@ import {useSocialActions} from '@/lib/hooks/useSocialActions';
 import {SOCIAL_KEYS, socialErrorMessage} from '@/lib/social';
 import {playerName} from '@/lib/utils';
 
+/** One copy path for the dialog and the on-felt call to action. */
+export async function copyInviteLink(url: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(url);
+    return true;
+  } catch {
+    // Clipboard API unavailable/blocked; callers fall back to the dialog's selectable input.
+    return false;
+  }
+}
+
+/** Visible call to action for a table where the viewer sits alone: copies the
+ * invite link, or opens the invite dialog when the clipboard is blocked. */
+export function InviteLinkCta({url, onOpenDialogAction}: { url: string; onOpenDialogAction: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return <Button type="button" variant="outline" className="table-invite-cta" onClick={async () => {
+    if (!await copyInviteLink(url)) {
+      onOpenDialogAction();
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }}>{copied ? <><Check/> Link copiado</> : <><Copy/> Copiar link de convite</>}</Button>;
+}
+
 /** Link sharing stays exactly as it was; `roomId` adds the friends section,
  * which sends in-app invites instead. The invite never carries the room's
  * share code — accepting it creates a server-side grant instead. */
@@ -42,13 +67,10 @@ export function InviteDialog({url, roomId, open: controlledOpen, onOpenChangeAct
   const friends = useSocialList(SOCIAL_KEYS.friends, listFriends, Boolean(roomId) && open);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API unavailable/blocked. The input stays visible and selectable for a manual copy.
-    }
+    // On failure the input stays visible and selectable for a manual copy.
+    if (!await copyInviteLink(url)) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   async function share() {

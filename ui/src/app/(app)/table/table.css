@@ -577,3 +577,50 @@
     margin-top: 4px;
     color: var(--danger-soft)
 }
+
+/* Icon-only header actions: the aria-label doubles as a visible tooltip on
+   hover (fine pointers only) and on keyboard focus. Menu items carry text and
+   no aria-label, so they are untouched. */
+.game-chrome > header .header-right button[aria-label] {
+    position: relative
+}
+.game-chrome > header .header-right button[aria-label]:focus-visible::after {
+    content: attr(aria-label);
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    padding: 4px 8px;
+    border-radius: var(--rounded-sm);
+    background: var(--surface-control);
+    border: 1px solid var(--control-border);
+    color: var(--on-brand);
+    font: 600 0.75rem var(--font-sans);
+    white-space: nowrap;
+    pointer-events: none
+}
+@media (hover: hover) {
+    .game-chrome > header .header-right button[aria-label]:hover::after {
+        content: attr(aria-label);
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 20;
+        padding: 4px 8px;
+        border-radius: var(--rounded-sm);
+        background: var(--surface-control);
+        border: 1px solid var(--control-border);
+        color: var(--on-brand);
+        font: 600 0.75rem var(--font-sans);
+        white-space: nowrap;
+        pointer-events: none
+    }
+}
+
+/* "Copiar link de convite" under the street label while seated alone. */
+.felt-center .table-invite-cta {
+    position: relative;
+    margin: 10px auto 0;
+    min-height: 44px;
+    pointer-events: auto
+}

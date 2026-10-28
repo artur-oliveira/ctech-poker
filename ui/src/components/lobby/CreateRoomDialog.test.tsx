@@ -165,6 +165,18 @@ describe('CreateRoomDialog', () => {
     expect(screen.getByRole('radio', {name: '9 lugares'})).toHaveAttribute('aria-checked', 'true');
   });
   
+  test('shows the four most common stakes, reveals the rest, and keeps the selection visible', async () => {
+    const many = [1, 2, 3, 4, 5, 6].map(n => ({small_blind: n * 10, big_blind: n * 20}));
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
+      queryKey[0] === 'player' ? {data: {wallet_mode: 'sandbox'}} : {data: queryKey[1] === 'real' ? [] : many});
+    render(<CreateRoomDialog/>);
+    await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
+    expect(screen.getAllByRole('radio').filter(r => /\//.test(r.textContent ?? ''))).toHaveLength(4);
+    await userEvent.click(screen.getByRole('button', {name: /Mais stakes/}));
+    expect(screen.getByRole('radio', {name: '60 / 120'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Mais stakes/})).not.toBeInTheDocument();
+  });
+
   test('disables creation with no stakes and exposes API errors without navigating', async () => {
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: {wallet_mode: 'sandbox'}} : {data: []});

@@ -12,7 +12,7 @@ import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
 import {IdleWarning} from '@/components/table/IdleWarning';
-import {InviteDialog} from '@/components/table/InviteDialog';
+import {InviteDialog, InviteLinkCta} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {LastWinners} from '@/components/table/LastWinners';
 import {EquityTrainerPanel} from '@/components/table/EquityTrainerPanel';
@@ -410,6 +410,8 @@ function TableContent() {
                   targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}
                   onTargetPlayerAction={pendingReaction ? overlays.sendTargetedReaction : undefined}
                   announcement={rt.announcement}
+                  waitingAction={canInvite && viewerSeat && s.seats.length === 1 ?
+                    <InviteLinkCta url={inviteUrl} onOpenDialogAction={() => overlays.setInviteOpen(true)}/> : undefined}
                   chatBubbles={rt.chatBubbles}/>
       <ActionBar
         onActAction={rt.act}
