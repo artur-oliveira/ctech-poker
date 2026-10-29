@@ -980,7 +980,7 @@ h1 em {
     width: 44px;
     height: 44px
 }
-[data-slot='button'] {
+[data-slot='button']:not(.room-card) {
     font-weight: 600
 }
 /* Not icon buttons: the avatar button is a circle that sets its own radius. */
