@@ -8617,7 +8617,11 @@ html:has(.has-tab-bar) {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-top: 20px;
+    /* overflow-y: auto makes overflow-x clip too, and the shared Input's border
+       and focus ring sit flush on the edge. The padding gives them room; the
+       negative margin keeps the column aligned with the rest of the dialog. */
+    padding: 4px;
+    margin: 16px -4px 0;
     max-height: 40dvh;
     overflow-y: auto
 }

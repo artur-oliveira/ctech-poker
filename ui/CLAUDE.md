@@ -9,7 +9,10 @@ off by default — do not build UI that assumes real money is on.
 - **`@aoctech/ui` first (gate rule `uidup`).** Do not add a local file named like an `@aoctech/ui`
   export; import it (`Button`, `Field`, `Input`, `Select`, `Switch`, `Skeleton` and friends all come
   from there; `Select` takes an `options` array with `icon`, `trailing`, `hint`, `href`). Table
-  controls that must stay 44px pass `compact={false}` to `Input`. The one local file that keeps a
+  controls that must stay 44px pass `compact={false}` to `Input`. **Button geometry is pinned in `app/base.css`**: the shared
+  Button follows the shell's density and this app runs compact (32px), so base.css restores poker's 44px (`sm`/default), 48px
+  (`lg`), 44px square (icon), radius `--rounded-control` and weight 600. A Button that must size to its content (the lobby
+  `room-card`) opts out with `.room-card`, and also needs `h-auto in-data-[density=compact]:h-auto whitespace-normal`. The one local file that keeps a
   `standards:allow <reason>` comment is `lib/network/NetworkProvider.tsx` (wraps the package
   provider; see the reason in the file). Delete the allow comment when the file goes.
 - **Reuse shared CTech client libraries:** `@aoctech/auth-client` (OAuth) and
