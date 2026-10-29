@@ -620,6 +620,9 @@
 /* "Copiar link de convite" under the street label while seated alone. */
 .felt-center .table-invite-cta {
     position: relative;
+    /* The button is inline-flex, and an auto margin only centres a block-level box. */
+    display: flex;
+    width: fit-content;
     margin: 10px auto 0;
     min-height: 44px;
     pointer-events: auto
