@@ -111,8 +111,9 @@ export function StakesGrid() {
           // The shared Button pins h-8 under data-density=compact (this app runs compact),
           // and that variant outranks a plain h-auto, so the card collapsed to its padding
           // and its content spilled over the section above. Naming the variant lets
-          // twMerge drop the h-8.
-          return <Button variant="ghost" key={key} className="room-card h-auto in-data-[density=compact]:h-auto"
+          // twMerge drop the h-8. whitespace-normal undoes the Button's whitespace-nowrap, which
+          // the card's text inherits and which pushed the buy-in hint past the card edge.
+          return <Button variant="ghost" key={key} className="room-card h-auto whitespace-normal in-data-[density=compact]:h-auto"
                          loading={isJoining} aria-disabled={waiting || undefined}
                          aria-label={`${displayName}, até ${maxSeats} jogadores · ${
                            isJoining ? (active > 0 ? 'entrando…' : 'criando mesa…')
