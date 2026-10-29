@@ -980,8 +980,18 @@ h1 em {
     width: 44px;
     height: 44px
 }
-[data-slot='button'] {
+[data-slot='button']:not(.room-card) {
     font-weight: 600
+}
+/* touch.css (unlayered, coarse pointer or under 640px) pins every compact button
+   to 36px, which outranks the h-auto on the room cards and squashes the icon
+   buttons to 36 x 44. Same specificity, and this sheet comes later. */
+[data-slot='button'].room-card {
+    height: auto
+}
+[data-density] [data-slot='button'][data-size='icon'] {
+    width: 44px;
+    height: 44px
 }
 /* Not icon buttons: the avatar button is a circle that sets its own radius. */
 [data-slot='button']:is([data-size='default'], [data-size='sm'], [data-size='lg']):not(.room-card) {
