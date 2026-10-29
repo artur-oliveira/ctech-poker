@@ -192,8 +192,11 @@ jobs:
   deploy:
     needs: [quality, browsers]
     # browsers is conditionally skipped (layout-changed.outputs.slow == 'false');
-    # a skipped-but-not-failed dependency must not block deploy.
+    # a skipped-but-not-failed dependency must not block deploy. The leading
+    # !cancelled() matters: without a status function the implicit success() is
+    # added, and a skipped need then skips this job too.
     if: |
+      !cancelled() &&
       github.event_name != 'pull_request' &&
       needs.quality.result == 'success' &&
       (needs.browsers.result == 'success' || needs.browsers.result == 'skipped')
