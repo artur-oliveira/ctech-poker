@@ -2781,6 +2781,10 @@
    leak into the toggle. Icon + text on the left (icon on the title row), the
    switch on the right with a 44px hit area. */
 .buyin-control.table-preference-toggle {
+    /* .buyin-control is a grid; the row layout is the toggle's own (renderer.css). */
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
     text-align: left;
     align-items: flex-start
 }
@@ -2797,11 +2801,11 @@
 .buyin-control.table-preference-toggle label {
     line-height: 20px
 }
-.buyin-control.table-preference-toggle > button {
+/* The shared Switch is a span[role=switch], not a button. flex: none keeps it from
+   shrinking in the row; the nudge centres its 24px track on the 20px title line. */
+.buyin-control.table-preference-toggle > [role='switch'] {
     flex: none;
-    min-width: 44px;
-    min-height: 44px;
-    margin-block: -12px -12px
+    margin-top: -1px
 }
 .onboarding-intro {
     position: relative;

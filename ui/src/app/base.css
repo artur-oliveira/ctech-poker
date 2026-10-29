@@ -961,3 +961,29 @@ h1 em {
 .people-suspense-skeleton [data-slot='skeleton']:nth-child(n + 2) {
     height: 88px
 }
+
+/* Button geometry. The shared Button follows the shell's density and this app
+   runs compact, which made every button 32px with a medium label. Poker's own
+   button was a 44px touch target, rounded-xl and semibold; that is the geometry
+   kept here. Unlayered on purpose, so it outranks the package's size utilities.
+   The lobby room cards opt out (they size to their content). */
+[data-slot='button']:not(.room-card)[data-size='default'],
+[data-slot='button']:not(.room-card)[data-size='sm'] {
+    height: 44px;
+    padding-inline: 16px
+}
+[data-slot='button'][data-size='lg'] {
+    height: 48px;
+    padding-inline: 24px
+}
+[data-slot='button'][data-size='icon'] {
+    width: 44px;
+    height: 44px
+}
+[data-slot='button'] {
+    font-weight: 600
+}
+/* Not icon buttons: the avatar button is a circle that sets its own radius. */
+[data-slot='button']:is([data-size='default'], [data-size='sm'], [data-size='lg']):not(.room-card) {
+    border-radius: var(--rounded-control)
+}
