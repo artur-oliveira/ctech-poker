@@ -984,7 +984,8 @@ h1 em {
     width: 44px;
     height: 44px
 }
-:where([data-slot='button']:not(.room-card)) {
+/* Not :where(): the app's own `button` reset (a type selector) would beat zero specificity. */
+[data-slot='button']:not(.room-card) {
     font-weight: 600
 }
 /* Not icon buttons: the avatar button is a circle that sets its own radius. */
