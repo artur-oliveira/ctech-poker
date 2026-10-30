@@ -27,7 +27,7 @@ export function ProfilePhotoEditor({name, avatarUrl, size, className, frameId, b
 
   return <div className={className}>
     <PlayerAvatar name={name} avatarUrl={avatarUrl} size={size} frameId={frameId} badgeIds={badgeIds}/>
-    <Button type="button" size="icon" className="profile-avatar-camera" disabled={upload.isPending}
+    <Button type="button" size="icon" className="profile-avatar-camera absolute" disabled={upload.isPending}
             aria-label={avatarUrl ? 'Trocar foto de perfil' : 'Adicionar foto de perfil'}
             onClick={() => fileInput.current?.click()}>
       {upload.isPending ? <LoaderCircle className="spin" aria-hidden="true"/> : <Camera aria-hidden="true"/>}

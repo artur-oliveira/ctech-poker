@@ -14,7 +14,9 @@ off by default — do not build UI that assumes real money is on.
   (`lg`), radius `--rounded-control` and weight 600. Icon buttons get a 44px square at zero specificity, so a class that
   sizes its own icon button wins (the seat menu is a 22px badge, restated in base.css above `touch.css`). A Button that
   sizes itself is excluded by class name in that sheet; the lobby `room-card` also needs
-  `h-auto in-data-[density=compact]:h-auto whitespace-normal`. Never target a Switch with a bare `> span` rule: it is a
+  `h-auto in-data-[density=compact]:h-auto whitespace-normal`. A Button that positions itself with CSS (`position: absolute` in a class) needs the `absolute` utility class too: `touch.css`
+  sets `position: relative` on every compact button except `.absolute`, `.fixed` and `.sticky`, and it outranks the app's class
+  (the onboarding close and the avatar camera sat in flow until this). Never target a Switch with a bare `> span` rule: it is a
   `span[role=switch]` and would lose its own centring. The one local file that keeps a
   `standards:allow <reason>` comment is `lib/network/NetworkProvider.tsx` (wraps the package
   provider; see the reason in the file). Delete the allow comment when the file goes.
