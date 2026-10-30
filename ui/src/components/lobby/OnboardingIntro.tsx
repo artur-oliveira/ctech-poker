@@ -20,6 +20,6 @@ export function OnboardingIntro() {
       <p>Blinds, lotação e faixa de entrada são explicados junto às opções.</p>
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label="Fechar introdução"
-            className="onboarding-intro-close" onClick={dismiss}><X/></Button>
+            className="onboarding-intro-close absolute" onClick={dismiss}><X/></Button>
   </div>;
 }
