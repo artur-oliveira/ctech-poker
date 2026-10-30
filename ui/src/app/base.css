@@ -966,34 +966,47 @@ h1 em {
    runs compact, which made every button 32px with a medium label. Poker's own
    button was a 44px touch target, rounded-xl and semibold; that is the geometry
    kept here. Unlayered on purpose, so it outranks the package's size utilities.
-   The lobby room cards opt out (they size to their content). */
-[data-slot='button']:not(.room-card)[data-size='default'],
-[data-slot='button']:not(.room-card)[data-size='sm'] {
+   Buttons that size themselves (a class with its own height) are excluded by name
+   below and keep the package behaviour. */
+[data-slot='button']:not(:is(.room-card, .profile-wallet-link, .app-nav-people-link, .replay-play, .raise-cancel, .profile-menu-logout, .table-invite-cta))[data-size='default'],
+[data-slot='button']:not(:is(.room-card, .profile-wallet-link, .app-nav-people-link, .replay-play, .raise-cancel, .profile-menu-logout, .table-invite-cta))[data-size='sm'] {
     height: 44px;
     padding-inline: 16px
 }
-[data-slot='button'][data-size='lg'] {
+[data-slot='button']:not(:is(.room-card, .profile-wallet-link, .app-nav-people-link, .replay-play, .raise-cancel, .profile-menu-logout, .table-invite-cta))[data-size='lg'] {
     height: 48px;
     padding-inline: 24px
 }
-[data-slot='button'][data-size='icon'] {
+/* Icon buttons: zero specificity on purpose. A class that sizes its own icon
+   button (the seat menu is 22px, the reaction and chat toggles have their own
+   boxes) must win; only a plain icon button gets the 44px square. */
+:where([data-slot='button'][data-size='icon']) {
     width: 44px;
     height: 44px
 }
-[data-slot='button']:not(.room-card) {
+:where([data-slot='button']:not(.room-card)) {
     font-weight: 600
 }
+/* Not icon buttons: the avatar button is a circle that sets its own radius. */
+:where([data-slot='button']:is([data-size='default'], [data-size='sm'], [data-size='lg']):not(.room-card)) {
+    border-radius: var(--rounded-control)
+}
 /* touch.css (unlayered, coarse pointer or under 640px) pins every compact button
-   to 36px, which outranks the h-auto on the room cards and squashes the icon
-   buttons to 36 x 44. Same specificity, and this sheet comes later. */
+   to 36px, which outranks the h-auto on the room cards. Same specificity, and
+   this sheet comes later. */
 [data-slot='button'].room-card {
     height: auto
 }
-[data-density] [data-slot='button'][data-size='icon'] {
-    width: 44px;
-    height: 44px
+/* The seat's player menu is a 22px badge (a 16px+ chip on the portrait ring). The
+   shared Button's size="icon" and touch.css (which pins 36px, specificity 0,3,0)
+   both outrank the seat's own rule, so it is restated here above them. */
+[data-density] .seat-actions-trigger [data-slot='button'][data-size='icon'] {
+    width: 22px;
+    height: 22px;
+    min-width: 0;
+    min-height: 0
 }
-/* Not icon buttons: the avatar button is a circle that sets its own radius. */
-[data-slot='button']:is([data-size='default'], [data-size='sm'], [data-size='lg']):not(.room-card) {
-    border-radius: var(--rounded-control)
+[data-density] .stage-v-ring .seat-actions-trigger [data-slot='button'][data-size='icon'] {
+    width: var(--note-size);
+    height: var(--note-size)
 }

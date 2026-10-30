@@ -2788,7 +2788,7 @@
     text-align: left;
     align-items: flex-start
 }
-.buyin-control.table-preference-toggle > span {
+.buyin-control.table-preference-toggle > span:not([role='switch']) {
     flex: 1 1 auto;
     min-width: 0;
     align-items: flex-start
