@@ -408,3 +408,19 @@ test('poker_idempotency holds Idempotency-Key claims (pk+sk, TTL, no PITR)', () 
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
   });
 });
+
+// The purge finds rows about an erased player through these indexes: the API
+// role is denied dynamodb:Scan, so a purge that needs a Scan fails in prod.
+test('indexes what the account-deletion purge looks up by the erased player', () => {
+  const template = Template.fromStack(new DynamoDBStack(new App(), 'TestPurgeIndexesStack', {environment: 'dev'}));
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_player_notes',
+    GlobalSecondaryIndexes: Match.arrayWith([Match.objectLike({IndexName: 'gsi_notes_about'})]),
+  });
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_player_profiles',
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({IndexName: 'gsi_avreport_target'}),
+    ]),
+  });
+});
