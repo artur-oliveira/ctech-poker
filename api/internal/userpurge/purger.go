@@ -228,10 +228,9 @@ func (r *run) notesAboutUser(ctx context.Context) error {
 }
 
 // avatarReports erases the avatar-report guard rows by or about the user, found
-// through the two sparse guard indexes. The legacy avatar_reporters sets (gone
-// since #220, which stopped writing them) are stripped by
-// cmd/backfill-avatar-reporters: finding them takes a Scan, which the service
-// role is denied.
+// through the two sparse guard indexes (the service role cannot Scan). The legacy
+// avatar_reporters sets are not handled: #220 stopped writing them and none was
+// left in prod (checked 2026-11-01).
 func (r *run) avatarReports(ctx context.Context) error {
 	for _, ix := range []struct{ name, attr string }{
 		{gsiAvatarReportTarget, "target_id"}, {gsiAvatarReportReporter, "reporter_id"},
