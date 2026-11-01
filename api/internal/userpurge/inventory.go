@@ -54,6 +54,10 @@ const (
 	gsiReportReporter    = "gsi_reporter"           // reports/store.go
 	gsiHandShareOwner    = "gsi_owner"              // handshare/store.go
 	gsiPlayerSettlements = "gsi_player_settlements" // reconcile/pending.go
+
+	gsiNotesAbout           = "gsi_notes_about"       // notes about a player: pk = sk of the base row
+	gsiAvatarReportTarget   = "gsi_avreport_target"   // avreport# guard rows, by target_id
+	gsiAvatarReportReporter = "gsi_avreport_reporter" // avreport# guard rows, by reporter_id
 )
 
 // inventory is the data inventory §7 as built: the treatment of every table

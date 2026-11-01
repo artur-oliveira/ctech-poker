@@ -73,26 +73,6 @@ func (p *Purger) eachItem(ctx context.Context, in *dynamodb.QueryInput, fn func(
 	}
 }
 
-// eachScan is eachItem for a Scan. Used only where no index exists; erasures
-// are rare, so a full read per erasure is the price of not adding a GSI.
-func (p *Purger) eachScan(ctx context.Context, in *dynamodb.ScanInput, fn func(item) error) error { // standards:allow user purge scan
-	for {
-		out, err := p.db.Scan(ctx, in) // standards:allow user purge scan
-		if err != nil {
-			return fmt.Errorf("userpurge: scan %s: %w", aws.ToString(in.TableName), err)
-		}
-		for _, it := range out.Items {
-			if err := fn(it); err != nil {
-				return err
-			}
-		}
-		if len(out.LastEvaluatedKey) == 0 {
-			return nil
-		}
-		in.ExclusiveStartKey = out.LastEvaluatedKey
-	}
-}
-
 // deleteKeys batch-deletes keys (25 per call), retrying unprocessed items.
 func (p *Purger) deleteKeys(ctx context.Context, table string, keys []item) error {
 	name := p.table(table)

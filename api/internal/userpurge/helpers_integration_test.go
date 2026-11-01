@@ -60,10 +60,13 @@ var purgeTables = map[string]bool{
 	TablePlayerReports: true, TableHandShares: false, TablePendingCashouts: true,
 }
 
-var purgeIndexes = map[string]gsi{
-	TablePlayerReports:   {name: gsiReportReporter, pk: "gsi_reporter_pk", sk: "gsi_reporter_sk"},
-	TableHandShares:      {name: gsiHandShareOwner, pk: "owner_id", sk: "created_at", skNumber: true},
-	TablePendingCashouts: {name: gsiPlayerSettlements, pk: "player_id", sk: "recorded_at"},
+var purgeIndexes = map[string][]gsi{
+	TablePlayerReports:   {{name: gsiReportReporter, pk: "gsi_reporter_pk", sk: "gsi_reporter_sk"}},
+	TableHandShares:      {{name: gsiHandShareOwner, pk: "owner_id", sk: "created_at", skNumber: true}},
+	TablePendingCashouts: {{name: gsiPlayerSettlements, pk: "player_id", sk: "recorded_at"}},
+	// Keys only, like cdk/lib/dynamodb-stack.ts: the purge reads nothing but keys.
+	TablePlayerNotes:    {{name: gsiNotesAbout, pk: "sk", sk: "pk"}},
+	TablePlayerProfiles: {{name: gsiAvatarReportTarget, pk: "target_id"}, {name: gsiAvatarReportReporter, pk: "reporter_id"}},
 }
 
 func createPurgeTables(t *testing.T, db *dynamodb.Client, env string) {
@@ -76,19 +79,19 @@ func createPurgeTables(t *testing.T, db *dynamodb.Client, env string) {
 			keys = append(keys, types.KeySchemaElement{AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange})
 		}
 		var indexes []types.GlobalSecondaryIndex
-		if ix, ok := purgeIndexes[table]; ok {
+		for _, ix := range purgeIndexes[table] {
 			attrs[ix.pk] = types.ScalarAttributeTypeS
-			skType := types.ScalarAttributeTypeS
-			if ix.skNumber {
-				skType = types.ScalarAttributeTypeN
+			schema := []types.KeySchemaElement{{AttributeName: aws.String(ix.pk), KeyType: types.KeyTypeHash}}
+			if ix.sk != "" {
+				skType := types.ScalarAttributeTypeS
+				if ix.skNumber {
+					skType = types.ScalarAttributeTypeN
+				}
+				attrs[ix.sk] = skType
+				schema = append(schema, types.KeySchemaElement{AttributeName: aws.String(ix.sk), KeyType: types.KeyTypeRange})
 			}
-			attrs[ix.sk] = skType
 			indexes = append(indexes, types.GlobalSecondaryIndex{
-				IndexName: aws.String(ix.name),
-				KeySchema: []types.KeySchemaElement{
-					{AttributeName: aws.String(ix.pk), KeyType: types.KeyTypeHash},
-					{AttributeName: aws.String(ix.sk), KeyType: types.KeyTypeRange},
-				},
+				IndexName: aws.String(ix.name), KeySchema: schema,
 				Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
 			})
 		}

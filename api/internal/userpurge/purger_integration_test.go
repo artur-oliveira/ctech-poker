@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/erasure"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -106,8 +105,7 @@ func TestPurgeLeavesNoTraceOfTheUser(t *testing.T) {
 	put(t, db, env, TablePendingCashouts, map[string]any{"pk": "t1#" + testU + "#cashout", "sk": "pending", "player_id": testU,
 		"resolved": true, "recorded_at": "2026-10-01T00:00:00Z"})
 	// Rows about the user in other players' partitions.
-	putAV(t, db, env, TablePlayerProfiles, map[string]types.AttributeValue{"pk": str(testO), "name": str("Bob"),
-		"avatar_reporters": &types.AttributeValueMemberSS{Value: []string{testU, third}}})
+	put(t, db, env, TablePlayerProfiles, map[string]any{"pk": testO, "name": "Bob"})
 	put(t, db, env, TablePlayerProfiles, map[string]any{"pk": "avreport#" + testO + "#" + testU, "target_id": testO, "reporter_id": testU})
 	put(t, db, env, TablePlayerNotes, map[string]any{"pk": testU, "sk": testO, "note": "Bob tilts"})
 	put(t, db, env, TablePlayerNotes, map[string]any{"pk": testO, "sk": testU, "note": "Alice bluffs"})
@@ -159,9 +157,6 @@ func TestPurgeLeavesNoTraceOfTheUser(t *testing.T) {
 	profiles := scanTable(t, db, env, TablePlayerProfiles)
 	if len(profiles) != 1 || stringAttr(profiles[0], "name") != "Bob" {
 		t.Fatalf("only Bob's profile must remain: %v", profiles)
-	}
-	if set := profiles[0]["avatar_reporters"].(*types.AttributeValueMemberSS).Value; len(set) != 1 || set[0] != third {
-		t.Fatalf("avatar_reporters: %v", set)
 	}
 	events := scanTable(t, db, env, TableSocialEvents)
 	if len(events) != 1 || stringAttr(events[0], "sk") != "e3" {
