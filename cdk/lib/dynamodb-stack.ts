@@ -150,10 +150,27 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'friend_code', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    // avreport# guard rows (player.ReportAvatar) carry target_id and reporter_id;
+    // these sparse, keys-only indexes let the purge find the ones by or about an
+    // erased player without a Scan. The reporter_id index follows in its own deploy:
+    // DynamoDB allows one index creation per table update.
+    playerProfiles.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.avatarReportTarget,
+      partitionKey: {name: 'target_id', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
     // Private annotation namespace: pk is always the authenticated viewer and
     // sk is the opponent. Nothing reads this table while constructing public
     // table snapshots.
-    table('poker_player_notes', true);
+    const playerNotes = table('poker_player_notes', true);
+    // Notes ABOUT a player (sk = that player), for the account-deletion purge.
+    // The service role cannot Scan, so this is the only way to find them.
+    // Keys only: the purge deletes by key and never reads a note.
+    playerNotes.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.notesAbout,
+      partitionKey: {name: 'sk', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
     // poker_chat_prefs (#327): pk = player_id only — one item per player with
     // their personal extra chat-filter words (capped at 50 words). Read by
     // exact key (and cached in Valkey), so no sk, GSI or TTL.
