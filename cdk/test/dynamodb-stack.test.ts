@@ -421,6 +421,7 @@ test('indexes what the account-deletion purge looks up by the erased player', ()
     TableName: 'dev_poker_player_profiles',
     GlobalSecondaryIndexes: Match.arrayWith([
       Match.objectLike({IndexName: 'gsi_avreport_target'}),
+      Match.objectLike({IndexName: 'gsi_avreport_reporter'}),
     ]),
   });
 });

@@ -152,11 +152,16 @@ export class DynamoDBStack extends cdk.Stack {
     });
     // avreport# guard rows (player.ReportAvatar) carry target_id and reporter_id;
     // these sparse, keys-only indexes let the purge find the ones by or about an
-    // erased player without a Scan. The reporter_id index follows in its own deploy:
-    // DynamoDB allows one index creation per table update.
+    // erased player without a Scan. One GSI per deploy: DynamoDB allows a single
+    // index creation per table update, so the reporter index ships separately.
     playerProfiles.addGlobalSecondaryIndex({
       indexName: DYNAMO_INDEX.avatarReportTarget,
       partitionKey: {name: 'target_id', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
+    playerProfiles.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.avatarReportReporter,
+      partitionKey: {name: 'reporter_id', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
     // Private annotation namespace: pk is always the authenticated viewer and

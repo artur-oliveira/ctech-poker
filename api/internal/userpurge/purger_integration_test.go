@@ -160,9 +160,8 @@ func TestPurgeLeavesNoTraceOfTheUser(t *testing.T) {
 	if len(profiles) != 1 || stringAttr(profiles[0], "name") != "Bob" {
 		t.Fatalf("only Bob's profile must remain: %v", profiles)
 	}
-	if set := profiles[0]["avatar_reporters"].(*types.AttributeValueMemberSS).Value; len(set) != 1 || set[0] != third {
-		t.Fatalf("avatar_reporters: %v", set)
-	}
+	// The legacy avatar_reporters set is cmd/backfill-avatar-reporters' job (it takes
+	// a Scan, which the service role cannot do): the purge leaves it alone.
 	events := scanTable(t, db, env, TableSocialEvents)
 	if len(events) != 1 || stringAttr(events[0], "sk") != "e3" {
 		t.Fatalf("only the third party's event must remain: %v", events)

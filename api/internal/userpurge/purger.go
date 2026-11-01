@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -222,47 +221,26 @@ func (r *run) actorEvents(ctx context.Context, recipient string) error {
 	return r.p.deleteKeys(ctx, TableSocialEvents, keys)
 }
 
-// notesAboutUser erases notes others wrote about the user (sk = sub, no index).
+// notesAboutUser erases notes others wrote about the user (sk = sub), read
+// through the gsi_notes_about index: the service role cannot Scan.
 func (r *run) notesAboutUser(ctx context.Context) error {
-	var keys []item
-	if err := r.p.eachScan(ctx, &dynamodb.ScanInput{ // standards:allow user purge scan
-		TableName:                 aws.String(r.p.table(TablePlayerNotes)),
-		FilterExpression:          aws.String("sk = :sub"),
-		ExpressionAttributeValues: item{":sub": str(r.sub)},
-		ConsistentRead:            aws.Bool(true),
-	}, func(it item) error {
-		keys = append(keys, keyOf(it))
-		return nil
-	}); err != nil {
-		return err
-	}
-	r.count(TablePlayerNotes+"_erased", len(keys))
-	return r.p.deleteKeys(ctx, TablePlayerNotes, keys)
+	return r.ownByIndex(ctx, TablePlayerNotes, gsiNotesAbout, "sk", false)
 }
 
-// avatarReports erases the avatar-report guard rows by or about the user and
-// removes the user from the legacy avatar_reporters sets (no index: scan).
+// avatarReports erases the avatar-report guard rows by or about the user, found
+// through the two sparse guard indexes. The legacy avatar_reporters sets (gone
+// since #220, which stopped writing them) are stripped by
+// cmd/backfill-avatar-reporters: finding them takes a Scan, which the service
+// role is denied.
 func (r *run) avatarReports(ctx context.Context) error {
-	return r.p.eachScan(ctx, &dynamodb.ScanInput{ // standards:allow user purge scan
-		TableName:                 aws.String(r.p.table(TablePlayerProfiles)),
-		FilterExpression:          aws.String("(begins_with(pk, :guard) AND (target_id = :sub OR reporter_id = :sub)) OR contains(avatar_reporters, :sub)"),
-		ExpressionAttributeValues: item{":guard": str("avreport#"), ":sub": str(r.sub)},
-		ConsistentRead:            aws.Bool(true),
-	}, func(it item) error {
-		if strings.HasPrefix(stringAttr(it, "pk"), "avreport#") {
-			return r.deleteItem(ctx, TablePlayerProfiles, keyOf(it))
+	for _, ix := range []struct{ name, attr string }{
+		{gsiAvatarReportTarget, "target_id"}, {gsiAvatarReportReporter, "reporter_id"},
+	} {
+		if err := r.ownByIndex(ctx, TablePlayerProfiles, ix.name, ix.attr, false); err != nil {
+			return err
 		}
-		if _, err := r.p.db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-			TableName:                 aws.String(r.p.table(TablePlayerProfiles)),
-			Key:                       keyOf(it),
-			UpdateExpression:          aws.String("DELETE avatar_reporters :sub"),
-			ExpressionAttributeValues: item{":sub": &types.AttributeValueMemberSS{Value: []string{r.sub}}},
-		}); err != nil {
-			return fmt.Errorf("userpurge: avatar_reporters: %w", err)
-		}
-		r.count(TablePlayerProfiles+"_anonymized", 1)
-		return nil
-	})
+	}
+	return nil
 }
 
 // reports keeps reports for 1 year under the pseudonym (plan ruling R9) and
