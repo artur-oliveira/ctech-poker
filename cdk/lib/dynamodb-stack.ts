@@ -80,7 +80,7 @@ export class DynamoDBStack extends cdk.Stack {
         removalPolicy,
         pointInTimeRecoverySpecification:
           environment === 'prod' ? {pointInTimeRecoveryEnabled: pitr} : undefined,
-        encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
+        encryption: dynamodb.TableEncryptionV2.dynamoOwnedKey(),
         timeToLiveAttribute: withTTL ? 'ttl' : undefined,
         dynamoStream: withStream ? dynamodb.StreamViewType.NEW_IMAGE : undefined,
       });

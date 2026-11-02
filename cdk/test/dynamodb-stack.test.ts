@@ -425,3 +425,15 @@ test('indexes what the account-deletion purge looks up by the erased player', ()
     ]),
   });
 });
+
+// KMS policy: tables use the AWS-owned key (free, no KMS requests). The AWS-managed
+// key (`aws/dynamodb`) bills every table request as a KMS call.
+test('every table uses the AWS-owned key, never a KMS key', () => {
+  const template = Template.fromStack(new DynamoDBStack(new App(), 'KmsPolicyStack', {environment: 'prod'}));
+  const tables = Object.values(template.findResources('AWS::DynamoDB::GlobalTable')) as any[];
+  expect(tables.length).toBeGreaterThan(0);
+  for (const t of tables) {
+    expect(t.Properties.SSESpecification.SSEEnabled).toBe(false);
+    expect(t.Properties.SSESpecification.SSEType).toBeUndefined();
+  }
+});
