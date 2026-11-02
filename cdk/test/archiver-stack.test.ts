@@ -23,11 +23,14 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
   template.hasResourceProperties('AWS::Lambda::Function', {FunctionName: 'dev-poker-action-log-archiver'});
   template.resourceCountIs('AWS::Lambda::EventSourceMapping', 1);
 
-  // B10: poison records must land in a DLQ (not be dropped).
-  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-action-log-archiver-dlq'});
+  // B10: poison records are reported to the shared alerts topic, not dropped and not parked in a queue.
+  template.resourceCountIs('AWS::SQS::Queue', 0);
   template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
     BisectBatchOnFunctionError: true,
-    DestinationConfig: {OnFailure: {Destination: {'Fn::GetAtt': [Match.stringLikeRegexp('ArchiverDLQ'), 'Arn']}}},
+    DestinationConfig: {OnFailure: {Destination: Match.anyValue()}},
+  });
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {Statement: Match.arrayWith([Match.objectLike({Action: 'sns:Publish', Effect: 'Allow'})])},
   });
   // Poker creates no CloudWatch alarms and no SNS topic.
   template.resourceCountIs('AWS::CloudWatch::Alarm', 0);

@@ -7,11 +7,10 @@ Queues (CDK; `{env}` = `prod`):
 | `{env}-poker-user-erasure-dlq` | `{env}-poker-user-erasure` after 5 receives | `cdk/lib/api-stack.ts` | back to the source queue (default) |
 | `{env}-poker-reconcile-dlq` | EventBridge Scheduler `{env}-poker-reconcile` (reconcile Lambda) | `cdk/lib/reconcile-stack.ts` | none: no source queue; reconcile is idempotent and runs every few minutes, so inspect and purge |
 | `{env}-poker-tablecleanup-dlq` | Scheduler `{env}-poker-tablecleanup` | `cdk/lib/tablecleanup-stack.ts` | same as reconcile |
-| `{env}-poker-action-log-archiver-dlq` | DynamoDB stream records the archiver Lambda failed 3 times | `cdk/lib/archiver-stack.ts` | none: records carry the stream metadata, not a queue payload; replay by invoking the archiver or reading the action log table |
 
 ## Alert
 
-None fires on DLQ depth: the family declined CloudWatch alarms (poker #427). A failed erasure purge alerts to `ctech-{env}-alerts` (`erasure-purge-failed`, each redelivery) and also shows as a deletion in `purging` in ctech-account. The `reconcile` and `tablecleanup` Lambdas alert on a quarantined cash-out or a failed stale-table refund (`poker-reconcile`, `poker-tablecleanup-refund`, `poker-tablecleanup-settlement`); for the archiver DLQ, read the depth after a Lambda error in its log group.
+None fires on DLQ depth: the family declined CloudWatch alarms (poker #427). A failed erasure purge alerts to `ctech-{env}-alerts` (`erasure-purge-failed`, each redelivery) and also shows as a deletion in `purging` in ctech-account. The `reconcile` and `tablecleanup` Lambdas alert on a quarantined cash-out or a failed stale-table refund (`poker-reconcile`, `poker-tablecleanup-refund`, `poker-tablecleanup-settlement`); the archiver has no queue: a stream record it failed 3 times is reported to `ctech-{env}-alerts` (SNS failure destination, shard and sequence range only), and is replayed by invoking the archiver or reading the action log table.
 
 ## Inspect
 

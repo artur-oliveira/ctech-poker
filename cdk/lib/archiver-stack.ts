@@ -7,13 +7,14 @@ import {ILocalBundling, RemovalPolicy} from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
-import {DynamoEventSource, SqsDlq} from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import {DynamoEventSource, SnsDlq} from 'aws-cdk-lib/aws-lambda-event-sources';
 import {StartingPosition} from 'aws-cdk-lib/aws-lambda';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from "./bundle";
-import {actionLogArchiveBucketName} from './constants';
+import {actionLogArchiveBucketName, alertsTopicParam} from './constants';
 
 // localGoBundling builds the archiver binary with the host's own Go
 // toolchain, skipping Docker entirely when `go` is on PATH — Docker-in-CI
@@ -59,21 +60,21 @@ export class ArchiverStack extends cdk.Stack {
 
     bucket.grantWrite(fn);
 
-    // B10: poison stream records land in a DLQ instead of being dropped after
-    // the retries. bisectBatchOnError isolates the bad record so a single
-    // poison item doesn't send its 99 batch-mates to the DLQ with it.
-    const dlq = new sqs.Queue(this, 'ArchiverDLQ', {
-      queueName: `${environment}-poker-action-log-archiver-dlq`,
-      retentionPeriod: cdk.Duration.days(14),
-      enforceSSL: true,
-      receiveMessageWaitTime: cdk.Duration.seconds(20),
-    });
+    // B10: poison stream records are reported instead of dropped after the
+    // retries. The failure destination is the shared alerts topic (go-common
+    // alerts, SSM /ctech/{env}/alerts/topic-arn): a stream source's failure
+    // record carries only the shard and sequence range, never a payload, so
+    // there was nothing to redrive from a queue and nobody read it. bisectBatchOnError
+    // isolates the bad record so a single poison item doesn't fail its 99 batch-mates.
+    const alertsTopic = sns.Topic.fromTopicArn(
+      this, 'AlertsTopic', ssm.StringParameter.valueForStringParameter(this, alertsTopicParam(environment)),
+    );
     fn.addEventSource(new DynamoEventSource(actionLogTable, {
       startingPosition: StartingPosition.TRIM_HORIZON,
       batchSize: 100,
       retryAttempts: 3,
       bisectBatchOnError: true,
-      onFailure: new SqsDlq(dlq),
+      onFailure: new SnsDlq(alertsTopic),
     }));
   }
 }
