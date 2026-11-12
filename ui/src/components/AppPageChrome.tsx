@@ -9,6 +9,7 @@ import {PokerLogo} from '@/components/PokerLogo';
 import {PeopleNavBadge} from '@/components/social/PeopleNavBadge';
 import {useSocialUnread} from '@/lib/hooks/useSocialUnread';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
+import {NOTO_CREDIT, NOTO_CREDIT_URL} from '@/lib/reactions';
 
 type MainRoute = 'lobby' | 'people' | 'guide' | 'leaderboard' | 'achievements' | 'hands' | 'store';
 
@@ -157,7 +158,8 @@ export function AppPageHeader({icon: Icon, eyebrow, title, description, actions,
 export function AppPageFooter({authed}: {authed: boolean}) {
   return <footer className="app-page-footer shell">
     <div><span className="brand-mark" aria-hidden="true"><PokerLogo/></span>
-      <p><strong>CTech Poker</strong><span>Jogo social, transparente e responsável.</span></p></div>
+      <p><strong>CTech Poker</strong><span>Jogo social, transparente e responsável.</span>
+        <span><a href={NOTO_CREDIT_URL} target="_blank" rel="noreferrer">{NOTO_CREDIT}</a></span></p></div>
     <nav aria-label="Links do rodapé">
       <Link href="/guide">Como jogar</Link>
       <Link href="/poker-rules">Regras</Link>
