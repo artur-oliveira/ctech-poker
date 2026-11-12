@@ -26,36 +26,36 @@ const REACTION_ENTRIES = Object.entries(TABLE_REACTIONS) as [
 ][];
 
 const REACTION_THEATER = {
-  clap: {accent: 'BRAVO', particles: ['✦', '·', '✦', '·', '✦', '·']},
-  laugh: {accent: 'HA!', particles: ['HA', 'HA', 'HA', 'HA']},
-  wow: {accent: '!', particles: ['✦', '!', '✦', '!']},
-  angry: {accent: '', particles: ['', '', '', '']},
-  cry: {accent: '', particles: ['', '', '', '', '', '']},
-  nervous: {accent: '', particles: ['•', '•', '•', '•', '•']},
-  cold: {accent: '', particles: ['❄', '❄', '❄', '❄', '❄', '❄']},
-  fire: {accent: '', particles: ['', '', '', '', '', '']},
-  respect: {accent: 'GG', particles: ['✦', '✦', '✦', '✦']},
-  sleepy: {accent: '', particles: ['z', 'z', 'Z']},
-  heartbeat: {accent: 'ALL IN', particles: ['♥', '·', '♥', '·']},
-  shark: {accent: '', particles: ['≈', '≈', '≈', '≈']},
-  pokerface: {accent: '', particles: ['♠', '♦', '♣', '♥']},
-  chip: {accent: '', particles: []},
-  coffee: {accent: '', particles: ['~', '~', '~']},
-  clover: {accent: '', particles: ['🍀', '✦', '🍀', '✦', '🍀', '✦']},
-  horseshoe: {accent: '', particles: ['★', '★', '★', '★', '★', '★']},
-  tear: {accent: '', particles: ['', '', '', '', '', '', '', '']},
-  tomato: {accent: 'SPLAT', particles: ['', '', '', '', '', '']},
-  poop: {accent: 'ECA', particles: ['·', '·', '·', '·', '·']},
-  rofl: {accent: 'HA!', particles: ['🤣', '🤣', '🤣']},
-  duck: {accent: 'QUACK', particles: ['🪶', '🪶', '🪶', '🪶', '🪶']},
-  turtle: {accent: '', particles: ['z', 'z', 'Z']},
-  knife: {accent: '', particles: ['', '', '', '', '', '', '', '']},
-  flowers: {accent: '', particles: ['🌸', '🌸', '🌸', '🌸', '🌸', '🌸']},
-  spotlight: {accent: 'BOA', particles: ['✦', '✦', '✦', '✦']},
-  crown: {accent: 'REI', particles: ['♠', '♦', '♣', '♥', '★']},
-  bandage: {accent: '+1', particles: ['♥', '✦', '♥', '✦']},
+  clap: {accent: 'OVAÇÃO', particles: ['✦', '·', '✦', '·', '✦', '·']},
+  laugh: {accent: 'KKKKK', particles: ['k', 'k', 'k', 'k', 'k', 'k']},
+  wow: {accent: 'UAU?!', particles: ['!', '?', '!', '?']},
+  angry: {accent: 'PSSSHH!', particles: ['', '', '', '']},
+  cry: {accent: 'SNIF', particles: ['', '', '', '', '', '']},
+  nervous: {accent: 'TUDO BEM', particles: ['', '', '', '', '']},
+  cold: {accent: 'BRRR!', particles: ['', '', '', '', '', '']},
+  fire: {accent: 'QUENTE', particles: ['', '', '', '', '', '']},
+  respect: {accent: 'F', particles: ['✦', '✦', '✦', '✦']},
+  sleepy: {accent: 'BLIND!', particles: ['z', 'z', 'Z']},
+  heartbeat: {accent: 'ALL IN', particles: ['', '♥', '♥', '♥', '·']},
+  shark: {accent: 'NHAC!', particles: ['≈', '≈', '≈', '≈']},
+  pokerface: {accent: 'BLEFE?', particles: ['♠', '♦', '♣', '♥']},
+  chip: {accent: 'GORJETA', particles: []},
+  coffee: {accent: 'ACORDOU?', particles: ['~', '~', '~', '', '', '', '']},
+  clover: {accent: 'AMÉM', particles: ['', '', '', '', '', '']},
+  horseshoe: {accent: 'SÓ SORTE', particles: ['★', '★', '★', '★', '★', '★']},
+  tear: {accent: 'VIOLINO', particles: ['', '', '', '', '', '', '♪', '♫']},
+  tomato: {accent: 'MOLHO!', particles: ['', '', '', '', '', '']},
+  poop: {accent: 'PLOFT', particles: ['', '', '', '', '']},
+  rofl: {accent: 'HA HA HA', particles: ['', '', '', '', '']},
+  duck: {accent: 'QUÁ!', particles: ['', '', '', '', '', '']},
+  turtle: {accent: 'TIMEBANK', particles: ['', '', '']},
+  knife: {accent: 'ET TU?', particles: ['', '', '', '', '', '', '', '']},
+  flowers: {accent: 'R.I.P.', particles: ['', '', '', '', '', '']},
+  spotlight: {accent: 'FLAGRA!', particles: ['', '', '', '', '', '']},
+  crown: {accent: 'SE VIRA!', particles: ['', '', '', '', '']},
+  bandage: {accent: 'TALVEZ', particles: ['', '', '']},
   cucumber: {accent: 'SUSTO!', particles: ['', '', '', '', '', '']},
-  boomerang: {accent: 'VOLTOU', particles: ['', '', '']}
+  boomerang: {accent: 'KARMA', particles: ['★', '★', '★']}
 } satisfies Record<TableReactionID, {accent: string; particles: string[]}>;
 
 /** A stack of `count` chips. Three reads as the catalogue's icon; the thrown
@@ -70,12 +70,12 @@ function ReactionChipStack({count = 3, className = '', style}: {
                                                      style={{'--i': index} as CSSProperties}/>)}</span>;
 }
 
-function ReactionGlyph({reactionId, glyph, chipCount}: {
-  reactionId: TableReactionID; glyph: string; chipCount?: number;
+function ReactionGlyph({reactionId, glyph, chipCount, animated}: {
+  reactionId: TableReactionID; glyph: string; chipCount?: number; animated?: boolean;
 }) {
   return reactionId === 'chip'
     ? <ReactionChipStack count={chipCount}/>
-    : <EmojiGlyph glyph={glyph}/>;
+    : <EmojiGlyph glyph={glyph} animated={animated}/>;
 }
 
 /** A fistful of chips thrown at someone: each piece leaves the impact point on
@@ -106,6 +106,7 @@ function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
   if (reactionId === 'chip') {
     return <span className="reaction-impact reaction-impact-chip" data-reaction-impact={reactionId} aria-hidden="true">
       <i className="reaction-chip-flash"/>
+      <b className="reaction-impact-accent">{REACTION_THEATER.chip.accent}</b>
       {CHIP_PIECES.map(index => <ReactionChipStack key={index} count={index % 4 === 0 ? 2 : 1}
                                                    className="reaction-jackpot-stack"
                                                    style={chipBurstStyle(index)}/>)}
@@ -171,7 +172,7 @@ function ReactionEffect({item}: {item: TableReactionEvent}) {
                className={`table-reaction-effect reaction-${item.reactionId} ${definition.targeted ? 'thrown' : 'emote'}`}
                data-reaction-id={item.reactionId} role="img" aria-label={definition.label}>
     <span className="reaction-projectile">
-      <ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph} chipCount={1}/></span>
+      <ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph} chipCount={1} animated/></span>
     <ReactionImpact reactionId={item.reactionId}/>
   </span>;
 }

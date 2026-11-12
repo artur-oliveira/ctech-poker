@@ -1,35 +1,35 @@
 export const TABLE_REACTIONS = {
-  clap: {label: 'Aplausos', caption: 'Que espetáculo', glyph: '👏', targeted: false},
-  laugh: {label: 'Risada', caption: 'Ri até doer', glyph: '😄', targeted: false},
-  wow: {label: 'Uau', caption: 'Não acredito nisso', glyph: '😮', targeted: false},
-  angry: {label: 'Raiva', caption: 'Tô fervendo aqui', glyph: '😤', targeted: false},
-  cry: {label: 'Choro', caption: 'Doeu na alma', glyph: '😭', targeted: false},
-  nervous: {label: 'Nervoso', caption: 'Suando frio', glyph: '😰', targeted: false},
-  cold: {label: 'Frio na mesa', caption: 'Não entro em nada', glyph: '🥶', targeted: false},
-  fire: {label: 'Pegando fogo', caption: 'Tô imparável', glyph: '🔥', targeted: false},
-  respect: {label: 'Respeito', caption: 'Tiro o chapéu', glyph: '🫡', targeted: false},
-  sleepy: {label: 'Sono', caption: 'Isso vai demorar', glyph: '🥱', targeted: false},
-  heartbeat: {label: 'Coração all-in', caption: 'Tudo ou nada', glyph: '🫀', targeted: false},
-  shark: {label: 'Modo tubarão', caption: 'Sangue na água', glyph: '🦈', targeted: false},
-  pokerface: {label: 'Pokerface', caption: 'Nem tenta me ler', glyph: '😎', targeted: false},
+  clap: {label: 'Aplausos', caption: 'Palmas. Bem devagar.', glyph: '👏', targeted: false},
+  laugh: {label: 'Risada', caption: 'Kkkkk... tô sem ar', glyph: '😄', targeted: false},
+  wow: {label: 'Uau', caption: 'Você jogou isso mesmo?', glyph: '😮', targeted: false},
+  angry: {label: 'Raiva', caption: 'Tô a um bad beat de surtar', glyph: '😤', targeted: false},
+  cry: {label: 'Choro', caption: 'Chora, mas paga o blind', glyph: '😭', targeted: false},
+  nervous: {label: 'Nervoso', caption: 'Tá tudo sob controle', glyph: '😰', targeted: false},
+  cold: {label: 'Frio na mesa', caption: 'Mesa virou geladeira', glyph: '🥶', targeted: false},
+  fire: {label: 'Pegando fogo', caption: 'Chama o bombeiro', glyph: '🔥', targeted: false},
+  respect: {label: 'Respeito', caption: 'F pelo stack caído', glyph: '🫡', targeted: false},
+  sleepy: {label: 'Sono', caption: 'Acorda quando subir o blind', glyph: '🥱', targeted: false},
+  heartbeat: {label: 'Coração all-in', caption: 'Reza que o coração aguenta', glyph: '🫀', targeted: false},
+  shark: {label: 'Modo tubarão', caption: 'Tubarão não dorme, blefa', glyph: '🦈', targeted: false},
+  pokerface: {label: 'Pokerface', caption: 'Blefe ou nuts? Adivinha.', glyph: '😎', targeted: false},
 
-  chip: {label: 'Jogar ficha', caption: 'Rico e sem talento', glyph: '🟠', targeted: true},
-  coffee: {label: 'Mandar café', caption: 'Acorda pro jogo', glyph: '☕', targeted: true},
-  clover: {label: 'Dar sorte', caption: 'Vai precisar de sorte', glyph: '🍀', targeted: true},
-  horseshoe: {label: 'Jogar ferradura', caption: 'Só na sorte, né', glyph: '🧲', targeted: true},
-  tear: {label: 'Jogar lágrima', caption: 'Chora mais, campeão', glyph: '💧', targeted: true},
-  tomato: {label: 'Jogar tomate', caption: 'Toma na cara', glyph: '🍅', targeted: true},
-  poop: {label: 'Jogar cocô', caption: 'Isso fede daqui', glyph: '💩', targeted: true},
-  rofl: {label: 'Rir da cara', caption: 'Rindo de você', glyph: '🤣', targeted: true},
-  duck: {label: 'Jogar pato', caption: 'Jogou igual pato', glyph: '🦆', targeted: true},
-  turtle: {label: 'Chamar de lento', caption: 'Acorda, tá dormindo', glyph: '🐢', targeted: true},
-  knife: {label: 'Jogar faca', caption: 'Pelas costas', glyph: '🗡️', targeted: true},
-  flowers: {label: 'Mandar flores', caption: 'Meus pêsames', glyph: '💐', targeted: true},
-  spotlight: {label: 'Boa leitura', caption: 'Te li fácil', glyph: '🔦', targeted: true},
-  crown: {label: 'Passar a coroa', caption: 'Manda você então', glyph: '👑', targeted: true},
-  bandage: {label: 'Curar bad beat', caption: 'Vai sobreviver, talvez', glyph: '🩹', targeted: true},
-  cucumber: {label: 'Botar pepino', caption: 'Pulou que nem gato', glyph: '🥒', targeted: true},
-  boomerang: {label: 'Jogar bumerangue', caption: 'Isso volta pra você', glyph: '🪃', targeted: true}
+  chip: {label: 'Jogar ficha', caption: 'Toma, vai comprar talento', glyph: '🟠', targeted: true},
+  coffee: {label: 'Mandar café', caption: 'Café pra quem dormiu', glyph: '☕', targeted: true},
+  clover: {label: 'Dar sorte', caption: 'Te abençoo. Vai precisar', glyph: '🍀', targeted: true},
+  horseshoe: {label: 'Jogar ferradura', caption: 'Ímã de ficha, hein?', glyph: '🧲', targeted: true},
+  tear: {label: 'Jogar lágrima', caption: 'Chora mais, eu aguento', glyph: '💧', targeted: true},
+  tomato: {label: 'Jogar tomate', caption: 'Esse blefe pede molho', glyph: '🍅', targeted: true},
+  poop: {label: 'Jogar cocô', caption: 'Chegou o delivery', glyph: '💩', targeted: true},
+  rofl: {label: 'Rir da cara', caption: 'Sua jogada é piada pronta', glyph: '🤣', targeted: true},
+  duck: {label: 'Jogar pato', caption: 'Pato confirmado', glyph: '🦆', targeted: true},
+  turtle: {label: 'Chamar de lento', caption: 'Tá no timebank desde ontem', glyph: '🐢', targeted: true},
+  knife: {label: 'Jogar faca', caption: 'Nada pessoal, parça', glyph: '🗡️', targeted: true},
+  flowers: {label: 'Mandar flores', caption: 'Foi bonito enquanto durou', glyph: '💐', targeted: true},
+  spotlight: {label: 'Boa leitura', caption: 'Tá escrito na sua testa', glyph: '🔦', targeted: true},
+  crown: {label: 'Passar a coroa', caption: 'Agora o problema é seu, rei', glyph: '👑', targeted: true},
+  bandage: {label: 'Curar bad beat', caption: 'Passa com beijinho', glyph: '🩹', targeted: true},
+  cucumber: {label: 'Botar pepino', caption: 'Olha atrás, gatinho', glyph: '🥒', targeted: true},
+  boomerang: {label: 'Jogar bumerangue', caption: 'Vai, mas volta com juros', glyph: '🪃', targeted: true}
 } as const;
 
 export type TableReactionID = keyof typeof TABLE_REACTIONS;
@@ -48,3 +48,7 @@ export interface TableReactionEvent {
   reactionId: TableReactionID;
   targetPlayerId?: string;
 }
+
+/** Required by CC BY 4.0 for the animated Noto emoji bundled in public/emoji. */
+export const NOTO_CREDIT = 'Emojis: Noto Emoji, © Google, CC BY 4.0';
+export const NOTO_CREDIT_URL = 'https://googlefonts.github.io/noto-emoji-animation/';
