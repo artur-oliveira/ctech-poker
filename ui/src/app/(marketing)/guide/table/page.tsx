@@ -244,6 +244,10 @@ export default function TableGuide() {
         <li><span><b>Reações:</b> 30 gestos, divididos entre os que nascem na sua cadeira e os que você manda para
           alguém. Nesses, escolha o gesto e depois toque no assento que vai recebê-lo. Seis são premium e ficam
           bloqueados até serem liberados na Loja.</span></li>
+        <li><span><b>Arte:</b> as reações usam os emojis Noto, do Google, embutidos no jogo: o desenho é o mesmo em
+          qualquer aparelho. Cada reação tem a própria animação, com direito a uma frase e uma palavra de efeito
+          (a Raiva solta vapor, o Pepino dá um susto, o Bumerangue volta para quem jogou). Com movimento reduzido
+          ativo no sistema, os efeitos somem e o emoji aparece parado.</span></li>
         <li><span><b>Favoritas:</b> até três reações ficam como atalho fixo ao lado do botão, sem abrir o
           painel.</span></li>
         <li><span><b>Intervalo:</b> há uma pausa curta entre um envio e o próximo, para ninguém cobrir a mesa de

@@ -33,7 +33,7 @@ New token (`src/app/globals.css` `:root`): `--reaction-muck: #6b4a2a`, `--reacti
 Added to `src/lib/reactions.ts`, `REACTION_THEATER`, `src/app/table-reactions.css`, and the API
 whitelist (`api/internal/reactions/catalog.go` + `catalog_test.go`). Both free and targeted.
 
-- **`cucumber` — "Botar pepino" / "Pulou que nem gato"** (`🥒`, `--tag-green`). The cat-and-cucumber
+- **`cucumber` — "Botar pepino" / "Olha atrás, gatinho"** (`🥒`, `--tag-green`). The cat-and-cucumber
   scare: the cucumber creeps in low and quiet from the side, settles behind the target, then the seat
   jolts — green shock-ring burst, `SUSTO!` punch-in, and jump lines radiating up. Terminal beat: the
   burst + callout.

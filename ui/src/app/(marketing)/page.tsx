@@ -26,6 +26,7 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import {cardPath} from '@/lib/cards';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
 import {PokerLogo} from '@/components/PokerLogo';
+import {NOTO_CREDIT, NOTO_CREDIT_URL} from '@/lib/reactions';
 import React from 'react';
 
 // A curated, static preview, not fetched from the catalog. The landing page
@@ -275,6 +276,7 @@ export default function Home() {
       <div className="brand"><span className="brand-mark"><PokerLogo/></span><span>CTech <b>Poker</b></span></div>
       <div className="footer-content">
         <p>Jogue com responsabilidade. © {new Date().getFullYear()} A O CARVALHO TECH</p>
+        <p><a href={NOTO_CREDIT_URL} target="_blank" rel="noreferrer">{NOTO_CREDIT}</a></p>
         <nav>
           <a href="https://accounts.aoctech.app/products/poker" target="_blank" rel="noreferrer">Termos de Uso</a>
           <a href="https://accounts.aoctech.app/products/poker-privacy" target="_blank" rel="noreferrer">Política de

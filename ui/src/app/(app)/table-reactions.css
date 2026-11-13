@@ -463,12 +463,30 @@
 }
 
 /* Self tells: each grows from the actor's seat and owns one visual motif. */
+/* clap: a sarcastic slow clap (three smacks 550ms apart, a ring each) that
+   suddenly turns into a standing ovation at 1750ms: rapid hops, gold ring,
+   confetti fan, the OVAÇÃO banner. */
 .reaction-clap .reaction-projectile {
-    animation: reaction-clap-hands 520ms var(--ease-out-quart) 140ms 3;
+    animation: reaction-clap-slow 550ms ease-in-out 100ms 3,
+               reaction-clap-rapid 110ms linear 1750ms 7;
 }
 
 .reaction-impact-clap {
-    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-impact-hold 3s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-clap::before {
+    inset: 24px;
+    border: 2px solid color-mix(in srgb, var(--gold) 66%, transparent);
+    border-radius: 50%;
+    animation: reaction-clap-ring 550ms ease-out calc(var(--impact-delay) + 100ms) 3 both;
+}
+
+.reaction-impact-clap::after {
+    inset: 8px;
+    border: 3px solid var(--gold-bright);
+    border-radius: 50%;
+    animation: reaction-clap-ovation 700ms var(--ease-out-expo) calc(var(--impact-delay) + 1750ms) both;
 }
 
 .reaction-impact-clap .reaction-impact-accent {
@@ -477,17 +495,24 @@
     background: var(--gold);
     color: var(--gold-ink);
     transform: translate(-50%, -70px) rotate(-3deg);
-    animation: reaction-banner-snap 1.8s var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-banner-snap 1.1s var(--ease-out-expo) calc(var(--impact-delay) + 1750ms) both;
 }
 
 .reaction-impact-clap i {
     color: var(--gold-pale);
-    animation: reaction-clap-fan 1.4s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 65ms) both;
+    animation: reaction-clap-fan 1s var(--ease-out-quart)
+               calc(var(--impact-delay) + 1750ms + var(--piece) * 45ms) both;
 }
 
+.reaction-impact-clap i:nth-child(1) { --cd: 38px }
+.reaction-impact-clap i:nth-child(2) { --cd: 62px }
+.reaction-impact-clap i:nth-child(3) { --cd: 46px }
+.reaction-impact-clap i:nth-child(4) { --cd: 68px }
+.reaction-impact-clap i:nth-child(5) { --cd: 42px }
+.reaction-impact-clap i:nth-child(6) { --cd: 56px }
+
 .reaction-laugh .reaction-projectile {
-    animation: reaction-laugh-hop 720ms var(--ease-out-quart) 120ms 3;
+    animation: reaction-laugh-fit 2s linear 80ms both;
 }
 
 .reaction-impact-laugh {
@@ -498,68 +523,128 @@
     color: var(--tag-yellow);
     font-size: var(--font-size-body);
     transform: translate(-50%, -36px) rotate(-8deg);
-    animation: reaction-laugh-label 1.6s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-laugh-accent 1.9s var(--ease-out-quart) calc(var(--impact-delay) + 500ms) both;
 }
 
+/* laugh: "kkkkk" typed faster and bigger as the fit grows (pieces 0-4), the
+   sixth k has no air left and sags. Glyph shakes harder, then slumps. */
 .reaction-impact-laugh i {
     color: var(--gold-pale);
     font: 800 var(--font-size-tiny) var(--font-mono);
-    animation: reaction-laugh-bubble 1.8s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 110ms) both;
+    text-transform: lowercase;
+    animation: reaction-laugh-k 1.1s var(--ease-out-quart)
+               calc(var(--impact-delay) + 150ms + var(--piece) * var(--piece) * 40ms + var(--piece) * 70ms) both;
+}
+
+.reaction-impact-laugh i:nth-child(n + 2) { font-size: var(--font-size-compact) }
+.reaction-impact-laugh i:nth-child(n + 4) { font-size: var(--font-size-body) }
+.reaction-impact-laugh i:nth-child(6) {
+    color: var(--gold-bright);
+    animation-name: reaction-laugh-sag;
+    animation-duration: 1.3s;
+}
+
+/* wow: a double take. The glyph winds up (squash), the jaw drops (stretch
+   down from the top), it jitters in disbelief, leans away and snaps back.
+   On the snap (260ms) a shockwave leaves, "UAU?!" slams in and four !/?
+   marks are thrown clear of the face. Beats: wind-up 0-240, drop 260,
+   lean-away 520-640, banner hold to ~1800. */
+.reaction-wow .reaction-projectile {
+    transform-origin: 50% 20%;
+    animation: reaction-wow-take 1000ms var(--ease-out-quart) 0ms both;
 }
 
 .reaction-impact-wow {
-    animation: reaction-impact-hold 2.4s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-impact-hold 2.3s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-wow::before,
 .reaction-impact-wow::after {
-    inset: 28px;
-    border: 2px solid color-mix(in srgb, var(--tag-blue) 75%, transparent);
+    inset: 30px;
+    border: 3px solid color-mix(in srgb, var(--tag-blue) 80%, transparent);
     border-radius: 50%;
-    animation: reaction-shock-ring 1.5s var(--ease-out-expo)
-               calc(var(--impact-delay) + var(--ring, 0) * 180ms) both;
+    animation: reaction-shock-ring 760ms var(--ease-out-expo)
+               calc(var(--impact-delay) + 260ms + var(--ring, 0) * 110ms) both;
 }
 
-.reaction-impact-wow::after { --ring: 1 }
+.reaction-impact-wow::after {
+    --ring: 1;
+    border-color: color-mix(in srgb, var(--paper) 60%, transparent);
+}
 
 .reaction-impact-wow .reaction-impact-accent {
     color: var(--tag-blue);
-    font-size: 2rem;
-    transform: translate(-50%, -50%);
-    animation: reaction-wow-mark 1.2s var(--ease-out-expo) var(--impact-delay) both;
+    font-size: 1.5rem;
+    text-shadow: 0 2px 0 var(--black-08);
+    transform: translate(-50%, -58px) rotate(-4deg);
+    animation: reaction-wow-banner 1.7s var(--ease-out-quart) calc(var(--impact-delay) + 260ms) both;
 }
 
 .reaction-impact-wow i {
-    color: var(--felt-text);
-    animation: reaction-radial-pop 1.3s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+    color: var(--paper);
+    font: 800 1.4rem var(--font-mono);
+    text-shadow: 0 0 6px var(--tag-blue);
+    animation: reaction-wow-mark 1.5s var(--ease-out-quart)
+               calc(var(--impact-delay) + 260ms + var(--piece) * 60ms) both;
 }
 
+.reaction-impact-wow i:nth-child(1) { --mx: -40px; --my: -30px; --mr: -18deg }
+.reaction-impact-wow i:nth-child(2) { --mx: 42px; --my: -20px; --mr: 14deg }
+.reaction-impact-wow i:nth-child(3) { --mx: -48px; --my: 8px; --mr: -10deg; font-size: 1.05rem }
+.reaction-impact-wow i:nth-child(4) { --mx: 36px; --my: -48px; --mr: 20deg; font-size: 1.05rem }
+
+/* angry: a pressure cooker. Pressure builds 0-880ms (the glyph shudders with
+   growing amplitude, a red bloom swells), the lid pops at 880ms (squash then
+   stretch, a shock ring, PSSSHH!) and four steam puffs jet out of the nostrils. */
 .reaction-angry .reaction-projectile {
-    animation: reaction-angry-shake 420ms linear 160ms 5;
+    animation: reaction-angry-build 880ms linear 0ms both,
+               reaction-angry-vent 420ms var(--ease-out-expo) 880ms;
 }
 
 .reaction-impact-angry {
-    animation: reaction-impact-hold 2.4s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-angry::before {
-    inset: 30px;
+    inset: 18px;
     border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--danger) 36%, transparent), transparent 68%);
-    animation: reaction-heat-pulse 950ms var(--ease-out-quart) var(--impact-delay) 2;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--danger) 52%, transparent),
+                color-mix(in srgb, var(--danger) 18%, transparent) 62%, transparent);
+    animation: reaction-angry-pressure 2.2s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-angry i {
-    width: 8px;
-    height: 44px;
+.reaction-impact-angry::after {
+    inset: 30px;
+    border: 3px solid var(--tag-red);
     border-radius: 50%;
-    background: color-mix(in srgb, var(--paper) 74%, transparent);
-    filter: blur(1px);
-    animation: reaction-steam-jet 1.55s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+    animation: reaction-angry-pop 560ms var(--ease-out-expo) calc(var(--impact-delay) + 880ms) both;
 }
+
+.reaction-impact-angry .reaction-impact-accent {
+    color: var(--paper);
+    text-shadow: 0 0 8px var(--tag-red);
+    transform: translate(-50%, -48px);
+    animation: reaction-angry-accent 1.5s var(--ease-out-quart) calc(var(--impact-delay) + 900ms) both;
+}
+
+/* steam puffs: soft discs aimed down-and-out of the nose, 2 left, 2 right */
+.reaction-impact-angry i {
+    left: 50%;
+    top: 50%;
+    bottom: auto;
+    width: 26px;
+    height: 26px;
+    margin: -8px 0 0 -13px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--paper), color-mix(in srgb, var(--paper) 40%, transparent) 60%, transparent);
+    animation: reaction-angry-puff 1.1s var(--ease-out-quart)
+               calc(var(--impact-delay) + 900ms + var(--piece) * 60ms) both;
+}
+
+.reaction-impact-angry i:nth-child(1) { --px: -44px; --py: -2px }
+.reaction-impact-angry i:nth-child(2) { --px: -30px; --py: 20px }
+.reaction-impact-angry i:nth-child(3) { --px: 44px; --py: -2px }
+.reaction-impact-angry i:nth-child(4) { --px: 30px; --py: 20px }
 
 /* One water material for both weeping reactions: a drop pointed at the *top*
    (the trailing edge of something falling), a specular catchlight up and left,
@@ -599,123 +684,281 @@
 
 .reaction-impact-cry i:nth-child(even) { --eye: 1 }
 
-/* Where the tears land. Two rings, offset, so the surface reads as wet. */
+/* The punchline: every tear that lands is felt. A puddle forms where the stack
+   used to be, widening in a step per landing (transform only, anchored on its
+   own centre) and the glyph keeps sobbing over it. A ring keeps rippling on top.
+   The whole box fades with .reaction-impact-hold, so the puddle just "dries". */
 .reaction-impact-cry::before,
 .reaction-impact-cry::after {
     left: 50%;
     top: 50%;
-    width: 21px;
-    height: 8px;
-    margin: 44px 0 0 -17px;
-    border: 1px solid color-mix(in srgb, var(--tag-blue) 60%, transparent);
     border-radius: 50%;
-    animation: reaction-tear-ripple 1.15s var(--ease-out-quart)
-               calc(var(--impact-delay) + 660ms + var(--ring, 0) * 340ms) both;
+}
+
+.reaction-impact-cry::before {
+    width: 84px;
+    height: 24px;
+    margin: 40px 0 0 -42px;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--tag-blue) 62%, transparent),
+                color-mix(in srgb, var(--tag-blue) 34%, transparent) 70%, transparent);
+    box-shadow: inset 0 2px 3px color-mix(in srgb, var(--paper) 40%, transparent);
+    animation: reaction-cry-puddle 1.95s var(--ease-out-quart) calc(var(--impact-delay) + 640ms) both;
 }
 
 .reaction-impact-cry::after {
-    --ring: 1;
-    margin-left: 0;
+    width: 30px;
+    height: 10px;
+    margin: 47px 0 0 -15px;
+    border: 1px solid color-mix(in srgb, var(--paper) 55%, var(--tag-blue));
+    animation: reaction-tear-ripple 620ms var(--ease-out-quart)
+               calc(var(--impact-delay) + 700ms) 3 both;
 }
 
+.reaction-cry .reaction-projectile {
+    animation: reaction-cry-sob 520ms ease-in-out calc(var(--impact-delay) + 120ms) 4;
+}
+
+.reaction-impact-cry .reaction-impact-accent {
+    color: var(--tag-blue);
+    text-shadow: 0 2px 0 var(--black-08);
+    transform: translate(-50%, -50px);
+    animation: reaction-cry-snif 1.1s var(--ease-out-quart) calc(var(--impact-delay) + 1500ms) both;
+}
+
+/* nervous: a bluff with a marginal hand. The tremble escalates in three steps
+   (0.15 s, 0.55 s, 1.03 s), a heartbeat ring speeds up under it and four sweat
+   beads swell on the forehead and drip. At 1.55 s everything freezes, the
+   glyph gulps, the big drop plops (1.75 s) and a very calm "TUDO BEM" shows.
+   The emote wrapper fades from 2.37 s, so the punchline must land before. */
 .reaction-nervous .reaction-projectile {
-    animation: reaction-nervous-tremble 150ms linear 180ms 10;
+    animation: reaction-nervous-t1 100ms linear 150ms 4,
+               reaction-nervous-t2 80ms linear 550ms 6,
+               reaction-nervous-t3 50ms linear 1030ms 10,
+               reaction-nervous-gulp 420ms var(--ease-out-quart) 1550ms both;
 }
 
 .reaction-impact-nervous {
-    animation: reaction-impact-hold 2.45s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-nervous-hold 2.9s linear var(--impact-delay) both;
 }
 
 .reaction-impact-nervous::before {
     inset: 31px;
-    border: 2px dashed color-mix(in srgb, var(--tag-blue) 52%, transparent);
+    border: 2px solid color-mix(in srgb, var(--tag-red) 62%, transparent);
     border-radius: 50%;
-    animation: reaction-nervous-orbit 1.5s linear var(--impact-delay) 2;
+    animation: reaction-nervous-beat 1.8s linear var(--impact-delay) both;
+}
+
+.reaction-impact-nervous::after {
+    left: 50%;
+    top: 50%;
+    width: 34px;
+    height: 12px;
+    margin: 38px 0 0 -17px;
+    border: 2px solid var(--tag-blue);
+    border-radius: 50%;
+    animation: reaction-nervous-splat 520ms var(--ease-out-expo) calc(var(--impact-delay) + 1750ms) both;
+}
+
+.reaction-impact-nervous .reaction-impact-accent {
+    font-size: 1.4rem;
+    color: var(--paper);
+    text-shadow: 0 2px 0 var(--tag-blue), 0 3px 4px var(--black-08);
+    transform: translate(-50%, -48px);
+    animation: reaction-nervous-word 1100ms var(--ease-out-quart) calc(var(--impact-delay) + 1750ms) both;
 }
 
 .reaction-impact-nervous i {
+    left: 50%;
+    top: 50%;
     width: 7px;
     height: 10px;
-    border-radius: 50% 50% 55% 45%;
+    margin: -22px 0 0 -3px;
+    border-radius: 50% 50% 55% 45% / 62% 62% 38% 38%;
     background: var(--tag-blue);
-    animation: reaction-sweat-orbit 1.45s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+    --sx: calc((var(--piece) - 1.5) * 8px);
+    animation: reaction-nervous-drip 950ms linear
+               calc(var(--impact-delay) + 150ms + var(--piece) * 240ms) both;
 }
 
+.reaction-impact-nervous i:nth-child(5) {
+    --sx: 0px;
+    width: 10px;
+    height: 14px;
+    margin: -24px 0 0 -5px;
+    animation: reaction-nervous-plop 1.05s linear calc(var(--impact-delay) + 700ms) both;
+}
+
+/* cold: the table temperature drops. Frost creeps in from the edge while the
+   glyph chatters harder, it freezes solid inside an ice cube (0-1.1 s), the
+   cube wobbles, then cracks (1.88 s): six shards fly and the glyph hops free. */
 .reaction-cold .reaction-projectile {
-    animation: reaction-shiver 240ms var(--ease-out-quart) 120ms 7;
+    animation: reaction-cold-chatter 1100ms linear both,
+               reaction-cold-thaw 560ms var(--ease-out-quart) 1880ms forwards;
 }
 
 .reaction-impact-cold {
-    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+    --ice: color-mix(in srgb, var(--tag-blue) 30%, var(--felt-text));
+    animation: reaction-impact-hold 2.9s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-cold::before {
+    inset: 4px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, transparent 50%,
+                color-mix(in srgb, var(--ice) 34%, transparent) 78%, var(--ice) 96%, transparent);
+    animation: reaction-cold-creep 1.95s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-cold::after {
     inset: 24px;
-    border: 3px double color-mix(in srgb, var(--felt-text) 70%, transparent);
-    border-radius: 28% 72% 34% 66%;
-    animation: reaction-frost-grow 2s var(--ease-out-expo) var(--impact-delay) both;
+    border: 2px solid var(--ice);
+    border-radius: 24%;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--paper) 46%, transparent),
+                color-mix(in srgb, var(--ice) 22%, transparent) 55%, color-mix(in srgb, var(--paper) 30%, transparent));
+    animation: reaction-cold-cube 2s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-cold .reaction-impact-accent {
+    color: var(--ice);
+    text-shadow: 0 0 6px var(--tag-blue);
+    transform: translate(-50%, -52px);
+    animation: reaction-cold-accent 1.95s linear var(--impact-delay) both;
 }
 
 .reaction-impact-cold i {
-    color: var(--felt-text);
-    animation: reaction-snow-orbit 2.2s ease-in-out
-               calc(var(--impact-delay) + var(--piece) * 80ms) both;
+    width: 9px;
+    height: 14px;
+    margin: -7px 0 0 -4px;
+    background: linear-gradient(to bottom, var(--paper), var(--ice));
+    clip-path: polygon(50% 0, 100% 100%, 0 72%);
+    animation: reaction-cold-shard 760ms var(--ease-out-expo)
+               calc(var(--impact-delay) + 1880ms) both;
 }
 
+.reaction-impact-cold i:nth-child(even) { --far: 12px; height: 11px }
+
+/* fire: the glyph heats up (a shake that grows), ignites with a whoosh ring,
+   then six tongues of six heights lick up behind it. Beats: charge 0-650ms,
+   ignition 680ms, roar 700-2200ms. */
 .reaction-fire .reaction-projectile {
-    animation: reaction-flame-pulse 650ms var(--ease-out-quart) 80ms 4;
+    animation: reaction-fire-charge 700ms ease-in 0ms both,
+               reaction-fire-breathe 460ms ease-in-out 700ms 3;
 }
 
 .reaction-impact-fire {
-    animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-fire::before {
+    inset: 4px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--tag-orange) 62%, transparent),
+                color-mix(in srgb, var(--tag-red) 22%, transparent) 60%, transparent);
+    animation: reaction-fire-heat 2.3s var(--ease-out-quart) calc(var(--impact-delay) + 250ms) both;
+}
+
+.reaction-impact-fire::after {
+    inset: 34px;
+    border: 3px solid var(--gold-bright);
+    border-radius: 50%;
+    animation: reaction-fire-whoosh 620ms var(--ease-out-expo) calc(var(--impact-delay) + 680ms) both;
+}
+
+.reaction-impact-fire .reaction-impact-accent {
+    color: var(--gold-bright);
+    text-shadow: 0 0 8px var(--tag-orange);
+    transform: translate(-50%, -46px);
+    animation: reaction-fire-accent 1.6s var(--ease-out-quart) calc(var(--impact-delay) + 800ms) both;
 }
 
 .reaction-impact-fire i {
     left: 50%;
     top: 50%;
     bottom: auto;
-    width: 6px;
-    height: 6px;
-    border-radius: 50% 50% 50% 0;
-    background: var(--gold-bright);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--tag-orange) 55%, transparent);
-    animation: reaction-ember-fan 1.6s ease-out
-               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+    width: 20px;
+    height: 46px;
+    margin: -22px 0 0 -10px;
+    border-radius: 50% 50% 46% 46% / 72% 72% 28% 28%;
+    background: linear-gradient(to top, var(--tag-red), var(--tag-orange) 45%, var(--gold-bright));
+    box-shadow: 0 0 9px color-mix(in srgb, var(--tag-orange) 60%, transparent);
+    transform-origin: 50% 100%;
+    --fx: calc((var(--piece) - 2.5) * 11px);
+    animation: reaction-fire-lick 1.55s ease-in-out
+               calc(var(--impact-delay) + 680ms + var(--piece) * 55ms) both;
 }
 
-.reaction-impact-respect {
-    animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
+.reaction-impact-fire i:nth-child(1) { --fh: .62 }
+.reaction-impact-fire i:nth-child(2) { --fh: 1.05 }
+.reaction-impact-fire i:nth-child(3) { --fh: 1.45 }
+.reaction-impact-fire i:nth-child(4) { --fh: 1.2 }
+.reaction-impact-fire i:nth-child(5) { --fh: .85 }
+.reaction-impact-fire i:nth-child(6) { --fh: .55 }
+
+/* respect: a salute with parade-ground crispness. The glyph heel-clicks down,
+   snaps up to attention (tilted, held stiff) and relaxes. A gold shaft drops
+   on it like a memorial light, and a single "F" lands for the fallen stack,
+   one beat, then slumps. Sincere or mock-solemn, the timing is the joke.
+   Beats: snap 0-220ms, shaft 120ms, F 560ms, at ease 1800ms. (Legacy sheet
+   rules in renderer.css are beaten with the doubled class.) */
+.reaction-respect .reaction-projectile {
+    animation: reaction-respect-salute 2.2s linear both;
+}
+
+.reaction-impact.reaction-impact-respect {
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    opacity: 0;
+    animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-respect::before {
-    inset: 24px;
-    border: 2px solid color-mix(in srgb, var(--gold) 66%, transparent);
-    border-radius: 50%;
-    clip-path: polygon(0 0, 43% 0, 43% 100%, 0 100%, 0 62%, 24% 50%, 0 38%,
-                       100% 38%, 76% 50%, 100% 62%, 100% 100%, 57% 100%, 57% 0, 100% 0);
-    animation: reaction-laurel-open 1.7s var(--ease-out-expo) var(--impact-delay) both;
+    left: 50%;
+    top: -20px;
+    width: 34px;
+    height: 86px;
+    margin-left: -17px;
+    background: linear-gradient(to bottom, transparent,
+                color-mix(in srgb, var(--gold-pale) 62%, transparent));
+    clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
+    transform-origin: 50% 0;
+    animation: reaction-respect-shaft 1.9s var(--ease-out-quart) calc(var(--impact-delay) + 120ms) both;
+}
+
+.reaction-impact-respect::after {
+    left: 50%;
+    top: 50%;
+    width: 64px;
+    height: 2px;
+    margin: 20px 0 0 -32px;
+    background: var(--gold);
+    animation: reaction-respect-ground 1.9s var(--ease-out-expo) calc(var(--impact-delay) + 160ms) both;
 }
 
 .reaction-impact-respect .reaction-impact-accent {
-    color: var(--gold);
-    transform: translate(-50%, -50%);
-    animation: reaction-respect-mark 1.9s var(--ease-out-quart) var(--impact-delay) both;
+    color: var(--gold-bright);
+    font-size: 2rem;
+    text-shadow: 0 2px 0 var(--gold-ink);
+    transform: translate(calc(-50% + 40px), calc(-50% - 22px));
+    animation: reaction-respect-f 1.75s linear calc(var(--impact-delay) + 560ms) both;
 }
 
-.reaction-impact-respect i {
+.reaction-impact.reaction-impact-respect i {
+    left: 50%;
+    top: 50%;
+    font-size: 1rem;
     color: var(--gold-pale);
-    animation: reaction-radial-pop 1.35s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+    animation: reaction-respect-glint 1.1s var(--ease-out-quart)
+               calc(var(--impact-delay) + 300ms + var(--piece) * 150ms) both;
+    --gx: calc((var(--piece) - 1.5) * 26px);
+    --gy: calc(-26px - (var(--piece) % 2) * 14px);
 }
 
-.reaction-impact-sleepy,
-.reaction-impact-turtle {
+.reaction-impact-sleepy {
     animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-sleepy i,
-.reaction-impact-turtle i {
+.reaction-impact-sleepy i {
     left: 50%;
     top: 50%;
     bottom: auto;
@@ -725,8 +968,76 @@
                calc(var(--impact-delay) + var(--piece) * 270ms) both;
 }
 
+/* sleepy: "me acorda quando subir o blind". The glyph nods off three times,
+   each sag snapped back by a head jerk, deeper every time; between nods one
+   big yawn stretches it and two rings ripple outward (the contagious yawn).
+   The z's are a blind clock: each tick lands one bigger z, until the blind
+   goes up at 1950ms: the glyph jolts awake, the z's are knocked away and
+   BLIND! slams in. Overrides the shared sleepy/turtle rule above and the
+   legacy renderer.css one by specificity. Beats: nod 0-500, nod 650-1100,
+   yawn 1250-1700, last nod 1700-1950, blind 1950-2800. */
+.reaction-sleepy .reaction-projectile {
+    animation: reaction-sleepy-nod 2400ms linear both;
+}
+
+.reaction-impact.reaction-impact-sleepy {
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    opacity: 0;
+    animation: reaction-impact-hold 3.1s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-sleepy::before,
+.reaction-impact-sleepy::after {
+    inset: 22px;
+    border: 2px solid var(--ice);
+    border-radius: 50%;
+    opacity: 0;
+    animation: reaction-sleepy-yawn 1150ms var(--ease-out-quart) calc(var(--impact-delay) + 1250ms) both;
+}
+
+.reaction-impact-sleepy::after {
+    border-width: 1px;
+    animation-delay: calc(var(--impact-delay) + 1480ms);
+}
+
+.reaction-impact-sleepy .reaction-impact-accent {
+    color: var(--gold-bright);
+    font-size: 1.5rem;
+    text-shadow: 0 2px 0 var(--gold-ink);
+    opacity: 0;
+    transform: translate(-50%, -62px);
+    animation: reaction-sleepy-blind 1.15s linear calc(var(--impact-delay) + 1950ms) both;
+}
+
+.reaction-impact.reaction-impact-sleepy i {
+    left: 50%;
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    color: var(--ice);
+    font: 800 var(--zs) var(--font-mono);
+    opacity: 0;
+    --zd: calc(2050ms - var(--zt));
+    animation: reaction-sleepy-z var(--zd) linear calc(var(--impact-delay) + var(--zt)) both;
+}
+
+.reaction-impact-sleepy i:nth-child(1) { --zt: 450ms; --zs: 1.4rem; --zx: 22px; --zy: -26px }
+.reaction-impact-sleepy i:nth-child(2) { --zt: 1000ms; --zs: 1.8rem; --zx: 36px; --zy: -50px }
+.reaction-impact-sleepy i:nth-child(3) { --zt: 1500ms; --zs: 2.4rem; --zx: 48px; --zy: -76px }
+
+/* heartbeat: the second before the shove. A monitor blip sweeps across the
+   seat once per beat, each pass faster, and the glyph thumps lub-dub in time
+   (0 / 540 / 980 ms). Then the line goes flat and the heart holds dead still
+   (1300 ms). At 1750 ms it slams: shock disc across the seat, the flatline
+   snaps into a spike, hearts burst, ALL IN lands. Not a ring (that is nervous). */
 .reaction-heartbeat .reaction-projectile {
-    animation: reaction-heartbeat 1.05s var(--ease-out-quart) 100ms 3;
+    animation: reaction-heartbeat-lub 520ms ease-out 0ms,
+               reaction-heartbeat-lub 420ms ease-out 540ms,
+               reaction-heartbeat-lub 320ms ease-out 980ms,
+               reaction-heartbeat-hush 450ms ease-in 1300ms,
+               reaction-heartbeat-slam 550ms var(--ease-out-quart) 1750ms;
 }
 
 .reaction-impact-heartbeat {
@@ -734,89 +1045,181 @@
 }
 
 .reaction-impact-heartbeat::before {
-    left: 17px;
-    top: 60px;
-    width: 98px;
-    height: 16px;
-    border-block: 2px solid var(--brand-bright);
+    left: 50%;
+    top: 50%;
+    width: 110px;
+    height: 36px;
+    margin: -18px 0 0 -55px;
     clip-path: polygon(0 43%, 24% 43%, 30% 4%, 39% 96%, 48% 43%, 61% 43%, 67% 20%, 73% 66%, 79% 43%, 100% 43%, 100% 58%, 80% 58%, 73% 82%, 67% 39%, 62% 58%, 49% 58%, 39% 100%, 30% 19%, 25% 58%, 0 58%);
     background: var(--brand-bright);
-    animation: reaction-ecg-scan 1.5s var(--ease-out-expo) var(--impact-delay) both;
+    opacity: 0;
+    animation: reaction-heartbeat-blip 520ms linear calc(var(--impact-delay) + 0ms),
+               reaction-heartbeat-blip 420ms linear calc(var(--impact-delay) + 540ms),
+               reaction-heartbeat-blip 320ms linear calc(var(--impact-delay) + 980ms);
+}
+
+.reaction-impact-heartbeat::after {
+    left: 50%;
+    top: 50%;
+    width: 90px;
+    height: 90px;
+    margin: -45px 0 0 -45px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--tag-red) 70%, transparent),
+                color-mix(in srgb, var(--tag-red) 24%, transparent) 62%, transparent);
+    opacity: 0;
+    animation: reaction-heartbeat-pulse 420ms ease-out calc(var(--impact-delay) + 40ms),
+               reaction-heartbeat-pulse 340ms ease-out calc(var(--impact-delay) + 580ms),
+               reaction-heartbeat-pulse 260ms ease-out calc(var(--impact-delay) + 1020ms),
+               reaction-heartbeat-shock 700ms var(--ease-out-expo) calc(var(--impact-delay) + 1750ms);
 }
 
 .reaction-impact-heartbeat .reaction-impact-accent {
-    top: 8px;
-    color: var(--danger-soft);
-    transform: translateX(-50%);
-    animation: reaction-banner-snap 1.8s var(--ease-out-expo) var(--impact-delay) both;
+    color: var(--paper);
+    text-shadow: 0 0 10px var(--tag-red), 0 2px 0 var(--tag-red);
+    transform: translate(-50%, -46px);
+    opacity: 0;
+    animation: reaction-heartbeat-accent 800ms var(--ease-out-expo) calc(var(--impact-delay) + 1750ms) both;
 }
 
 .reaction-impact-heartbeat i {
-    color: var(--brand-bright);
-    animation: reaction-heart-pop 1.5s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 120ms) both;
+    color: var(--danger-soft);
+    opacity: 0;
+    animation: reaction-heartbeat-burst 800ms var(--ease-out-expo) calc(var(--impact-delay) + 1750ms) both;
 }
+
+/* i:nth-child(1) is the flatline (its glyph is empty) */
+.reaction-impact-heartbeat i:nth-child(1) {
+    width: 150px;
+    height: 2px;
+    margin: -1px 0 0 -75px;
+    background: var(--brand-bright);
+    box-shadow: 0 0 6px var(--brand-bright);
+    animation: reaction-heartbeat-flat 450ms ease-out calc(var(--impact-delay) + 1300ms),
+               reaction-heartbeat-snap 280ms ease-out calc(var(--impact-delay) + 1750ms);
+}
+
+.reaction-impact-heartbeat i:nth-child(2) { --bx: -46px; --by: -34px }
+.reaction-impact-heartbeat i:nth-child(3) { --bx: 48px; --by: -26px }
+.reaction-impact-heartbeat i:nth-child(4) { --bx: -10px; --by: 50px; font-size: 1.2em }
+.reaction-impact-heartbeat i:nth-child(5) { --bx: 40px; --by: 40px }
 
 .reaction-impact-shark {
     animation: reaction-impact-hold 2.8s var(--ease-out-quart) var(--impact-delay) both;
 }
 
+/* shark: the felt becomes water. A dorsal fin cuts in from the left in two
+   beats (da... dun), the glyph lurks low and trembles, then at 1130ms the fin
+   dives, the glyph lunges up and a pair of teeth SNAPS shut on "NHAC!" in a
+   splash of droplets. Beats: da 0-630ms, hold 800ms, bite 1130ms, banner
+   lands 1130-2300ms. */
+.reaction-shark .reaction-projectile {
+    animation: reaction-shark-lurk 2s var(--ease-out-quart) both;
+}
+
 .reaction-impact-shark::before {
-    left: 54px;
-    top: 44px;
-    width: 24px;
-    height: 30px;
+    left: 50%;
+    top: 50%;
+    margin: 6px 0 0 -13px;
+    width: 26px;
+    height: 32px;
     background: linear-gradient(160deg,
-        color-mix(in srgb, var(--felt-text) 32%, var(--ink)),
-        color-mix(in srgb, var(--felt-text) 14%, var(--ink)));
+        color-mix(in srgb, var(--felt-text) 62%, var(--ink)),
+        color-mix(in srgb, var(--felt-text) 36%, var(--ink)));
     clip-path: polygon(58% 0, 100% 100%, 54% 78%, 0 100%);
     filter: drop-shadow(0 3px 4px var(--black-0b));
-    animation: reaction-fin-pass 2.1s var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-shark-fin 2.1s linear var(--impact-delay) both;
 }
 
 .reaction-impact-shark::after {
-    left: 18px;
-    right: 18px;
-    bottom: 26px;
-    height: 22px;
-    background: radial-gradient(
-        ellipse at 50% 100%,
-        transparent 65%,
-        color-mix(in srgb, var(--tag-blue) 74%, transparent) 66% 69%,
-        transparent 70%
-    );
-    animation: reaction-wake-spread 2s var(--ease-out-quart) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    margin: 20px 0 0 -56px;
+    width: 112px;
+    height: 20px;
+    border: 2px solid color-mix(in srgb, var(--paper) 55%, transparent);
+    border-radius: 50%;
+    animation: reaction-shark-ripple 2.1s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-shark .reaction-impact-accent {
+    color: var(--paper);
+    text-shadow: 0 0 8px var(--tag-red), 0 1px 2px var(--black-0b);
+    transform: translate(-50%, -50px);
+    animation: reaction-shark-accent 1.2s var(--ease-out-quart) calc(var(--impact-delay) + 1130ms) both;
+}
+
+.reaction-impact-shark .reaction-impact-accent::before,
+.reaction-impact-shark .reaction-impact-accent::after {
+    content: '';
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    height: 7px;
+    background: var(--paper);
+    clip-path: polygon(0 0, 8% 100%, 16% 0, 25% 100%, 33% 0, 41% 100%, 50% 0, 58% 100%, 66% 0, 75% 100%, 83% 0, 91% 100%, 100% 0);
+}
+
+.reaction-impact-shark .reaction-impact-accent::before {
+    top: -9px;
+    animation: reaction-shark-jaw-top 1.2s var(--ease-out-expo) calc(var(--impact-delay) + 1130ms) both;
+}
+
+.reaction-impact-shark .reaction-impact-accent::after {
+    bottom: -9px;
+    transform: scaleY(-1);
+    animation: reaction-shark-jaw-bottom 1.2s var(--ease-out-expo) calc(var(--impact-delay) + 1130ms) both;
 }
 
 .reaction-impact-shark i {
-    color: var(--tag-blue);
+    font-size: 15px;
     font-weight: 800;
-    animation: reaction-wave-run 1.8s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+    animation: reaction-shark-drop 1s var(--ease-out-quart)
+               calc(var(--impact-delay) + 1130ms + var(--piece) * 35ms) both;
 }
 
 .reaction-impact-pokerface {
     animation: reaction-impact-hold 2.65s var(--ease-out-quart) var(--impact-delay) both;
 }
 
+/* pokerface: the stillness is the joke. The glyph never moves; the four suits
+   around it vibrate nervously, then all freeze dead at 1.05s (the face did not
+   crack). One lens glint pings, then a deadpan "BLEFE?" appears with no motion
+   at all. Shape (♠ ♦ ♣ ♥) carries the suit, colour is only a bonus. */
+.reaction-impact-pokerface {
+    animation: reaction-impact-hold 2.65s var(--ease-out-quart) var(--impact-delay) both;
+}
+
 .reaction-impact-pokerface::before {
-    inset: 26px;
-    border: 2px solid color-mix(in srgb, var(--paper) 30%, transparent);
-    border-radius: 50%;
-    animation: reaction-shock-ring 1.7s var(--ease-out-expo) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    width: 17px;
+    height: 17px;
+    margin: -15px 0 0 -13px;
+    background: var(--paper);
+    clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+    animation: reaction-pokerface-glint 700ms var(--ease-out-expo) calc(var(--impact-delay) + 1250ms) both;
+}
+
+.reaction-impact-pokerface .reaction-impact-accent {
+    color: var(--paper);
+    text-shadow: 0 1px 0 var(--ink), 0 0 6px var(--ink);
+    transform: translate(-50%, -34px);
+    animation: reaction-pokerface-accent 1.1s steps(1, end) calc(var(--impact-delay) + 1600ms) both;
 }
 
 .reaction-impact-pokerface i {
     color: var(--suit-color, var(--paper));
     font-size: var(--font-size-body);
-    animation: reaction-pokerface-suit 2.1s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+    text-shadow: 0 1px 2px var(--black-0b);
+    animation: reaction-pokerface-suit 2.3s linear
+               calc(var(--impact-delay) + var(--piece) * 37ms) both;
 }
 
-.reaction-impact-pokerface i:nth-child(2),
-.reaction-impact-pokerface i:nth-child(4) {
-    --suit-color: var(--brand-bright);
-}
+.reaction-impact-pokerface i:nth-child(1) { --bx: -40px; --by: -14px }
+.reaction-impact-pokerface i:nth-child(2) { --bx: 40px; --by: -14px; --suit-color: var(--brand-bright) }
+.reaction-impact-pokerface i:nth-child(3) { --bx: -34px; --by: 24px }
+.reaction-impact-pokerface i:nth-child(4) { --bx: 34px; --by: 24px; --suit-color: var(--brand-bright) }
 
 /* Directed gestures: flight arrives at 27%, then the target owns the impact. */
 
@@ -830,95 +1233,316 @@
     height: calc(var(--chip-w) + (var(--tier) - 1) * var(--chip-gap));
 }
 
+/* Chip: the contemptuous tip. Eleven chips are FLICKED across the felt from the
+   sender's side (travel is calc() over --reaction-dx/dy, so it re-aims with the
+   seats) and skid flat into a pile; the last one is tossed like a coin, flips
+   edge-on twice, lands on top with a clink ring, and GORJETA snaps in. --chip-k
+   is 1 on the ring and .64 on the compact one (which opts out of the sheet's
+   scale(.64), because the flick travels across the felt in px). */
 .reaction-impact-chip {
-    animation: reaction-impact-hold 2.3s var(--ease-out-quart) var(--impact-delay) both;
+    --chip-k: 1;
+    animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-chip .reaction-impact-accent {
+    color: var(--paper);
+    text-shadow: 0 1px 0 var(--gold-ink), 0 0 8px var(--gold-deep);
+    transform: translate(-50%, calc(-50% - 40px * var(--chip-k)));
+    animation: reaction-banner-snap 1.2s var(--ease-out-expo) calc(var(--impact-delay) + 1300ms) both;
+}
+
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-chip { transform: none; --chip-k: .64 }
 }
 
 /* Each piece leaves on its own bearing, hops, lands flat and settles. The
    drop-shadow is what puts it *on* the felt rather than floating over it. */
 .reaction-jackpot-stack {
-    --chip-w: 21px;
+    --chip-w: calc(21px * var(--chip-k, 1));
+    --chip-from-x: calc(clamp(-72px, var(--reaction-dx) * -.2, 72px) * var(--chip-k, 1));
+    --chip-from-y: calc(clamp(-72px, var(--reaction-dy) * -.2, 72px) * var(--chip-k, 1));
     width: var(--chip-w);
     height: calc(var(--chip-w) + (var(--tier) - 1) * var(--chip-gap));
     margin: calc(var(--chip-w) / -2) calc(var(--chip-w) / -2);
     filter: drop-shadow(0 3px 3px var(--black-06));
-    animation: reaction-chip-scatter 2s cubic-bezier(.22, .7, .35, 1)
-               calc(var(--impact-delay) + var(--piece) * 16ms) both;
+    transform: none;
+    animation: reaction-chip-flick 1.5s cubic-bezier(.22, .7, .35, 1)
+               calc(var(--impact-delay) + 60ms + var(--piece) * 45ms) both;
+}
+
+/* The last piece is the tip: tossed from low on the sender's side, flipping. */
+.reaction-impact-chip .reaction-jackpot-stack:nth-child(3) {
+    animation: reaction-chip-toss 1.7s linear calc(var(--impact-delay) + 300ms) both;
 }
 
 /* The impact reads as a hit, not a glare: one crisp rim that expands and dies.
    The old filled gold radial was the yellow smear over the whole burst. */
-.reaction-chip-flash {
-    width: 30px;
-    height: 30px;
-    margin: -15px;
+.reaction-impact-chip .reaction-chip-flash {
+    left: 50%;
+    top: 50%;
+    width: calc(30px * var(--chip-k, 1));
+    height: calc(30px * var(--chip-k, 1));
+    margin: calc(-15px * var(--chip-k, 1));
     border: 2px solid color-mix(in srgb, var(--gold-pale) 78%, transparent);
     background: none;
-    animation: reaction-shock-ring 900ms var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-shock-ring 900ms var(--ease-out-expo) calc(var(--impact-delay) + 1330ms) both;
 }
 
-.reaction-impact-coffee {
-    animation: reaction-impact-hold 2.45s var(--ease-out-quart) var(--impact-delay) both;
+/* Coffee: room service. The cup SLIDES in from the sender along the sender-target line
+   (px travel on --reaction-dx/dy, so it re-aims with the seats), skids past, settles and
+   sloshes, steam rises, and the ring it leaves on the felt is the punchline: it swells
+   into a caffeine shockwave (four jittering ticks + ACORDOU?) while the cup hops. */
+.reaction-impact.reaction-impact-coffee {
+    --coffee-r: 38px;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    animation: reaction-coffee-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-coffee::before {
     content: '☕';
-    left: 48px;
-    top: 43px;
-    font-size: 34px;
-    animation: reaction-cup-land 1.7s var(--ease-out-quart) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    z-index: 1;
+    margin: -20px 0 0 -20px;
+    font-size: 38px;
+    line-height: 1;
+    animation: reaction-coffee-slide 2.5s linear var(--impact-delay) both;
 }
 
-.reaction-impact-coffee i {
-    left: calc(51px + var(--piece) * 10px);
-    top: 30px;
+.reaction-impact-coffee::after {
+    left: 50%;
+    top: 50%;
+    width: 40px;
+    height: 40px;
+    margin: -16px 0 0 -20px;
+    border: 3px solid color-mix(in srgb, var(--tag-orange) 38%, var(--gold-ink));
+    border-radius: 50%;
+    animation: reaction-coffee-stain 2.5s linear var(--impact-delay) both;
+}
+
+.reaction-impact-coffee .reaction-impact-accent {
+    color: var(--tag-yellow);
+    transform: translate(-50%, -66px);
+    animation: reaction-banner-snap 1.1s var(--ease-out-expo) calc(var(--impact-delay) + 1240ms) both;
+}
+
+/* Pieces 0-2 are steam wisps, 3-6 the caffeine jolt ticks. */
+.reaction-impact.reaction-impact-coffee i {
+    left: calc(50% + (var(--piece) - 1) * 9px - 4px);
+    top: calc(50% - 50px);
     width: 8px;
-    height: 37px;
+    height: 34px;
     overflow: hidden;
+    border: 0;
+    border-radius: 0;
     color: var(--paper);
     font: 800 var(--font-size-body) var(--font-mono);
-    filter: blur(.7px);
+    filter: none;
     animation: reaction-coffee-steam 1.75s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 110ms) both;
+               calc(var(--impact-delay) + 520ms + var(--piece) * 110ms) both;
 }
 
-.reaction-impact-clover,
-.reaction-impact-horseshoe {
+.reaction-impact.reaction-impact-coffee i:nth-child(n+4) {
+    left: 50%;
+    top: 50%;
+    width: 4px;
+    height: 12px;
+    margin: -6px 0 0 -2px;
+    border-radius: 2px;
+    background: var(--tag-yellow);
+    animation: reaction-coffee-jolt 1s var(--ease-out-expo) calc(var(--impact-delay) + 1200ms) both;
+}
+
+/* Travels in px across the felt, so it opts out of the compact scale and sizes itself. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-coffee { transform: none }
+    .reaction-impact.reaction-impact-coffee { --coffee-r: 26px }
+    .reaction-impact-coffee::before { margin: -14px 0 0 -14px; font-size: 27px }
+    .reaction-impact-coffee::after { width: 27px; height: 27px; margin: -11px 0 0 -14px; border-width: 2px }
+    .reaction-impact-coffee .reaction-impact-accent { transform: translate(-50%, -44px) }
+    .reaction-impact.reaction-impact-coffee i { top: calc(50% - 36px); height: 24px }
+    .reaction-impact.reaction-impact-coffee i:nth-child(n+4) { top: 50%; height: 9px }
+}
+
+/* Clover: an ironic benediction. The gift lobs in slowly like a falling leaf, then a
+   four-leaf clover assembles over the target leaf by leaf, a halo drops on, gold dust
+   rains down, AMÉM. The fourth (top) leaf is late and, once it lands, goes limp while
+   the halo slips: "you will need it". Every length is N * --u so the compact ring
+   (which opts out of the shared scale(.64) to keep the lob in real px) just shrinks --u.
+   The .reaction-impact.reaction-impact-clover selectors beat the legacy renderer.css rules. */
+.table-reaction-effect.thrown.reaction-clover {
+    animation: reaction-clover-lob 3.3s var(--ease-out-quart) both;
+}
+
+.reaction-impact.reaction-impact-clover {
+    --u: 1px;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
     animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-clover::before {
-    content: '🍀';
-    left: 49px;
-    top: 43px;
-    font-size: 34px;
-    animation: reaction-clover-bloom 1.8s var(--ease-out-expo) var(--impact-delay) both;
-}
+.reaction-impact.reaction-impact-clover > .reaction-impact-particles { inset: 0 }
 
-.reaction-impact-clover::after {
-    inset: 29px;
+.reaction-impact.reaction-impact-clover::before {
+    content: '';
+    left: 50%;
+    top: 50%;
+    width: calc(34 * var(--u));
+    height: calc(12 * var(--u));
+    margin: calc(-46 * var(--u)) 0 0 calc(-17 * var(--u));
+    border: calc(2.5 * var(--u)) solid var(--gold);
     border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--success) 38%, transparent), transparent 70%);
-    animation: reaction-shock-ring 1.7s var(--ease-out-expo) var(--impact-delay) both;
+    box-shadow: 0 0 calc(8 * var(--u)) var(--gold);
+    animation: reaction-clover-halo 2s var(--ease-out-quart) calc(var(--impact-delay) + 300ms) both;
 }
 
-.reaction-impact-clover i,
-.reaction-impact-horseshoe i {
+.reaction-impact.reaction-impact-clover::after {
+    left: 50%;
+    top: 50%;
+    width: calc(70 * var(--u));
+    height: calc(70 * var(--u));
+    margin: calc(-35 * var(--u)) 0 0 calc(-35 * var(--u));
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--gold) 55%, transparent), transparent 68%);
+    animation: reaction-clover-glow 1.4s var(--ease-out-expo) calc(var(--impact-delay) + 820ms) both;
+}
+
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    font-size: 0;
+    filter: none;
+    transform: none;
+}
+
+/* Leaves: lens shapes (two opposite sharp corners), pivoted on the clover's centre. */
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(-n+4) {
+    width: calc(15 * var(--u));
+    height: calc(19 * var(--u));
+    margin: calc(-9.5 * var(--u)) 0 0 calc(-7.5 * var(--u));
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+    background: linear-gradient(135deg, var(--success), var(--tag-green));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paper) 45%, transparent),
+                0 0 calc(7 * var(--u)) color-mix(in srgb, var(--gold) 60%, transparent);
+    rotate: calc(var(--piece) * 90deg);
+    animation: reaction-clover-leaf 1.9s var(--ease-out-expo) calc(var(--impact-delay) + var(--leaf-at, 0ms)) both;
+}
+
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(1) {
+    --leaf-at: 640ms;
+    animation-name: reaction-clover-leaf-late;
+    animation-duration: 1.6s;
+}
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(2) { --leaf-at: 0ms }
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(3) { --leaf-at: 150ms }
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(4) { --leaf-at: 300ms }
+
+/* Gold dust: one speck plus box-shadow specks per element, falling over the target. */
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(n+5) {
+    width: calc(3 * var(--u));
+    height: calc(3 * var(--u));
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: calc(-24 * var(--u)) calc(-4 * var(--u)) 0 var(--gold-pale),
+                calc(-11 * var(--u)) calc(-16 * var(--u)) 0 var(--gold),
+                calc(13 * var(--u)) calc(-10 * var(--u)) 0 var(--gold-pale),
+                calc(25 * var(--u)) calc(2 * var(--u)) 0 var(--gold),
+                calc(-3 * var(--u)) calc(11 * var(--u)) 0 var(--gold-pale);
+    animation: reaction-clover-dust 1.4s var(--ease-out-quart) calc(var(--impact-delay) + 520ms) both;
+}
+
+.reaction-impact.reaction-impact-clover .reaction-impact-particles i:nth-child(6) {
+    translate: calc(8 * var(--u)) calc(-8 * var(--u));
+    animation-delay: calc(var(--impact-delay) + 800ms);
+}
+
+.reaction-impact-clover .reaction-impact-accent {
     color: var(--gold-pale);
-    animation: reaction-suit-orbit 2s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 70ms) both;
+    text-shadow: 0 1px 3px var(--black-0b), 0 0 8px color-mix(in srgb, var(--gold) 70%, transparent);
+    transform: translate(-50%, calc(var(--u, 1px) * 34));
+    animation: reaction-banner-snap 1.5s var(--ease-out-expo) calc(var(--impact-delay) + 1000ms) both;
+}
+
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-clover { transform: none }
+    .reaction-impact.reaction-impact-clover { --u: .64px }
+    .reaction-impact-clover .reaction-impact-accent { transform: translate(-50%, 46px) }
+}
+
+/* Horseshoe: the lucky charm is a magnet. It clamps onto the target (a ring of
+   field contracts onto it, the target's chips - gold stars - snap onto the poles),
+   then it YANKS the haul back along the sender-target line with a rubber-band
+   overshoot and SÓ SORTE lands on the felt where the stars were pulled to. Travel is
+   calc() over the measured --reaction-dx/dy (target -> sender is the negative), and
+   the compact sheet's scale(.64) is opted out because of it. */
+.reaction-impact.reaction-impact-horseshoe {
+    --horseshoe-r: 46px;
+    --horseshoe-pull: .34;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    animation: reaction-impact-hold 2.4s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-horseshoe::before {
     content: '🧲';
-    left: 48px;
-    top: 39px;
-    font-size: 35px;
-    animation: reaction-horseshoe-slam 1.85s var(--ease-out-quart) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    margin: -20px 0 0 -20px;
+    font-size: 40px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 5px var(--black-0b));
+    animation: reaction-horseshoe-clamp 2.2s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-horseshoe i {
+.reaction-impact-horseshoe::after {
+    left: 50%;
+    top: 50%;
+    width: 120px;
+    height: 120px;
+    margin: -60px 0 0 -60px;
+    border: 2px dashed color-mix(in srgb, var(--gold) 80%, transparent);
+    border-radius: 50%;
+    animation: reaction-horseshoe-field 1s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact.reaction-impact-horseshoe i {
+    left: 50%;
+    top: 50%;
+    width: auto;
+    height: auto;
+    margin: -8px 0 0 -8px;
     color: var(--gold);
+    font-size: 16px;
+    line-height: 1;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--gold) 70%, transparent);
+    transform: none;
+    animation: reaction-horseshoe-filing 2.2s ease-in-out var(--impact-delay) both;
+}
+
+.reaction-impact-horseshoe .reaction-impact-accent {
+    margin: 0;
+    color: var(--paper);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--gold) 85%, transparent), 0 2px 3px var(--black-0b);
+    transform: translate(calc(-50% - var(--reaction-dx) * var(--horseshoe-pull)),
+                         calc(-50% - var(--reaction-dy) * var(--horseshoe-pull) + 34px));
+    animation: reaction-banner-snap 1.4s var(--ease-out-expo) calc(var(--impact-delay) + 1000ms) both;
+}
+
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-horseshoe { transform: none }
+    .reaction-impact.reaction-impact-horseshoe { --horseshoe-r: 30px }
+    .reaction-impact-horseshoe::before { margin: -14px 0 0 -14px; font-size: 28px }
+    .reaction-impact-horseshoe::after { width: 76px; height: 76px; margin: -38px 0 0 -38px }
+    .reaction-impact.reaction-impact-horseshoe i { margin: -6px 0 0 -6px; font-size: 12px }
+    .reaction-impact-horseshoe .reaction-impact-accent {
+        transform: translate(calc(-50% - var(--reaction-dx) * var(--horseshoe-pull)),
+                             calc(-50% - var(--reaction-dy) * var(--horseshoe-pull) + 24px));
+    }
 }
 
 .reaction-impact-tear {
@@ -939,7 +1563,7 @@
     border-radius: 50%;
     background: radial-gradient(ellipse at 50% 50%,
         color-mix(in srgb, var(--tag-blue) 24%, transparent), transparent 70%);
-    animation: reaction-splash-ring 1.7s var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-splash-ring 2.2s var(--ease-out-expo) var(--impact-delay) both;
 }
 
 .reaction-impact-tear::after {
@@ -947,7 +1571,7 @@
     --drop-h: 19px;
     left: 50%;
     top: 50%;
-    animation: reaction-splash-jet 1.6s var(--ease-out-quart)
+    animation: reaction-splash-jet 2.2s var(--ease-out-quart)
                calc(var(--impact-delay) + 40ms) both;
 }
 
@@ -970,11 +1594,41 @@
 .reaction-impact-tear i:nth-child(4) { --apex-x: 17px; --apex-y: -48px; --land-x: 29px; --land-y: 19px }
 .reaction-impact-tear i:nth-child(5) { --apex-x: -42px; --apex-y: -23px; --land-x: -65px; --land-y: 11px }
 .reaction-impact-tear i:nth-child(6) { --apex-x: 43px; --apex-y: -24px; --land-x: 66px; --land-y: 12px }
-.reaction-impact-tear i:nth-child(7) { --apex-x: -5px; --apex-y: -54px; --land-x: -8px; --land-y: 23px }
-.reaction-impact-tear i:nth-child(8) { --apex-x: 6px; --apex-y: -53px; --land-x: 10px; --land-y: 22px }
 
-.reaction-impact-tomato,
-.reaction-impact-poop {
+/* Dedo na ferida: the splash is the setup. A second drop falls into the crater
+   (the jet's keyframes) and the ring pulses again; then VIOLINO snaps in and two
+   sad notes drift up. Pieces 7-8 are the notes, not droplets. */
+.reaction-impact-tear .reaction-impact-particles i:nth-child(n + 7) {
+    width: auto;
+    height: auto;
+    margin: -8px 0 0 -5px;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--paper);
+    font: 800 15px/1 var(--font-mono);
+    text-shadow: 0 0 6px var(--tag-blue), 0 1px 2px var(--black-0b);
+    animation: reaction-tear-note 1s ease-out calc(var(--impact-delay) + 560ms + var(--piece) * 120ms) both;
+}
+
+.reaction-impact-tear .reaction-impact-particles i:nth-child(8) { --note-x: 16px }
+.reaction-impact-tear .reaction-impact-particles i:nth-child(7) { --note-x: -16px }
+
+.reaction-impact-tear .reaction-impact-accent {
+    margin: 0;
+    color: var(--paper);
+    text-shadow: 0 0 8px var(--tag-blue), 0 2px 3px var(--black-0b);
+    transform: translate(-50%, 34px);
+    animation: reaction-banner-snap 1.2s var(--ease-out-expo) calc(var(--impact-delay) + 1250ms) both;
+}
+
+/* Compact seats are an avatar with the stack readout right below it: put the
+   banner on the cards above instead of on the number. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .reaction-impact-tear .reaction-impact-accent { transform: translate(-50%, -52px) }
+}
+
+.reaction-impact-tomato {
     animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
@@ -985,139 +1639,388 @@
     box-shadow: -22px 6px 0 -9px color-mix(in srgb, var(--danger) 70%, transparent),
                 24px -3px 0 -11px color-mix(in srgb, var(--danger) 66%, transparent),
                 9px 22px 0 -13px color-mix(in srgb, var(--danger) 72%, transparent);
-    animation: reaction-splat 1.9s var(--ease-out-expo) var(--impact-delay) both;
+    transform-origin: 50% 12%;
+    animation: reaction-tomato-splat 2s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+/* Signature: the tomato lands flat and wide, then the pulp slumps and a long
+   drip runs down the face. Three seeds fly off, three juice drops fall. */
+.reaction-impact-tomato::after {
+    left: 50%;
+    top: 58px;
+    width: 9px;
+    height: 40px;
+    margin-left: -5px;
+    border-radius: 4px 4px 50% 50%;
+    background: var(--danger);
+    transform-origin: 50% 0;
+    animation: reaction-tomato-drip 1.9s cubic-bezier(.45, .05, .55, 1)
+               calc(var(--impact-delay) + 260ms) both;
 }
 
 .reaction-impact-tomato .reaction-impact-accent {
     top: 61px;
     color: var(--paper);
     transform: translate(-50%, -50%) rotate(-8deg);
-    animation: reaction-splat-word 1.75s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-tomato-word 1.9s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-tomato i {
-    width: 8px;
-    height: 8px;
+    --seed-x: 0px;
+    --seed-y: -30px;
+    width: 6px;
+    height: 6px;
+    margin: -3px;
     border-radius: 50%;
     background: var(--danger);
-    animation: reaction-splat-drop 1.7s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 45ms) both;
+    animation: reaction-tomato-fall 1.2s cubic-bezier(.5, 0, .9, .6)
+               calc(var(--impact-delay) + 90ms + var(--piece) * 70ms) both;
 }
 
-.reaction-impact-poop::before {
-    inset: 35px 25px;
-    border-radius: 46% 54% 51% 49%;
-    background: var(--reaction-muck);
-    box-shadow: -22px 6px 0 -9px color-mix(in srgb, var(--reaction-muck) 78%, transparent),
-                24px -3px 0 -11px color-mix(in srgb, var(--reaction-muck-deep) 82%, transparent),
-                9px 22px 0 -13px color-mix(in srgb, var(--reaction-muck) 72%, transparent);
-    animation: reaction-splat 1.9s var(--ease-out-expo) var(--impact-delay) both;
-}
-
-.reaction-impact-poop::after {
-    left: 34px;
-    top: 22px;
-    width: 64px;
-    height: 64px;
+.reaction-impact-tomato i:nth-child(-n+3) {
+    width: 5px;
+    height: 9px;
+    margin: -4px -2px;
     border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--reaction-muck) 26%, transparent), transparent 70%);
-    filter: blur(9px);
-    animation: reaction-stink-cloud 2s var(--ease-out-quart) var(--impact-delay) both;
+    background: color-mix(in srgb, var(--gold) 55%, var(--paper));
+    animation-name: reaction-tomato-seed;
+    animation-duration: 1.3s;
+    animation-timing-function: cubic-bezier(.2, .62, .4, 1);
 }
 
-.reaction-impact-poop .reaction-impact-accent {
-    top: 61px;
-    color: var(--paper);
-    transform: translate(-50%, -50%) rotate(-8deg);
-    animation: reaction-splat-word 1.75s var(--ease-out-quart) var(--impact-delay) both;
-}
+.reaction-impact-tomato i:nth-child(1) { --seed-x: -46px; --seed-y: -34px }
+.reaction-impact-tomato i:nth-child(2) { --seed-x: 12px; --seed-y: -46px }
+.reaction-impact-tomato i:nth-child(3) { --seed-x: 50px; --seed-y: -26px }
+.reaction-impact-tomato i:nth-child(4) { --seed-x: -26px; --seed-y: 18px }
+.reaction-impact-tomato i:nth-child(5) { --seed-x: 22px; --seed-y: 24px }
+.reaction-impact-tomato i:nth-child(6) { --seed-x: 38px; --seed-y: 10px }
 
-.reaction-impact-poop i {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--reaction-muck-deep);
-    animation: reaction-splat-drop 1.7s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 45ms) both;
-}
-
-.reaction-impact-rofl {
+/* Poop: PLOP. A soft-serve coil drops onto the spot, squashes flat, bounces once
+   and settles, PLOFT pops at the squash, then the stink takes over: two wavy
+   fumes rise in a column and three flies orbit the mound. Nothing travels across
+   the felt, so no compact opt-out. The doubled class beats renderer.css's legacy
+   .reaction-impact-poop box (90x62 + tomato splat). */
+.reaction-impact.reaction-impact-poop {
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-rofl .reaction-impact-accent {
-    top: 29px;
+.reaction-impact-poop::before {
+    left: 31px;
+    top: 40px;
+    width: 70px;
+    height: 62px;
+    background:
+        radial-gradient(ellipse 7% 9% at 53% 12%, var(--reaction-muck) 0 92%, transparent 100%),
+        radial-gradient(ellipse 22% 15% at 50% 31%, var(--reaction-muck) 0 92%, transparent 100%),
+        radial-gradient(ellipse 22% 15% at 50% 37%, var(--reaction-muck-deep) 0 92%, transparent 100%),
+        radial-gradient(ellipse 36% 17% at 50% 53%, var(--reaction-muck) 0 92%, transparent 100%),
+        radial-gradient(ellipse 36% 17% at 50% 60%, var(--reaction-muck-deep) 0 92%, transparent 100%),
+        radial-gradient(ellipse 50% 19% at 50% 79%, var(--reaction-muck) 0 92%, transparent 100%),
+        radial-gradient(ellipse 50% 19% at 50% 86%, var(--reaction-muck-deep) 0 92%, transparent 100%);
+    transform-origin: 50% 100%;
+    animation: reaction-poop-plop 2.3s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-poop::after {
+    left: 26px;
+    top: 4px;
+    width: 80px;
+    height: 70px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--success) 22%, transparent), transparent 68%);
+    animation: reaction-poop-haze 2.1s var(--ease-out-quart) calc(var(--impact-delay) + 300ms) both;
+}
+
+.reaction-impact-poop .reaction-impact-accent {
+    top: 22px;
+    color: var(--paper);
+    font-size: 15px;
+    text-shadow: 0 0 6px var(--reaction-muck-deep), 0 2px 2px var(--black-0b);
+    transform: translate(-50%, -50%) rotate(-6deg);
+    animation: reaction-poop-word 1.8s var(--ease-out-quart) calc(var(--impact-delay) + 230ms) both;
+}
+
+.reaction-impact-poop i {
+    --orbit: 34px;
+    width: 6px;
+    height: 6px;
+    margin: -3px;
+    border-radius: 50%;
+    background: var(--black-0b);
+    box-shadow: 3px -2px 0 -1px color-mix(in srgb, var(--paper) 55%, transparent);
+    animation: reaction-poop-fly 1.7s ease-in-out calc(var(--impact-delay) + 500ms) both;
+}
+
+.reaction-impact-poop i:nth-child(2) { --orbit: 42px }
+.reaction-impact-poop i:nth-child(3) { --orbit: 29px }
+
+/* Fumes (pieces 4-5): wavy tongues that rise and sway, skew flipping like a wave. */
+.reaction-impact-poop i:nth-child(n + 4) {
+    --sway: 7px;
+    width: 12px;
+    height: 44px;
+    margin: -30px -6px;
+    border: 3px solid color-mix(in srgb, var(--paper) 45%, var(--success));
+    border-width: 0 0 0 3px;
+    border-radius: 50% 10% 50% 10%;
+    background: none;
+    box-shadow: none;
+    animation: reaction-poop-fume 1.7s ease-out calc(var(--impact-delay) + 420ms) both;
+}
+
+.reaction-impact-poop i:nth-child(4) { --sway: -8px; margin-left: -20px }
+.reaction-impact-poop i:nth-child(5) { margin-left: 8px; animation-delay: calc(var(--impact-delay) + 640ms) }
+
+/* Rofl: laughing AT someone. The flying 🤣 lands and ROLLS on the floor (its own
+   rocking roll, below), laugh-tears spray off it, and two "HA" bubbles ricochet
+   between the target and the sender's seat: the echo of the laugh going back where
+   it came from. --u scales the static sizes; the impact opts out of the compact
+   sheet's scale(.64) because the echo travels the felt in px (calc over
+   --reaction-dx/dy, bow on the perpendicular (-dy, dx)). */
+.table-reaction-effect.thrown.reaction-rofl .reaction-projectile {
+    animation: reaction-rofl-floor 3.3s ease-in-out both;
+}
+
+.reaction-impact.reaction-impact-rofl {
+    --u: 1;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-rofl::before,
+.reaction-impact-rofl::after {
+    left: 50%;
+    top: 50%;
+    width: calc(30px * var(--u));
+    height: calc(18px * var(--u));
+    margin: calc(-9px * var(--u)) 0 0 calc(-15px * var(--u));
+    border-radius: calc(9px * var(--u)) calc(9px * var(--u)) calc(9px * var(--u)) 2px;
+    font: 800 calc(10px * var(--u)) / calc(18px * var(--u)) var(--font-mono);
+    letter-spacing: .06em;
+    text-align: center;
+    box-shadow: 0 2px 6px var(--black-0b);
+    opacity: 0;
+}
+
+.reaction-impact-rofl::before {
+    content: 'HA';
+    background: var(--tag-purple);
+    color: var(--paper);
+    animation: reaction-rofl-echo 1.9s ease-in-out calc(var(--impact-delay) + 60ms) both;
+}
+
+.reaction-impact-rofl::after {
+    content: 'HÁ';
+    background: var(--paper);
     color: var(--tag-purple);
-    transform: translateX(-50%);
-    animation: reaction-banner-snap 1.6s var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-rofl-echo 1.9s ease-in-out calc(var(--impact-delay) + 380ms) both;
 }
 
-.reaction-impact-rofl i {
-    top: 58%;
-    font-size: 21px;
-    animation: reaction-rofl-roll 1.9s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 130ms) both;
+.reaction-impact-rofl .reaction-impact-accent {
+    color: var(--paper);
+    text-shadow: 0 0 8px var(--tag-purple), 0 1px 2px var(--black-0b);
+    transform: translate(-50%, calc(-50% - 54px * var(--u)));
+    animation: reaction-banner-snap 1.5s var(--ease-out-expo) calc(var(--impact-delay) + 560ms) both;
 }
 
-.reaction-impact-rofl i:nth-child(1) { left: 22% }
-.reaction-impact-rofl i:nth-child(2) { left: 50% }
-.reaction-impact-rofl i:nth-child(3) { left: 78% }
+.reaction-impact.reaction-impact-rofl i {
+    left: 50%;
+    top: 50%;
+    width: calc(7px * var(--u));
+    height: calc(10px * var(--u));
+    margin: calc(-5px * var(--u)) 0 0 calc(-3.5px * var(--u));
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+    background: color-mix(in srgb, var(--tag-blue) 62%, var(--paper));
+    font-size: 0;
+    opacity: 0;
+    transform: none;
+    animation: reaction-rofl-tear 1.3s ease-out calc(var(--impact-delay) + 80ms + var(--piece) * 70ms) both;
+}
+
+.reaction-impact-rofl i:nth-child(1) { --tx: -36; --up: -26 }
+.reaction-impact-rofl i:nth-child(2) { --tx: -20; --up: -40 }
+.reaction-impact-rofl i:nth-child(3) { --tx: 6; --up: -46 }
+.reaction-impact-rofl i:nth-child(4) { --tx: 24; --up: -38 }
+.reaction-impact-rofl i:nth-child(5) { --tx: 40; --up: -24 }
+
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-rofl { transform: none; --u: .8 }
+}
 
 .reaction-impact-duck,
 .reaction-impact-flowers {
     animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-duck::before {
-    content: '🦆';
-    left: 47px;
-    top: 42px;
-    font-size: 37px;
-    animation: reaction-duck-waddle 1.8s var(--ease-out-quart) var(--impact-delay) both;
+/* Duck: a CSS rubber duck (body + head/eye + beak, no OS emoji) drops onto the target,
+   squashes like a squeaky toy (QUÁ! pops with the same squeeze), ripples a puddle and
+   then floats there listing to one side, a lame duck. Five CSS feather leaves drift
+   down. Particles: i1 = the duck, i2..i6 = feathers. Nothing travels the felt, so the
+   shared compact scale(.64) is fine. */
+.reaction-impact.reaction-impact-duck::before,
+.reaction-impact.reaction-impact-duck::after {
+    left: 50%;
+    top: calc(50% + 17px);
+    width: 62px;
+    height: 62px;
+    margin: -31px 0 0 -31px;
+    border-radius: 50%;
 }
 
-.reaction-impact-duck .reaction-impact-accent {
-    top: 30px;
+.reaction-impact.reaction-impact-duck::before {
+    background: color-mix(in srgb, var(--tag-blue) 38%, transparent);
+    animation: reaction-duck-puddle 2.1s var(--ease-out-expo) calc(var(--impact-delay) + 500ms) both;
+}
+
+.reaction-impact.reaction-impact-duck::after {
+    border: 2px solid color-mix(in srgb, var(--paper) 75%, var(--tag-blue));
+    animation: reaction-duck-ripple 1.6s ease-out calc(var(--impact-delay) + 520ms) both;
+}
+
+.reaction-impact.reaction-impact-duck .reaction-impact-accent {
+    top: calc(50% - 40px);
     color: var(--tag-yellow);
-    transform: translateX(-50%) rotate(-5deg);
-    animation: reaction-laugh-label 1.7s var(--ease-out-quart) var(--impact-delay) both;
+    text-shadow: 0 1px 3px var(--black);
+    transform: translate(-50%, -50%) rotate(-6deg);
+    animation: reaction-duck-squeak 1.55s var(--ease-out-expo) calc(var(--impact-delay) + 480ms) both;
 }
 
-.reaction-impact-duck i,
-.reaction-impact-flowers i {
-    font-size: 15px;
-    animation: reaction-feather-fall 1.95s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 75ms) both;
+.reaction-impact.reaction-impact-duck .reaction-impact-particles i {
+    left: 50%;
+    top: 50%;
+    width: 5px;
+    height: 11px;
+    margin: -5px 0 0 -2px;
+    border-radius: 0 100% 0 100%;
+    background: var(--paper);
+    box-shadow: none;
+    font-size: 0;
+    opacity: 0;
+    transform: none;
+    animation: reaction-duck-feather 1.9s ease-out
+               calc(var(--impact-delay) + 520ms + var(--piece) * 45ms) both;
 }
 
-.reaction-impact-turtle::before {
-    content: '🐢';
-    left: 48px;
-    top: 47px;
-    font-size: 34px;
-    animation: reaction-turtle-tank 2.05s var(--ease-out-quart) var(--impact-delay) both;
+.reaction-impact-duck .reaction-impact-particles i:nth-child(2) { --fx: -34px; --fr: -140deg }
+.reaction-impact-duck .reaction-impact-particles i:nth-child(3) { --fx: -14px; --fr: 120deg }
+.reaction-impact-duck .reaction-impact-particles i:nth-child(4) { --fx: 10px; --fr: -110deg }
+.reaction-impact-duck .reaction-impact-particles i:nth-child(5) { --fx: 28px; --fr: 150deg }
+.reaction-impact-duck .reaction-impact-particles i:nth-child(6) { --fx: 42px; --fr: -90deg }
+
+.reaction-impact.reaction-impact-duck .reaction-impact-particles i:nth-child(1) {
+    top: calc(50% + 6px);
+    width: 30px;
+    height: 22px;
+    margin: -11px 0 0 -15px;
+    border-radius: 50% 50% 46% 46% / 62% 62% 38% 38%;
+    background: radial-gradient(ellipse at 42% 62%,
+                color-mix(in srgb, var(--tag-orange) 38%, var(--tag-yellow)) 0 5px, transparent 6px),
+                var(--tag-yellow);
+    transform-origin: 50% 85%;
+    animation: reaction-duck-plop 2.3s var(--ease-out-quart) calc(var(--impact-delay) + 40ms) both;
 }
 
-.reaction-impact-knife {
-    animation: reaction-impact-hold 3.1s var(--ease-out-quart) var(--impact-delay) both;
+/* head with an eye, and the beak; both ride the body's transform */
+.reaction-impact-duck .reaction-impact-particles i:nth-child(1)::before,
+.reaction-impact-duck .reaction-impact-particles i:nth-child(1)::after {
+    content: '';
+    position: absolute;
 }
 
-.reaction-impact-knife::before {
-    left: 53px;
-    top: 53px;
-    width: 26px;
-    height: 26px;
+.reaction-impact-duck .reaction-impact-particles i:nth-child(1)::before {
+    right: -3px;
+    top: -12px;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 66% 42%, var(--black) 0 1.6px, transparent 2.2px), var(--tag-yellow);
+}
+
+.reaction-impact-duck .reaction-impact-particles i:nth-child(1)::after {
+    right: -10px;
+    top: -5px;
+    width: 9px;
+    height: 5px;
+    border-radius: 2px 50% 50% 2px;
+    background: var(--tag-orange);
+}
+
+/* Knife, "Pelas costas": Brutus. The thrown dagger lands as usual, then a second one
+   (::before, the flat Noto SVG) swings in from the side AWAY from the sender and
+   thunks into the target's back tip first (--wx/--wy: a short step along the
+   sender-target line, calc over --reaction-dx/dy so it re-aims with the seats), quivers
+   around its tip, and the wound flashes (::after) and drips (the bleed material below)
+   before the ET TU? banner lands. This impact opts out of the compact scale(.64)
+   (the knife's angle and offset are in real px) and sizes itself with --knife-k. */
+.reaction-impact.reaction-impact-knife {
+    --knife-k: 1;
+    --ks: calc(46px * var(--knife-k));
+    --wx: calc(clamp(-30px, var(--reaction-dx) * .14, 30px) * var(--knife-k));
+    --wy: calc(clamp(-8px, var(--reaction-dy) * .14, 24px) * var(--knife-k));
+    --knife-turn: calc(atan2(var(--reaction-dy), var(--reaction-dx)) + 45deg);
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    animation: reaction-impact-hold 2.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact.reaction-impact-knife::before {
+    inset: auto;
+    left: calc(50% + var(--wx) - var(--ks) * .03);
+    top: calc(50% + var(--wy) - var(--ks) * .97);
+    width: var(--ks);
+    height: var(--ks);
     margin: 0;
+    border-radius: 0;
+    background: url('/emoji/1f5e1-fe0f.svg') center / contain no-repeat;
+    filter: drop-shadow(0 2px 2px var(--black-0b));
+    transform-origin: 3% 97%;
+    opacity: 0;
+    animation: reaction-knife-stab 2.3s ease-in-out var(--impact-delay) both;
+}
+
+.reaction-impact.reaction-impact-knife::after {
+    display: block;
+    inset: auto;
+    left: calc(50% + var(--wx) - 16px * var(--knife-k));
+    top: calc(50% + var(--wy) - 16px * var(--knife-k));
+    width: calc(32px * var(--knife-k));
+    height: calc(32px * var(--knife-k));
+    margin: 0;
+    border: 2px solid color-mix(in srgb, var(--paper) 75%, transparent);
     border-radius: 50%;
     background: radial-gradient(circle,
         color-mix(in srgb, var(--danger) 62%, transparent),
         transparent 70%);
     opacity: 0;
-    animation: reaction-flash-pop 420ms var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-flash-pop 480ms var(--ease-out-quart) calc(var(--impact-delay) + 120ms) both;
 }
 
-.reaction-impact-knife::after {
-    display: none;
+.reaction-impact.reaction-impact-knife .reaction-impact-particles {
+    transform: translate(var(--wx), var(--wy)) scale(var(--knife-k));
+}
+
+.reaction-impact.reaction-impact-knife .reaction-impact-accent {
+    padding: 6px 12px;
+    color: var(--paper);
+    font-size: 1.05rem;
+    text-shadow: 0 2px 0 var(--danger);
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 72px * var(--knife-k)));
+    animation: reaction-banner-snap 1.5s var(--ease-out-expo) calc(var(--impact-delay) + 520ms) both;
+}
+
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact.reaction-impact-knife { transform: none; --knife-k: .64 }
+    .reaction-impact.reaction-impact-knife .reaction-impact-accent { font-size: .85rem }
 }
 
 .reaction-impact-knife .reaction-impact-particles i {
@@ -1132,8 +2035,8 @@
         color-mix(in srgb, var(--danger) 92%, transparent) 78%);
     transform-origin: top center;
     opacity: 0;
-    animation: reaction-bleed-drip 2.35s var(--ease-out-quart)
-               calc(var(--impact-delay) + 60ms + var(--piece) * 110ms) both;
+    animation: reaction-bleed-drip 2.1s var(--ease-out-quart)
+               calc(var(--impact-delay) + 180ms + var(--piece) * 100ms) both;
 }
 
 .reaction-impact-knife i:nth-child(1) { left: 45px; height: 26px; --rot: -8deg }
@@ -1145,172 +2048,461 @@
 .reaction-impact-knife i:nth-child(7) { left: 62px; width: 4px; height: 18px; --rot: 3deg }
 .reaction-impact-knife i:nth-child(8) { left: 74px; height: 40px; --rot: -5deg }
 
-.reaction-impact-flowers::before {
-    content: '💐';
-    left: 44px;
-    top: 42px;
-    font-size: 39px;
-    animation: reaction-bouquet-open 1.9s var(--ease-out-expo) var(--impact-delay) both;
+/* Flowers: a funeral bouquet, delivered with a straight face. A CSS bouquet (three
+   heads, leaves, a stem bundle: no OS emoji) is laid on the felt without a bounce, a
+   shadow settles under it, six petals fall slowly and stay where they land, and a black
+   mourning sash reads R.I.P. (opens from the middle, last, at ~650ms after impact).
+   Nothing travels the felt, so the shared compact scale(.64) is fine. Elements:
+   ::before bouquet, ::after ground shadow, accent sash, 6 petals. */
+.reaction-impact.reaction-impact-flowers::before {
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 40px;
+    margin: -32px 0 0 -23px;
+    background:
+        radial-gradient(circle at 23px 9px, var(--gold) 0 2px, var(--paper) 2.4px 7px, transparent 7.6px),
+        radial-gradient(circle at 12px 16px, var(--gold) 0 2px, var(--brand-bright-7) 2.4px 8px, transparent 8.6px),
+        radial-gradient(circle at 34px 16px, var(--gold) 0 2px,
+                        color-mix(in srgb, var(--brand-bright-7) 55%, var(--paper)) 2.4px 8px, transparent 8.6px),
+        radial-gradient(ellipse 8px 4px at 7px 27px, var(--tag-green) 0 80%, transparent 100%),
+        radial-gradient(ellipse 8px 4px at 39px 27px, var(--tag-green) 0 80%, transparent 100%),
+        linear-gradient(color-mix(in srgb, var(--tag-green) 70%, var(--black)),
+                        color-mix(in srgb, var(--tag-green) 70%, var(--black))) 20px 18px / 6px 22px no-repeat;
+    animation: reaction-flowers-lay 1.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-flowers i {
-    color: var(--brand-bright-7);
+.reaction-impact.reaction-impact-flowers::after {
+    left: 50%;
+    top: 50%;
+    width: 70px;
+    height: 14px;
+    margin: 2px 0 0 -35px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, color-mix(in srgb, var(--black) 46%, transparent), transparent 70%);
+    animation: reaction-flowers-hush 1s var(--ease-out-quart) var(--impact-delay) both;
 }
+
+.reaction-impact.reaction-impact-flowers .reaction-impact-accent {
+    top: calc(50% + 26px);
+    padding: 2px 8px;
+    border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+    background: color-mix(in srgb, var(--black) 84%, transparent);
+    color: var(--paper);
+    letter-spacing: .12em;
+    transform: translate(calc(-50% - 12px), -50%) rotate(-5deg);
+    animation: reaction-flowers-sash 800ms var(--ease-out-expo) calc(var(--impact-delay) + 650ms) both;
+}
+
+.reaction-impact.reaction-impact-flowers .reaction-impact-particles i {
+    left: 50%;
+    top: calc(50% - 26px);
+    width: 6px;
+    height: 10px;
+    margin: 0 0 0 -3px;
+    border-radius: 0 100% 0 100%;
+    background: var(--brand-bright-7);
+    font-size: 0;
+    opacity: 0;
+    transform: none;
+    animation: reaction-flowers-petal 1.5s var(--ease-out-quart)
+               calc(var(--impact-delay) + 300ms + var(--piece) * 100ms) both;
+}
+
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(even) { background: var(--paper) }
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(1) { --fx: -38px; --fy: 24px; --fr: 140deg }
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(2) { --fx: -22px; --fy: 30px; --fr: -120deg }
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(3) { --fx: -8px; --fy: 27px; --fr: 100deg }
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(4) { --fx: 10px; --fy: 31px; --fr: -150deg }
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(5) { --fx: 26px; --fy: 25px; --fr: 130deg }
+.reaction-impact-flowers .reaction-impact-particles i:nth-child(6) { --fx: 40px; --fy: 29px; --fr: -90deg }
 
 .reaction-impact-spotlight {
     animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
 }
 
-.reaction-impact-spotlight::before {
-    left: 13px;
-    top: 6px;
-    width: 106px;
-    height: 116px;
-    background: linear-gradient(to bottom, color-mix(in srgb, var(--gold-pale) 48%, transparent), transparent 78%);
-    clip-path: polygon(42% 0, 58% 0, 91% 100%, 9% 100%);
+/* Interrogation lamp: the cone snaps on with a bulb flicker, the target is "caught"
+   (the pool of light startles once), two generic card-back outlines flash in the beam
+   (pure gag shapes, never the target's real cards), dust drifts, FLAGRA! stamps. */
+.reaction-impact.reaction-impact-spotlight::before {
+    left: 50%;
+    top: -26px;
+    width: 124px;
+    height: 150px;
+    margin-left: -62px;
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--gold-pale) 62%, transparent),
+                                color-mix(in srgb, var(--gold-pale) 14%, transparent) 86%);
+    clip-path: polygon(43% 0, 57% 0, 100% 100%, 0 100%);
     transform-origin: top center;
-    animation: reaction-spotlight-sweep 1.9s var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-spotlight-cone 2s linear var(--impact-delay) both;
 }
 
-.reaction-impact-spotlight::after {
-    left: 27px;
-    bottom: 10px;
-    width: 78px;
-    height: 18px;
+.reaction-impact.reaction-impact-spotlight::after {
+    left: 50%;
+    top: 86px;
+    width: 104px;
+    height: 28px;
+    margin-left: -52px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--gold-pale) 34%, transparent);
-    filter: blur(4px);
-    animation: reaction-puddle 1.8s var(--ease-out-quart) var(--impact-delay) both;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--gold-pale) 70%, transparent) 55%, transparent);
+    animation: reaction-spotlight-pool 2s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-spotlight .reaction-impact-accent {
-    top: 64px;
-    color: var(--gold-ink);
-    transform: translate(-50%, -50%);
-    animation: reaction-spotlight-word 1.85s var(--ease-out-quart) var(--impact-delay) both;
+    top: 118px;
+    color: var(--paper);
+    text-shadow: 0 1px 2px var(--black-0b), 0 2px 7px var(--black-08);
+    transform: translate(-50%, -50%) rotate(-4deg);
+    animation: reaction-spotlight-stamp 1.5s var(--ease-out-expo) calc(var(--impact-delay) + 560ms) both;
 }
 
+/* pieces 1-2: ghost card backs; pieces 3-6: dust motes (CSS shapes, text emptied in TSX) */
 .reaction-impact-spotlight i {
-    color: var(--gold-pale);
-    animation: reaction-radial-pop 1.5s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+    font-size: 0;
+    animation: reaction-spotlight-mote 1.6s ease-in-out
+               calc(var(--impact-delay) + 200ms + var(--piece) * 120ms) both;
 }
 
+.reaction-impact-spotlight i:nth-child(n+3) {
+    width: 4px;
+    height: 4px;
+    margin: 0 0 0 calc((var(--piece) - 3.5) * 15px);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--paper) 80%, transparent);
+}
+
+.reaction-impact-spotlight i:nth-child(-n+2) {
+    width: 20px;
+    height: 28px;
+    margin: -48px 0 0 -10px;
+    border: 1.5px solid color-mix(in srgb, var(--paper) 85%, transparent);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--paper) 14%, transparent);
+    rotate: -13deg;
+    translate: -11px 0;
+    animation: reaction-spotlight-ghost 1.1s var(--ease-out-expo) calc(var(--impact-delay) + 330ms) both;
+}
+
+.reaction-impact-spotlight i:nth-child(2) { rotate: 13deg; translate: 11px 0 }
+
+/* compact seats put the stack readout right under the avatar: drop the stamp below it */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .reaction-impact-spotlight .reaction-impact-accent { top: 152px }
+}
+
+/* Crown, "Se vira!": passar a coroa is also passing the problem. A CSS crown that is
+   one size too big drops on the target, squashes into the velvet, bounces, then slips
+   down over one eye; a thud ring + paper confetti fan on landing, SE VIRA! after the
+   slip. Nothing travels the felt, so the shared compact scale(.64) is fine. */
 .reaction-impact-crown {
-    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-crown::before {
-    content: '👑';
-    left: 43px;
-    top: 27px;
-    font-size: 43px;
-    filter: drop-shadow(0 5px 6px var(--black-08));
-    animation: reaction-crown-land 2s var(--ease-out-expo) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 34px;
+    margin: -17px 0 0 -23px;
+    clip-path: polygon(0 100%, 0 18%, 24% 54%, 50% 0, 76% 54%, 100% 18%, 100% 100%);
+    background:
+        radial-gradient(circle at 50% 85%, var(--brand-bright) 0 2.6px, transparent 3.2px),
+        linear-gradient(180deg, var(--gold-pale) 0, var(--gold) 68%,
+                        color-mix(in srgb, var(--gold) 62%, var(--gold-ink)) 68%);
+    animation: reaction-crown-land 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-crown::after {
+    left: 50%;
+    top: 50%;
+    width: 72px;
+    height: 72px;
+    margin: -36px 0 0 -36px;
+    border: 2px solid color-mix(in srgb, var(--gold) 80%, transparent);
+    border-radius: 50%;
+    animation: reaction-crown-thud 1s var(--ease-out-expo) calc(var(--impact-delay) + 330ms) both;
 }
 
 .reaction-impact-crown .reaction-impact-accent {
-    top: 81px;
+    top: 96px;
     padding: 3px 7px;
     border-radius: var(--rounded-xs);
     background: var(--gold);
     color: var(--gold-ink);
-    transform: translateX(-50%);
-    animation: reaction-banner-snap 1.8s var(--ease-out-expo)
-               calc(var(--impact-delay) + 180ms) both;
+    transform: translateX(-50%) rotate(-3deg);
+    animation: reaction-banner-snap 1.6s var(--ease-out-expo)
+               calc(var(--impact-delay) + 640ms) both;
 }
 
+/* five paper streamers (text emptied in TSX): gold, red, paper */
 .reaction-impact-crown i {
-    color: var(--suit-color, var(--paper));
-    animation: reaction-crown-suit 1.9s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 75ms) both;
+    width: 4px;
+    height: 9px;
+    margin: -24px 0 0 -2px;
+    background: var(--gold);
+    animation: reaction-crown-streamer 1.5s var(--ease-out-quart)
+               calc(var(--impact-delay) + 330ms) both;
 }
 
-.reaction-impact-crown i:nth-child(2),
-.reaction-impact-crown i:nth-child(4) {
-    --suit-color: var(--brand-bright);
+.reaction-impact-crown i:nth-child(2n) { background: var(--brand-bright) }
+.reaction-impact-crown i:nth-child(3n) { background: var(--paper) }
+
+/* compact seats: the stack readout sits right under the avatar, so the banner drops below it */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .reaction-impact-crown .reaction-impact-accent { top: 152px }
 }
 
+/* Bandage: first aid for a bad beat. A hairline crack snaps open on the seat, a
+   band-aid (CSS, no glyph) slaps on with a squash, the crack closes under it,
+   three white crosses float up, and after a beat the band-aid sags crooked while
+   the deadpan TALVEZ lands. Nothing travels the felt, the shared compact
+   scale(.64) is fine. Elements: crack, band-aid, 3 crosses, banner. */
 .reaction-impact-bandage {
     animation: reaction-impact-hold 2.65s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-bandage::before {
-    content: '🩹';
-    left: 44px;
-    top: 40px;
-    font-size: 40px;
-    animation: reaction-bandage-seal 1.9s var(--ease-out-expo) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    width: 48px;
+    height: 16px;
+    margin: -8px 0 0 -24px;
+    border-radius: 8px;
+    background:
+        linear-gradient(90deg, transparent 32%, var(--paper) 32% 68%, transparent 68%),
+        color-mix(in srgb, var(--gold) 52%, var(--paper));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 70%, var(--ink)),
+                0 2px 3px var(--black-08);
+    animation: reaction-bandage-slap 2.3s var(--ease-out-expo) var(--impact-delay) both;
 }
 
 .reaction-impact-bandage::after {
-    inset: 26px;
-    border: 2px solid color-mix(in srgb, var(--success) 68%, transparent);
-    border-radius: 50%;
-    animation: reaction-heal-ring 1.8s var(--ease-out-expo) var(--impact-delay) both;
+    left: 50%;
+    top: 50%;
+    width: 66px;
+    height: 10px;
+    margin: -5px 0 0 -33px;
+    background: var(--danger);
+    clip-path: polygon(0 50%, 14% 10%, 28% 70%, 42% 15%, 56% 80%, 70% 20%, 84% 70%, 100% 50%,
+                       84% 90%, 70% 40%, 56% 100%, 42% 40%, 28% 95%, 14% 35%);
+    animation: reaction-bandage-crack 1.1s var(--ease-out-expo) var(--impact-delay) both;
 }
 
 .reaction-impact-bandage .reaction-impact-accent {
-    top: 27px;
-    color: var(--success);
+    top: -6px;
+    font-size: var(--font-size-title);
+    letter-spacing: .06em;
+    text-shadow: 0 2px 3px var(--black-08);
+    -webkit-text-stroke: 3px var(--ink);
+    paint-order: stroke fill;
     transform: translateX(-50%);
-    animation: reaction-laugh-label 1.6s var(--ease-out-quart)
-               calc(var(--impact-delay) + 200ms) both;
+    animation: reaction-banner-snap 1.3s var(--ease-out-expo) calc(var(--impact-delay) + 1050ms) both;
+}
+
+/* Compact seats are bare avatars with the stack readout directly above or below,
+   so the banner lands on the avatar itself, where the band-aid just peeled off. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .reaction-impact-bandage .reaction-impact-accent { top: 58px }
 }
 
 .reaction-impact-bandage i {
-    color: var(--success);
-    animation: reaction-heart-pop 1.55s var(--ease-out-quart)
-               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    background:
+        linear-gradient(var(--paper), var(--paper)) center / 100% 4px no-repeat,
+        linear-gradient(var(--paper), var(--paper)) center / 4px 100% no-repeat;
+    filter: drop-shadow(0 1px 1.5px var(--black-08));
+    animation: reaction-bandage-plus 1.5s var(--ease-out-quart)
+               calc(var(--impact-delay) + 520ms + var(--piece) * 120ms) both;
 }
 
-/* Cucumber: the vegetable creeps in behind the target, then the seat jolts. */
-.reaction-impact-cucumber {
-    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+/* Cucumber, "Botar pepino": the cat-vs-cucumber gag. The effect node sits on the TARGET
+   from frame 0 (turtle pattern) and the projectile, the animated Noto cucumber (always
+   whole: never the flat SVG, never cut), is set down in silence beside the avatar, on the
+   side away from the sender. 700 ms of deadpan, then the SCARE: a whoosh ring, a gold "!"
+   that hops over the head, four jump lines and the SUSTO! stamp. At 1.9 s the scare is
+   gone and only the calm cucumber remains until it fades (everything lands before 2.3 s).
+   The cucumber sits in px beside the avatar (calc over --reaction-dx, em keeps it right
+   on the compact ring), the impact itself travels nowhere, so the shared compact
+   scale(.64) is fine. Elements: ring, "!" bar + dot, 4 lines, banner = 8 + projectile. */
+.table-reaction-effect.thrown.reaction-cucumber {
+    animation: reaction-turtle-node 3.3s linear both;
+}
+
+.table-reaction-effect.thrown.reaction-cucumber .reaction-projectile {
+    --cx: clamp(-1.4em, calc(var(--reaction-dx) * 1000), 1.4em);
+    --cy: .5em;
+    animation: reaction-cucumber-sneak 2.4s linear both;
+}
+
+.thrown .reaction-impact.reaction-impact-cucumber {
+    --impact-delay: 0ms;
+    animation: reaction-impact-hold 2.6s var(--ease-out-quart) both;
 }
 
 .reaction-impact-cucumber::before {
-    content: '🥒';
     left: 50%;
-    top: 62%;
-    margin-left: -18px;
-    font-size: 32px;
-    animation: reaction-cucumber-creep 2s var(--ease-out-quart) var(--impact-delay) both;
-}
-
-.reaction-impact-cucumber::after {
-    inset: 18px;
+    top: 50%;
+    width: 72px;
+    height: 72px;
+    margin: -36px;
+    border: 2px solid color-mix(in srgb, var(--paper) 80%, var(--tag-green));
     border-radius: 50%;
-    border: 3px solid color-mix(in srgb, var(--tag-green) 70%, transparent);
-    background: radial-gradient(circle, color-mix(in srgb, var(--tag-green) 28%, transparent), transparent 64%);
     opacity: 0;
-    animation: reaction-shock-ring 1.15s var(--ease-out-expo) calc(var(--impact-delay) + 620ms) both;
+    animation: reaction-shock-ring 560ms var(--ease-out-expo) 700ms both;
 }
 
 .reaction-impact-cucumber .reaction-impact-accent {
-    top: 4px;
-    color: var(--tag-green);
-    font-size: var(--font-size-title);
-    letter-spacing: .04em;
+    top: calc(50% - 96px);
+    font-size: 1.1rem;
+    text-shadow: 0 2px 0 var(--danger);
+    opacity: 0;
     transform: translateX(-50%);
-    animation: reaction-banner-snap 1.7s var(--ease-out-expo) calc(var(--impact-delay) + 600ms) both;
+    animation: reaction-banner-snap 1.5s var(--ease-out-expo) 760ms both;
 }
 
-.reaction-impact-cucumber i {
+/* The "!" over the head: bar (piece 0) and dot (piece 1). */
+.reaction-impact.reaction-impact-cucumber i {
+    inset: auto;
     left: 50%;
-    top: 44%;
-    width: 3px;
-    height: 18px;
-    border-radius: 2px;
-    background: color-mix(in srgb, var(--tag-green) 55%, var(--paper));
-    box-shadow: 0 0 6px color-mix(in srgb, var(--tag-green) 45%, transparent);
-    animation: reaction-startle-jump 1s var(--ease-out-expo)
-               calc(var(--impact-delay) + 640ms + var(--piece) * 40ms) both;
+    top: 50%;
+    border-radius: 3px;
+    background: var(--gold);
+    opacity: 0;
 }
 
-/* Boomerang: arcs out to the target, clips it, then whips back to the sender. */
+.reaction-impact.reaction-impact-cucumber i:nth-child(1) {
+    width: 6px;
+    height: 16px;
+    margin: -52px 0 0 -3px;
+    animation: reaction-cucumber-bang 1.2s var(--ease-out-expo) 700ms both;
+}
+
+.reaction-impact.reaction-impact-cucumber i:nth-child(2) {
+    width: 6px;
+    height: 6px;
+    margin: -32px 0 0 -3px;
+    border-radius: 50%;
+    animation: reaction-cucumber-bang 1.2s var(--ease-out-expo) 740ms both;
+}
+
+/* Four jump lines fanned over the head. */
+.reaction-impact.reaction-impact-cucumber i:nth-child(n + 3) {
+    width: 3px;
+    height: 11px;
+    margin: -5px 0 0 -1px;
+    background: var(--paper);
+    animation: reaction-cucumber-jolt 700ms var(--ease-out-expo) 700ms both;
+}
+
+.reaction-impact-cucumber i:nth-child(3) { --a: -64deg }
+.reaction-impact-cucumber i:nth-child(4) { --a: -30deg }
+.reaction-impact-cucumber i:nth-child(5) { --a: 30deg }
+.reaction-impact-cucumber i:nth-child(6) { --a: 64deg }
+
+/* Compact ring: the stack readout of a top seat sits right above its avatar, so the "!"
+   moves beside the head like a comic bubble instead of over it. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .reaction-impact.reaction-impact-cucumber i:nth-child(1) { margin: -44px 0 0 34px }
+    .reaction-impact.reaction-impact-cucumber i:nth-child(2) { margin: -22px 0 0 34px }
+}
+
+/* Turtle: "gasta o timebank". The joke is pace. The shared throw is replaced:
+   the effect node sits at the TARGET from frame 0 (so the impact box is already
+   on the target seat) and only the projectile crawls there from the sender, in
+   eight waddling steps over 1600 ms, written with calc() over the measured
+   --reaction-dx/dy so it re-aims with the seats. Meanwhile the target seat gets
+   a clock whose hand fast-forwards (five turns a second) and speed streaks race
+   past (the rest of the table going on without them). At 1600 ms the turtle
+   arrives, the hand jams, the face jumps red and TIMEBANK stamps in. Overrides
+   the legacy renderer.css turtle rules by specificity. */
+.table-reaction-effect.thrown.reaction-turtle {
+    animation: reaction-turtle-node 3.3s linear both;
+}
+
+.table-reaction-effect.thrown.reaction-turtle .reaction-projectile {
+    animation: reaction-turtle-crawl 1600ms linear both;
+}
+
+.thrown .reaction-impact.reaction-impact-turtle {
+    --impact-delay: 0ms;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    animation: reaction-impact-hold 3s var(--ease-out-quart) both;
+}
+
+.reaction-impact-turtle::before {
+    left: 50%;
+    top: 50%;
+    width: 56px;
+    height: 56px;
+    margin: -28px;
+    border: 2px solid var(--ice);
+    border-radius: 50%;
+    background: var(--surface-seat);
+    opacity: 0;
+    animation: reaction-turtle-face 3000ms var(--ease-out-quart) both;
+}
+
+.reaction-impact-turtle::after {
+    left: 50%;
+    top: 50%;
+    width: 2px;
+    height: 22px;
+    margin: -22px 0 0 -1px;
+    border-radius: 1px;
+    background: var(--ice);
+    opacity: 0;
+    transform-origin: 50% 100%;
+    animation: reaction-turtle-hand 3000ms linear both;
+}
+
+.reaction-impact.reaction-impact-turtle i {
+    inset: auto;
+    left: 50%;
+    top: calc(50% + (var(--piece) - 1) * 14px);
+    width: 22px;
+    height: 2px;
+    margin: -1px 0 0 -11px;
+    border-radius: 1px;
+    background: var(--paper);
+    opacity: 0;
+    animation: reaction-turtle-streak 400ms linear calc(var(--piece) * 130ms) 4 both;
+}
+
+.reaction-impact.reaction-impact-turtle .reaction-impact-accent {
+    color: var(--paper);
+    font-size: 1.1rem;
+    text-shadow: 0 2px 0 var(--danger);
+    opacity: 0;
+    transform: translate(-50%, -50px);
+    animation: reaction-banner-snap 1s var(--ease-out-expo) 1600ms both;
+}
+
+/* The sheet shrinks every impact box on the compact ring; this one is anchored on
+   the target and its projectile crawls in real px, so it opts out and sizes itself. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-turtle { transform: none }
+    .reaction-impact-turtle::before { width: 38px; height: 38px; margin: -19px }
+    .reaction-impact-turtle::after { height: 15px; margin: -15px 0 0 -1px }
+    .reaction-impact.reaction-impact-turtle i { width: 15px; top: calc(50% + (var(--piece) - 1) * 10px); margin-left: -7px }
+    .reaction-impact.reaction-impact-turtle .reaction-impact-accent { font-size: .85rem; transform: translate(-50%, -36px) }
+}
+
+/* Boomerang: a banana-shaped loop. It leaves the sender bowing to one side, clips the
+   target (hit-stop, dizzy stars, shock ring), then peels off bowing to the OTHER side
+   and lands back on the sender: ring + KARMA at the thrower's own seat. The outbound
+   leg overrides the shared throw so the two legs mirror each other around the
+   sender-target line; the perpendicular is (-dy, dx), written with calc() on the
+   measured --reaction-dx/dy so it re-aims with the seats. */
+.table-reaction-effect.thrown.reaction-boomerang {
+    animation: reaction-boomerang-out 3.3s var(--ease-out-quart) both;
+}
+
 .reaction-impact-boomerang {
-    animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-impact-hold 3.2s var(--ease-out-quart) var(--impact-delay) both;
 }
 
 .reaction-impact-boomerang::before {
@@ -1319,77 +2511,170 @@
     top: 50%;
     margin: -19px 0 0 -19px;
     font-size: 38px;
-    animation: reaction-boomerang-spin 2.1s var(--ease-out-quart) var(--impact-delay) both;
+    animation: reaction-boomerang-back 2s ease-in-out var(--impact-delay) both;
 }
 
 .reaction-impact-boomerang::after {
     left: 50%;
     top: 50%;
-    width: 96px;
-    height: 96px;
-    margin: -48px 0 0 -48px;
-    border: 3px solid transparent;
-    border-top-color: color-mix(in srgb, var(--tag-orange) 68%, transparent);
-    border-right-color: color-mix(in srgb, var(--tag-orange) 34%, transparent);
+    width: 84px;
+    height: 84px;
+    margin: -42px 0 0 -42px;
+    border: 3px solid color-mix(in srgb, var(--tag-orange) 72%, transparent);
     border-radius: 50%;
-    animation: reaction-boomerang-arc 2s var(--ease-out-expo) var(--impact-delay) both;
+    animation: reaction-boomerang-rings 2s var(--ease-out-expo) var(--impact-delay) both;
 }
 
 .reaction-impact-boomerang .reaction-impact-accent {
-    top: 8px;
     color: var(--tag-orange);
-    transform: translateX(-50%);
-    animation: reaction-banner-snap 1.7s var(--ease-out-expo) var(--impact-delay) both;
+    transform: translate(calc(-50% - var(--reaction-dx)), calc(-50% - var(--reaction-dy) - 44px));
+    animation: reaction-banner-snap 1.5s var(--ease-out-expo) calc(var(--impact-delay) + 1360ms) both;
+}
+
+/* The sheet shrinks every impact box on the compact ring; this one travels the whole
+   felt in px, so it opts out and shrinks its own static sizes instead. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect .reaction-impact-boomerang { transform: none }
+    .reaction-impact-boomerang::before { margin: -13px 0 0 -13px; font-size: 26px }
+    .reaction-impact-boomerang::after { width: 54px; height: 54px; margin: -27px 0 0 -27px }
 }
 
 .reaction-impact-boomerang i {
-    left: 50%;
-    top: 50%;
-    width: 34px;
-    height: 5px;
-    border-radius: var(--rounded-pill);
-    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--tag-orange) 78%, transparent));
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--tag-orange) 45%, transparent));
-    animation: reaction-boomerang-return 1.9s var(--ease-out-quart)
-               calc(var(--impact-delay) + 620ms + var(--piece) * 130ms) both;
+    translate: -50% calc(-50% - 30px);
+    color: var(--tag-orange);
+    font-size: var(--font-size-compact);
+    line-height: 1;
+    animation: reaction-boomerang-dizzy 1.5s ease-out calc(var(--impact-delay) + 120ms) both;
 }
 
-@keyframes reaction-cucumber-creep {
-    0% { opacity: 0; transform: translateX(-46px) rotate(-6deg) scale(.7) }
-    16% { opacity: 1; transform: translateX(-8px) rotate(2deg) scale(1) }
-    24%, 30% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1) }
-    34% { transform: translateY(-9px) rotate(-5deg) scale(1.08) }
-    44% { transform: translateY(0) rotate(3deg) scale(1) }
-    100% { opacity: 0; transform: translate(10px, 6px) rotate(10deg) scale(.85) }
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .reaction-impact-boomerang i { translate: -50% calc(-50% - 20px) }
 }
 
-@keyframes reaction-startle-jump {
-    0% { opacity: 0; transform: rotate(calc((var(--piece) - 2.5) * 30deg)) translateY(-6px) scaleY(.3) }
-    40% { opacity: 1; transform: rotate(calc((var(--piece) - 2.5) * 30deg)) translateY(-40px) scaleY(1) }
-    100% { opacity: 0; transform: rotate(calc((var(--piece) - 2.5) * 30deg)) translateY(-54px) scaleY(.6) }
-}
-
-@keyframes reaction-boomerang-spin {
-    0% { opacity: 0; transform: rotate(-120deg) scale(.4) }
-    16% { opacity: 1; transform: rotate(360deg) scale(1.1) }
-    46% { transform: rotate(1080deg) scale(1) }
-    62% { opacity: 1; transform: rotate(1440deg) scale(.95) }
-    100% {
+/* Set down in silence beside the target (0-336 ms), then it just sits there, deadpan. */
+@keyframes reaction-cucumber-sneak {
+    0% {
         opacity: 0;
-        transform: translate(calc(var(--reaction-dx) * -.45), calc(var(--reaction-dy) * -.45)) rotate(2340deg) scale(.45)
+        transform: translate(calc(var(--cx) * 1.9), calc(var(--cy) + .3em)) rotate(-14deg) scale(.7);
+        animation-timing-function: var(--ease-out-quart);
+    }
+    6% { opacity: 1 }
+    14%, 86% { opacity: 1; transform: translate(var(--cx), var(--cy)) rotate(-4deg) scale(1.25) }
+    100% { opacity: 0; transform: translate(var(--cx), var(--cy)) rotate(-4deg) scale(1.25) }
+}
+
+/* The "!" hops over the head, settles, then is cut. */
+@keyframes reaction-cucumber-bang {
+    0% { opacity: 0; transform: translateY(12px) scale(.4) }
+    10% { opacity: 1; transform: translateY(-12px) scale(1.35) }
+    22% { opacity: 1; transform: translateY(0) scale(1) }
+    58% { opacity: 1; transform: translateY(0) scale(1) }
+    64%, 100% { opacity: 0; transform: translateY(0) scale(1) }
+}
+
+@keyframes reaction-cucumber-jolt {
+    0% { opacity: 0; transform: rotate(var(--a)) translateY(-32px) scaleY(.3) }
+    25% { opacity: 1; transform: rotate(var(--a)) translateY(-46px) scaleY(1) }
+    100% { opacity: 0; transform: rotate(var(--a)) translateY(-58px) scaleY(.5) }
+}
+
+@keyframes reaction-boomerang-out {
+    0% { opacity: 0; transform: translate(0, 4px) rotate(-16deg) scale(.72) }
+    8% { opacity: 1 }
+    16% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * .5 - var(--reaction-dy) * .28),
+                             calc(var(--reaction-dy) * .5 + var(--reaction-dx) * .28))
+                   rotate(540deg) scale(1.15)
+    }
+    27%, 100% {
+        opacity: 1;
+        transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(1080deg) scale(1)
     }
 }
 
-@keyframes reaction-boomerang-arc {
-    0% { opacity: 0; transform: rotate(-40deg) scale(.3) }
-    30%, 66% { opacity: .8; transform: rotate(220deg) scale(1) }
-    100% { opacity: 0; transform: rotate(400deg) scale(1.2) }
+/* Leaves the target bowing to the opposite side, whips into the sender, pops. */
+@keyframes reaction-boomerang-back {
+    0% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1.3) }
+    7% { opacity: 1; transform: translate(0, 0) rotate(-24deg) scale(.92); animation-timing-function: ease-out }
+    40% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * -.5 + var(--reaction-dy) * .28),
+                             calc(var(--reaction-dy) * -.5 - var(--reaction-dx) * .28))
+                   rotate(-720deg) scale(1.1);
+        animation-timing-function: cubic-bezier(.5, 0, .9, .5)
+    }
+    68% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * -1), calc(var(--reaction-dy) * -1)) rotate(-1440deg) scale(1.2)
+    }
+    78%, 100% {
+        opacity: 0;
+        transform: translate(calc(var(--reaction-dx) * -1), calc(var(--reaction-dy) * -1)) rotate(-1560deg) scale(.3)
+    }
 }
 
-@keyframes reaction-boomerang-return {
-    0% { opacity: 0; transform: translate(0, 0) rotate(0) scale(.5) }
-    24% { opacity: 1; transform: translate(calc(var(--reaction-dx) * -.12), calc(var(--reaction-dy) * -.12)) rotate(-60deg) scale(1) }
-    100% { opacity: 0; transform: translate(calc(var(--reaction-dx) * -.5), calc(var(--reaction-dy) * -.5)) rotate(-200deg) scale(.6) }
+/* One ring, two places: the clip at the target, then the landing on the sender. */
+@keyframes reaction-boomerang-rings {
+    0% { opacity: .9; transform: scale(.3) }
+    22% { opacity: 0; transform: scale(1.25) }
+    22.1%, 67.9% { opacity: 0; transform: translate(calc(var(--reaction-dx) * -1), calc(var(--reaction-dy) * -1)) scale(.3) }
+    68% { opacity: .9; transform: translate(calc(var(--reaction-dx) * -1), calc(var(--reaction-dy) * -1)) scale(.3) }
+    92%, 100% { opacity: 0; transform: translate(calc(var(--reaction-dx) * -1), calc(var(--reaction-dy) * -1)) scale(1.6) }
+}
+
+@keyframes reaction-boomerang-dizzy {
+    0% { opacity: 0; rotate: calc(var(--piece) * 120deg) }
+    12% { opacity: 1 }
+    70% { opacity: 1 }
+    100% { opacity: 0; rotate: calc(var(--piece) * 120deg + 720deg) }
+}
+
+/* The projectile, once landed, rolls on the floor laughing: rocking roll left and
+   right with growing squeals, then calms and fades before the impact does. */
+@keyframes reaction-rofl-floor {
+    0%, 25% { opacity: 1; transform: none }
+    32% { transform: translate(-9px, 3px) rotate(-110deg) scale(1.35) }
+    40% { transform: translate(9px, 3px) rotate(110deg) scale(1.4) }
+    48% { transform: translate(-9px, 3px) rotate(-110deg) scale(1.4) }
+    56% { transform: translate(9px, 3px) rotate(110deg) scale(1.4) }
+    64% { transform: translate(-6px, 2px) rotate(-70deg) scale(1.3) }
+    72% { transform: translate(6px, 2px) rotate(70deg) scale(1.25) }
+    80% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1.2) }
+    92%, 100% { opacity: 0; transform: scale(.7) }
+}
+
+/* "HA" bubble: pops at the target, ricochets toward the sender (bowing on the
+   perpendicular (-dy, dx)), back, again, and dies on the target. */
+@keyframes reaction-rofl-echo {
+    0% { opacity: 0; transform: scale(.4) }
+    10% { opacity: 1; transform: scale(1.15) rotate(-6deg) }
+    28% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * -.6 - var(--reaction-dy) * .12),
+                             calc(var(--reaction-dy) * -.6 + var(--reaction-dx) * .12)) rotate(6deg)
+    }
+    50% { opacity: 1; transform: translate(0, 0) scale(1.1) rotate(-6deg) }
+    72% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * -.45 + var(--reaction-dy) * .1),
+                             calc(var(--reaction-dy) * -.45 - var(--reaction-dx) * .1)) rotate(6deg)
+    }
+    88% { opacity: 1; transform: translate(0, 0) scale(.95) }
+    100% { opacity: 0; transform: scale(.5) }
+}
+
+/* A laugh-tear: up and sideways off the 🤣, then gravity. */
+@keyframes reaction-rofl-tear {
+    0% { opacity: 0; transform: translate(0, 0) scale(.4) }
+    22% {
+        opacity: 1;
+        transform: translate(calc(var(--tx) * .7px * var(--u)), calc(var(--up) * 1px * var(--u))) scale(1)
+    }
+    100% {
+        opacity: 0;
+        transform: translate(calc(var(--tx) * 1.15px * var(--u)), calc(34px * var(--u))) scale(.7)
+    }
 }
 
 @keyframes reaction-loading-spin {
@@ -1438,9 +2723,26 @@
     100% { opacity: 0 }
 }
 
-@keyframes reaction-clap-hands {
+@keyframes reaction-clap-slow {
     0%, 100% { transform: rotate(0) scale(1) }
-    48% { transform: rotate(-9deg) scale(1.13) }
+    30% { transform: rotate(4deg) scale(.86) }
+    48% { transform: rotate(-8deg) scale(1.22) }
+}
+
+@keyframes reaction-clap-rapid {
+    0%, 100% { transform: translateY(0) rotate(0) scale(1) }
+    50% { transform: translateY(-4px) rotate(-6deg) scale(1.2) }
+}
+
+@keyframes reaction-clap-ring {
+    0%, 40% { opacity: 0; transform: scale(.5) }
+    48% { opacity: .75; transform: scale(.6) }
+    100% { opacity: 0; transform: scale(1.5) }
+}
+
+@keyframes reaction-clap-ovation {
+    0% { opacity: 1; transform: scale(.4) }
+    100% { opacity: 0; transform: scale(1.5) }
 }
 
 @keyframes reaction-banner-snap {
@@ -1457,19 +2759,41 @@
 
 @keyframes reaction-clap-fan {
     0% { opacity: 0; transform: rotate(calc((var(--piece) - 2.5) * 40deg)) translateY(-14px) scale(.3) }
-    28%, 66% { opacity: 1; transform: rotate(calc((var(--piece) - 2.5) * 40deg)) translateY(-50px) scale(1) }
-    100% { opacity: 0; transform: rotate(calc((var(--piece) - 2.5) * 40deg)) translateY(-60px) scale(.5) }
+    28%, 66% { opacity: 1; transform: rotate(calc((var(--piece) - 2.5) * 40deg)) translateY(calc(var(--cd) * -1)) scale(1) }
+    100% { opacity: 0; transform: rotate(calc((var(--piece) - 2.5) * 40deg)) translateY(calc(var(--cd) * -1 - 12px)) scale(.5) }
 }
 
-@keyframes reaction-laugh-hop {
-    0%, 100% { transform: translateY(0) rotate(0) }
-    45% { transform: translateY(-7px) rotate(-7deg) }
+@keyframes reaction-laugh-fit {
+    0% { transform: none }
+    12% { transform: translateY(-2px) rotate(-5deg) }
+    24% { transform: translateY(0) rotate(5deg) }
+    34% { transform: translateY(-3px) rotate(-9deg) }
+    42% { transform: translateY(0) rotate(9deg) }
+    50% { transform: translateY(-5px) rotate(-13deg) }
+    57% { transform: translateY(0) rotate(13deg) }
+    63% { transform: translateY(-6px) rotate(-16deg) }
+    69% { transform: translateY(0) rotate(16deg) }
+    75% { transform: translateY(-4px) rotate(-10deg) }
+    86% { transform: translateY(5px) rotate(18deg) scale(.94) }
+    100% { transform: translateY(3px) rotate(10deg) scale(.94) }
 }
 
-@keyframes reaction-laugh-label {
-    0% { opacity: 0; transform: translate(-50%, 4px) rotate(-8deg) scale(.55) }
-    28%, 75% { opacity: 1; transform: translate(-50%, -36px) rotate(-8deg) scale(1) }
-    100% { opacity: 0; transform: translate(-50%, -46px) rotate(-2deg) scale(.86) }
+@keyframes reaction-laugh-accent {
+    0% { opacity: 0; transform: translate(-50%, 4px) rotate(-8deg) scale(.5) }
+    20%, 60% { opacity: 1; transform: translate(-50%, -66px) rotate(-8deg) scale(1.15) }
+    100% { opacity: 0; transform: translate(-50%, -20px) rotate(14deg) scale(.7) }
+}
+
+@keyframes reaction-laugh-k {
+    0% { opacity: 0; transform: translate(-50%, 6px) scale(.3) }
+    25%, 65% { opacity: 1; transform: translate(calc(-50% + (var(--piece) - 2.5) * 20px), calc(-30px - var(--piece) * 5px)) rotate(calc((var(--piece) - 2) * 9deg)) scale(1) }
+    100% { opacity: 0; transform: translate(calc(-50% + (var(--piece) - 2.5) * 24px), calc(-48px - var(--piece) * 6px)) scale(.8) }
+}
+
+@keyframes reaction-laugh-sag {
+    0% { opacity: 0; transform: translate(calc(-50% + 50px), -52px) scale(.4) }
+    25%, 45% { opacity: 1; transform: translate(calc(-50% + 50px), -52px) rotate(0) scale(1) }
+    100% { opacity: 0; transform: translate(calc(-50% + 56px), 4px) rotate(80deg) scale(.7) }
 }
 
 @keyframes reaction-laugh-bubble {
@@ -1484,27 +2808,75 @@
     100% { opacity: 0; transform: scale(1.65) }
 }
 
+@keyframes reaction-wow-take {
+    0% { transform: scale(1) }
+    24% { transform: scale(1.1, .82) }
+    30% { transform: scale(.86, 1.5) }
+    38% { transform: scale(.92, 1.34) translateX(-2px) }
+    46% { transform: scale(.88, 1.42) translateX(2px) }
+    54% { transform: scale(.92, 1.36) translateX(-1px) }
+    66% { transform: scale(.94, 1.1) translateX(-7px) rotate(-8deg) }
+    74% { transform: scale(1.1, .94) translateX(2px) rotate(2deg) }
+    100% { transform: scale(1) }
+}
+
+@keyframes reaction-wow-banner {
+    0% { opacity: 0; transform: translate(-50%, -58px) rotate(-4deg) scale(2.4) }
+    14% { opacity: 1; transform: translate(-50%, -58px) rotate(-4deg) scale(.9) }
+    24%, 74% { opacity: 1; transform: translate(-50%, -58px) rotate(-4deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -66px) rotate(-4deg) scale(.95) }
+}
+
 @keyframes reaction-wow-mark {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(.35); filter: blur(4px) }
-    32%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); filter: blur(0) }
-    100% { opacity: 0; transform: translate(-50%, -50%) scale(.85) }
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.2) }
+    14% { opacity: 1; transform: translate(calc(-50% + var(--mx)), calc(-50% + var(--my))) rotate(var(--mr)) scale(1.5) }
+    30%, 68% { opacity: 1; transform: translate(calc(-50% + var(--mx)), calc(-50% + var(--my))) rotate(var(--mr)) scale(1) }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--mx) * 1.2), calc(-50% + var(--my) - 10px)) rotate(var(--mr)) scale(.8) }
 }
 
-@keyframes reaction-angry-shake {
-    0%, 100% { transform: translateX(0) rotate(0) }
-    25% { transform: translateX(-3px) rotate(-4deg) }
-    75% { transform: translateX(3px) rotate(4deg) }
+@keyframes reaction-angry-build {
+    0% { transform: translateX(0) scale(1) }
+    12% { transform: translateX(-1px) rotate(-1deg) scale(1.01) }
+    24% { transform: translateX(1px) rotate(1deg) scale(1.03) }
+    36% { transform: translateX(-2px) rotate(-2deg) scale(1.05) }
+    48% { transform: translateX(2px) rotate(2deg) scale(1.08) }
+    60% { transform: translateX(-3px) rotate(-3deg) scale(1.11) }
+    72% { transform: translateX(3px) rotate(3deg) scale(1.15) }
+    84% { transform: translateX(-4px) rotate(-4deg) scale(1.2) }
+    100% { transform: translateX(0) rotate(0) scale(1.22) }
 }
 
-@keyframes reaction-heat-pulse {
-    0%, 100% { opacity: 0; transform: scale(.6) }
-    40% { opacity: 1; transform: scale(1.18) }
+@keyframes reaction-angry-vent {
+    0% { transform: scale(1.22, 1.22) }
+    22% { transform: scale(1.4, .86) }
+    55% { transform: scale(.94, 1.12) }
+    100% { transform: scale(1) }
 }
 
-@keyframes reaction-steam-jet {
-    0% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 17px), 12px) scaleY(.3) }
-    28%, 64% { opacity: .8; transform: translate(calc((var(--piece) - 1.5) * 22px), -30px) scaleY(1) }
-    100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 28px), -54px) scaleY(1.25) }
+@keyframes reaction-angry-pressure {
+    0% { opacity: 0; transform: scale(.3) }
+    40% { opacity: .75; transform: scale(.7) }
+    42% { opacity: .85; transform: scale(.74) }
+    90% { opacity: .95; transform: scale(.98) }
+    100% { opacity: 0; transform: scale(.98) }
+}
+
+@keyframes reaction-angry-pop {
+    0% { opacity: .95; transform: scale(.4) }
+    100% { opacity: 0; transform: scale(2) }
+}
+
+@keyframes reaction-angry-accent {
+    0% { opacity: 0; transform: translate(-50%, -30px) scale(.5) }
+    20% { opacity: 1; transform: translate(-50%, -48px) scale(1.2) }
+    36%, 74% { opacity: 1; transform: translate(-50%, -48px) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(.94) }
+}
+
+@keyframes reaction-angry-puff {
+    0% { opacity: 0; transform: translate(0, 0) scale(.3) }
+    18% { opacity: .95 }
+    100% { opacity: 0; transform: translate(var(--px), calc(var(--py) - 8px)) scale(1.9) }
 }
 
 /* Swell at the eye (surface tension holds), neck off, stretch under
@@ -1519,39 +2891,167 @@
     100% { opacity: 0; transform: translate(calc(var(--eye) * 11px), 52px) scale(1.38, .36) }
 }
 
+@keyframes reaction-cry-puddle {
+    0% { opacity: 0; transform: scale(.1, .2) }
+    14% { opacity: 1; transform: scale(.3, .5) }
+    34% { transform: scale(.52, .78) }
+    56% { transform: scale(.74, .94) }
+    78%, 100% { opacity: 1; transform: scale(1, 1) }
+}
+
+@keyframes reaction-cry-sob {
+    0%, 100% { transform: translateY(0) scale(1) }
+    35% { transform: translateY(-2px) scale(.96, 1.06) }
+    62% { transform: translateY(2px) scale(1.08, .88) }
+}
+
+@keyframes reaction-cry-snif {
+    0% { opacity: 0; transform: translate(-50%, -38px) scale(.6) }
+    22% { opacity: 1; transform: translate(-50%, -50px) rotate(-5deg) scale(1.1) }
+    34% { transform: translate(-50%, -50px) rotate(4deg) scale(1) }
+    46%, 72% { opacity: 1; transform: translate(-50%, -50px) rotate(-2deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -58px) scale(.95) }
+}
+
 @keyframes reaction-tear-ripple {
     0% { opacity: 0; transform: scale(.22) }
     32% { opacity: .78; transform: scale(1) }
     100% { opacity: 0; transform: scale(1.95) }
 }
 
-@keyframes reaction-nervous-tremble {
-    0%, 100% { transform: translate(0) }
-    50% { transform: translate(2px, -1px) }
+@keyframes reaction-nervous-hold {
+    0% { opacity: 0 }
+    4%, 90% { opacity: 1 }
+    100% { opacity: 0 }
 }
 
-@keyframes reaction-nervous-orbit {
-    from { opacity: 0; transform: rotate(0) scale(.7) }
-    18% { opacity: 1 }
-    to { opacity: 0; transform: rotate(360deg) scale(1.05) }
+@keyframes reaction-nervous-t1 {
+    0%, 100% { transform: translate(0) rotate(0) }
+    50% { transform: translate(1.5px, -.5px) rotate(1.5deg) }
 }
 
-@keyframes reaction-sweat-orbit {
-    0% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg)) translateY(-29px) scale(.4) }
-    24%, 70% { opacity: 1; transform: rotate(calc(var(--piece) * 72deg + 36deg)) translateY(-47px) scale(1) }
-    100% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg + 52deg)) translateY(-59px) scale(.7) }
+@keyframes reaction-nervous-t2 {
+    0%, 100% { transform: translate(0) rotate(0) }
+    25% { transform: translate(-2.5px, 0) rotate(-3deg) }
+    75% { transform: translate(2.5px, -1px) rotate(3deg) }
 }
 
-@keyframes reaction-frost-grow {
-    0% { opacity: 0; transform: rotate(-18deg) scale(.3); filter: blur(3px) }
-    30%, 76% { opacity: 1; transform: rotate(8deg) scale(1); filter: blur(0) }
-    100% { opacity: 0; transform: rotate(16deg) scale(1.16) }
+@keyframes reaction-nervous-t3 {
+    0%, 100% { transform: translate(0) rotate(0) scale(1) }
+    25% { transform: translate(-4px, 1px) rotate(-5deg) scale(1.04) }
+    75% { transform: translate(4px, -1px) rotate(5deg) scale(1.04) }
 }
 
-@keyframes reaction-snow-orbit {
-    0% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg)) translateY(-21px) scale(.4) }
-    24%, 74% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg + 80deg)) translateY(-51px) scale(1) }
-    100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 140deg)) translateY(-59px) scale(.7) }
+/* dead stillness, then one hard swallow */
+@keyframes reaction-nervous-gulp {
+    0% { transform: scale(1) }
+    25% { transform: scale(.82, 1.12) }
+    55% { transform: scale(1.1, .92) }
+    100% { transform: scale(1) }
+}
+
+/* heartbeat: two thumps per beat, beats get closer together */
+@keyframes reaction-nervous-beat {
+    0%, 100% { opacity: 0; transform: scale(.8) }
+    3% { opacity: .8; transform: scale(.9) }
+    12% { opacity: 0; transform: scale(1.3) }
+    27% { opacity: 0; transform: scale(.8) }
+    29% { opacity: .8; transform: scale(.9) }
+    38% { opacity: 0; transform: scale(1.3) }
+    49% { opacity: 0; transform: scale(.8) }
+    50% { opacity: .9; transform: scale(.9) }
+    58% { opacity: 0; transform: scale(1.3) }
+    66% { opacity: 0; transform: scale(.8) }
+    67% { opacity: .9; transform: scale(.9) }
+    74% { opacity: 0; transform: scale(1.3) }
+    80% { opacity: 0; transform: scale(.8) }
+    81% { opacity: 1; transform: scale(.9) }
+    87% { opacity: 0; transform: scale(1.3) }
+}
+
+/* a bead swells on the forehead, then slides down and out */
+@keyframes reaction-nervous-drip {
+    0% { opacity: 0; transform: translate(var(--sx), 0) scale(.2);
+         animation-timing-function: ease-out }
+    42% { opacity: 1; transform: translate(var(--sx), 0) scale(1);
+          animation-timing-function: ease-in }
+    100% { opacity: 0; transform: translate(var(--sx), 56px) scale(1) }
+}
+
+@keyframes reaction-nervous-plop {
+    0% { opacity: 0; transform: scale(.2); animation-timing-function: ease-out }
+    55% { opacity: 1; transform: scale(1.25) translateY(0); animation-timing-function: ease-in }
+    92% { opacity: 1; transform: scale(1) translateY(52px) }
+    100% { opacity: 0; transform: scale(.5) translateY(52px) }
+}
+
+@keyframes reaction-nervous-splat {
+    0% { opacity: .9; transform: scale(.2) }
+    100% { opacity: 0; transform: scale(1.7) }
+}
+
+@keyframes reaction-nervous-word {
+    0% { opacity: 0; transform: translate(-50%, -34px) scale(.6) }
+    25% { opacity: 1; transform: translate(-50%, -48px) scale(1.1) }
+    40%, 78% { opacity: 1; transform: translate(-50%, -48px) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -54px) scale(.96) }
+}
+
+@keyframes reaction-cold-chatter {
+    0% { transform: translate(0) rotate(0) scale(1) }
+    8% { transform: translate(-1px, 0) rotate(-2deg) scale(.99) }
+    16% { transform: translate(1px, 0) rotate(2deg) scale(.98) }
+    24% { transform: translate(-1.5px, 0) rotate(-3deg) scale(.97) }
+    32% { transform: translate(1.5px, 0) rotate(3deg) scale(.97) }
+    40% { transform: translate(-2px, 0) rotate(-4deg) scale(.96) }
+    48% { transform: translate(2px, 0) rotate(4deg) scale(.96) }
+    56% { transform: translate(-2px, 0) rotate(-4deg) scale(.95) }
+    64% { transform: translate(2px, 0) rotate(4deg) scale(.95) }
+    78% { transform: translate(-1px, 0) rotate(-2deg) scale(.94) }
+    100% { transform: translate(0) rotate(0) scale(.94) }
+}
+
+@keyframes reaction-cold-thaw {
+    0% { transform: scale(.94) }
+    35% { transform: translateY(-7px) scale(1.16) rotate(-6deg) }
+    65% { transform: translateY(0) scale(.97) rotate(3deg) }
+    100% { transform: scale(1) rotate(0) }
+}
+
+@keyframes reaction-cold-creep {
+    0% { opacity: 0; transform: scale(1.5) }
+    55%, 94% { opacity: 1; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1.3) }
+}
+
+@keyframes reaction-cold-cube {
+    0%, 48% { opacity: 0; transform: scale(1.35) }
+    53% { opacity: 1; transform: scale(.95) }
+    57%, 80% { opacity: 1; transform: scale(1) rotate(0) }
+    84% { opacity: 1; transform: scale(1) rotate(-4deg) }
+    88% { opacity: 1; transform: scale(1) rotate(4deg) }
+    93% { opacity: 1; transform: scale(1) rotate(-2deg) }
+    95% { opacity: .9; transform: scale(1.1) rotate(0) }
+    100% { opacity: 0; transform: scale(1.35) }
+}
+
+@keyframes reaction-cold-accent {
+    0% { opacity: 0; transform: translate(calc(-50% - 3px), -44px) scale(.7) }
+    6% { opacity: 1; transform: translate(calc(-50% + 3px), -52px) scale(1.1) }
+    12% { transform: translate(calc(-50% - 3px), -52px) scale(1) }
+    18% { transform: translate(calc(-50% + 3px), -52px) }
+    24% { transform: translate(calc(-50% - 2px), -52px) }
+    30% { transform: translate(calc(-50% + 2px), -52px) }
+    38% { transform: translate(calc(-50% - 2px), -52px) }
+    46% { transform: translate(calc(-50% + 1px), -52px) }
+    56%, 90% { opacity: 1; transform: translate(-50%, -52px) }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(.94) }
+}
+
+@keyframes reaction-cold-shard {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 20deg)) translateY(-18px) }
+    10% { opacity: 1 }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 20deg)) translateY(calc(-54px - var(--far, 0px))) rotate(210deg) scale(.5) }
 }
 
 @keyframes reaction-ember-fan {
@@ -1560,16 +3060,84 @@
     100% { opacity: 0; transform: translate(calc((var(--piece) - 2.5) * 17px), calc(-42px - var(--piece) * 3px)) rotate(120deg) scale(.3) }
 }
 
-@keyframes reaction-laurel-open {
-    0% { opacity: 0; transform: scale(.42) rotate(-25deg); clip-path: inset(0 50%) }
-    30%, 76% { opacity: 1; transform: scale(1) rotate(0); clip-path: inset(0) }
-    100% { opacity: 0; transform: scale(1.12) }
+@keyframes reaction-fire-charge {
+    0% { transform: scale(1) rotate(0) }
+    30% { transform: scale(1.06) rotate(-2deg) }
+    50% { transform: scale(1.12) rotate(3deg) }
+    68% { transform: scale(1.2) rotate(-4deg) }
+    84% { transform: scale(1.34) rotate(0) }
+    100% { transform: scale(1.08) rotate(0) }
 }
 
-@keyframes reaction-respect-mark {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(.4) }
-    28%, 78% { opacity: 1; transform: translate(-50%, -50%) scale(1) }
-    100% { opacity: 0; transform: translate(-50%, -56%) scale(.9) }
+@keyframes reaction-fire-breathe {
+    0%, 100% { transform: scale(1.08) translateY(0) }
+    50% { transform: scale(1.18) translateY(-2px) }
+}
+
+@keyframes reaction-fire-heat {
+    0% { opacity: 0; transform: scale(.4) }
+    30% { opacity: .9; transform: scale(1) }
+    55% { opacity: .65; transform: scale(1.12) }
+    78% { opacity: .8; transform: scale(1) }
+    100% { opacity: 0; transform: scale(.85) }
+}
+
+@keyframes reaction-fire-whoosh {
+    0% { opacity: .95; transform: scale(.35) }
+    100% { opacity: 0; transform: scale(1.9) }
+}
+
+@keyframes reaction-fire-accent {
+    0% { opacity: 0; transform: translate(-50%, -34px) scale(.6) }
+    22% { opacity: 1; transform: translate(-50%, -46px) scale(1.12) }
+    40%, 76% { opacity: 1; transform: translate(-50%, -46px) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -58px) scale(.94) }
+}
+
+@keyframes reaction-fire-lick {
+    0% { opacity: 0; transform: translateX(var(--fx)) scale(.3, 0) }
+    14% { opacity: 1; transform: translateX(var(--fx)) scale(1, calc(var(--fh) * 1.18)) skewX(0) }
+    28% { transform: translateX(var(--fx)) scale(.9, calc(var(--fh) * .86)) skewX(8deg) }
+    44% { transform: translateX(var(--fx)) scale(1.05, calc(var(--fh) * 1.1)) skewX(-9deg) }
+    60% { transform: translateX(var(--fx)) scale(.92, calc(var(--fh) * .9)) skewX(6deg) }
+    76% { opacity: .9; transform: translateX(var(--fx)) scale(1, calc(var(--fh) * 1.02)) skewX(-5deg) }
+    100% { opacity: 0; transform: translateX(var(--fx)) scale(.4, calc(var(--fh) * .3)) skewX(0) }
+}
+
+@keyframes reaction-respect-salute {
+    0% { transform: scale(1) rotate(0); animation-timing-function: ease-in }
+    5% { transform: translateY(3px) scale(.88, .94) rotate(0); animation-timing-function: cubic-bezier(.25, 1, .5, 1) }
+    10% { transform: translateY(-3px) scale(1.2) rotate(-10deg); animation-timing-function: ease-out }
+    14%, 80% { transform: translateY(-2px) scale(1.14) rotate(-8deg) }
+    90% { transform: translateY(1px) scale(1) rotate(0) }
+    100% { transform: scale(1) rotate(0) }
+}
+
+@keyframes reaction-respect-shaft {
+    0% { opacity: 0; transform: scaleY(0) }
+    14% { opacity: 1; transform: scaleY(1) }
+    80% { opacity: .8; transform: scaleY(1) }
+    100% { opacity: 0; transform: scaleY(1) }
+}
+
+@keyframes reaction-respect-ground {
+    0% { opacity: 0; transform: scaleX(0) }
+    16%, 78% { opacity: .85; transform: scaleX(1) }
+    100% { opacity: 0; transform: scaleX(1) }
+}
+
+@keyframes reaction-respect-f {
+    0% { opacity: 0; transform: translate(calc(-50% + 40px), calc(-50% - 22px)) scale(2) }
+    8% { opacity: 1; transform: translate(calc(-50% + 40px), calc(-50% - 22px)) scale(.9) }
+    13%, 62% { opacity: 1; transform: translate(calc(-50% + 40px), calc(-50% - 22px)) scale(1) }
+    80% { opacity: 1; transform: translate(calc(-50% + 42px), calc(-50% - 10px)) rotate(14deg) scale(1) }
+    100% { opacity: 0; transform: translate(calc(-50% + 44px), calc(-50% + 4px)) rotate(24deg) scale(.9) }
+}
+
+@keyframes reaction-respect-glint {
+    0% { opacity: 0; transform: translate(calc(-50% + var(--gx)), calc(-50% + var(--gy) + 8px)) scale(.3) }
+    30% { opacity: 1; transform: translate(calc(-50% + var(--gx)), calc(-50% + var(--gy))) scale(1.2) rotate(45deg) }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--gx)), calc(-50% + var(--gy) - 8px)) scale(.5) rotate(90deg) }
 }
 
 @keyframes reaction-dream-rise {
@@ -1578,41 +3146,156 @@
     100% { opacity: 0; transform: translate(calc((var(--piece) - 1) * 23px), calc(-48px - var(--piece) * 12px)) rotate(13deg) scale(1.3) }
 }
 
-@keyframes reaction-heartbeat {
-    0%, 100% { transform: scale(1) }
-    18% { transform: scale(1.18) }
-    32% { transform: scale(.96) }
-    48% { transform: scale(1.1) }
+@keyframes reaction-sleepy-nod {
+    0% { transform: rotate(0); animation-timing-function: ease-in }
+    17% { transform: rotate(15deg) translateY(2px); animation-timing-function: var(--ease-out-expo) }
+    21% { transform: rotate(-5deg); animation-timing-function: ease-out }
+    25% { transform: rotate(0); animation-timing-function: ease-in }
+    44% { transform: rotate(24deg) translateY(3px); animation-timing-function: var(--ease-out-expo) }
+    48% { transform: rotate(-8deg); animation-timing-function: ease-out }
+    52% { transform: rotate(0); animation-timing-function: ease-in-out }
+    58%, 66% { transform: scale(1.14, 1.3) translateY(-2px); animation-timing-function: ease-in-out }
+    72% { transform: rotate(0); animation-timing-function: ease-in }
+    80% { transform: rotate(38deg) translateY(6px); animation-timing-function: var(--ease-out-expo) }
+    83% { transform: rotate(-16deg) scale(1.3); animation-timing-function: ease-out }
+    90% { transform: rotate(0) scale(1.05) }
+    100% { transform: rotate(0) scale(1) }
 }
 
-@keyframes reaction-ecg-scan {
-    0% { opacity: 0; transform: scaleX(0); transform-origin: left center; filter: blur(2px) }
-    26%, 72% { opacity: 1; transform: scaleX(1); transform-origin: left center; filter: blur(0) }
-    100% { opacity: 0; transform: translateX(18px) scaleX(.7); transform-origin: right center }
+@keyframes reaction-sleepy-yawn {
+    0% { opacity: .7; transform: scale(.4) }
+    100% { opacity: 0; transform: scale(2.1) }
 }
 
-@keyframes reaction-heart-pop {
-    0% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg + 45deg)) translateY(-18px) scale(.3) }
-    28%, 72% { opacity: 1; transform: rotate(calc(var(--piece) * 90deg + 45deg)) translateY(-49px) scale(1) }
-    100% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg + 60deg)) translateY(-59px) scale(.62) }
+@keyframes reaction-sleepy-z {
+    0% { opacity: 0; transform: translate(calc(var(--zx) * .6), calc(var(--zy) * .6)) scale(.4) }
+    4% { opacity: 1; transform: translate(calc(var(--zx) * .6), calc(var(--zy) * .6)) scale(1.2) }
+    8% { opacity: 1; transform: translate(calc(var(--zx) * .65), calc(var(--zy) * .65)) scale(1) rotate(-6deg) }
+    90% { opacity: 1; transform: translate(var(--zx), var(--zy)) scale(1) rotate(6deg) }
+    100% { opacity: 0; transform: translate(calc(var(--zx) * 2), calc(var(--zy) * 1.3)) scale(1.5) rotate(40deg) }
 }
 
-@keyframes reaction-fin-pass {
-    0% { opacity: 0; transform: translate(-48px, 17px) rotate(-12deg) scale(.7) }
-    24%, 66% { opacity: 1; transform: translate(0, 0) rotate(5deg) scale(1) }
-    100% { opacity: 0; transform: translate(52px, 13px) rotate(12deg) scale(.78) }
+@keyframes reaction-sleepy-blind {
+    0% { opacity: 0; transform: translate(-50%, -62px) scale(2) rotate(-8deg) }
+    10% { opacity: 1; transform: translate(-50%, -62px) scale(.92) rotate(2deg) }
+    18%, 72% { opacity: 1; transform: translate(-50%, -62px) scale(1) rotate(0) }
+    100% { opacity: 0; transform: translate(-50%, -74px) scale(.94) }
 }
 
-@keyframes reaction-wake-spread {
-    0% { opacity: 0; transform: scaleX(.2) }
-    26%, 70% { opacity: 1; transform: scaleX(1) }
-    100% { opacity: 0; transform: scaleX(1.35) translateY(5px) }
+@keyframes reaction-heartbeat-lub {
+    0%, 60%, 100% { transform: scale(1) }
+    14% { transform: scale(1.3) }
+    28% { transform: scale(.96) }
+    42% { transform: scale(1.18) }
 }
 
-@keyframes reaction-wave-run {
-    0% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 18px), 15px) scaleX(.5) }
-    30%, 74% { opacity: 1; transform: translate(calc((var(--piece) - 1.5) * 24px), 38px) scaleX(1.15) }
-    100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 31px), 42px) scaleX(1.5) }
+@keyframes reaction-heartbeat-hush {
+    0% { transform: scale(1) }
+    35%, 100% { transform: scale(.92) }
+}
+
+@keyframes reaction-heartbeat-slam {
+    0% { transform: scale(.92) }
+    18% { transform: scale(1.6) }
+    40% { transform: scale(.95) }
+    60% { transform: scale(1.12) }
+    100% { transform: scale(1) }
+}
+
+@keyframes reaction-heartbeat-blip {
+    0% { opacity: 0; transform: translateX(-110px) }
+    14%, 80% { opacity: 1 }
+    100% { opacity: 0; transform: translateX(110px) }
+}
+
+@keyframes reaction-heartbeat-pulse {
+    0% { opacity: .7; transform: scale(.5) }
+    100% { opacity: 0; transform: scale(1.3) }
+}
+
+@keyframes reaction-heartbeat-shock {
+    0% { opacity: .9; transform: scale(.4) }
+    100% { opacity: 0; transform: scale(3.2) }
+}
+
+@keyframes reaction-heartbeat-flat {
+    0% { opacity: 0; transform: scaleX(.15) }
+    30%, 100% { opacity: 1; transform: scaleX(1) }
+}
+
+@keyframes reaction-heartbeat-snap {
+    0% { opacity: 1; transform: scaleY(1) }
+    25% { opacity: 1; transform: scaleY(16) }
+    100% { opacity: 0; transform: scaleX(1.5) scaleY(1) }
+}
+
+@keyframes reaction-heartbeat-accent {
+    0% { opacity: 0; transform: translate(-50%, -40px) scale(1.9) }
+    14% { opacity: 1; transform: translate(-50%, -46px) scale(.94) }
+    26%, 78% { opacity: 1; transform: translate(-50%, -46px) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -54px) scale(.96) }
+}
+
+@keyframes reaction-heartbeat-burst {
+    0% { opacity: 0; transform: translate(0, 0) scale(.3) }
+    16% { opacity: 1 }
+    100% { opacity: 0; transform: translate(var(--bx), var(--by)) scale(1) }
+}
+
+@keyframes reaction-shark-fin {
+    0% { opacity: 0; transform: translate(-64px, 8px) }
+    10% { opacity: 1; transform: translate(-54px, 6px) }
+    30%, 38% { opacity: 1; transform: translate(-34px, 5px) rotate(-3deg) }
+    42% { transform: translate(-32px, 5px) rotate(3deg) }
+    52% { opacity: 1; transform: translate(-6px, 2px) scale(1.2) rotate(0); animation-timing-function: ease-in }
+    57% { opacity: 0; transform: translate(0, 16px) scale(1, .2) }
+    100% { opacity: 0; transform: translate(0, 16px) scale(1, .2) }
+}
+
+@keyframes reaction-shark-ripple {
+    0% { opacity: 0; transform: scale(.3) }
+    20% { opacity: .55; transform: scale(.9) }
+    50% { opacity: .5; transform: scale(1) }
+    55% { opacity: .9; transform: scale(1.05) }
+    100% { opacity: 0; transform: scale(1.7, 1.5) }
+}
+
+@keyframes reaction-shark-lurk {
+    0% { transform: translateY(0) scale(1) }
+    25%, 50% { transform: translateY(5px) scale(.9) rotate(0) }
+    32% { transform: translateY(5px) scale(.9) rotate(-3deg) }
+    40% { transform: translateY(5px) scale(.9) rotate(3deg) }
+    55% { transform: translateY(-12px) scale(1.55) rotate(-14deg) }
+    65% { transform: translateY(-3px) scale(1.2) rotate(4deg) }
+    100% { transform: translateY(0) scale(1) rotate(0) }
+}
+
+@keyframes reaction-shark-accent {
+    0% { opacity: 0; transform: translate(-50%, -50px) scale(.4, 1.5) }
+    12% { opacity: 1; transform: translate(-50%, -50px) scale(1.2, .8) }
+    28%, 80% { opacity: 1; transform: translate(-50%, -50px) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(.94) }
+}
+
+@keyframes reaction-shark-jaw-top {
+    0% { opacity: 0; transform: translateY(-16px) }
+    10% { opacity: 1; transform: translateY(0) }
+    60% { opacity: 1; transform: translateY(0) }
+    100% { opacity: 0; transform: translateY(-8px) }
+}
+
+@keyframes reaction-shark-jaw-bottom {
+    0% { opacity: 0; transform: scaleY(-1) translateY(-16px) }
+    10% { opacity: 1; transform: scaleY(-1) translateY(0) }
+    60% { opacity: 1; transform: scaleY(-1) translateY(0) }
+    100% { opacity: 0; transform: scaleY(-1) translateY(-8px) }
+}
+
+@keyframes reaction-shark-drop {
+    0% { opacity: 0; transform: translate(0, 8px) scale(.4) }
+    16% { opacity: 1; transform: translate(calc((var(--piece) - 1.5) * 14px), -28px) scale(1) }
+    60% { opacity: .9; transform: translate(calc((var(--piece) - 1.5) * 26px), -8px) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 32px), 14px) scale(.7) }
 }
 
 @keyframes reaction-suit-orbit {
@@ -1622,16 +3305,68 @@
 }
 
 @keyframes reaction-pokerface-suit {
-    0% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg)) translateY(-40px) scale(.4) }
-    24%, 74% { opacity: 1; transform: rotate(calc(var(--piece) * 90deg + 26deg)) translateY(-56px) scale(1) }
-    100% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg + 44deg)) translateY(-64px) scale(.6) }
+    0% { opacity: 0; transform: translate(var(--bx), var(--by)) }
+    4% { opacity: 1; transform: translate(calc(var(--bx) - 3px), calc(var(--by) + 2px)) }
+    10% { transform: translate(calc(var(--bx) + 3px), calc(var(--by) - 2px)) }
+    16% { transform: translate(calc(var(--bx) - 2px), calc(var(--by) - 3px)) }
+    22% { transform: translate(calc(var(--bx) + 2px), calc(var(--by) + 3px)) }
+    28% { transform: translate(calc(var(--bx) - 3px), calc(var(--by) - 1px)) }
+    34% { transform: translate(calc(var(--bx) + 3px), calc(var(--by) + 1px)) }
+    40% { transform: translate(calc(var(--bx) - 2px), calc(var(--by) + 3px)) }
+    45% { transform: translate(calc(var(--bx) + 2px), calc(var(--by) - 3px)) }
+    46%, 80% { opacity: 1; transform: translate(var(--bx), var(--by)) }
+    100% { opacity: 0; transform: translate(var(--bx), var(--by)) }
 }
 
-@keyframes reaction-cup-land {
-    0% { opacity: 0; transform: translateY(-25px) rotate(-14deg) scale(.72) }
-    28% { opacity: 1; transform: translateY(3px) rotate(5deg) scale(1.08) }
-    42%, 76% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
-    100% { opacity: 0; transform: translateY(2px) scale(.94) }
+@keyframes reaction-pokerface-glint {
+    0% { opacity: 0; transform: scale(.2) rotate(0) }
+    30% { opacity: 1; transform: scale(1.15) rotate(20deg) }
+    100% { opacity: 0; transform: scale(.4) rotate(45deg) }
+}
+
+@keyframes reaction-pokerface-accent {
+    0% { opacity: 0 }
+    1%, 100% { opacity: 1 }
+}
+
+@keyframes reaction-coffee-hold {
+    0% { opacity: 0 }
+    4%, 88% { opacity: 1 }
+    100% { opacity: 0 }
+}
+
+/* Slide in from the sender, skid past the mark, settle, slosh, then the 1200ms hop. */
+@keyframes reaction-coffee-slide {
+    0% { opacity: 0; transform: translate(calc(var(--reaction-dx) * -.14), calc(var(--reaction-dy) * -.14)) rotate(-10deg) }
+    8% { opacity: 1 }
+    24% { opacity: 1; transform: translate(calc(var(--reaction-dx) * .02), calc(var(--reaction-dy) * .02)) rotate(7deg) }
+    32% { transform: translate(0, 0) rotate(-4deg) }
+    38% { transform: rotate(3deg) }
+    44%, 47% { transform: rotate(0) }
+    52% { transform: translateY(-12px) scale(1.14) rotate(-6deg) }
+    60% { transform: translateY(0) scale(1) rotate(2deg) }
+    66%, 84% { opacity: 1; transform: rotate(0) }
+    100% { opacity: 0; transform: translateY(2px) scale(.92) }
+}
+
+/* The ring stamps under the cup, then leaves it as the shockwave. */
+@keyframes reaction-coffee-stain {
+    0%, 29% { opacity: 0; transform: scale(1.4) }
+    35% { opacity: .85; transform: scale(1) }
+    47.9% { opacity: .85; transform: scale(1) }
+    48% { opacity: .9; transform: scale(1) }
+    72%, 100% { opacity: 0; transform: scale(3) }
+}
+
+/* Four ticks off the cup, each jittering on its own side like a jolt of espresso. */
+@keyframes reaction-coffee-jolt {
+    0% { opacity: 0; transform: rotate(calc((var(--piece) - 3) * 90deg + 45deg)) translateY(calc(var(--coffee-r) * -.6)) scaleY(.4) }
+    14% { opacity: 1; transform: rotate(calc((var(--piece) - 3) * 90deg + 45deg)) translateY(calc(var(--coffee-r) * -1)) scaleY(1) }
+    26% { transform: rotate(calc((var(--piece) - 3) * 90deg + 53deg)) translateY(calc(var(--coffee-r) * -1)) }
+    38% { transform: rotate(calc((var(--piece) - 3) * 90deg + 37deg)) translateY(calc(var(--coffee-r) * -1)) }
+    50% { transform: rotate(calc((var(--piece) - 3) * 90deg + 51deg)) translateY(calc(var(--coffee-r) * -1)) }
+    70% { opacity: 1; transform: rotate(calc((var(--piece) - 3) * 90deg + 45deg)) translateY(calc(var(--coffee-r) * -1)) }
+    100% { opacity: 0; transform: rotate(calc((var(--piece) - 3) * 90deg + 45deg)) translateY(calc(var(--coffee-r) * -1.25)) scaleY(.5) }
 }
 
 @keyframes reaction-coffee-steam {
@@ -1640,17 +3375,101 @@
     100% { opacity: 0; transform: translate(calc((var(--piece) - 1) * -4px), -27px) scaleX(1.35) }
 }
 
-@keyframes reaction-clover-bloom {
-    0% { opacity: 0; transform: rotate(-100deg) scale(.28); filter: blur(4px) }
-    30%, 76% { opacity: 1; transform: rotate(8deg) scale(1.12); filter: blur(0) }
-    100% { opacity: 0; transform: rotate(22deg) scale(.93) }
+/* A gift lobbed high and slow, swaying side to side like a falling leaf (the sway is
+   the perpendicular (-dy, dx) of the measured flight, so it re-aims with the seats). */
+@keyframes reaction-clover-lob {
+    0% { opacity: 0; transform: translate(0, 4px) rotate(-10deg) scale(.7) }
+    8% { opacity: 1 }
+    12% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * .3 - var(--reaction-dy) * .09),
+                             calc(var(--reaction-dy) * .3 + var(--reaction-dx) * .09 - var(--reaction-arc) * 1.2))
+                   rotate(-22deg) scale(1.2)
+    }
+    20% {
+        opacity: 1;
+        transform: translate(calc(var(--reaction-dx) * .66 + var(--reaction-dy) * .08),
+                             calc(var(--reaction-dy) * .66 - var(--reaction-dx) * .08 - var(--reaction-arc) * 1.1))
+                   rotate(20deg) scale(1.15)
+    }
+    27% { opacity: 1; transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(-8deg) scale(1) }
+    31%, 100% { opacity: 1; transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(0) scale(1) }
 }
 
-@keyframes reaction-horseshoe-slam {
-    0% { opacity: 0; transform: translateY(-42px) rotate(-22deg) scale(1.25) }
-    27% { opacity: 1; transform: translateY(5px) rotate(6deg) scale(1.08) }
-    39%, 76% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
-    100% { opacity: 0; transform: translateY(2px) scale(.95) }
+@keyframes reaction-clover-leaf {
+    0% { opacity: 0; transform: translateY(calc(var(--u) * -36)) rotate(-180deg) scale(.2) }
+    20% { opacity: 1; transform: translateY(calc(var(--u) * -9)) rotate(10deg) scale(1.25) }
+    32%, 80% { opacity: 1; transform: translateY(calc(var(--u) * -11)) rotate(0) scale(1) }
+    100% { opacity: 0; transform: translateY(calc(var(--u) * -11)) rotate(0) scale(1) }
+}
+
+/* The late leaf: arrives last, then goes limp. */
+@keyframes reaction-clover-leaf-late {
+    0% { opacity: 0; transform: translateY(calc(var(--u) * -36)) rotate(-180deg) scale(.2) }
+    16% { opacity: 1; transform: translateY(calc(var(--u) * -9)) rotate(10deg) scale(1.25) }
+    26%, 36% { opacity: 1; transform: translateY(calc(var(--u) * -11)) rotate(0) scale(1) }
+    52%, 82% { opacity: 1; transform: translate(calc(var(--u) * -5), calc(var(--u) * -3)) rotate(-75deg) scale(.9) }
+    100% { opacity: 0; transform: translate(calc(var(--u) * -6), 0) rotate(-85deg) scale(.88) }
+}
+
+@keyframes reaction-clover-halo {
+    0% { opacity: 0; transform: translateY(calc(var(--u) * -22)) scale(.6) }
+    18% { opacity: 1; transform: translateY(0) scale(1) }
+    52% { opacity: 1; transform: translateY(0) rotate(0) }
+    62%, 80% { opacity: 1; transform: translate(calc(var(--u) * 5), calc(var(--u) * 2)) rotate(16deg) }
+    100% { opacity: 0; transform: translate(calc(var(--u) * 6), calc(var(--u) * 4)) rotate(18deg) }
+}
+
+@keyframes reaction-clover-glow {
+    0% { opacity: 0; transform: scale(.3) }
+    30% { opacity: .9; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1.3) }
+}
+
+@keyframes reaction-clover-dust {
+    0% { opacity: 0; transform: translateY(calc(var(--u) * -30)) }
+    22% { opacity: 1 }
+    100% { opacity: 0; transform: translateY(calc(var(--u) * 26)) }
+}
+
+/* Clamp on the target, wind up away from the sender, yank towards it past the pull
+   point, settle. The stars below share these stops so they ride the magnet. */
+@keyframes reaction-horseshoe-clamp {
+    0% { opacity: 0; transform: scale(1.5) rotate(-20deg) }
+    10% { opacity: 1; transform: scale(.9) rotate(6deg) }
+    16%, 40% { opacity: 1; transform: scale(1) rotate(0) }
+    44% { opacity: 1; transform: scale(1.12) rotate(-5deg) }
+    50% { opacity: 1; transform: translate(calc(var(--reaction-dx) * .04), calc(var(--reaction-dy) * .04)) scale(.95) rotate(4deg) }
+    62% { opacity: 1; transform: translate(calc(var(--reaction-dx) * var(--horseshoe-pull) * -1.18),
+                                           calc(var(--reaction-dy) * var(--horseshoe-pull) * -1.18)) scale(1.06) rotate(-10deg) }
+    74%, 84% { opacity: 1; transform: translate(calc(var(--reaction-dx) * var(--horseshoe-pull) * -1),
+                                                calc(var(--reaction-dy) * var(--horseshoe-pull) * -1)) scale(1) rotate(0) }
+    100% { opacity: 0; transform: translate(calc(var(--reaction-dx) * var(--horseshoe-pull) * -1),
+                                            calc(var(--reaction-dy) * var(--horseshoe-pull) * -1)) scale(.8) }
+}
+
+/* The field is a ring that CLOSES on the magnet (everything else in the sheet bursts
+   outwards), the tell that this one pulls. */
+@keyframes reaction-horseshoe-field {
+    0% { opacity: 0; transform: scale(1.7) }
+    35% { opacity: .9 }
+    100% { opacity: 0; transform: scale(.25) }
+}
+
+/* Chips as gold stars: tremble on a ring, snap onto the poles, ride the yank. */
+@keyframes reaction-horseshoe-filing {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg)) translateY(calc(var(--horseshoe-r) * -1.25)) scale(.6); translate: 0 0 }
+    12% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg)) translateY(calc(var(--horseshoe-r) * -1)) scale(1) }
+    22% { transform: rotate(calc(var(--piece) * 60deg + 6deg)) translateY(calc(var(--horseshoe-r) * -.92)) scale(1) }
+    28% { transform: rotate(calc(var(--piece) * 60deg - 6deg)) translateY(calc(var(--horseshoe-r) * -.88)) scale(1) }
+    42% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg + 120deg)) translateY(0) scale(.7); translate: 0 0 }
+    50% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg + 120deg)) translateY(0) scale(.7); translate: 0 0 }
+    62% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg + 120deg)) translateY(0) scale(.8);
+          translate: calc(var(--reaction-dx) * var(--horseshoe-pull) * -1.18 + (var(--piece) - 2.5) * 4px) calc(var(--reaction-dy) * var(--horseshoe-pull) * -1.18) }
+    74%, 84% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg + 120deg)) translateY(0) scale(.8);
+          translate: calc(var(--reaction-dx) * var(--horseshoe-pull) * -1 + (var(--piece) - 2.5) * 5px) calc(var(--reaction-dy) * var(--horseshoe-pull) * -1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 120deg)) translateY(0) scale(.4);
+          translate: calc(var(--reaction-dx) * var(--horseshoe-pull) * -1 + (var(--piece) - 2.5) * 5px) calc(var(--reaction-dy) * var(--horseshoe-pull) * -1) }
 }
 
 @keyframes reaction-puddle {
@@ -1661,9 +3480,18 @@
 
 @keyframes reaction-splash-ring {
     0% { opacity: 0; transform: scale(.12) }
-    20% { opacity: .92; transform: scale(.66) }
-    52% { opacity: .42; transform: scale(1) }
-    100% { opacity: 0; transform: scale(1.26) }
+    14% { opacity: .92; transform: scale(.66) }
+    38% { opacity: .3; transform: scale(1) }
+    55% { opacity: 0; transform: scale(1.1) }
+    62% { opacity: .85; transform: scale(.3) }
+    100% { opacity: 0; transform: scale(.95) }
+}
+
+@keyframes reaction-tear-note {
+    0% { opacity: 0; transform: translate(var(--note-x), 0) rotate(-8deg) scale(.5) }
+    25% { opacity: 1; transform: translate(calc(var(--note-x) * 1.2), -14px) rotate(8deg) scale(1) }
+    55% { opacity: 1; transform: translate(calc(var(--note-x) * .8), -30px) rotate(-8deg) scale(1) }
+    100% { opacity: 0; transform: translate(calc(var(--note-x) * 1.1), -48px) rotate(6deg) scale(.9) }
 }
 
 /* The rebound jet: the crater closes and throws a column back up, which pinches
@@ -1671,11 +3499,17 @@
    makes an impact look like water rather than like a shape appearing. */
 @keyframes reaction-splash-jet {
     0% { opacity: 0; transform: translateY(7px) scale(.38, .44) }
-    13% { opacity: 1; transform: translateY(-7px) scale(.66, 1.58) }
-    37% { opacity: 1; transform: translateY(-31px) scale(.9, 1.12) }
-    61% { opacity: 1; transform: translateY(-15px) scale(1, 1) }
-    85% { opacity: .92; transform: translateY(5px) scale(1.28, .6) }
-    100% { opacity: 0; transform: translateY(6px) scale(1.62, .34) }
+    10% { opacity: 1; transform: translateY(-7px) scale(.66, 1.58) }
+    27% { opacity: 1; transform: translateY(-31px) scale(.9, 1.12) }
+    42% { opacity: 1; transform: translateY(-15px) scale(1, 1) }
+    50% { opacity: .9; transform: translateY(5px) scale(1.28, .6) }
+    53% { opacity: 0; transform: translateY(6px) scale(1.5, .34) }
+    /* the dare: a second drop falls straight into the crater */
+    54% { opacity: 0; transform: translateY(-46px) scale(.7, 1.5) }
+    60% { opacity: 1; transform: translateY(-34px) scale(.74, 1.5) }
+    70% { opacity: 1; transform: translateY(2px) scale(.8, 1.34) }
+    76% { opacity: .95; transform: translateY(5px) scale(1.4, .5) }
+    100% { opacity: 0; transform: translateY(6px) scale(1.7, .3) }
 }
 
 @keyframes reaction-splash-arc {
@@ -1688,6 +3522,60 @@
 /* Twelve pieces of a thrown fistful: out on a bearing, up over the hop, then
    down onto the felt where each one lands flat (scaleY compressed = a disc seen
    from above) and settles. */
+@keyframes reaction-chip-flick {
+    0% {
+        opacity: 0;
+        translate: calc(var(--chip-from-x) + var(--chip-land-x) * var(--chip-k, 1))
+                   calc(var(--chip-from-y) + var(--chip-land-y) * var(--chip-k, 1));
+        rotate: var(--chip-rot0);
+        scale: .7
+    }
+    10% { opacity: 1 }
+    46% {
+        opacity: 1;
+        translate: calc(var(--chip-land-x) * var(--chip-k, 1)) calc(var(--chip-land-y) * var(--chip-k, 1));
+        rotate: var(--chip-rot1);
+        scale: 1.06 .8
+    }
+    56%, 84% {
+        opacity: 1;
+        translate: calc(var(--chip-land-x) * var(--chip-k, 1)) calc(var(--chip-land-y) * var(--chip-k, 1));
+        rotate: var(--chip-rot1);
+        scale: 1
+    }
+    100% {
+        opacity: 0;
+        translate: calc(var(--chip-land-x) * var(--chip-k, 1)) calc(var(--chip-land-y) * var(--chip-k, 1));
+        rotate: var(--chip-rot1);
+        scale: .96
+    }
+}
+
+/* Coin toss: path (translate) and flips (scale Y) are separate properties so the
+   two edge-on turns do not need their own path stops. Lands on the pile at 62%. */
+@keyframes reaction-chip-toss {
+    0% {
+        opacity: 0;
+        translate: calc(var(--chip-from-x) * 1.4) calc(var(--chip-from-y) * 1.4 + 8px * var(--chip-k, 1));
+        rotate: -20deg;
+        scale: .7 1
+    }
+    6% { opacity: 1 }
+    36% {
+        translate: calc(var(--chip-from-x) * .35) calc(var(--chip-from-y) * .35 - 62px * var(--chip-k, 1));
+        animation-timing-function: cubic-bezier(.5, 0, .9, .6)
+    }
+    62% {
+        opacity: 1;
+        translate: 0 0;
+        scale: 1.1 .8;
+        rotate: 8deg
+    }
+    68% { scale: .98 1; rotate: 0deg }
+    72%, 88% { opacity: 1; translate: 0 0; scale: 1; rotate: 0deg }
+    100% { opacity: 0; translate: 0 0; scale: .96 }
+}
+
 @keyframes reaction-chip-scatter {
     0% { opacity: 0; transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.38) }
     9% { opacity: 1 }
@@ -1731,6 +3619,78 @@
     100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 7deg)) translateY(-58px) scale(.65) }
 }
 
+@keyframes reaction-tomato-splat {
+    0% { opacity: 0; transform: scale(.25, .2) }
+    10% { opacity: .96; transform: scale(1.32, .52) }
+    26% { opacity: .94; transform: scale(.98, 1.04) }
+    70% { opacity: .9; transform: translateY(10px) scale(.96, 1.12) }
+    100% { opacity: 0; transform: translateY(18px) scale(.94, 1.2) }
+}
+
+@keyframes reaction-tomato-drip {
+    0% { opacity: 0; transform: scaleY(.05) }
+    12% { opacity: .92 }
+    55% { opacity: .92; transform: scaleY(1) translateY(0) }
+    100% { opacity: 0; transform: scaleY(1) translateY(22px) }
+}
+
+@keyframes reaction-tomato-word {
+    0% { opacity: 0; transform: translate(-50%, -50%) rotate(-18deg) scale(.35) }
+    14% { opacity: 1; transform: translate(-50%, -50%) rotate(-8deg) scale(1.18) }
+    28%, 62% { opacity: 1; transform: translate(-50%, -50%) rotate(-8deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -30%) rotate(-4deg) scale(.96) }
+}
+
+@keyframes reaction-tomato-seed {
+    0% { opacity: 0; transform: translate(0, 0) scale(.4) }
+    24% { opacity: 1; transform: translate(calc(var(--seed-x) * .7), var(--seed-y)) scale(1) }
+    100% { opacity: 0; transform: translate(var(--seed-x), calc(var(--seed-y) + 58px)) scale(.8) }
+}
+
+@keyframes reaction-tomato-fall {
+    0% { opacity: 0; transform: translate(var(--seed-x), 0) scale(.4) }
+    18% { opacity: .95; transform: translate(var(--seed-x), var(--seed-y)) scale(1, 1.2) }
+    100% { opacity: 0; transform: translate(var(--seed-x), calc(var(--seed-y) + 34px)) scale(.8, 1.7) }
+}
+
+@keyframes reaction-poop-plop {
+    0% { opacity: 0; transform: translateY(-64px) scale(.8, 1.25) }
+    8% { opacity: 1; transform: translateY(-40px) scale(.9, 1.15) }
+    18% { opacity: 1; transform: translateY(0) scale(1.35, .55) }
+    30% { opacity: 1; transform: translateY(-10px) scale(.92, 1.12) }
+    42% { opacity: 1; transform: translateY(0) scale(1.06, .94) }
+    54%, 80% { opacity: 1; transform: scale(1) }
+    100% { opacity: 0; transform: translateY(6px) scale(1.02, .96) }
+}
+
+@keyframes reaction-poop-haze {
+    0% { opacity: 0; transform: scale(.4) }
+    35%, 65% { opacity: 1; transform: scale(1) }
+    100% { opacity: 0; transform: translateY(-14px) scale(1.25) }
+}
+
+@keyframes reaction-poop-word {
+    0% { opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(.3) }
+    12% { opacity: 1; transform: translate(-50%, -50%) rotate(-6deg) scale(1.4) }
+    24%, 70% { opacity: 1; transform: translate(-50%, -50%) rotate(-6deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -80%) rotate(-3deg) scale(.95) }
+}
+
+@keyframes reaction-poop-fly {
+    0% { opacity: 0; transform: scaleY(.6) rotate(calc(var(--piece) * 120deg)) translateX(var(--orbit)) }
+    12% { opacity: 1 }
+    80% { opacity: 1 }
+    100% { opacity: 0; transform: scaleY(.6) rotate(calc(var(--piece) * 120deg + 600deg)) translateX(calc(var(--orbit) * 1.5)) }
+}
+
+@keyframes reaction-poop-fume {
+    0% { opacity: 0; transform: translate(0, 0) skewX(0) scale(.6) }
+    20% { opacity: .85; transform: translate(var(--sway), -12px) skewX(14deg) scale(1) }
+    45% { opacity: .85; transform: translate(calc(var(--sway) * -.6), -30px) skewX(-14deg) scale(1) }
+    70% { opacity: .6; transform: translate(var(--sway), -46px) skewX(14deg) scale(1.05) }
+    100% { opacity: 0; transform: translate(calc(var(--sway) * -.4), -60px) skewX(-10deg) scale(1.1) }
+}
+
 @keyframes reaction-stink-cloud {
     0% { opacity: 0; transform: scale(.3); filter: blur(2px) }
     30%, 68% { opacity: .8; transform: scale(1); filter: blur(8px) }
@@ -1738,17 +3698,109 @@
 }
 
 
-@keyframes reaction-duck-waddle {
-    0% { opacity: 0; transform: translateX(-35px) rotate(-14deg) scale(.66) }
-    26% { opacity: 1; transform: translateX(-7px) rotate(8deg) scale(1.08) }
-    42%, 74% { opacity: 1; transform: translateX(4px) rotate(-5deg) scale(1) }
-    100% { opacity: 0; transform: translateX(35px) rotate(8deg) scale(.82) }
+@keyframes reaction-duck-plop {
+    0% { opacity: 0; transform: translateY(-58px) rotate(-34deg) scale(1.2) }
+    10% { opacity: 1 }
+    22% { opacity: 1; transform: translateY(3px) rotate(0) scale(1.34, .6) }
+    32% { transform: translateY(-11px) rotate(9deg) scale(.88, 1.14) }
+    42% { transform: translateY(1px) rotate(-7deg) scale(1.1, .9) }
+    56% { transform: translateY(0) rotate(-13deg) scale(1) }
+    72% { transform: translateY(2px) rotate(-8deg) scale(1) }
+    100% { opacity: 1; transform: translateY(-1px) rotate(-14deg) scale(1) }
 }
 
-@keyframes reaction-turtle-tank {
-    0% { opacity: 0; transform: translateX(-34px) scale(.65) }
-    34%, 76% { opacity: 1; transform: translateX(0) scale(1) }
-    100% { opacity: 0; transform: translateX(16px) scale(.9) }
+@keyframes reaction-duck-squeak {
+    0% { opacity: 0; transform: translate(-50%, -50%) rotate(-6deg) scale(.4, 1.5) }
+    16% { opacity: 1; transform: translate(-50%, -50%) rotate(-6deg) scale(1.35, .7) }
+    32% { transform: translate(-50%, -50%) rotate(-6deg) scale(.92, 1.14) }
+    48%, 78% { opacity: 1; transform: translate(-50%, -50%) rotate(-6deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -62%) rotate(-6deg) scale(.9) }
+}
+
+@keyframes reaction-duck-puddle {
+    0% { opacity: 0; transform: scale(.25, .1) }
+    18% { opacity: 1; transform: scale(1, .42) }
+    100% { opacity: .8; transform: scale(1.05, .44) }
+}
+
+@keyframes reaction-duck-ripple {
+    0% { opacity: 0; transform: scale(.3, .13) }
+    8% { opacity: .9 }
+    48% { opacity: 0; transform: scale(1.5, .62) }
+    50% { opacity: 0; transform: scale(.3, .13) }
+    58% { opacity: .75 }
+    100% { opacity: 0; transform: scale(1.6, .66) }
+}
+
+@keyframes reaction-duck-feather {
+    0% { opacity: 0; transform: translate(0, 0) rotate(0) scale(.6) }
+    12% { opacity: 1; transform: translate(calc(var(--fx) * .6), -30px) rotate(calc(var(--fr) * .3)) scale(1) }
+    42% { opacity: 1; transform: translate(calc(var(--fx) * 1.1), -16px) rotate(calc(var(--fr) * .6)) scale(1) }
+    70% { opacity: .9; transform: translate(calc(var(--fx) * .55), 6px) rotate(calc(var(--fr) * -.2)) scale(1) }
+    100% { opacity: 0; transform: translate(calc(var(--fx) * 1.05), 26px) rotate(var(--fr)) scale(.9) }
+}
+
+/* turtle keyframes: one block, see "Turtle" above the boomerang block. The
+   plod advances 1/8 of the way per step (r = what is left to crawl). */
+@keyframes reaction-turtle-node {
+    0%, 92% { opacity: 1; transform: translate(var(--reaction-dx), var(--reaction-dy)) }
+    100% { opacity: 0; transform: translate(var(--reaction-dx), var(--reaction-dy)) }
+}
+
+@keyframes reaction-turtle-crawl {
+    0% { opacity: 1; transform: translate(calc(var(--reaction-dx) * -1), calc(var(--reaction-dy) * -1)) rotate(-7deg) }
+    12.5% { transform: translate(calc(var(--reaction-dx) * -.875), calc(var(--reaction-dy) * -.875 - 3px)) rotate(7deg) }
+    25% { transform: translate(calc(var(--reaction-dx) * -.75), calc(var(--reaction-dy) * -.75)) rotate(-7deg) }
+    37.5% { transform: translate(calc(var(--reaction-dx) * -.625), calc(var(--reaction-dy) * -.625 - 3px)) rotate(7deg) }
+    50% { transform: translate(calc(var(--reaction-dx) * -.5), calc(var(--reaction-dy) * -.5)) rotate(-7deg) }
+    62.5% { transform: translate(calc(var(--reaction-dx) * -.375), calc(var(--reaction-dy) * -.375 - 3px)) rotate(7deg) }
+    75% { transform: translate(calc(var(--reaction-dx) * -.25), calc(var(--reaction-dy) * -.25)) rotate(-7deg) }
+    87.5% { transform: translate(calc(var(--reaction-dx) * -.125), calc(var(--reaction-dy) * -.125 - 3px)) rotate(7deg) }
+    100% { opacity: 1; transform: none }
+}
+
+/* Clock face: pops in, holds, then jumps when the turtle finally arrives. */
+@keyframes reaction-turtle-face {
+    0% { opacity: 0; transform: scale(.6) }
+    6% { opacity: 1; transform: scale(1) }
+    54% { opacity: 1; transform: scale(1); border-color: var(--ice) }
+    58% { opacity: 1; transform: scale(1.3); border-color: var(--danger) }
+    72%, 100% { opacity: 1; transform: scale(1); border-color: var(--danger) }
+}
+
+/* Hand: fast-forward (about 5 turns a second), then it jams at arrival. */
+@keyframes reaction-turtle-hand {
+    0% { opacity: 0; transform: rotate(0) }
+    6% { opacity: 1 }
+    52% { opacity: 1; transform: rotate(2500deg); background: var(--ice) }
+    58%, 100% { opacity: 1; transform: rotate(2540deg); background: var(--danger) }
+}
+
+/* Speed streaks: the rest of the table moving at fast-forward, left to right. */
+@keyframes reaction-turtle-streak {
+    0% { opacity: 0; transform: translateX(-46px) scaleX(.4) }
+    25% { opacity: .9; transform: translateX(-20px) scaleX(1) }
+    100% { opacity: 0; transform: translateX(46px) scaleX(1.4) }
+}
+
+/* The second dagger: in from behind (tip toward the target), thunk at 6%, then quiver
+   around its tip with a decaying wobble. */
+@keyframes reaction-knife-stab {
+    0% {
+        opacity: 0;
+        translate: calc(var(--wx) * 2.6) calc(var(--wy) * 2.6);
+        rotate: calc(var(--knife-turn) + 30deg);
+        scale: 1.4;
+        animation-timing-function: cubic-bezier(.7, 0, 1, .7);
+    }
+    3% { opacity: 1 }
+    6% { opacity: 1; translate: 0 0; rotate: var(--knife-turn); scale: 1 }
+    9% { opacity: 1; rotate: calc(var(--knife-turn) + 17deg) }
+    13% { rotate: calc(var(--knife-turn) - 12deg) }
+    18% { rotate: calc(var(--knife-turn) + 7deg) }
+    24% { rotate: calc(var(--knife-turn) - 4deg) }
+    32%, 84% { opacity: 1; translate: 0 0; rotate: var(--knife-turn); scale: 1 }
+    100% { opacity: 0; translate: 0 0; rotate: var(--knife-turn); scale: 1 }
 }
 
 @keyframes reaction-bleed-drip {
@@ -1759,47 +3811,118 @@
     100% { opacity: 0; transform: rotate(var(--rot)) scaleY(1) }
 }
 
-@keyframes reaction-bouquet-open {
-    0% { opacity: 0; transform: translateY(21px) rotate(-16deg) scale(.45); filter: blur(3px) }
-    30%, 76% { opacity: 1; transform: translateY(0) rotate(4deg) scale(1.08); filter: blur(0) }
-    100% { opacity: 0; transform: translateY(4px) rotate(0) scale(.94) }
+/* flowers keyframes: no bounce on purpose, the bouquet is laid down gravely. */
+@keyframes reaction-flowers-lay {
+    0% { opacity: 0; transform: translateY(-26px) rotate(-14deg) }
+    30% { opacity: 1; transform: translateY(0) rotate(-3deg) }
+    46%, 100% { opacity: 1; transform: translateY(0) rotate(0) }
 }
 
-@keyframes reaction-spotlight-sweep {
-    0% { opacity: 0; transform: rotate(-26deg) scaleX(.25); filter: blur(5px) }
-    30%, 76% { opacity: .92; transform: rotate(0) scaleX(1); filter: blur(0) }
-    100% { opacity: 0; transform: rotate(18deg) scaleX(.55); filter: blur(4px) }
+@keyframes reaction-flowers-hush {
+    0%, 20% { opacity: 0; transform: scaleX(.4) }
+    100% { opacity: 1; transform: scaleX(1) }
 }
 
-@keyframes reaction-spotlight-word {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(.55); filter: blur(3px) }
-    32%, 74% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0) }
-    100% { opacity: 0; transform: translate(-50%, -57%) scale(.88) }
+@keyframes reaction-flowers-sash {
+    0% { opacity: 0; clip-path: inset(0 50% 0 50%) }
+    100% { opacity: 1; clip-path: inset(0) }
 }
 
+@keyframes reaction-flowers-petal {
+    0% { opacity: 0; transform: translate(calc(var(--fx) * .2), 0) rotate(0) }
+    14% { opacity: 1 }
+    55% { transform: translate(calc(var(--fx) * 1.3), calc(var(--fy) * .55)) rotate(calc(var(--fr) * .6)) }
+    100% { opacity: 1; transform: translate(var(--fx), var(--fy)) rotate(var(--fr)) }
+}
+
+@keyframes reaction-spotlight-cone {
+    0% { opacity: 0; transform: scaleY(.2) }
+    4% { opacity: .9; transform: scaleY(1) }
+    8% { opacity: .15 }
+    12% { opacity: .95 }
+    16% { opacity: .35 }
+    20%, 78% { opacity: 1; transform: scaleY(1) }
+    100% { opacity: 0; transform: scaleY(1) }
+}
+
+@keyframes reaction-spotlight-pool {
+    0%, 4% { opacity: 0; transform: scale(.4) }
+    14% { opacity: 1; transform: scale(1.25) }
+    24%, 78% { opacity: .85; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1) }
+}
+
+@keyframes reaction-spotlight-ghost {
+    0% { opacity: 0; transform: translateY(14px) scale(.7) }
+    18%, 55% { opacity: 1; transform: translateY(0) scale(1) }
+    66% { opacity: .2 }
+    76% { opacity: .9 }
+    100% { opacity: 0; transform: translateY(-10px) scale(.9) }
+}
+
+@keyframes reaction-spotlight-mote {
+    0% { opacity: 0; transform: translateY(52px) }
+    25%, 70% { opacity: .9 }
+    100% { opacity: 0; transform: translateY(-14px) translateX(calc((var(--piece) - 3.5) * 5px)) }
+}
+
+@keyframes reaction-spotlight-stamp {
+    0% { opacity: 0; scale: 1.7 }
+    18%, 80% { opacity: 1; scale: 1 }
+    100% { opacity: 0; scale: .95 }
+}
+
+/* drop (ease-in), squash into the velvet, bounce, settle, then slip over one eye */
 @keyframes reaction-crown-land {
-    0% { opacity: 0; transform: translateY(-52px) rotate(-18deg) scale(.72) }
-    28% { opacity: 1; transform: translateY(3px) rotate(7deg) scale(1.12) }
-    43%, 78% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
-    100% { opacity: 0; transform: translateY(-3px) scale(.94) }
+    0% { opacity: 0; transform: translateY(-78px) rotate(-8deg) scale(1.3); animation-timing-function: cubic-bezier(.5, 0, .9, .6) }
+    2% { opacity: 1 }
+    13% { opacity: 1; transform: translateY(-16px) rotate(0) scale(1) }
+    18% { transform: translateY(-12px) scale(1.14, .74); animation-timing-function: var(--ease-out-quart) }
+    28% { transform: translateY(-27px) scale(.96, 1.06) }
+    38% { transform: translateY(-16px) scale(1) }
+    52% { transform: translateY(-16px) rotate(0) }
+    60%, 84% { opacity: 1; transform: translate(-6px, 2px) rotate(-24deg) scale(1) }
+    100% { opacity: 0; transform: translate(-6px, 4px) rotate(-24deg) scale(.94) }
 }
 
-@keyframes reaction-crown-suit {
-    0% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg)) translateY(-18px) scale(.3) }
-    28%, 72% { opacity: 1; transform: rotate(calc(var(--piece) * 72deg + 48deg)) translateY(-52px) scale(1) }
-    100% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg + 76deg)) translateY(-60px) scale(.58) }
+@keyframes reaction-crown-thud {
+    0% { opacity: .85; transform: scale(.4) }
+    100% { opacity: 0; transform: scale(1.5) }
 }
 
-@keyframes reaction-bandage-seal {
-    0% { opacity: 0; transform: rotate(-42deg) scale(.3); filter: blur(4px) }
-    30%, 76% { opacity: 1; transform: rotate(8deg) scale(1.1); filter: blur(0) }
-    100% { opacity: 0; transform: rotate(0) scale(.95) }
+@keyframes reaction-crown-streamer {
+    0% { opacity: 0; transform: rotate(calc((var(--piece) - 2) * 32deg)) translateY(-6px) scale(.4) }
+    22% { opacity: 1; transform: rotate(calc((var(--piece) - 2) * 32deg)) translateY(-46px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc((var(--piece) - 2) * 32deg + 40deg)) translateY(-30px) scale(.7) }
 }
 
-@keyframes reaction-heal-ring {
-    0% { opacity: 0; transform: scale(.3) }
-    30%, 70% { opacity: 1; transform: scale(1) }
-    100% { opacity: 0; transform: scale(1.45) }
+@keyframes reaction-bandage-slap {
+    0% { opacity: 0; transform: rotate(-58deg) scale(2.1) }
+    8% { opacity: 1 }
+    10% { opacity: 1; transform: rotate(-28deg) scale(1) }
+    13% { transform: rotate(-28deg) scale(1.24, .6) }
+    18% { transform: rotate(-28deg) scale(.94, 1.12) }
+    23%, 30% { transform: rotate(-28deg) scale(1) }
+    34% { transform: rotate(-28deg) scale(1.08) }
+    38%, 42% { transform: rotate(-28deg) scale(1) }
+    46% { transform: rotate(-28deg) scale(1.06) }
+    50%, 52% { transform: rotate(-28deg) scale(1) }
+    56%, 64% { opacity: 1; transform: translate(2px, 3px) rotate(-35deg) scale(1) }
+    84%, 100% { opacity: 0; transform: translate(12px, 26px) rotate(-84deg) scale(.96) }
+}
+
+@keyframes reaction-bandage-crack {
+    0% { opacity: 0; transform: rotate(18deg) scaleX(.15) }
+    14% { opacity: 1; transform: rotate(18deg) scaleX(1.06) }
+    22%, 52% { opacity: 1; transform: rotate(18deg) scaleX(1) }
+    84% { opacity: 1; transform: rotate(18deg) scaleX(.04) }
+    100% { opacity: 0; transform: rotate(18deg) scaleX(.04) }
+}
+
+@keyframes reaction-bandage-plus {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 1) * 14px), -8px) scale(.3) }
+    28%, 64% { opacity: 1; transform: translate(calc((var(--piece) - 1) * 34px), calc(-22px - var(--piece) * 3px)) scale(1) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1) * 38px), calc(-28px - var(--piece) * 3px)) scale(.7) }
 }
 
 @media (max-width: 420px) {
