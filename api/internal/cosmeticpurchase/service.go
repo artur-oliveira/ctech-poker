@@ -205,6 +205,9 @@ func (s *Service) requireOpenWindow(ctx context.Context, playerID string, kind c
 	if ent != nil && ent.RequestKey == requestKey {
 		return nil
 	}
+	if ent.active() {
+		return ErrAlreadyOwned // owning it is the truer answer than "window closed"
+	}
 	return ErrNotAvailable
 }
 

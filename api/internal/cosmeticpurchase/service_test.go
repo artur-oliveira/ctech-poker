@@ -82,6 +82,8 @@ func premiumFixtures() []premiumFixture {
 	return []premiumFixture{
 		{kind: cosmetics.KindDeck, itemID: "golden", sku: "poker_deck_golden", priceFichas: 500_000, priceCents: 500},
 		{kind: cosmetics.KindFelt, itemID: "midnight", sku: "poker_felt_midnight", priceFichas: 1_000_000, priceCents: 1000},
+		{kind: cosmetics.KindHat, itemID: "top-hat", sku: "poker_hat_top_hat", priceFichas: 300_000, priceCents: 300},
+		{kind: cosmetics.KindFrame, itemID: "felt-ring", sku: "poker_frame_felt_ring", priceFichas: 600_000, priceCents: 600},
 	}
 }
 
@@ -93,7 +95,7 @@ func premiumFixtures() []premiumFixture {
 func TestListCatalogMergesFreeAndPremium(t *testing.T) {
 	for _, fx := range premiumFixtures() {
 		t.Run(string(fx.kind), func(t *testing.T) {
-			w := &fakeWallet{skus: allCosmeticSKUs()}
+			w := &fakeWallet{skus: allSKUsWithAvatars()}
 			svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
 			entries, err := svc.ListCatalog(context.Background(), "player-1", fx.kind)
 			if err != nil {
@@ -311,23 +313,26 @@ func TestRefundWithoutCurrentSelectionFuncWiredAllowsRefund(t *testing.T) {
 }
 
 func TestRefundSandboxCannotCreditTwice(t *testing.T) {
-	fx := premiumFixtures()[0]
-	wallet := &fakeWallet{}
-	entitlements, store := newTestEntitlementStore(t), newTestStore(t)
-	svc := NewService(wallet, entitlements, store)
-	playerID := "player-refund-once"
-	rec, err := svc.CreateSandbox(context.Background(), playerID, fx.kind, fx.itemID, "idem-buy-once")
-	if err != nil {
-		t.Fatalf("CreateSandbox: %v", err)
-	}
-	if _, err := svc.Refund(context.Background(), playerID, rec.PurchaseID, "caller-key-1"); err != nil {
-		t.Fatalf("first Refund: %v", err)
-	}
-	if _, err := svc.Refund(context.Background(), playerID, rec.PurchaseID, "caller-key-2"); !errors.Is(err, ErrAlreadyRefunded) {
-		t.Fatalf("second Refund = %v, want ErrAlreadyRefunded", err)
-	}
-	if wallet.credits != 1 {
-		t.Fatalf("refund credited wallet %d times, want exactly once", wallet.credits)
+	for _, fx := range premiumFixtures() {
+		t.Run(string(fx.kind), func(t *testing.T) {
+			wallet := &fakeWallet{}
+			entitlements, store := newTestEntitlementStore(t), newTestStore(t)
+			svc := NewService(wallet, entitlements, store)
+			playerID := "player-refund-once-" + string(fx.kind)
+			rec, err := svc.CreateSandbox(context.Background(), playerID, fx.kind, fx.itemID, "idem-buy-once")
+			if err != nil {
+				t.Fatalf("CreateSandbox: %v", err)
+			}
+			if _, err := svc.Refund(context.Background(), playerID, rec.PurchaseID, "caller-key-1"); err != nil {
+				t.Fatalf("first Refund: %v", err)
+			}
+			if _, err := svc.Refund(context.Background(), playerID, rec.PurchaseID, "caller-key-2"); !errors.Is(err, ErrAlreadyRefunded) {
+				t.Fatalf("second Refund = %v, want ErrAlreadyRefunded", err)
+			}
+			if wallet.credits != 1 {
+				t.Fatalf("refund credited wallet %d times, want exactly once", wallet.credits)
+			}
+		})
 	}
 }
 
@@ -685,4 +690,115 @@ func TestConfirmFromWebhookGrantsAvatarEntitlement(t *testing.T) {
 	if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindAccessory, "monocle"); err != nil || !owned {
 		t.Fatalf("monocle not owned after webhook: owned=%v err=%v", owned, err)
 	}
+}
+
+// Not parallel: swaps the package-level cosmetics catalog.
+func TestClosedWindowOwnedVsPendingOtherKey(t *testing.T) {
+	until := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	const sku = "poker_hat_ltd"
+	defer cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "ltd-hat", Premium: true, Source: cosmetics.SourcePurchase, SKU: sku, PriceFichas: 100_000, Until: until},
+	})()
+	ctx := context.Background()
+
+	t.Run("owned new key is already_owned", func(t *testing.T) {
+		w := &fakeWallet{}
+		svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+		playerID := uniquePlayer("player-closed-owned")
+		svc.now = func() time.Time { return until.Add(-time.Minute) }
+		if _, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-first"); err != nil {
+			t.Fatalf("CreateSandbox inside window: %v", err)
+		}
+		svc.now = func() time.Time { return until.Add(time.Hour) }
+		if _, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-new"); !errors.Is(err, ErrAlreadyOwned) {
+			t.Fatalf("CreateSandbox new key = %v, want ErrAlreadyOwned", err)
+		}
+		if _, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-new"); !errors.Is(err, ErrAlreadyOwned) {
+			t.Fatalf("CreateReal new key = %v, want ErrAlreadyOwned", err)
+		}
+		if w.debits != 1 || len(w.purchaseKeys) != 0 {
+			t.Fatalf("wallet touched after close: debits=%d purchases=%d", w.debits, len(w.purchaseKeys))
+		}
+	})
+
+	t.Run("pending other key is not_available", func(t *testing.T) {
+		playerID := uniquePlayer("player-closed-pending")
+		pending := &walletclient.ProductPurchase{PurchaseID: "prdp-pending-" + playerID, UserID: playerID, SKU: sku, Amount: 100, Status: "pending"}
+		w := &fakeWallet{purchase: pending, getResult: pending}
+		svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+		svc.now = func() time.Time { return until.Add(-time.Minute) }
+		if _, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-pix"); err != nil {
+			t.Fatalf("CreateReal inside window: %v", err)
+		}
+		svc.now = func() time.Time { return until.Add(time.Hour) }
+		if _, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-other"); !errors.Is(err, ErrNotAvailable) {
+			t.Fatalf("CreateSandbox other key = %v, want ErrNotAvailable", err)
+		}
+		if _, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-other"); !errors.Is(err, ErrNotAvailable) {
+			t.Fatalf("CreateReal other key = %v, want ErrNotAvailable", err)
+		}
+		if w.debits != 0 || len(w.purchaseKeys) != 1 {
+			t.Fatalf("wallet touched after close: debits=%d purchases=%d", w.debits, len(w.purchaseKeys))
+		}
+	})
+}
+
+// Money already moved: confirming a PIX opened in-window must never be gated
+// by a window that closed before the wallet confirmed it.
+// Not parallel: swaps the package-level cosmetics catalog.
+func TestWebhookAndRefreshNeverWindowGated(t *testing.T) {
+	until := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	const sku = "poker_hat_ltd"
+	defer cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "ltd-hat", Premium: true, Source: cosmetics.SourcePurchase, SKU: sku, PriceFichas: 100_000, Until: until},
+	})()
+	ctx := context.Background()
+
+	for _, path := range []string{"webhook", "refresh"} {
+		t.Run(path, func(t *testing.T) {
+			playerID := uniquePlayer("player-late-confirm-" + path)
+			purchaseID := "prdp-late-" + playerID
+			w := &fakeWallet{purchase: &walletclient.ProductPurchase{PurchaseID: purchaseID, UserID: playerID, SKU: sku, Amount: 100, Status: "pending"}}
+			svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+			svc.now = func() time.Time { return until.Add(-time.Minute) }
+			if _, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-late"); err != nil {
+				t.Fatalf("CreateReal inside window: %v", err)
+			}
+			svc.now = func() time.Time { return until.Add(time.Hour) }
+			w.getResult = &walletclient.ProductPurchase{PurchaseID: purchaseID, UserID: playerID, SKU: sku, Amount: 100, Status: "confirmed"}
+			var rec Record
+			var err error
+			if path == "webhook" {
+				rec, _, err = svc.ConfirmFromWebhook(ctx, purchaseID)
+			} else {
+				rec, err = svc.Refresh(ctx, playerID, purchaseID)
+			}
+			if err != nil || rec.Status != "confirmed" || rec.Kind != string(cosmetics.KindHat) || rec.ItemID != "ltd-hat" {
+				t.Fatalf("%s after close: rec=%+v err=%v", path, rec, err)
+			}
+			if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindHat, "ltd-hat"); err != nil || !owned {
+				t.Fatalf("not owned after late %s: owned=%v err=%v", path, owned, err)
+			}
+		})
+	}
+
+	t.Run("ambiguous fichas debit resumes once after close", func(t *testing.T) {
+		w := &fakeWallet{debitErr: &walletclient.Error{Status: 503, Title: "Service Unavailable"}}
+		svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+		playerID := uniquePlayer("player-ambiguous-resume")
+		svc.now = func() time.Time { return until.Add(-time.Minute) }
+		if _, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-ambiguous"); err == nil {
+			t.Fatal("expected the ambiguous debit error")
+		}
+		svc.now = func() time.Time { return until.Add(time.Hour) }
+		w.debitErr = nil
+		rec, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-ambiguous")
+		if err != nil || rec.Status != "confirmed" {
+			t.Fatalf("resume after close: rec=%+v err=%v", rec, err)
+		}
+		// Two Debit calls, one wallet idempotency key: the wallet charges once.
+		if len(w.debitKeys) != 2 || w.debitKeys[0] != w.debitKeys[1] {
+			t.Fatalf("resume must reuse the original wallet key, got %v", w.debitKeys)
+		}
+	})
 }

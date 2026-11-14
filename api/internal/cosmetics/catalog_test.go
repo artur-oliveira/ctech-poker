@@ -116,6 +116,17 @@ func TestAvatarCatalogInvariants(t *testing.T) {
 	}
 }
 
+// ListCatalog no longer fails loud (ErrCatalogMismatch) for a premium entry
+// that is not purchasable, so a premium deck/felt entry missing its SKU or
+// price would silently show no price; pin it here instead.
+func TestPremiumDeckFeltHaveSKUAndPrice(t *testing.T) {
+	for _, e := range catalog {
+		if e.Premium && e.Source == "" && (e.SKU == "" || e.PriceFichas <= 0) {
+			t.Fatalf("%v/%s premium without Source needs SKU and price", e.Kind, e.ID)
+		}
+	}
+}
+
 func TestAvailable(t *testing.T) {
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	until := from.Add(24 * time.Hour)
