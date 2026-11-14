@@ -188,6 +188,13 @@ describe('avatar item sections', () => {
       expect.any(HTMLButtonElement));
   });
 
+  test('an owned earned hat shows no price', () => {
+    render(<HatStoreSection catalog={[{kind: 'hat', id: 'crown', premium: true, owned: true, source: 'achievement',
+      available: true}]} purchases={[]} isLoading={false} isError={false} {...actions}/>);
+    expect(within(item('Coroa')).getByText('Sua')).toBeInTheDocument();
+    expect(within(item('Coroa')).queryByText(/R\$|fichas/)).not.toBeInTheDocument();
+  });
+
   test('an owned hat links to the profile to equip it', () => {
     renderHats();
     const row = item('Gorro');

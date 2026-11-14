@@ -76,7 +76,7 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
       return <li key={entry.id} className={`cosmetic-store-item${owned ? ' owned' : ''}`}>
         <span className="cosmetic-store-preview" aria-hidden="true">{renderPreview(entry.id)}</span>
         <span className="cosmetic-store-copy"><strong>{labelFor(entry.id)}</strong>
-          {entry.premium && !unavailable && <small>{moneyExact(entry.price_cents)} <span aria-hidden="true">·</span>
+          {entry.premium && !earnable && !unavailable && <small>{moneyExact(entry.price_cents)} <span aria-hidden="true">·</span>
             {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small>}</span>
         {!entry.premium ? <span className="cosmetic-store-free">Grátis</span>
           : owned ? <span className="cosmetic-store-owned"><Sparkles aria-hidden="true"/> Sua</span>
@@ -137,11 +137,12 @@ export function cosmeticItemLabel(kind: CosmeticKind, id: string): string | unde
   return AVATAR_ART[kind][id] ? AVATAR_ITEMS[kind][id]?.label : undefined;
 }
 
-/** An avatar item worn by a neutral "EU" chip: the same `PlayerAvatar`
- * composition the table and profile use, never a second one. Decorative. */
+/** An avatar item worn by a blank default avatar (initials hidden, so a mask
+ * or monocle is not drawn over letters): the same `PlayerAvatar` composition
+ * the table and profile use, never a second one. Decorative. */
 export function AvatarItemPreview({kind, id, size}: { kind: AvatarStoreKind; id: string; size: number }) {
   const slot = {frame: {frameId: id}, hat: {hatId: id}, accessory: {accessoryId: id}}[kind];
-  return <PlayerAvatar isViewer decorative size={size} {...slot}/>;
+  return <PlayerAvatar isViewer decorative size={size} className="text-transparent" {...slot}/>;
 }
 
 function avatarSection(kind: AvatarStoreKind, noun: string, plural: string) {

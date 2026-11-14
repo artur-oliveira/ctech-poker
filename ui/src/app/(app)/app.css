@@ -6510,8 +6510,11 @@ button.deck-grid-slot:hover {
         grid-template-areas: "glyph copy" "state action"
     }
 .cosmetic-store-item {
-        grid-template-columns: auto minmax(0, 1fr);
-        grid-template-areas: "preview copy" "state action"
+        /* The state label spans the preview column and a spare one, so a label
+           wider than the 48px preview ("Não liberada", "Conquista") never
+           pushes the item's name off its column. */
+        grid-template-columns: 48px auto minmax(0, 1fr);
+        grid-template-areas: "preview copy copy" "state state action"
     }
 .reaction-store-owned,
     .reaction-store-lock,
