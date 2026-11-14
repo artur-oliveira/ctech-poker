@@ -45,4 +45,3 @@ describe('websocket protocol utilities', () => {
     expect(b.badge_ids).toEqual([]);
   });
 });
-

@@ -270,8 +270,9 @@ const mockProfile = {
   wallet_mode: 'sandbox' as 'sandbox' | 'real',
   deck_variant: 'four-color' as DeckVariantId,
   table_theme: 'classic' as TableThemeId,
-  // One of each owned, so the equip picker (#292) has something to show
-  // without a purchase flow standing behind it in mock-land.
+  // Nothing equipped yet; mockOwnedAvatarIDs below owns items in all four
+  // slots, so the equip picker (#292) has something to show without a
+  // purchase flow standing behind it in mock-land.
   equipped_frame_id: '' as string,
   equipped_hat_id: '' as string,
   equipped_accessory_id: '' as string,
