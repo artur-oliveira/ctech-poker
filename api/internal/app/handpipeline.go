@@ -149,6 +149,10 @@ func (p *handPipeline) announceUnlocks(ctx context.Context, tableID string, unlo
 		if p.cosmetics == nil {
 			continue
 		}
+		// ponytail: lower rows are retried on every higher-tier unlock (one
+		// failed conditional write + one read each); add a previousStars field
+		// to achievements.TierUnlock and grant only rows above it if that cost
+		// ever matters.
 		for _, g := range cosmetics.GrantsFor(unlock.Key, unlock.Stars) {
 			created, err := p.cosmetics.Grant(ctx, unlock.PlayerID, g.Kind, g.ID, fmt.Sprintf("achievement:%s:%d", unlock.Key, unlock.Stars))
 			if err != nil {
