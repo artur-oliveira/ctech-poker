@@ -34,6 +34,16 @@ func TestEveryGrantTargetsAnAchievementItem(t *testing.T) {
 	}
 }
 
+func TestGrantRowsSortedByStarsWithinKey(t *testing.T) {
+	last := map[string]int{}
+	for _, g := range cosmetics.AchievementGrants {
+		if g.Stars < last[g.Key] {
+			t.Errorf("%s: %s at %d stars after a %d-star row", g.Key, g.ID, g.Stars, last[g.Key])
+		}
+		last[g.Key] = g.Stars
+	}
+}
+
 func TestEveryGrantKeyAndStarsExist(t *testing.T) {
 	for _, g := range cosmetics.AchievementGrants {
 		ok := false
@@ -58,8 +68,8 @@ func TestGrantsForSkippedTier(t *testing.T) {
 	for _, g := range cosmetics.GrantsFor("hands_played", 3) {
 		ids = append(ids, g.ID)
 	}
-	if want := []string{"dealer-visor", "chip-ring", "veteran"}; !reflect.DeepEqual(ids, want) {
-		t.Fatalf("got %v want %v (table order)", ids, want)
+	if want := []string{"dealer-visor", "veteran", "chip-ring"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("got %v want %v (tier order)", ids, want)
 	}
 }
 

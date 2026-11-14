@@ -10,16 +10,17 @@ type AchievementGrant struct {
 	ID    string
 }
 
-// AchievementGrants is the binding grant table. Season-source items have no
-// achievement trigger and are intentionally absent.
+// AchievementGrants is the binding grant table, rows ordered by Stars within
+// each key so a tier-skipping unlock toasts its items in tier order. Season-
+// source items have no achievement trigger and are intentionally absent.
 //
 // social-butterfly: no social achievement exists, so it maps to
 // won_full_table (the closest table-presence metric) until a hosting metric
 // exists.
 var AchievementGrants = []AchievementGrant{
 	{"hands_played", 1, KindHat, "dealer-visor"},
-	{"hands_played", 3, KindFrame, "chip-ring"},
 	{"hands_played", 2, KindBadge, "veteran"},
+	{"hands_played", 3, KindFrame, "chip-ring"},
 	{"wins", 3, KindHat, "laurel"},
 	{"wins", 4, KindHat, "crown"},
 	{"bluff", 2, KindAccessory, "bandit-mask"},

@@ -177,8 +177,8 @@ func TestTierSkippingUnlockGrantsEveryLowerRow(t *testing.T) {
 	}
 	assertAchievementFrame(t, frames[0], "hands_played", 3)
 	assertCosmeticFrame(t, frames[1], cosmetics.KindHat, "dealer-visor")
-	assertCosmeticFrame(t, frames[2], cosmetics.KindFrame, "chip-ring")
-	assertCosmeticFrame(t, frames[3], cosmetics.KindBadge, "veteran")
+	assertCosmeticFrame(t, frames[2], cosmetics.KindBadge, "veteran")
+	assertCosmeticFrame(t, frames[3], cosmetics.KindFrame, "chip-ring")
 }
 
 func TestNilGranterStillAnnouncesAchievements(t *testing.T) {
