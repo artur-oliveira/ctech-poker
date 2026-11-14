@@ -48,6 +48,12 @@ type countingDynamo struct {
 	// stopped writing shows up as a missing table rather than as a smaller
 	// (apparently better) budget.
 	tables map[string]int
+	// progressAttrs, when set, is the ALL_NEW image every achievement-progress
+	// UpdateItem returns, so a test can make a hand cross a tier (an unlock).
+	// Empty — the budget test's case — no counter crosses anything.
+	progressAttrs string
+	// client is the DynamoDB client wired to this stub, for stores a test adds.
+	client *dynamodb.Client
 }
 
 func (c *countingDynamo) Do(req *http.Request) (*http.Response, error) {
@@ -117,6 +123,9 @@ func (c *countingDynamo) Do(req *http.Request) (*http.Response, error) {
 		resp = `{"Items":[],"Count":0}`
 	case "UpdateItem":
 		resp = `{"Attributes":{}}`
+		if c.progressAttrs != "" && strings.Contains(body.TableName, "achievement_progress") {
+			resp = `{"Attributes":` + c.progressAttrs + `}`
+		}
 	case "BatchWriteItem":
 		resp = `{"UnprocessedItems":{}}`
 	}
@@ -137,6 +146,7 @@ func countingPipeline() (*handPipeline, *countingDynamo) {
 		BaseEndpoint:     aws.String("https://dynamodb.us-east-1.amazonaws.com"),
 		RetryMaxAttempts: 1,
 	})
+	stub.client = db
 	const env = "budget_test"
 	achv := achievements.NewService(achievements.NewStore(db, env))
 	achv.SetCache(cache.NewMemoryBackend(64))
@@ -190,6 +200,12 @@ func TestHandPipelineDynamoBudget(t *testing.T) {
 	// see docs/plans/2026-09-17-monthly-leaderboard.md. A seat on the win_rate
 	// board costs a second write per board, pinned separately by
 	// leaderboard.TestRecordHandWriteBudget.
+	//
+	// Achievement-item grants (phase 3 avatar cosmetics) are not in these
+	// ceilings: they cost nothing unless a tier crossing maps to an item, which
+	// this worst-case stub never reports. Their cost — one entitlement
+	// transaction per newly granted item — is pinned by
+	// TestHandPipelineGrantBudget instead.
 	//
 	// Measured today (see the t.Logf below): 17 calls / 17 written items at 2
 	// seats, 43 / 55 at 6, 73 / 94 at 9. The ceilings carry only enough

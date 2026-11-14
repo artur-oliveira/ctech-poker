@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/handhook"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
@@ -113,6 +115,60 @@ type handPipeline struct {
 	tables       *tablestore.Store
 	handReveals  *handreveal.Store
 	cfg          *config.Config
+	// cosmetics grants the avatar items an achievement tier unlocks
+	// (cosmetics.AchievementGrants). nil skips granting.
+	cosmetics cosmeticGranter
+}
+
+// cosmeticGranter is the slice of cosmeticpurchase.Service the pipeline uses.
+// created is true only when the call wrote a new entitlement, so a repeated
+// unlock announces nothing.
+type cosmeticGranter interface {
+	Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) (created bool, err error)
+}
+
+// announceUnlocks tells each player about their unlocked tiers and grants the
+// avatar items those tiers map to. It runs inside the ClaimHandCounters
+// branch, so at most once per hand; Grant is idempotent on top of that. A
+// grant is best-effort: an error is logged and never stops the remaining
+// unlocks, the leaderboard or the rest of the hand. Order per unlock is the
+// achievement toast first, then one cosmetic_unlocked frame per item this
+// call actually created. Costs DynamoDB only when an unlock maps to an item
+// (one conditional write per item, see TestHandPipelineGrantBudget).
+func (p *handPipeline) announceUnlocks(ctx context.Context, tableID string, unlocks []achievements.TierUnlock) {
+	for _, unlock := range unlocks {
+		key := tableID + "#" + unlock.PlayerID
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{
+			Type:  "achievement_unlocked",
+			Key:   unlock.Key,
+			Stars: int32(unlock.Stars),
+		})
+		if err == nil {
+			p.reg.Broadcast(ctx, key, data)
+		}
+		if p.cosmetics == nil {
+			continue
+		}
+		for _, g := range cosmetics.GrantsFor(unlock.Key, unlock.Stars) {
+			created, err := p.cosmetics.Grant(ctx, unlock.PlayerID, g.Kind, g.ID, fmt.Sprintf("achievement:%s:%d", unlock.Key, unlock.Stars))
+			if err != nil {
+				slog.Error("cosmetics: achievement grant failed", "table", tableID, "player", unlock.PlayerID,
+					"achievement", unlock.Key, "stars", unlock.Stars, "kind", g.Kind, "item", g.ID, "err", err)
+				continue
+			}
+			if !created {
+				continue
+			}
+			data, err := goproto.Marshal(&pokerproto.ServerMessage{
+				Type:         "cosmetic_unlocked",
+				CosmeticKind: string(g.Kind),
+				CosmeticId:   g.ID,
+			})
+			if err == nil {
+				p.reg.Broadcast(ctx, key, data)
+			}
+		}
+	}
 }
 
 func (p *handPipeline) persistHandHistory(ctx context.Context, tableID, handID, mode string, outcome hand.HandOutcome, names map[string]string) {
@@ -271,16 +327,7 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 		if err != nil {
 			slog.Error("achievements record hand failed", "table", tableID, "err", err)
 		}
-		for _, unlock := range unlocks {
-			data, err := goproto.Marshal(&pokerproto.ServerMessage{
-				Type:  "achievement_unlocked",
-				Key:   unlock.Key,
-				Stars: int32(unlock.Stars),
-			})
-			if err == nil {
-				p.reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
-			}
-		}
+		p.announceUnlocks(ctx, tableID, unlocks)
 		unlocksErr := p.leaderboard.RecordUnlocks(ctx, mode, unlocks)
 		handErr := p.leaderboard.RecordHand(ctx, mode, outcome, names)
 		if unlocksErr != nil {

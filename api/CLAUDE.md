@@ -858,7 +858,14 @@ catalog.
   refuse an earnable item with `ErrNotPurchasable` (400 `not_purchasable`) and a closed window with `ErrNotAvailable`
   (409 `not_available`) before any write, while a same-key replay of an in-window purchase still resolves; webhook,
   refresh and refund are never window-gated. `ListCatalog` returns earnable entries with `source` and no price; ownership
-  is permanent once granted. `cosmetics.Decor` (frame, hat, accessory, badges) is the
+  is permanent once granted. **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
+  (inside the `ClaimHandCounters` branch, so once per hand) sends the `achievement_unlocked` frame, then for each
+  `cosmetics.GrantsFor(key, stars)` row calls `cosmeticpurchase.Service.Grant` (reason `achievement:<key>:<stars>`;
+  returns `created`, true only when it wrote the entitlement) and, only when created, sends
+  `ServerMessage{type:"cosmetic_unlocked", cosmetic_kind, cosmetic_id}` (proto fields 22/23) to `tableID#playerID`.
+  A grant error is logged and skipped, never aborting the other unlocks, the leaderboard or the hand. Cost: zero unless
+  an unlock maps to an item, then one conditional entitlement transaction per item (`TestHandPipelineGrantBudget`;
+  the #204 ceilings are unchanged). A nil granter skips granting. `cosmetics.Decor` (frame, hat, accessory, badges) is the
   single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
   persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
   `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`

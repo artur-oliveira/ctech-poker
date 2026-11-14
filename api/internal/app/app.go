@@ -599,7 +599,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(lc fx.Lifecycle, sup *supervisor.Supervisor, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache) *tablemanager.Manager {
+func newTableManager(lc fx.Lifecycle, sup *supervisor.Supervisor, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client, chatPrefsCache *chatprefs.ExtraWordsCache, cosmeticsSvc *cosmeticpurchase.Service) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -616,6 +616,7 @@ func newTableManager(lc fx.Lifecycle, sup *supervisor.Supervisor, leases *tablel
 		// pipeline.run's ordered steps (#315).
 		consumers: []handhook.Consumer{recentPlayersConsumer(recentSvc)},
 		tables:    store, handReveals: handRevealStore, cfg: cfg,
+		cosmetics: cosmeticsSvc,
 	}
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		dispatchGamificationPipeline(tableID, handID, func(ctx context.Context) {
