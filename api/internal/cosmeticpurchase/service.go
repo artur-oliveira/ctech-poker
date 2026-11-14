@@ -21,6 +21,7 @@ import (
 var (
 	ErrNotFound           = errors.New("cosmeticpurchase: not found")
 	ErrUnknownItem        = errors.New("cosmeticpurchase: unknown cosmetic")
+	ErrNotAvailable       = errors.New("cosmeticpurchase: item is outside its sale window")
 	ErrNotPremium         = errors.New("cosmeticpurchase: cosmetic is not premium")
 	ErrInUse              = errors.New("cosmeticpurchase: cosmetic is the player's current selection, cannot refund")
 	ErrAlreadyOwned       = errors.New("cosmeticpurchase: cosmetic already owned")
@@ -603,6 +604,14 @@ func (s *Service) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.
 func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) error {
 	if !cosmetics.IsKnown(kind, itemID) {
 		return ErrUnknownItem
+	}
+	if !cosmetics.Available(kind, itemID, s.now()) {
+		// Window closed: an already-owned item stays an idempotent no-op so a
+		// retried grant is safe; anything else must not create ownership.
+		if ent, err := s.entitlements.Get(ctx, playerID, kind, itemID); err == nil && ent != nil && ent.active() {
+			return nil
+		}
+		return ErrNotAvailable
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	err := s.entitlements.Put(ctx, Entitlement{

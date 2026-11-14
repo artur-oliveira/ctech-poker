@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
@@ -407,5 +408,45 @@ func TestGrantUnknownItemRejected(t *testing.T) {
 	svc := NewService(&fakeWallet{}, entitlements, store)
 	if err := svc.Grant(context.Background(), "player-1", cosmetics.KindBadge, "not-a-real-badge", "season:x"); !errors.Is(err, ErrUnknownItem) {
 		t.Fatalf("expected ErrUnknownItem, got %v", err)
+	}
+}
+
+// Not parallel: swaps the package-level cosmetics catalog.
+func TestGrantOutsideWindow(t *testing.T) {
+	until := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	defer cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "ltd-hat", Source: cosmetics.SourceSeason, Until: until},
+	})()
+	svc := NewService(&fakeWallet{}, newTestEntitlementStore(t), newTestStore(t))
+	ctx := context.Background()
+
+	svc.now = func() time.Time { return until.Add(-time.Hour) }
+	if err := svc.Grant(ctx, "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
+		t.Fatalf("grant inside window: %v", err)
+	}
+	svc.now = func() time.Time { return until.Add(time.Hour) }
+	if err := svc.Grant(ctx, "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
+		t.Fatalf("closed-window regrant of owned item must be a no-op, got %v", err)
+	}
+	err := svc.Grant(ctx, "p2", cosmetics.KindHat, "ltd-hat", "r")
+	if !errors.Is(err, ErrNotAvailable) {
+		t.Fatalf("want ErrNotAvailable, got %v", err)
+	}
+	if owned, oerr := svc.IsOwned(ctx, "p2", cosmetics.KindHat, "ltd-hat"); oerr != nil || owned {
+		t.Fatalf("no entitlement may be written: owned=%v err=%v", owned, oerr)
+	}
+}
+
+func TestGrantRepeatInsideWindowIsNoop(t *testing.T) {
+	until := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	defer cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "ltd-hat", Source: cosmetics.SourceSeason, Until: until},
+	})()
+	svc := NewService(&fakeWallet{}, newTestEntitlementStore(t), newTestStore(t))
+	svc.now = func() time.Time { return until.Add(-time.Hour) }
+	for i := 0; i < 2; i++ {
+		if err := svc.Grant(context.Background(), "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
+			t.Fatalf("grant %d: %v", i, err)
+		}
 	}
 }
