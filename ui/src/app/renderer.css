@@ -8682,8 +8682,8 @@ html:has(.has-tab-bar) {
     height: var(--avatar-badge-size);
     border: 2px solid var(--ink);
     border-radius: var(--rounded-pill);
-    background: var(--gold);
-    color: var(--gold-ink)
+    background: var(--badge-bg, var(--gold));
+    color: var(--badge-fg, var(--gold-ink))
 }
 .player-avatar-badge svg {
     width: calc(var(--avatar-badge-size) * .55);

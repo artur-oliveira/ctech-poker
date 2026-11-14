@@ -4,7 +4,7 @@ import {Medal} from 'lucide-react';
 import {Avatar, AvatarFallback, AvatarImage} from './avatar';
 import {avatarBadgeLabel} from '@/lib/avatarCosmetics';
 import {ACCESSORY_ART} from '@/components/avatar/accessories';
-import {BADGE_ART} from '@/components/avatar/badges';
+import {BADGE_ART, BADGE_TONE} from '@/components/avatar/badges';
 import {FRAME_ART} from '@/components/avatar/frames';
 import {HAT_ART} from '@/components/avatar/hats';
 import {cn, initials} from '@/lib/utils';
@@ -51,7 +51,12 @@ export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className
     {!!badgeIds?.length && <span className="player-avatar-badges" aria-hidden="true">
       {badgeIds.map(id => {
         const Glyph = BADGE_ART[id] ?? Medal;
-        return <span key={id} className="player-avatar-badge" title={avatarBadgeLabel(id)}>
+        const tone = BADGE_TONE[id];
+        const style = tone && {
+          '--badge-bg': `var(--cosmetic-${tone.bg})`,
+          '--badge-fg': `var(--cosmetic-${tone.fg})`,
+        } as CSSProperties;
+        return <span key={id} className="player-avatar-badge" style={style} title={avatarBadgeLabel(id)}>
           <Glyph aria-hidden="true"/>
         </span>;
       })}

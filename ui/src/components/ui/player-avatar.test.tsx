@@ -1,5 +1,6 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, test, vi} from 'vitest';
+import {avatarItemLabel} from '@/lib/avatarCosmetics';
 import {PlayerAvatar} from './player-avatar';
 
 // Hats/accessories are filled by later tasks; register fakes so layer order
@@ -90,6 +91,22 @@ describe('PlayerAvatar', () => {
   test('unknown badge ids still render the fallback medal with the raw id as tooltip', () => {
     render(<PlayerAvatar name="Ana" badgeIds={['future-badge']}/>);
     expect(screen.getByTitle('future-badge').querySelector('svg')).not.toBeNull();
+  });
+
+  test('TestBadgeChipUsesRegistryLabel: a known badge renders its own glyph, tone and registry title', () => {
+    render(<PlayerAvatar name="Ana" badgeIds={['rainmaker']}/>);
+    const chip = screen.getByTitle(avatarItemLabel('badge', 'rainmaker'));
+    expect(chip.querySelector('svg.lucide-gem')).not.toBeNull();
+    expect(chip.querySelector('svg.lucide-medal')).toBeNull();
+    expect(chip.style.getPropertyValue('--badge-bg')).toMatch(/^var\(--cosmetic-/);
+    expect(chip.style.getPropertyValue('--badge-fg')).toMatch(/^var\(--cosmetic-/);
+  });
+
+  test('an unknown badge falls back to Medal with no tone style', () => {
+    render(<PlayerAvatar name="Ana" badgeIds={['future-badge']}/>);
+    const chip = screen.getByTitle('future-badge');
+    expect(chip.querySelector('svg.lucide-medal')).not.toBeNull();
+    expect(chip).not.toHaveAttribute('style');
   });
 
   // Seat does not forward decoration yet (Task 7); this pins the seat's state
