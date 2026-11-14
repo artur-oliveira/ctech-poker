@@ -141,13 +141,17 @@ type PotResultView struct {
 }
 
 type SeatView struct {
-	PlayerID        string `json:"player_id"`
-	Name            string `json:"name,omitempty"`
-	AvatarURL       string `json:"avatar_url,omitempty"`
-	PlaystyleBadge  string `json:"playstyle_badge,omitempty"`
-	ConnectionState string `json:"connection_state,omitempty"`
-	Stack           int64  `json:"stack"`
-	State           string `json:"state"`
+	PlayerID        string   `json:"player_id"`
+	Name            string   `json:"name,omitempty"`
+	AvatarURL       string   `json:"avatar_url,omitempty"`
+	PlaystyleBadge  string   `json:"playstyle_badge,omitempty"`
+	FrameID         string   `json:"frame_id,omitempty"`
+	HatID           string   `json:"hat_id,omitempty"`
+	AccessoryID     string   `json:"accessory_id,omitempty"`
+	BadgeIDs        []string `json:"badge_ids,omitempty"`
+	ConnectionState string   `json:"connection_state,omitempty"`
+	Stack           int64    `json:"stack"`
+	State           string   `json:"state"`
 	// DealtIn is true when this seat belongs to the hand identified by the
 	// snapshot's HandID. Seat state is deliberately not used for this: a
 	// player may become Active mid-hand while waiting for the next deal.
@@ -277,6 +281,10 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			Name:             p.Name,
 			AvatarURL:        p.AvatarURL,
 			PlaystyleBadge:   p.PlaystyleBadge,
+			FrameID:          p.decor().Frame,
+			HatID:            p.decor().Hat,
+			AccessoryID:      p.decor().Accessory,
+			BadgeIDs:         p.decor().Badges,
 			Stack:            p.Stack,
 			State:            playerStateNames[p.State],
 			DealtIn:          dealtIn[p.ID],

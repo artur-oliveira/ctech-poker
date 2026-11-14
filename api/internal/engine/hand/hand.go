@@ -13,6 +13,7 @@ import (
 	"math/bits"
 	"time"
 
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
@@ -60,7 +61,11 @@ type Player struct {
 	Name           string `dynamodbav:"name,omitempty"`
 	AvatarURL      string `dynamodbav:"avatar_url,omitempty"`
 	PlaystyleBadge string `dynamodbav:"playstyle_badge,omitempty"`
-	RunItTwice     bool   `dynamodbav:"run_it_twice,omitempty"`
+	// Decor is a pointer because attributevalue omitempty does not omit a zero struct;
+	// nil (never equipped / cleared) keeps old items and empty seats attribute-free.
+	// Decor persists with the seat so every actor instance projects the same cosmetics.
+	Decor      *cosmetics.Decor `dynamodbav:"decor,omitempty"`
+	RunItTwice bool             `dynamodbav:"run_it_twice,omitempty"`
 	// AutoRebuy and BuyInAmount are set exactly once, at fresh-seat creation
 	// (AddWaitingPlayer/AddMidHandJoiner's new-Player branch) — rebuyExisting
 	// never touches either, so a later manual rebuy at a different amount
@@ -487,16 +492,27 @@ func (t *Table) DuplicateSeatIDForActor() (string, bool) {
 // SetPlayerIdentityForActor persists display identity with the seat so snapshots
 // built by any actor instance carry the same name/avatar. It reports whether the
 // value changed, allowing connection setup to avoid a no-op table commit.
-func (t *Table) SetPlayerIdentityForActor(playerID, name, avatarURL, playstyleBadge string) bool {
+func (t *Table) SetPlayerIdentityForActor(playerID, name, avatarURL, playstyleBadge string, decor cosmetics.Decor) bool {
 	p := t.playerByID(playerID)
-	if p == nil || (name == "" && avatarURL == "" && playstyleBadge == "") ||
-		(p.Name == name && p.AvatarURL == avatarURL && p.PlaystyleBadge == playstyleBadge) {
+	if p == nil || (name == "" && avatarURL == "" && playstyleBadge == "" && decor.Empty() && p.decor().Empty()) ||
+		(p.Name == name && p.AvatarURL == avatarURL && p.PlaystyleBadge == playstyleBadge && p.decor().Equal(decor)) {
 		return false
+	}
+	p.Decor = nil
+	if !decor.Empty() {
+		p.Decor = &decor
 	}
 	p.Name = name
 	p.AvatarURL = avatarURL
 	p.PlaystyleBadge = playstyleBadge
 	return true
+}
+
+func (p *Player) decor() cosmetics.Decor {
+	if p.Decor == nil {
+		return cosmetics.Decor{}
+	}
+	return *p.Decor
 }
 
 func (t *Table) HoleAndBoardForActor(playerID string) ([2]deck.Card, []deck.Card, bool) {
