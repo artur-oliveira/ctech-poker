@@ -1,7 +1,7 @@
-// Package cosmetics is the poker-owned source of truth for which deck and
-// felt cosmetic ids exist and which are premium — a game-design fact, not a
-// money fact, same rationale as internal/reactions (see
-// docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
+// Package cosmetics is the poker-owned source of truth for which deck, felt
+// and avatar (frame, hat, accessory, badge) cosmetic ids exist and which are
+// premium — a game-design fact, not a money fact, same rationale as
+// internal/reactions (see docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
 package cosmetics
 
 import (
@@ -19,14 +19,11 @@ const (
 	KindDeck Kind = "deck"
 	KindFelt Kind = "felt"
 	// KindFrame and KindBadge back issue #292 (seasonal avatar frames and
-	// badges). They are premium-only entries: unlike deck/felt, they are
-	// never sold through cosmeticpurchase's wallet flow (no SKU/PriceFichas,
-	// and cosmeticpurchase's :kind route param only ever accepts deck/felt —
-	// see internal/api/v1/cosmeticpurchase.go's validCosmeticKind), so
-	// ownership is granted directly via cosmeticpurchase.Service.Grant on a
-	// season/achievement milestone instead of a purchase. That trigger itself
-	// (which milestone unlocks which frame/badge) is still an open product
-	// decision per #292 — this catalog only fixes which ids exist.
+	// badges). Like hat/accessory they are avatar kinds: sold through
+	// cosmeticpurchase only when their Source is purchase, otherwise granted
+	// directly via cosmeticpurchase.Service.Grant on a season/achievement
+	// milestone. Which milestone unlocks which item is a product decision
+	// (#292); this catalog only fixes which ids exist.
 	KindFrame Kind = "frame"
 	KindBadge Kind = "badge"
 	// KindHat and KindAccessory are the remaining avatar decoration slots.

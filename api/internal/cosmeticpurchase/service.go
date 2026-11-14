@@ -67,8 +67,8 @@ type CatalogEntry struct {
 }
 
 // currentSelectionFunc reports the ids of kind the player currently has
-// applied (one for deck/felt/frame/hat/accessory, several for badge). Injected the same way SetOwnershipInvalidator injects a callback,
-// to avoid an import cycle with the player package (which itself depends on
+// applied (one for deck/felt/frame/hat/accessory, several for badge).
+// Injected the same way SetOwnershipInvalidator injects a callback, to avoid an import cycle with the player package (which itself depends on
 // cosmeticpurchase for ownership checks).
 type currentSelectionFunc func(ctx context.Context, playerID string, kind cosmetics.Kind) ([]string, error)
 
@@ -457,10 +457,8 @@ func (s *Service) CreateSandbox(ctx context.Context, playerID string, kind cosme
 
 // isCurrentSelection reports whether itemID is currently applied by the player
 // (deck, felt, frame, hat, accessory, or any equipped badge) — the cosmetic
-// equivalent of a reaction's "used" flag. Refund is
-// avatar/deck/felt item (badges: any of the equipped set) — the cosmetic equivalent of a reaction's "used" flag. Refund is
-// allowed only if the item was never applied, mirroring reactions' "never
-// sent" rule generalized to "never selected."
+// equivalent of a reaction's "used" flag. Refund is allowed only
+// if the item was never applied, mirroring reactions' "never sent" rule generalized to "never selected."
 func (s *Service) isCurrentSelection(ctx context.Context, playerID string, kind cosmetics.Kind, itemID string) (bool, error) {
 	if s.currentSelection == nil {
 		return false, nil
