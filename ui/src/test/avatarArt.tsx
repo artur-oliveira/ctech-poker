@@ -26,7 +26,7 @@ function pathPoints(d: string): Array<[number, number]> {
   return pts;
 }
 
-function elementBox(el: Element): Box {
+export function elementBox(el: Element): Box {
   const sw = el.getAttribute('stroke') && el.getAttribute('stroke') !== 'none' ? num(el, 'stroke-width') / 2 : 0;
   let b: Box;
   switch (el.tagName) {

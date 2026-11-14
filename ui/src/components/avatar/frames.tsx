@@ -35,7 +35,7 @@ export const FRAME_ART: Record<string, () => JSX.Element> = {
     <Ring r={26.5} w={2} c="gold-pale"/>
     <Ring r={28} w={1} c="ink"/>
     <Ring r={29.85} w={2.7} c="gold-pale"/>
-    <Ring r={31.6} w={0.8} c="ink"/>
+    <Ring r={31.5} w={0.8} c="ink"/>
   </Frame>,
   // Solid gold band with a pale highlight on the upper left, lit from above.
   'champion-gold': () => <Frame>
@@ -49,8 +49,10 @@ export const FRAME_ART: Record<string, () => JSX.Element> = {
     <Ring r={29} w={6} c="oxblood"/>
     <Ring r={29} w={3.5} c="paper" pathLength={12} strokeDasharray="1 1" strokeDashoffset={0.5}/>
   </Frame>,
-  // Table felt band with the walnut rail line on its inside edge.
+  // Table felt band with the walnut rail line on its inside edge; the ink
+  // hairline keeps that line off near-black photos.
   'felt-ring': () => <Frame>
+    <Ring r={24.75} w={0.75} c="ink"/>
     <Ring r={26} w={2} c="walnut"/>
     <Ring r={29.5} w={5} c="felt"/>
   </Frame>,

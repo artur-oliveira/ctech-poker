@@ -1,6 +1,7 @@
 import {describe, expect, test} from 'vitest';
 import {AVATAR_ITEMS} from '@/lib/avatarCosmetics';
-import {checkArt} from '@/test/avatarArt';
+import {render} from '@testing-library/react';
+import {checkArt, elementBox} from '@/test/avatarArt';
 import {ACCESSORY_ART} from './accessories';
 
 const ACCESSORY_IDS = Object.keys(AVATAR_ITEMS.accessory);
@@ -21,5 +22,15 @@ describe('ACCESSORY_ART', () => {
     expect(band).toBe('accessory');
     expect(lo).toBeGreaterThanOrEqual(min);
     expect(hi).toBeLessThanOrEqual(max);
+  });
+
+  test('TestHeadsetPiecesStayInTheirZones', () => {
+    // Every shape sits wholly in the hat zone (band, y 0-26) or on the ear line (cup and mic, y 24-40).
+    const Headset = ACCESSORY_ART.headset;
+    const {container} = render(<Headset/>);
+    for (const el of container.querySelectorAll('svg *')) {
+      const {y0, y1} = elementBox(el);
+      expect(y1 <= 26 || y0 >= 24, `${el.outerHTML} spans y ${y0}-${y1}`).toBe(true);
+    }
   });
 });

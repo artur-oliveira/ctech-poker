@@ -60,12 +60,14 @@ export const ACCESSORY_ART: Record<string, () => JSX.Element> = {
   </Accessory>,
   // Ink headband over the head, one ear cup with an oxblood cushion and a short mic.
   'headset': () => <Accessory y="6-40">
-    <path d="M13.5 27 C12 16 20.5 9 32 9 C43.5 9 52 16 50.5 27" fill="none" stroke={paint('ink')} strokeWidth={4}/>
-    <path d="M13.5 27 C12 16 20.5 9 32 9 C43.5 9 52 16 50.5 27" fill="none" stroke={paint('gold-pale')} strokeWidth={1}
+    {/* Band ends at y 24; its round cap paints to y 26 and tucks under the cup. */}
+    <path d="M12.5 24 C11.5 15 20.5 9 32 9 C43.5 9 52.5 15 51.5 24" fill="none" stroke={paint('ink')} strokeWidth={4}
+      strokeLinecap="round"/>
+    <path d="M12.5 24 C11.5 15 20.5 9 32 9 C43.5 9 52.5 15 51.5 24" fill="none" stroke={paint('gold-pale')} strokeWidth={1}
       strokeOpacity={0.45}/>
     <path d="M14 36 C18 39 21 38.5 23 38" fill="none" stroke={paint('ink')} strokeWidth={1.75}/>
     <circle cx={23.5} cy={37.75} r={1.75} fill={paint('oxblood')} stroke={paint('ink')} strokeWidth={0.75}/>
-    <rect x={8.5} y={25} width={8} height={12.5} rx={3.5} fill={paint('ink')} {...SHEEN}/>
-    <rect x={14} y={27} width={3} height={8.5} rx={1.5} fill={paint('oxblood')}/>
+    <rect x={8.5} y={24.5} width={8} height={12.5} rx={3.5} fill={paint('ink')} {...SHEEN}/>
+    <rect x={14} y={26.5} width={3} height={8.5} rx={1.5} fill={paint('oxblood')}/>
   </Accessory>,
 };
