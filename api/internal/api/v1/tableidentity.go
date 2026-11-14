@@ -15,12 +15,13 @@ import (
 )
 
 // identityCmdFor builds the SetIdentityCmd carrying playerID's complete
-// persisted display identity: name, avatar URL and playstyle badge.
+// persisted display identity: name, avatar URL, playstyle badge and equipped cosmetics
+// (profile.Decor()).
 //
-// All three always travel together on purpose. hand.Table's
-// SetPlayerIdentityForActor replaces the three seat fields as one unit, so a
-// caller that pushes only the field it happens to care about (a rename, say)
-// silently blanks the other two on every seat watching. This is the single
+// All four always travel together on purpose. hand.Table's
+// SetPlayerIdentityForActor replaces them as one unit, so a caller that
+// pushes only the field it happens to care about (a rename, say) silently
+// blanks the others on every seat watching. This is the single
 // place that assembles them; the WS gateway (on connect) and the profile
 // handler (on rename, #64) both go through it.
 //
@@ -54,6 +55,7 @@ func identityCmdFor(ctx context.Context, players *player.Service, stats pokerSta
 		Name:           profile.Name,
 		AvatarURL:      player.AvatarURL(profile, baseURL),
 		PlaystyleBadge: playstyleBadge,
+		Decor:          profile.Decor(),
 	}, true
 }
 

@@ -15,6 +15,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -86,7 +87,7 @@ type playerHandlers struct {
 	// identity pushes a renamed display name into the table the player is
 	// seated at, so opponents stop seeing the old one without a reconnect
 	// (#64). nil wherever the WS/table stack isn't wired (tests).
-	identity *tableIdentityPusher
+	identity identityPusher
 	// settlements backs GET /players/me/settlements (#333). nil in the
 	// narrower test-only registerRoutes wiring.
 	settlements settlementReader
@@ -98,6 +99,18 @@ type playerHandlers struct {
 	// balance-alert annotation on the profile response (#304). nil wherever
 	// the narrower test wiring doesn't provide one — every use guards on it.
 	walletAlerts *walletalert.Service
+}
+
+// identityPusher is the seam the profile handler pushes through; nil in the
+// narrower test wiring.
+type identityPusher interface {
+	push(ctx context.Context, playerID string)
+}
+
+func (h *playerHandlers) pushIdentity(ctx context.Context, playerID string) {
+	if h.identity != nil {
+		h.identity.push(ctx, playerID)
+	}
 }
 
 // leaderboardRanker is the one method the showcase needs from
@@ -112,7 +125,7 @@ type leaderboardRanker interface {
 // under the same resource and share the same auth-derived playerID.
 func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *ratelimit.Limiter, stats pokerStatsReader, extras ...any) {
 	var reportSvc *reports.Service
-	var identity *tableIdentityPusher
+	var identity identityPusher
 	var settlements settlementReader
 	var ranks leaderboardRanker
 	var walletAlerts *walletalert.Service
@@ -121,7 +134,9 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 		case *reports.Service:
 			reportSvc = value
 		case *tableIdentityPusher:
-			identity = value
+			if value != nil {
+				identity = value
+			}
 		case *leaderboard.Service:
 			// A typed nil would still be non-nil once boxed in the interface,
 			// and MyRank would deref its store — the narrower test wiring
@@ -312,7 +327,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 		// The seat's name is a cache the table actor filled at join time and
 		// never re-reads, so a rename would otherwise stay invisible to
 		// everyone at the table until this player reconnected (#64).
-		h.identity.push(c.Context(), userID)
+		h.pushIdentity(c.Context(), userID)
 	}
 	if req.WalletMode != nil {
 		if *req.WalletMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
@@ -383,6 +398,15 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return internalProblem("failed to update profile showcase layout", err).Send(c)
 		}
 	}
+	equipping := req.EquippedFrameID != nil || req.EquippedHatID != nil || req.EquippedAccessoryID != nil || req.EquippedBadgeIDs != nil
+	var decorBefore cosmetics.Decor
+	if equipping {
+		before, err := h.players.GetOrCreate(c.Context(), userID)
+		if err != nil {
+			return internalProblem("failed to load player profile", err).Send(c)
+		}
+		decorBefore = before.Decor()
+	}
 	if req.EquippedFrameID != nil {
 		if _, err := h.players.SetEquippedFrame(c.Context(), userID, *req.EquippedFrameID); err != nil {
 			if errors.Is(err, player.ErrInvalidFrame) {
@@ -425,6 +449,13 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 				return problem.BadRequest("equipped_badge_ids contains a badge that is not owned").Send(c)
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
+		}
+	}
+	if equipping {
+		// Seat cosmetics are a table-actor cache like the name; push so
+		// opponents see a new hat/frame/badge without a reconnect.
+		if after, err := h.players.GetOrCreate(c.Context(), userID); err == nil && !after.Decor().Equal(decorBefore) {
+			h.pushIdentity(c.Context(), userID)
 		}
 	}
 	if req.BetPresetMode != nil {

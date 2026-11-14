@@ -53,8 +53,10 @@ func IsAvatarKind(kind Kind) bool {
 
 // Decor is the set of avatar decorations a player has equipped.
 type Decor struct {
-	Frame, Hat, Accessory string
-	Badges                []string
+	Frame     string   `dynamodbav:"frame,omitempty" json:"frame,omitempty"`
+	Hat       string   `dynamodbav:"hat,omitempty" json:"hat,omitempty"`
+	Accessory string   `dynamodbav:"accessory,omitempty" json:"accessory,omitempty"`
+	Badges    []string `dynamodbav:"badges,omitempty" json:"badges,omitempty"`
 }
 
 func (d Decor) Empty() bool {

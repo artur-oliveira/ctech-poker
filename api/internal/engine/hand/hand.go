@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"slices"
 	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
@@ -500,6 +501,7 @@ func (t *Table) SetPlayerIdentityForActor(playerID, name, avatarURL, playstyleBa
 	}
 	p.Decor = nil
 	if !decor.Empty() {
+		decor.Badges = slices.Clone(decor.Badges)
 		p.Decor = &decor
 	}
 	p.Name = name
