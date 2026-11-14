@@ -62,7 +62,7 @@ describe('AvatarDecorationSection', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  test('lists only owned ids per slot, plus Nenhum, with radio/checkbox semantics', async () => {
+  test('lists only owned ids per slot, plus Nenhum/Nenhuma, with radio/checkbox semantics', async () => {
     render(<AvatarDecorationSection me={me}/>, {wrapper});
     for (const slot of ['frame', 'hat', 'accessory', 'badge']) {
       expect(listOwnedAvatarCosmetics).toHaveBeenCalledWith(slot);
@@ -71,6 +71,7 @@ describe('AvatarDecorationSection', () => {
     expect(hats).toEqual(['Nenhum', 'Coroa', 'Cartola']);
     const frames = within(await group('Borda equipada')).getAllByRole('radio');
     expect(frames).toHaveLength(3);
+    expect(frames[0].closest('label')?.textContent?.trim()).toBe('Nenhuma');
     expect(within(await group('Acessório equipado')).getByRole('radio', {name: 'Monóculo'})).toBeInTheDocument();
     expect(screen.queryByRole('radio', {name: 'Gorro'})).not.toBeInTheDocument();
     expect(await screen.findByRole('checkbox', {name: /Top 10 da Temporada/})).toBeInTheDocument();
@@ -89,17 +90,28 @@ describe('AvatarDecorationSection', () => {
   });
 
   test.each([
-    ['Borda equipada', 'equipped_frame_id', {equipped_frame_id: 'chip-ring'}],
-    ['Chapéu equipado', 'equipped_hat_id', {equipped_hat_id: 'crown'}],
-    ['Acessório equipado', 'equipped_accessory_id', {equipped_accessory_id: 'monocle'}],
-  ] as const)('Nenhum in %s unequips only that slot', async (name, field, equipped) => {
+    ['Borda equipada', 'Nenhuma', 'equipped_frame_id', {equipped_frame_id: 'chip-ring'}],
+    ['Chapéu equipado', 'Nenhum', 'equipped_hat_id', {equipped_hat_id: 'crown'}],
+    ['Acessório equipado', 'Nenhum', 'equipped_accessory_id', {equipped_accessory_id: 'monocle'}],
+  ] as const)('the empty option in %s (%s) unequips only that slot', async (name, none, field, equipped) => {
     const current = {...me, equipped_frame_id: 'season-2026-q3', equipped_hat_id: 'top-hat',
       equipped_accessory_id: 'monocle', equipped_badge_ids: ['season-2026-q3-top10'], ...equipped};
     updateMe.mockResolvedValue({...current, [field]: ''});
     render(<AvatarDecorationSection me={current}/>, {wrapper});
-    await userEvent.click(within(await group(name)).getByRole('radio', {name: 'Nenhum'}));
+    await userEvent.click(within(await group(name)).getByRole('radio', {name: none}));
     await userEvent.click(saveButton());
     expect(updateMe).toHaveBeenCalledWith({[field]: ''});
+  });
+
+  test('a saved id no longer owned stays listed and checked, so the picker matches the preview', async () => {
+    render(<AvatarDecorationSection me={{...me, equipped_hat_id: 'beanie', equipped_frame_id: 'gone-frame',
+      equipped_badge_ids: ['veteran']}}/>, {wrapper});
+    const hats = within(await group('Chapéu equipado')).getAllByRole('radio').map(r => r.closest('label')?.textContent?.trim());
+    expect(hats).toEqual(['Nenhum', 'Coroa', 'Cartola', 'Gorro']);
+    expect(screen.getByRole('radio', {name: 'Gorro'})).toBeChecked();
+    expect(within(await group('Borda equipada')).getByRole('radio', {name: 'gone-frame'})).toBeChecked();
+    expect(await screen.findByRole('checkbox', {name: /Veterano/})).toBeChecked();
+    expect(saveButton()).toBeDisabled();
   });
 
   test('blocks a fourth badge with the existing message', async () => {

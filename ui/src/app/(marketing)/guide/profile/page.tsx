@@ -39,10 +39,10 @@ export default function ProfileGuide() {
       {
         id: 'moldura-emblemas', title: 'Visual do avatar', summary: 'Borda, chapéu, acessório e emblemas, equipados ao redor da sua foto.',
         body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. As listas só mostram o que você já tem; não há compra aqui.</p>
-          <GuideSteps><li><span>Escolha uma borda, um chapéu e um acessório, ou <b>Nenhum</b> em cada um para não usar.</span></li>
+          <GuideSteps><li><span>Escolha uma borda, um chapéu e um acessório, ou <b>Nenhuma</b> (borda) e <b>Nenhum</b> (chapéu, acessório) para não usar.</span></li>
           <li><span>Marque até três emblemas.</span></li>
           <li><span>Toque em <b>Salvar visual do avatar</b>. O botão só acende quando algo mudou.</span></li></GuideSteps>
-          <p>Num tipo em que você ainda não tem nada, a seção avisa que é preciso conquistar ou comprar um item para equipar.</p></>
+          <p>Num tipo em que você ainda não tem nada, a seção avisa que é preciso conquistar ou comprar um item para equipar. Um item equipado que deixou de ser seu continua na lista, marcado, até você trocar.</p></>
       },
       {
         id: 'vitrine', title: 'Montar a vitrine', summary: 'A vitrine começa privada e só mostra o que você habilitar.',

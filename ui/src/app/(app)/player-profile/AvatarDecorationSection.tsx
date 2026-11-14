@@ -18,14 +18,14 @@ export const MAX_EQUIPPED_BADGES = 3;
 type RadioSlot = Exclude<AvatarSlot, 'badge'>;
 
 const RADIO_SLOTS: Record<RadioSlot, {
-  legend: string; group: string; loading: string; error: string;
+  legend: string; group: string; none: string; loading: string; error: string;
   art: Record<string, () => JSX.Element>; field: 'equipped_frame_id' | 'equipped_hat_id' | 'equipped_accessory_id';
 }> = {
-  frame: {legend: 'Borda', group: 'Borda equipada', loading: 'Carregando bordas…',
+  frame: {legend: 'Borda', group: 'Borda equipada', none: 'Nenhuma', loading: 'Carregando bordas…',
     error: 'Não foi possível carregar suas bordas agora.', art: FRAME_ART, field: 'equipped_frame_id'},
-  hat: {legend: 'Chapéu', group: 'Chapéu equipado', loading: 'Carregando chapéus…',
+  hat: {legend: 'Chapéu', group: 'Chapéu equipado', none: 'Nenhum', loading: 'Carregando chapéus…',
     error: 'Não foi possível carregar seus chapéus agora.', art: HAT_ART, field: 'equipped_hat_id'},
-  accessory: {legend: 'Acessório', group: 'Acessório equipado', loading: 'Carregando acessórios…',
+  accessory: {legend: 'Acessório', group: 'Acessório equipado', none: 'Nenhum', loading: 'Carregando acessórios…',
     error: 'Não foi possível carregar seus acessórios agora.', art: ACCESSORY_ART, field: 'equipped_accessory_id'},
 };
 
@@ -35,15 +35,19 @@ const useOwned = (slot: AvatarSlot) => useQuery({
   queryKey: ['wallet', 'avatar-cosmetic-owned', slot], queryFn: () => listOwnedAvatarCosmetics(slot)
 });
 
-/** Loading / error-with-retry / empty around a slot's owned list. */
-function OwnedList({query, loading, error, children}: {
-  query: ReturnType<typeof useOwned>; loading: string; error: string; children: (ids: string[]) => JSX.Element;
+/** Loading / error-with-retry / empty around a slot's owned list. `saved`
+ * ids no longer owned (revoked, expired) are listed too, so the picker always
+ * shows what the profile wears. */
+function OwnedList({query, saved, loading, error, children}: {
+  query: ReturnType<typeof useOwned>; saved: string[]; loading: string; error: string;
+  children: (ids: string[]) => JSX.Element;
 }) {
   if (query.isLoading) return <SkeletonList label={loading} count={1} height={44} className="skeleton-panel"/>;
   if (query.isError) return <div className="lobby-empty">{error}
     <Button variant="outline" size="sm" onClick={() => void query.refetch()}>Tentar novamente</Button>
   </div>;
-  const ids = query.data ?? [];
+  const owned = query.data ?? [];
+  const ids = [...owned, ...saved.filter(id => id && !owned.includes(id))];
   return ids.length === 0 ? <p className="player-profile-empty">{EMPTY_COPY}</p> : children(ids);
 }
 
@@ -131,9 +135,9 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
       const name = `avatar-decoration-${slot}`;
       return <fieldset key={slot} className="avatar-decoration-group">
         <legend>{cfg.legend}</legend>
-        <OwnedList query={owned[slot]} loading={cfg.loading} error={cfg.error}>
+        <OwnedList query={owned[slot]} saved={[saved[slot]]} loading={cfg.loading} error={cfg.error}>
           {ids => <div className="avatar-decoration-options" role="radiogroup" aria-label={cfg.group}>
-            <SlotOption name={name} checked={picked[slot] === ''} label="Nenhum"
+            <SlotOption name={name} checked={picked[slot] === ''} label={cfg.none}
                         onSelect={() => setPicked(p => ({...p, [slot]: ''}))}><Ban/></SlotOption>
             {ids.map(id => {
               const Art = cfg.art[id];
@@ -149,7 +153,7 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
 
     <fieldset className="avatar-decoration-group">
       <legend>Emblemas <span className="avatar-decoration-badge-count">{badgeIds.length}/{MAX_EQUIPPED_BADGES}</span></legend>
-      <OwnedList query={ownedBadges} loading="Carregando emblemas…" error="Não foi possível carregar seus emblemas agora.">
+      <OwnedList query={ownedBadges} saved={savedBadgeIds} loading="Carregando emblemas…" error="Não foi possível carregar seus emblemas agora.">
         {ids => <ul className="avatar-decoration-badges-list">
           {ids.map(id => {
             const Glyph = BADGE_ART[id] ?? Medal;

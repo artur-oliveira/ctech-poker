@@ -113,7 +113,7 @@ export function ProfileMenu() {
         {balanceLabel}
       </Link>
       <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Abrir perfil"/>}>
-        <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url} {...decorProps(me)}/>
+        <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url} size={36} {...decorProps(me)}/>
       </PopoverTrigger>
     </div>
     <PopoverContent className="profile-menu-content" aria-label="Perfil e preferências">

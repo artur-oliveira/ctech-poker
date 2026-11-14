@@ -1381,17 +1381,25 @@ const baseSeats = () => [
   {
     player_id: 'nina_recife',
     name: 'Nina',
+    frame_id: 'walnut-rail',
+    hat_id: 'top-hat',
+    accessory_id: 'headset',
+    badge_ids: ['rainmaker', 'social-butterfly', 'season-2026-q3-top10'],
     stack: 2775,
     state: 'active',
     dealt_in: true,
     contributed: 75,
     hole_cards: ['back', 'back']
   },
-  // Nameless on purpose — exercises the is-pending-name placeholder in dev.
-  {player_id: 'gui_bh', stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
+  // Nameless on purpose — exercises the is-pending-name placeholder in dev;
+  // decorated so the sitting-out greyscale covers the art and badges too.
+  {player_id: 'gui_bh', frame_id: 'oxblood-edge', hat_id: 'beanie', accessory_id: 'shades', badge_ids: ['veteran'],
+    stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
   {
     player_id: 'joao_floripa',
     name: 'João',
+    hat_id: 'dealer-visor',
+    accessory_id: 'bandit-mask',
     stack: 4375,
     state: 'active',
     dealt_in: true,
@@ -1401,6 +1409,10 @@ const baseSeats = () => [
   {
     player_id: 'mari_belém',
     name: 'Mari',
+    frame_id: 'season-2026-q3',
+    hat_id: 'laurel',
+    accessory_id: 'mustache',
+    badge_ids: ['season-2026-q3-champion'],
     stack: 8200,
     state: 'active',
     dealt_in: true,
@@ -1410,6 +1422,10 @@ const baseSeats = () => [
   {
     player_id: 'caio_goiânia',
     name: 'Caio',
+    // All-in with a frame: the all-in glow must still read around the ring.
+    frame_id: 'felt-ring',
+    hat_id: 'cowboy',
+    badge_ids: ['all-in-hero'],
     stack: 3400,
     state: 'all_in',
     dealt_in: true,

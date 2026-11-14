@@ -495,4 +495,3 @@ describe('Seat chip amounts and the touch tap target', () => {
     expect(container.querySelector('.game-seat > .seat-avatar')).toBeInTheDocument();
   });
 });
-

@@ -8674,7 +8674,7 @@ html:has(.has-tab-bar) {
     pointer-events: none
 }
 .game-seat .player-avatar-decorated {
-    --avatar-badge-size: max(12px, var(--seat-size, 36px) * .4)
+    --avatar-badge-size: min(20px, max(12px, var(--seat-size, 36px) * .4))
 }
 .player-avatar-badges {
     position: absolute;

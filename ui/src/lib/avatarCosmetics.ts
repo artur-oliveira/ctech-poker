@@ -70,11 +70,6 @@ export const decorProps = (e?: EquippedCosmetics) => ({
   badgeIds: e?.equipped_badge_ids,
 });
 
-export type AvatarFrameId = string;
-export type AvatarBadgeId = string;
-export const AVATAR_FRAMES = AVATAR_ITEMS.frame;
-export const AVATAR_BADGES = AVATAR_ITEMS.badge;
-
 export const avatarFrameLabel = (id: string) => avatarItemLabel('frame', id);
 export const avatarBadgeLabel = (id: string) => avatarItemLabel('badge', id);
 
