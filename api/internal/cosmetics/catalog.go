@@ -59,6 +59,20 @@ type Decor struct {
 	Badges    []string `dynamodbav:"badges,omitempty" json:"badges,omitempty"`
 }
 
+// Equipped is Decor's read-side wire shape for payloads that decorate another
+// player (people, hand opponents); the json names match the leaderboard's.
+// Embed it with `dynamodbav:"-"` so it is never persisted.
+type Equipped struct {
+	FrameID     string   `json:"equipped_frame_id,omitempty"`
+	HatID       string   `json:"equipped_hat_id,omitempty"`
+	AccessoryID string   `json:"equipped_accessory_id,omitempty"`
+	BadgeIDs    []string `json:"equipped_badge_ids,omitempty"`
+}
+
+func (d Decor) Equipped() Equipped {
+	return Equipped{FrameID: d.Frame, HatID: d.Hat, AccessoryID: d.Accessory, BadgeIDs: d.Badges}
+}
+
 func (d Decor) Empty() bool {
 	return d.Frame == "" && d.Hat == "" && d.Accessory == "" && len(d.Badges) == 0
 }

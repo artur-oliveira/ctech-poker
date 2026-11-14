@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -621,10 +623,11 @@ func (h *playerHandlers) resolveOpponentProfiles(ctx context.Context, hands []se
 			opp := &hands[i].Opponents[j]
 			profile, ok := profiles[opp.PlayerID]
 			if !ok {
-				opp.AvatarURL = ""
+				opp.AvatarURL, opp.Equipped = "", cosmetics.Equipped{}
 				continue
 			}
 			opp.AvatarURL = player.AvatarURL(&profile, baseURL)
+			opp.Equipped = profile.Decor().Equipped()
 			if profile.Name != "" {
 				opp.Name = profile.Name
 			}
@@ -701,6 +704,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		"showcase_layout":       profile.ShowcaseLayout,
 		"milestones":            h.profileMilestones(c, profile, counts[achievements.KeyHandsPlayed]),
 	}
+	maps.Copy(response, decorFields(profile))
 	// CreatedAt is stored but json:"-" on the profile itself; the showcase is
 	// the one place it is public, and only because ShowcasePublic gated the
 	// whole response above (#330).
@@ -776,8 +780,24 @@ func (h *playerHandlers) avatarBaseURL() string {
 	return h.cfg.AvatarBaseURL
 }
 
+// decorFields is the equipped_* wire fields for a map payload, empty ones
+// omitted (matching the omitempty structs of cosmetics.Equipped).
+func decorFields(profile *player.PlayerProfile) fiber.Map {
+	d := profile.Decor()
+	m := fiber.Map{}
+	for k, v := range map[string]string{"equipped_frame_id": d.Frame, "equipped_hat_id": d.Hat, "equipped_accessory_id": d.Accessory} {
+		if v != "" {
+			m[k] = v
+		}
+	}
+	if len(d.Badges) > 0 {
+		m["equipped_badge_ids"] = d.Badges
+	}
+	return m
+}
+
 func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.Map {
-	return fiber.Map{
+	m := fiber.Map{
 		"user_id":                 profile.UserID,
 		"name":                    profile.Name,
 		"friend_code":             profile.FriendCode,
@@ -795,4 +815,6 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,
 	}
+	maps.Copy(m, decorFields(profile))
+	return m
 }
