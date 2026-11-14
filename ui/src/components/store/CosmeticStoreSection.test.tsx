@@ -212,6 +212,16 @@ describe('avatar item sections', () => {
     expect(within(row).queryByRole('button', {name: 'Liberar'})).not.toBeInTheDocument();
   });
 
+  test('a season item is locked as Temporada, not Conquista, with no price', () => {
+    render(<FrameStoreSection catalog={[{kind: 'frame', id: 'champion-gold', premium: true, source: 'season',
+      available: true}]} purchases={[]} isLoading={false} isError={false} {...actions}/>);
+    const list = screen.getByRole('list', {name: 'Catálogo de molduras'});
+    expect(within(list).getByText('Temporada')).toBeInTheDocument();
+    expect(within(list).queryByText('Conquista')).not.toBeInTheDocument();
+    expect(within(list).queryByText(/fichas/)).not.toBeInTheDocument();
+    expect(within(list).queryByRole('button')).not.toBeInTheDocument();
+  });
+
   test('frames and accessories render their own catalogs', () => {
     render(<>
       <FrameStoreSection catalog={[{kind: 'frame', id: 'felt-ring', premium: true, source: 'purchase', available: true,

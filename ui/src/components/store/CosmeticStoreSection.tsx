@@ -84,7 +84,7 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
         {!entry.premium ? <span className="cosmetic-store-free">Grátis</span>
           : owned ? <span className="cosmetic-store-owned"><Sparkles aria-hidden="true"/> Na coleção</span>
             : active || refunding ? <span className="cosmetic-store-state">{STATUS_LABEL[purchase!.status]}</span>
-              : earnable ? <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> Conquista</span>
+              : earnable ? <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> {entry.source === 'season' ? 'Temporada' : 'Conquista'}</span>
                 : unavailable ? <span className="cosmetic-store-state">Indisponível</span>
                   : <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> A liberar</span>}
         <span className="cosmetic-store-action">

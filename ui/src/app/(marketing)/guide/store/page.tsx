@@ -31,10 +31,11 @@ export default function StoreGuide() {
           <GuideCallout kind="info" title="Estorno enquanto o item não foi usado">Um cosmético só pode ser estornado se nunca tiver sido selecionado. O servidor verifica isso antes de autorizar, e o item volta a ficar bloqueado.</GuideCallout></>
       },
       {
-        id: 'avatar', title: 'Molduras, chapéus e acessórios', summary: 'Alguns itens do avatar se compram; outros só vêm com conquistas.',
+        id: 'avatar', title: 'Molduras, chapéus e acessórios', summary: 'Alguns itens do avatar se compram; outros só vêm com conquistas ou temporadas.',
         body: <><p>Cada item mostra uma prévia sobre o avatar e um estado:</p>
           <GuideTerms><GuideTerm term="A liberar">À venda. Libere com fichas ou Pix, como um baralho ou um feltro.</GuideTerm>
           <GuideTerm term="Conquista">Não se compra: o item é seu quando você atinge a conquista ligada a ele.</GuideTerm>
+          <GuideTerm term="Temporada">Não se compra: itens sazonais vêm das temporadas do ranking.</GuideTerm>
           <GuideTerm term="Indisponível">Fora de venda agora. Um Pix que você já gerou continua em <b>Compras e estornos</b>.</GuideTerm>
           <GuideTerm term="Na coleção">Já é seu. <b>Equipar no perfil</b> leva ao seu perfil para usá-lo.</GuideTerm></GuideTerms>
           <p>Quando uma conquista libera um item durante a partida, um aviso na mesa diz qual foi. Os emblemas não aparecem na Loja: todos vêm de conquistas e temporadas.</p></>
