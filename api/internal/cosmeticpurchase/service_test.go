@@ -386,7 +386,7 @@ func TestGrantActivatesOwnershipWithoutWallet(t *testing.T) {
 	svc := NewService(wallet, entitlements, store)
 	ctx := context.Background()
 
-	if err := svc.Grant(ctx, "player-1", cosmetics.KindFrame, "season-2026-q3", "season:2026-q3-top10"); err != nil {
+	if _, err := svc.Grant(ctx, "player-1", cosmetics.KindFrame, "season-2026-q3", "season:2026-q3-top10"); err != nil {
 		t.Fatalf("Grant: %v", err)
 	}
 	owned, err := svc.IsOwned(ctx, "player-1", cosmetics.KindFrame, "season-2026-q3")
@@ -403,18 +403,21 @@ func TestGrantIsIdempotent(t *testing.T) {
 	svc := NewService(&fakeWallet{}, entitlements, store)
 	ctx := context.Background()
 
-	if err := svc.Grant(ctx, "player-1", cosmetics.KindBadge, "season-2026-q3-champion", "season:2026-q3-champion"); err != nil {
-		t.Fatalf("first Grant: %v", err)
+	playerID := uniquePlayer("player-grant-idem")
+	created, err := svc.Grant(ctx, playerID, cosmetics.KindBadge, "season-2026-q3-champion", "season:2026-q3-champion")
+	if err != nil || !created {
+		t.Fatalf("first Grant: created=%v err=%v, want created", created, err)
 	}
-	if err := svc.Grant(ctx, "player-1", cosmetics.KindBadge, "season-2026-q3-champion", "season:2026-q3-champion"); err != nil {
-		t.Fatalf("repeat Grant must be a no-op, got: %v", err)
+	created, err = svc.Grant(ctx, playerID, cosmetics.KindBadge, "season-2026-q3-champion", "season:2026-q3-champion")
+	if err != nil || created {
+		t.Fatalf("repeat Grant must be a no-op (created=false), got created=%v err=%v", created, err)
 	}
 }
 
 func TestGrantUnknownItemRejected(t *testing.T) {
 	entitlements, store := newTestEntitlementStore(t), newTestStore(t)
 	svc := NewService(&fakeWallet{}, entitlements, store)
-	if err := svc.Grant(context.Background(), "player-1", cosmetics.KindBadge, "not-a-real-badge", "season:x"); !errors.Is(err, ErrUnknownItem) {
+	if created, err := svc.Grant(context.Background(), "player-1", cosmetics.KindBadge, "not-a-real-badge", "season:x"); !errors.Is(err, ErrUnknownItem) || created {
 		t.Fatalf("expected ErrUnknownItem, got %v", err)
 	}
 }
@@ -428,19 +431,20 @@ func TestGrantOutsideWindow(t *testing.T) {
 	svc := NewService(&fakeWallet{}, newTestEntitlementStore(t), newTestStore(t))
 	ctx := context.Background()
 
+	p1, p2 := uniquePlayer("p1-window"), uniquePlayer("p2-window")
 	svc.now = func() time.Time { return until.Add(-time.Hour) }
-	if err := svc.Grant(ctx, "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
-		t.Fatalf("grant inside window: %v", err)
+	if created, err := svc.Grant(ctx, p1, cosmetics.KindHat, "ltd-hat", "r"); err != nil || !created {
+		t.Fatalf("grant inside window: created=%v err=%v", created, err)
 	}
 	svc.now = func() time.Time { return until.Add(time.Hour) }
-	if err := svc.Grant(ctx, "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
-		t.Fatalf("closed-window regrant of owned item must be a no-op, got %v", err)
+	if created, err := svc.Grant(ctx, p1, cosmetics.KindHat, "ltd-hat", "r"); err != nil || created {
+		t.Fatalf("closed-window regrant of owned item must be a no-op, got created=%v err=%v", created, err)
 	}
-	err := svc.Grant(ctx, "p2", cosmetics.KindHat, "ltd-hat", "r")
-	if !errors.Is(err, ErrNotAvailable) {
-		t.Fatalf("want ErrNotAvailable, got %v", err)
+	created, err := svc.Grant(ctx, p2, cosmetics.KindHat, "ltd-hat", "r")
+	if !errors.Is(err, ErrNotAvailable) || created {
+		t.Fatalf("want ErrNotAvailable and created=false, got created=%v err=%v", created, err)
 	}
-	if owned, oerr := svc.IsOwned(ctx, "p2", cosmetics.KindHat, "ltd-hat"); oerr != nil || owned {
+	if owned, oerr := svc.IsOwned(ctx, p2, cosmetics.KindHat, "ltd-hat"); oerr != nil || owned {
 		t.Fatalf("no entitlement may be written: owned=%v err=%v", owned, oerr)
 	}
 }
@@ -452,9 +456,11 @@ func TestGrantRepeatInsideWindowIsNoop(t *testing.T) {
 	})()
 	svc := NewService(&fakeWallet{}, newTestEntitlementStore(t), newTestStore(t))
 	svc.now = func() time.Time { return until.Add(-time.Hour) }
+	playerID := uniquePlayer("p1-repeat")
 	for i := 0; i < 2; i++ {
-		if err := svc.Grant(context.Background(), "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
-			t.Fatalf("grant %d: %v", i, err)
+		created, err := svc.Grant(context.Background(), playerID, cosmetics.KindHat, "ltd-hat", "r")
+		if err != nil || created != (i == 0) {
+			t.Fatalf("grant %d: created=%v err=%v, want created only on the first", i, created, err)
 		}
 	}
 }
@@ -484,7 +490,7 @@ func TestListCatalogIncludesEarnableWithoutPrice(t *testing.T) {
 	w := &fakeWallet{skus: allSKUsWithAvatars()}
 	svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
 	playerID := uniquePlayer("player-catalog-earnable")
-	if err := svc.Grant(ctx, playerID, cosmetics.KindFrame, "chip-ring", "achievement:hands_played:3"); err != nil {
+	if _, err := svc.Grant(ctx, playerID, cosmetics.KindFrame, "chip-ring", "achievement:hands_played:3"); err != nil {
 		t.Fatalf("Grant: %v", err)
 	}
 	entries, err := svc.ListCatalog(ctx, playerID, cosmetics.KindFrame)

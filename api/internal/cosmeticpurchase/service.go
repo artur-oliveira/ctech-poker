@@ -654,18 +654,20 @@ func (s *Service) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.
 // (e.g. "season:2026-q3-top10"), stored in the same PurchaseID column a real
 // purchase would use. A repeat grant of an already-active entitlement is a
 // no-op, not an error, so a retried or duplicated milestone trigger can never
-// double-write or fail loudly for something already true.
-func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) error {
+// double-write or fail loudly for something already true. created is true only
+// when this call wrote the active entitlement; every no-op and error reports
+// false, which is what lets the hand pipeline announce a new item exactly once.
+func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) (bool, error) {
 	if !cosmetics.IsKnown(kind, itemID) {
-		return ErrUnknownItem
+		return false, ErrUnknownItem
 	}
 	if !cosmetics.Available(kind, itemID, s.now()) {
 		// Window closed: an already-owned item stays an idempotent no-op so a
 		// retried grant is safe; anything else must not create ownership.
 		if ent, err := s.entitlements.Get(ctx, playerID, kind, itemID); err == nil && ent != nil && ent.active() {
-			return nil
+			return false, nil
 		}
-		return ErrNotAvailable
+		return false, ErrNotAvailable
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	err := s.entitlements.Put(ctx, Entitlement{
@@ -676,13 +678,13 @@ func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kin
 		if dynamo.IsConditionFailed(err) {
 			existing, getErr := s.entitlements.Get(ctx, playerID, kind, itemID)
 			if getErr == nil && existing.active() {
-				return nil
+				return false, nil
 			}
 		}
-		return fmt.Errorf("cosmeticpurchase: grant entitlement: %w", err)
+		return false, fmt.Errorf("cosmeticpurchase: grant entitlement: %w", err)
 	}
 	s.invalidate(ctx, playerID, kind, itemID)
-	return nil
+	return true, nil
 }
 
 // Refresh is the polling safety net. PIX purchases are always re-verified with

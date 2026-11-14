@@ -1678,7 +1678,7 @@ func (x *ClientMessage) GetBoardSlot() int32 {
 // ServerMessage is sent from the server to the client.
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "cosmetic_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "cosmetic_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count" | "cosmetic_unlocked"
 	// payload fields
 	ConnId   string         `protobuf:"bytes,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`       // for connected frame
 	Snapshot *TableSnapshot `protobuf:"bytes,3,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                 // for state frame
@@ -1701,6 +1701,8 @@ type ServerMessage struct {
 	PurchaseId      string       `protobuf:"bytes,19,opt,name=purchase_id,json=purchaseId,proto3" json:"purchase_id,omitempty"`                 // for sandbox_purchase_update, reaction_purchase_update, or cosmetic_purchase_update
 	SocialEvent     *SocialEvent `protobuf:"bytes,20,opt,name=social_event,json=socialEvent,proto3" json:"social_event,omitempty"`              // for social_event or social_presence_changed
 	UnreadCount     int32        `protobuf:"varint,21,opt,name=unread_count,json=unreadCount,proto3" json:"unread_count,omitempty"`             // for social_inbox_count
+	CosmeticKind    string       `protobuf:"bytes,22,opt,name=cosmetic_kind,json=cosmeticKind,proto3" json:"cosmetic_kind,omitempty"`           // for cosmetic_unlocked: avatar slot of the newly granted item (frame|hat|accessory|badge)
+	CosmeticId      string       `protobuf:"bytes,23,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`                 // for cosmetic_unlocked: catalog id of the newly granted item (the client owns the art)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1880,6 +1882,20 @@ func (x *ServerMessage) GetUnreadCount() int32 {
 		return x.UnreadCount
 	}
 	return 0
+}
+
+func (x *ServerMessage) GetCosmeticKind() string {
+	if x != nil {
+		return x.CosmeticKind
+	}
+	return ""
+}
+
+func (x *ServerMessage) GetCosmeticId() string {
+	if x != nil {
+		return x.CosmeticId
+	}
+	return ""
 }
 
 // Friend-visible presence. status is one of offline | online | in_table.
@@ -2274,7 +2290,7 @@ const file_poker_proto_rawDesc = "" +
 	"board_slot\x18\x11 \x01(\x05H\x02R\tboardSlot\x88\x01\x01B\r\n" +
 	"\v_card_indexB\x0f\n" +
 	"\r_run_it_twiceB\r\n" +
-	"\v_board_slot\"\x9e\x05\n" +
+	"\v_board_slot\"\xe4\x05\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +
@@ -2300,7 +2316,10 @@ const file_poker_proto_rawDesc = "" +
 	"\vpurchase_id\x18\x13 \x01(\tR\n" +
 	"purchaseId\x125\n" +
 	"\fsocial_event\x18\x14 \x01(\v2\x12.poker.SocialEventR\vsocialEvent\x12!\n" +
-	"\funread_count\x18\x15 \x01(\x05R\vunreadCountB\t\n" +
+	"\funread_count\x18\x15 \x01(\x05R\vunreadCount\x12#\n" +
+	"\rcosmetic_kind\x18\x16 \x01(\tR\fcosmeticKind\x12\x1f\n" +
+	"\vcosmetic_id\x18\x17 \x01(\tR\n" +
+	"cosmeticIdB\t\n" +
 	"\a_equity\"^\n" +
 	"\x0ePlayerPresence\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x16\n" +
