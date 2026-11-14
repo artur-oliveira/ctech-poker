@@ -118,6 +118,8 @@ export default function TableGuide() {
         <GuideTerm term="A">Leva o valor ao máximo. Fora da sua vez, prepara um all-in.</GuideTerm>
         <GuideTerm term="X">Prepara Check / Fold.</GuideTerm>
         <GuideTerm term="1 / 2">Espia a sua primeira ou a sua segunda carta.</GuideTerm>
+        <GuideTerm term="3 a 8">Disparam as suas reações favoritas: 3, 4 e 5 na sua cadeira; 6, 7 e 8 para outro jogador
+          (depois da tecla, toque em quem vai receber). Reação premium bloqueada não dispara.</GuideTerm>
         <GuideTerm term="E">Abre e fecha as reações.</GuideTerm>
         <GuideTerm term="T">Abre e fecha o chat.</GuideTerm>
         <GuideTerm term="Setas">Ajustam o valor do aumento; com Ctrl, o passo é o triplo.</GuideTerm>
@@ -248,8 +250,9 @@ export default function TableGuide() {
           qualquer aparelho. Cada reação tem a própria animação, com direito a uma frase e uma palavra de efeito
           (a Raiva solta vapor, o Pepino dá um susto, o Bumerangue volta para quem jogou). Com movimento reduzido
           ativo no sistema, os efeitos somem e o emoji aparece parado.</span></li>
-        <li><span><b>Favoritas:</b> até três reações ficam como atalho fixo ao lado do botão, sem abrir o
-          painel.</span></li>
+        <li><span><b>Favoritas:</b> até três reações na sua cadeira e até três para outro jogador, escolhidas na
+          estrela do painel (<b>Atalhos de reação</b>, em duas colunas). No computador ficam numa barra ao lado do botão de
+          emoji, cada uma com a sua tecla, de 3 a 8, sem abrir o painel; no celular aparecem no topo do painel.</span></li>
         <li><span><b>Intervalo:</b> há uma pausa curta entre um envio e o próximo, para ninguém cobrir a mesa de
           efeitos.</span></li>
         <li><span><b>Silenciar efeitos:</b> esconde as animações recebidas. Não afeta a partida e ninguém é
@@ -264,14 +267,14 @@ export default function TableGuide() {
         <li><span><b>Últimos vencedores:</b> resumo das últimas mãos resolvidas nesta mesa.</span></li>
       </GuideBullets>
         <p>O mesmo menu do assento tem adicionar amigo, silenciar, bloquear, denunciar e abrir a vitrine do
-          jogador. No celular basta <b>tocar no assento</b> do adversário para abri-lo; em tela larga, o
-          <b> ⋮</b> discreto no canto do cartão do assento faz o mesmo. Enquanto você está escolhendo o assento que
-          vai receber uma reação, o toque pertence à reação e o menu não abre.</p></>
+          jogador. Para abri-lo, toque ou clique na <b>foto do jogador</b> no assento (no computador um anel
+          dourado aparece ao passar o mouse). A foto não pode ser arrastada nem salva. Enquanto você está escolhendo o
+          assento que vai receber uma reação, o toque pertence à reação e o menu não abre.</p></>
     },
     {
       id: 'preferencias',
       title: 'Preferências da mesa',
-      summary: 'Apresentação, som e ritmo. Nada aqui muda as regras da mão.',
+      summary: 'Apresentação, som e ritmo, em duas colunas no computador. Nada aqui muda as regras da mão.',
       image: {src: '/guide/table-preferences.webp', alt: 'Diálogo de preferências com tema do feltro, sons, dealer, comandos por voz, treinador e lembrete'},
       body: <><GuideBullets>
         <li><span><b>Tema do feltro:</b> Clássico vem liberado; Meia-noite, Bordô e Oceano são cosméticos da Loja e

@@ -998,16 +998,3 @@ h1 em {
 [data-slot='button'].room-card {
     height: auto
 }
-/* The seat's player menu is a 22px badge (a 16px+ chip on the portrait ring). The
-   shared Button's size="icon" and touch.css (which pins 36px, specificity 0,3,0)
-   both outrank the seat's own rule, so it is restated here above them. */
-[data-density] .seat-actions-trigger [data-slot='button'][data-size='icon'] {
-    width: 22px;
-    height: 22px;
-    min-width: 0;
-    min-height: 0
-}
-[data-density] .stage-v-ring .seat-actions-trigger [data-slot='button'][data-size='icon'] {
-    width: var(--note-size);
-    height: var(--note-size)
-}

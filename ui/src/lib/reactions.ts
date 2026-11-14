@@ -52,3 +52,27 @@ export interface TableReactionEvent {
 /** Required by CC BY 4.0 for the animated Noto emoji bundled in public/emoji. */
 export const NOTO_CREDIT = 'Emojis: Noto Emoji, © Google, CC BY 4.0';
 export const NOTO_CREDIT_URL = 'https://googlefonts.github.io/noto-emoji-animation/';
+
+/** Mirrors `maxFavoritesPerKind` in api/internal/player/service.go: up to three
+ * favorites on the player's own seat and up to three thrown at someone. */
+export const MAX_FAVORITES_PER_KIND = 3;
+
+/** The number keys the quick bar owns. 1 and 2 peek the hole cards, so the
+ * favorites take 3 to 8: self reactions first (3-5), then thrown ones (6-8). */
+export const FAVORITE_KEYS = ['3', '4', '5', '6', '7', '8'] as const;
+
+export interface FavoriteSlot {
+  id: TableReactionID;
+  key: typeof FAVORITE_KEYS[number];
+}
+
+/** Self favorites sit on 3-5 and thrown ones on 6-8 whatever the counts, so a
+ * key never changes meaning because the player starred one more of the other
+ * kind. Within a kind, the order they were starred in is the key order. */
+export function favoriteSlots(favorites: TableReactionID[]): FavoriteSlot[] {
+  const pick = (targeted: boolean, offset: number) => favorites
+    .filter(id => TABLE_REACTIONS[id].targeted === targeted)
+    .slice(0, MAX_FAVORITES_PER_KIND)
+    .map((id, index) => ({id, key: FAVORITE_KEYS[offset + index]}));
+  return [...pick(false, 0), ...pick(true, MAX_FAVORITES_PER_KIND)];
+}

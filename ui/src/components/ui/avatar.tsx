@@ -13,7 +13,11 @@ function AvatarFallback({className, ...props}: Primitive.Fallback.Props) {
 }
 
 function AvatarImage({className, ...props}: Primitive.Image.Props) {
-  return <Primitive.Image className={cn('size-full object-cover', className)} {...props}/>;
+  // A photo is identity, not a download: no drag to another tab, no long-press
+  // "save image", no context menu. pointer-events:none also hands every click
+  // to the control wrapping the avatar.
+  return <Primitive.Image draggable={false} onContextMenu={event => event.preventDefault()}
+                          className={cn('pointer-events-none size-full select-none object-cover [-webkit-touch-callout:none] [-webkit-user-drag:none]', className)} {...props}/>;
 }
 
 export {Avatar, AvatarFallback, AvatarImage};

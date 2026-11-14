@@ -375,11 +375,14 @@ describe('Seat', () => {
 
   test('replaces the note trigger with the player menu when one is given, keeping the note marker', () => {
     const {container} = render(<Seat seat={seat()} isViewer={false} isTurn={false} index={0}
-      onEditNote={vi.fn()} renderActionsMenu={() => <button type="button">seat-menu</button>}
+      onEditNote={vi.fn()} renderActionsMenu={(_, trigger) => <button type="button">seat-menu {trigger}</button>}
       playerNote={{opponent_id: 'player-1', note: 'agressivo', tag: 'red', updated_at: '2026-08-01T00:00:00Z'}}/>);
-    expect(screen.getByRole('button', {name: 'seat-menu'})).toBeInTheDocument();
+    const menu = screen.getByRole('button', {name: /seat-menu/});
     expect(screen.queryByRole('button', {name: /nota privada/})).not.toBeInTheDocument();
-    expect(container.querySelector('.seat-actions-trigger .tag-red')).toBeInTheDocument();
+    // The avatar itself is the trigger's content, note marker included.
+    expect(menu.querySelector('.seat-avatar')).toBeInTheDocument();
+    expect(menu.querySelector('.tag-red')).toBeInTheDocument();
+    expect(container.querySelectorAll('.seat-avatar')).toHaveLength(1);
   });
 
   test('never offers the player menu on the viewer own seat', () => {
@@ -452,17 +455,14 @@ describe('Seat chip amounts and the touch tap target', () => {
     expect(screen.getByLabelText('Aposta de 600.000 fichas')).toHaveTextContent('600.000');
   });
 
-  test('the whole seat is the menu trigger on touch, until a reaction is being aimed at it', () => {
-    const menu = () => <button type="button">seat-menu</button>;
+  test('the avatar is the menu trigger, and aiming a reaction hands the seat to the target overlay', () => {
+    const menu = (_: unknown, trigger: React.ReactNode) => <button type="button">seat-menu {trigger}</button>;
     const {container, rerender} = render(<Seat seat={seat()} isViewer={false} isTurn={false} index={0}
                                                renderActionsMenu={menu}/>);
-    expect(container.querySelector('.seat-actions-trigger')).toHaveAttribute('data-seat-tap');
+    expect(container.querySelector('.seat-reaction-target')).not.toBeInTheDocument();
 
-    // Aiming a reaction hands the seat body to .seat-reaction-target instead;
-    // the trigger collapses back to its badge so the two cannot both claim the tap.
     rerender(<Seat seat={seat()} isViewer={false} isTurn={false} index={0} renderActionsMenu={menu}
                    reactionTargetLabel="Jogar tomate" onReactionTarget={vi.fn()}/>);
-    expect(container.querySelector('.seat-actions-trigger')).not.toHaveAttribute('data-seat-tap');
     expect(container.querySelector('.seat-reaction-target')).toBeInTheDocument();
   });
 });

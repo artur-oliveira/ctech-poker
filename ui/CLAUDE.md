@@ -12,7 +12,7 @@ off by default — do not build UI that assumes real money is on.
   controls that must stay 44px pass `compact={false}` to `Input`. **Button geometry is pinned in `app/base.css`**: the shared
   Button follows the shell's density and this app runs compact (32px), so base.css restores poker's 44px (`sm`/default), 48px
   (`lg`), radius `--rounded-control` and weight 600. Icon buttons get a 44px square at zero specificity, so a class that
-  sizes its own icon button wins (the seat menu is a 22px badge, restated in base.css above `touch.css`). A Button that
+  sizes its own icon button wins (the seat's player menu is now the avatar itself, see below). A Button that
   sizes itself is excluded by class name in that sheet; the lobby `room-card` also needs
   `h-auto in-data-[density=compact]:h-auto whitespace-normal`. A Button that positions itself with CSS (`position: absolute` in a class) needs the `absolute` utility class too: `touch.css`
   sets `position: relative` on every compact button except `.absolute`, `.fixed` and `.sticky`, and it outranks the app's class
@@ -221,13 +221,25 @@ off by default — do not build UI that assumes real money is on.
   bubble = 1 seat, an equity delta = 1 seat, a full `state` frame ≤ 3). Frame time itself is not
   measured — jsdom has no layout engine and there is no metrics sink. See
   `docs/2026-09-04-table-render-budget.md` and #230.
-- **The seat body is the player menu on touch, unless a reaction is being aimed.**
-  `Seat` sets `data-seat-tap` on `.seat-actions-trigger` whenever
-  `reactionTargetLabel` is absent; the coarse-pointer CSS stretches the same
-  `<button>` over the whole seat only under that attribute. It is one control in
-  both modes — flat and quiet inside the card on desktop, full-bleed and
-  icon-less on touch — so keyboard access and its accessible name never change.
-  Two affordances must never both claim the same tap.
+- **The avatar is the seat's player menu, on desktop and touch alike.** `Seat` hands
+  `renderActionsMenu(seat, trigger)` its avatar (plus the note dot) and
+  `PlayerActionsMenu`'s `trigger` prop makes that the popover button
+  (`.seat-avatar-trigger`, named "Detalhes de <jogador>"); the old 3-dot badge and the
+  full-bleed touch overlay are gone. The finger target is a transparent `::before`, the
+  hover/open/focus ring a second pseudo so it never fights the avatar's all-in shadow or
+  folded outline, and `.game-seat .seat-avatar-trigger` resets `min-height` because
+  `.game button` pins 44px (specificity 0,1,1) and turned the ring avatars into ovals.
+  While a reaction is being aimed `.seat-reaction-target` (z-index 8) sits over it.
+  `AvatarImage` is never draggable or saveable (`draggable=false`, `pointer-events:none`,
+  no context menu): a photo is identity, not a download. The render prop takes the
+  seat *and* the trigger, both stable per seat, so the renders-per-snapshot budget holds.
+- **Favorite reactions are 3 + 3, pinned to keys 3-8.** The server caps favorites at three
+  per kind (`maxFavoritesPerKind`, `targeted` from the catalogue) and `favoriteSlots`
+  (`lib/reactions.ts`) pins self ones to 3-5 and thrown ones to 6-8 whatever the counts, so a
+  key never changes meaning (1 and 2 peek the hole cards). `TableReactions` listens for them,
+  skips a locked premium so a stray key never opens a purchase, and renders the desktop
+  `.reaction-hotbar` beside the emoji toggle (fine pointer, 900px+). See
+  `docs/2026-11-13-table-overdrive.md`.
 - **Occupancy narrows the ring, never the felt — including its height.** The
   per-`data-player-count` rail insets are gone: they resized the table under the
   player on every join and leave. A seat joining or leaving animates on

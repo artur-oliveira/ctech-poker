@@ -10,11 +10,12 @@ import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesD
 import type {SeatIdentity} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {ownedReactionIDs} from '@/lib/api/reactionPurchases';
+import {isPlainKey} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
 import {useHoverPanel} from '@/lib/hooks/useHoverPanel';
 import {seatCenter} from '@/lib/seatRects';
 import {
-  PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionEvent, type TableReactionID
+  favoriteSlots, PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionEvent, type TableReactionID
 } from '@/lib/reactions';
 
 const REACTION_MUTE_KEY = 'poker:table-reactions-muted';
@@ -274,6 +275,31 @@ function TableReactionsImpl({items, seats, viewerId, connected, coolingDown, pen
     }
   }
 
+  const slots = favoriteSlots(favorites);
+  const slotDisabled = (id: TableReactionID) => {
+    const state = premiumState(id);
+    return !connected || coolingDown || state === 'loading' || state === 'unavailable' ||
+      (TABLE_REACTIONS[id].targeted && !hasOpponents);
+  };
+  // Number keys 3-8 fire the favorites (1 and 2 peek the hole cards). A locked
+  // premium is skipped on purpose: a stray key must never open a purchase.
+  const hotkeyRef = useRef<(key: string) => void>(() => undefined);
+  useEffect(() => {
+    hotkeyRef.current = key => {
+      const slot = slots.find(item => item.key === key);
+      if (!slot || slotDisabled(slot.id) || premiumState(slot.id) === 'locked') return;
+      chooseReaction(slot.id);
+    };
+  });
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (isPlainKey(event) && /^[3-8]$/.test(event.key)) hotkeyRef.current(event.key);
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const pendingLabel = pendingReaction ? TABLE_REACTIONS[pendingReaction].label : '';
 
   return <>
@@ -289,6 +315,21 @@ function TableReactionsImpl({items, seats, viewerId, connected, coolingDown, pen
               onClick={() => pendingReaction ? onPendingReactionChangeAction(null) : toggleFromClick(open)}>
         {open || pendingReaction ? <X/> : <SmilePlus/>}
       </Button>
+      {!open && !pendingReaction && slots.length > 0 && <div className="reaction-hotbar" role="group"
+                                                              aria-label="Atalhos de reação">
+        {slots.map(({id, key}) => {
+          const definition = TABLE_REACTIONS[id];
+          const state = premiumState(id);
+          return <button type="button" key={id} className={`${state}${definition.targeted ? ' targeted' : ''}`}
+                         title={`${definition.label} (tecla ${key})`} aria-keyshortcuts={key}
+                         aria-label={`${definition.label}${definition.targeted ? ', para alguém' : ''}`}
+                         disabled={slotDisabled(id)} onClick={() => chooseReaction(id)}>
+            <ReactionGlyph reactionId={id} glyph={definition.glyph}/>
+            <kbd aria-hidden="true">{key}</kbd>
+            {state === 'locked' && <LockKeyhole aria-label="Premium bloqueada"/>}
+          </button>;
+        })}
+      </div>}
       {pendingReaction && <span className="reaction-target-hint" role="status">
         <b>{pendingLabel}</b><small>Toque em um jogador</small>
       </span>}
@@ -309,18 +350,17 @@ function TableReactionsImpl({items, seats, viewerId, connected, coolingDown, pen
                     onClick={() => onOpenChangeAction(false)}><X/></Button>
           </span>
         </header>
-        {favorites.length > 0 && <div className="reaction-favorites" role="group" aria-label="Reações favoritas">
+        {slots.length > 0 && <div className="reaction-favorites" role="group" aria-label="Reações favoritas">
           <span><Star aria-hidden="true"/> Seus atalhos</span>
-          <div>{favorites.map(id => {
+          <div>{slots.map(({id, key}) => {
             const definition = TABLE_REACTIONS[id];
-            if (!definition) return null;
             const state = premiumState(id);
-            return <button type="button" key={id} title={definition.label}
+            return <button type="button" key={id} title={definition.label} aria-keyshortcuts={key}
                            className={`${state}${state === 'owned' ? ' premium-owned' : ''}`}
-                           disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable' ||
-                             (definition.targeted && !hasOpponents)} onClick={() => chooseReaction(id)}>
+                           disabled={slotDisabled(id)} onClick={() => chooseReaction(id)}>
               <ReactionGlyph reactionId={id} glyph={definition.glyph}/>
               <span>{definition.label}</span>
+              <kbd aria-hidden="true">{key}</kbd>
               {state === 'locked' && <LockKeyhole aria-label="Premium bloqueada"/>}
               {state === 'owned' && <Sparkles aria-label="Premium liberada"/>}
             </button>;

@@ -3,6 +3,7 @@ import {useCallback, useRef, useState} from 'react';
 import {useInfiniteQuery, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Bookmark, ChevronRight, Clock3, Coins, Layers, Palette, ShoppingBag, Sparkles} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
+import {DAILY_REWARD_ANCHOR, DailyRewardBanner} from '@/components/store/DailyRewardBanner';
 import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
 import {SkuGrid} from '@/components/store/SkuGrid';
 import {PurchaseModal} from '@/components/store/PurchaseModal';
@@ -241,6 +242,8 @@ export default function Store() {
           description="Reações permanentes, baralhos, feltros e fichas para a próxima mesa."
         />
 
+        <DailyRewardBanner/>
+
         <nav className="store-directory" aria-label="Seções da loja">
           <a href="#reactions">
             <span className="store-directory-icon"><Sparkles aria-hidden="true"/></span>
@@ -390,7 +393,7 @@ export default function Store() {
               </span>
             </div>
 
-            <section className="store-department-reward" aria-labelledby="daily-reward-title"><DailyRewardPanel/></section>
+            <section id={DAILY_REWARD_ANCHOR} className="store-department-reward" aria-labelledby="daily-reward-title"><DailyRewardPanel/></section>
 
             <div className="store-subsection-heading">
               <h3 id="credit-packs-title">Pacotes de fichas</h3>

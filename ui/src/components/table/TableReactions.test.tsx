@@ -170,6 +170,62 @@ describe('TableReactions Poker Theater', () => {
     expect(save).toHaveBeenCalledWith(['heartbeat', 'crown', 'shark']);
   });
 
+  test('number keys 3-8 fire favorites: self at once, thrown ones arm a target', async () => {
+    const user = userEvent.setup();
+    const {callbacks} = renderReactions({open: false, favorites: ['crown', 'heartbeat', 'clap']});
+
+    // Slots are pinned by kind, not by starring order: self 3-5, thrown 6-8.
+    const bar = screen.getByRole('group', {name: 'Atalhos de reação'});
+    expect(within(bar).getAllByRole('button').map(button => button.getAttribute('aria-keyshortcuts')))
+      .toEqual(['3', '4', '6']);
+
+    await user.keyboard('3');
+    expect(callbacks.onQuickSendAction).toHaveBeenCalledWith('heartbeat');
+    await user.keyboard('6');
+    expect(callbacks.onPendingReactionChangeAction).toHaveBeenCalledWith('crown');
+    await user.keyboard('1');
+    await user.keyboard('5');
+    expect(callbacks.onQuickSendAction).toHaveBeenCalledTimes(1);
+  });
+
+  test('number keys stay quiet while typing, cooling down or on a locked premium', async () => {
+    const user = userEvent.setup();
+    const {callbacks, rerender, props} = renderReactions({open: false, favorites: ['heartbeat', 'cold'],
+      premiumEnabled: true, catalog: [{id: 'cold', price_fichas: 100_000} as ReactionCatalogEntry]});
+
+    await user.keyboard('4');
+    expect(callbacks.onLockedReactionAction).not.toHaveBeenCalled();
+    expect(callbacks.onQuickSendAction).not.toHaveBeenCalled();
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    await user.keyboard('3');
+    expect(callbacks.onQuickSendAction).not.toHaveBeenCalled();
+    input.remove();
+
+    rerender(<TableReactions {...props} coolingDown/>);
+    await user.keyboard('3');
+    expect(callbacks.onQuickSendAction).not.toHaveBeenCalled();
+  });
+
+  test('the editor caps favorites at three per kind and shows each key', async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async () => undefined);
+    renderReactions({favorites: ['clap', 'laugh', 'wow', 'chip'], onFavoriteReactionsChangeAction: save});
+
+    await user.click(screen.getByRole('button', {name: 'Editar reações favoritas'}));
+    const dialog = screen.getByRole('dialog', {name: 'Atalhos de reação'});
+    expect(within(dialog).getByText('3 de 3')).toBeInTheDocument();
+    expect(within(dialog).getByText('1 de 3')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', {name: 'Raiva'})).toBeDisabled();
+    expect(within(dialog).getByRole('button', {name: /Jogar ficha/})).toHaveTextContent('6');
+
+    await user.click(within(dialog).getByRole('button', {name: 'Mandar café'}));
+    await user.click(within(dialog).getByRole('button', {name: 'Salvar atalhos'}));
+    expect(save).toHaveBeenCalledWith(['clap', 'laugh', 'wow', 'chip', 'coffee']);
+  });
+
   test('hides and restores live effects while preserving the preference', async () => {
     const user = userEvent.setup();
     const item: TableReactionEvent = {

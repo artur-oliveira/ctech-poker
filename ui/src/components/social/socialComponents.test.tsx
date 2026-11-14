@@ -163,6 +163,14 @@ describe('PlayerActionsMenu', () => {
     await screen.findByText('Ver perfil');
   }
 
+  test('opens from a custom trigger (the seat avatar) under a details name', async () => {
+    renderWithClient(<PlayerActionsMenu target={player({})} actions={actionState()} surface="table_behavior"
+                                        trigger={<span>foto</span>}/>);
+    expect(screen.queryByRole('button', {name: 'Ações para Bia'})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Detalhes de Bia'}));
+    expect(await screen.findByText('Ver perfil')).toBeInTheDocument();
+  });
+
   test('offers the friend action that matches the current relationship', async () => {
     const actions = actionState();
     const {rerender} = renderWithClient(

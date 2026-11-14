@@ -26,7 +26,7 @@ export default function StoreGuide() {
           <GuideSteps><li><span>Escolha o item. O cartão mostra o preço em fichas e o preço em reais.</span></li>
           <li><span>Pague com <b>fichas</b>, com confirmação imediata, ou com <b>Pix</b>, pelo QR code do passo seguinte.</span></li>
           <li><span>Confirmado, o item já vale em qualquer mesa: a reação entra no painel, o baralho aparece em <b>Seu perfil</b>, na seção <b>Sua mesa</b>, e o feltro nas preferências da mesa.</span></li></GuideSteps>
-          <p>Reações premium bloqueadas continuam visíveis na mesa com um cadeado; tocar nelas abre a compra sem tirar você da partida. Até três reações, premium ou não, podem virar atalho fixo ao lado do botão.</p>
+          <p>Reações premium bloqueadas continuam visíveis na mesa com um cadeado; tocar nelas abre a compra sem tirar você da partida. Até três reações na sua cadeira e até três para outro jogador, premium ou não, podem virar atalho fixo, com uma tecla de 3 a 8 no computador.</p>
           <GuideCallout kind="info" title="Estorno enquanto o item não foi usado">Um cosmético só pode ser estornado se nunca tiver sido selecionado. O servidor verifica isso antes de autorizar, e o item volta a ficar bloqueado.</GuideCallout></>
       },
       {
@@ -40,7 +40,7 @@ export default function StoreGuide() {
       },
       {
         id: 'diaria', title: 'Resgatar a recompensa diária', summary: 'Um resgate por dia, numa trilha de 30 dias.',
-        body: <><GuideSteps><li><span>Um ponto dourado na Loja avisa quando a recompensa está pronta. Nada é resgatado automaticamente.</span></li>
+        body: <><GuideSteps><li><span>Um ponto dourado na Loja avisa quando a recompensa está pronta, e no topo da página aparece o botão <b>Pegar recompensa</b>, que leva você até a Ofensiva diária. Nada é resgatado automaticamente.</span></li>
           <li><span>Use <b>Abrir e resgatar</b> na <b>Ofensiva diária</b>. A trilha mostra o valor de cada dia; cada dia seguido vale mais, e o dia 30 paga o baú final.</span></li>
           <li><span>Depois, o painel mostra o dia garantido e o tempo até o próximo resgate. O dia vira à meia-noite de Brasília.</span></li></GuideSteps>
           <p>A cada 7 dias seguidos você ganha uma <b>proteção</b>, que cobre exatamente um dia sem resgate. Se faltar um dia sem proteção, ou dois dias ou mais mesmo com ela, a ofensiva é interrompida e o próximo resgate recomeça no dia 1; o painel avisa antes do resgate. Uma proteção não usada continua guardada.</p>

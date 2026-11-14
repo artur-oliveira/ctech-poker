@@ -73,7 +73,7 @@ production reject the socket action.
 - Premium loading, locked, owned, unavailable, and refunding states keep their previous entitlement behavior.
 - Pending targeting names the chosen reaction and offers a one-tap cancel path.
 - The visibility toggle persists at `poker:table-reactions-muted`; it suppresses rendering only, not transport.
-- The favorites editor still accepts up to three IDs and can include a locked premium reaction.
+- The favorites editor accepts up to three IDs per kind (own seat, thrown at someone; see `2026-11-13-table-overdrive.md`) and can include a locked premium reaction.
 
 ## Accessibility and performance
 
