@@ -75,6 +75,15 @@ func TestWalletProblemPassesThroughNextAction(t *testing.T) {
 	}
 }
 
+func TestWalletProblemNeverRelaysServiceAuthFailure(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		p, ok := walletProblem(&walletclient.Error{Status: status, Type: "/problems/unauthorized", Title: "Unauthorized", Detail: "invalid credentials"})
+		if !ok || p.Status != http.StatusServiceUnavailable || p.Detail == "invalid credentials" {
+			t.Fatalf("status %d relayed as %+v", status, p)
+		}
+	}
+}
+
 func TestResponsibleProblemTypes(t *testing.T) {
 	p, ok := responsibleProblem(responsible.ErrConsentRequired)
 	if !ok || p.Type != "/problems/gambling-terms-required" || p.Status != http.StatusForbidden {
