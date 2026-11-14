@@ -106,7 +106,11 @@ func TestSocialResponseCarriesDecor(t *testing.T) {
 
 func TestInboxActorCarriesDecor(t *testing.T) {
 	app := fiber.New()
-	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "actor"); c.Locals(localsFirstParty, true); return c.Next() }
+	auth := func(c fiber.Ctx) error {
+		c.Locals(localsUserID, "actor")
+		c.Locals(localsFirstParty, true)
+		return c.Next()
+	}
 	events := &fakeInboxEventStore{events: []social.Event{{RecipientPlayerID: "actor", EventID: "e1", Type: social.EventFriendRequest, ActorPlayerID: "ana", Status: social.EventStatusPending, CreatedAt: 1}}}
 	svc := social.NewService(newAPISocialStore(), true).WithInbox(events)
 	profiles := &fakeMultiProfileStore{byID: map[string]player.PlayerProfile{"ana": decoredProfile}}
