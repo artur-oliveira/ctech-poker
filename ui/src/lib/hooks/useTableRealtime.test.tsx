@@ -50,6 +50,8 @@ vi.mock('@/lib/api/client', () => ({
 }));
 
 vi.mock('@/lib/auth/oauth', () => ({doRefresh: auth.refresh}));
+const queryClient = vi.hoisted(() => ({invalidateQueries: vi.fn()}));
+vi.mock('@tanstack/react-query', () => ({useQueryClient: () => queryClient}));
 vi.mock('@/lib/sound', () => ({playSound: vi.fn()}));
 vi.mock('@/lib/notify', () => ({pushNotification: vi.fn()}));
 vi.mock('@/lib/network/NetworkProvider', () => ({
@@ -690,6 +692,16 @@ describe('useTableRealtime', () => {
       renderHook(() => useTableRealtime('table-1', VIEWER));
       receive({type: 'cosmetic_unlocked', cosmetic_kind: 'hat', cosmetic_id: 'crown'});
       expect(notified()).toEqual([['Novo item desbloqueado: Coroa. Equipe em Perfil.', 'info']]);
+    });
+
+    test('refreshes the owned and catalog queries once per frame', () => {
+      queryClient.invalidateQueries.mockClear();
+      renderHook(() => useTableRealtime('table-1', VIEWER));
+      receive({type: 'cosmetic_unlocked', cosmetic_kind: 'hat', cosmetic_id: 'crown'});
+      expect(queryClient.invalidateQueries.mock.calls).toEqual([
+        [{queryKey: ['wallet', 'avatar-cosmetic-owned']}],
+        [{queryKey: ['wallet', 'cosmetic-catalog']}],
+      ]);
     });
 
     test('unknown id and unknown kind fall back to the id', () => {

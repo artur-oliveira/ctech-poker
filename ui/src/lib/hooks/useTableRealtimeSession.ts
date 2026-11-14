@@ -1,5 +1,6 @@
 'use client';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useQueryClient} from '@tanstack/react-query';
 import {recoverSession} from '@/lib/auth/session';
 import type {WSStatus} from '@aoctech/ws-client';
 import type {MockScenario} from '@/lib/mockConfig';
@@ -36,6 +37,7 @@ export type TableRealtimeMockOptions = {
  * memoized set: it is compared by identity. */
 export function useTableRealtimeSession(id: string, viewerId?: string, shareCode?: string,
   mockOptions?: TableRealtimeMockOptions, suppressedPlayerIds?: ReadonlySet<string>) {
+  const queryClient = useQueryClient();
   // Read through a ref: receive() must see the current suppression set without
   // being rebuilt (and re-subscribing the socket) every time it changes.
   const suppressedRef = useRef(suppressedPlayerIds);
@@ -504,6 +506,9 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       // Unknown kind (new server slot, old client) falls back to the raw id.
       const label = avatarItemLabel(message.cosmetic_kind as AvatarSlot, message.cosmetic_id);
       pushNotification(`Novo item desbloqueado: ${label}. Equipe em Perfil.`, 'info');
+      // The grant landed server-side: refresh what the profile and store show.
+      void queryClient.invalidateQueries({queryKey: ['wallet', 'avatar-cosmetic-owned']});
+      void queryClient.invalidateQueries({queryKey: ['wallet', 'cosmetic-catalog']});
     }
     if (message.type === 'chat' && message.message && !isSuppressed(message.player_id)) {
       const chatMessage = message.message;
@@ -523,7 +528,7 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       };
       showReaction(reaction);
     }
-  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, isSuppressed,
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, isSuppressed, queryClient,
     noteFreshChatArrivals, retryAuxiliaryCommand, sendActFrame, showReaction, viewerId]);
 
   const receiveForTable = useCallback((message: ServerMessage) => {
