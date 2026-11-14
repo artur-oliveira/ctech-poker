@@ -865,7 +865,14 @@ catalog.
   `ServerMessage{type:"cosmetic_unlocked", cosmetic_kind, cosmetic_id}` (proto fields 22/23) to `tableID#playerID`.
   A grant error is logged and skipped, never aborting the other unlocks, the leaderboard or the hand. Cost: zero unless
   an unlock maps to an item, then one conditional entitlement transaction per item (`TestHandPipelineGrantBudget`;
-  the #204 ceilings are unchanged). A nil granter skips granting. `cosmetics.Decor` (frame, hat, accessory, badges) is the
+  the #204 ceilings are unchanged). A nil granter skips granting. **Self-heal on read:** `GET /players/me/cosmetics/:kind/owned`
+  first runs `grantEarned` (`internal/api/v1/avatarcosmetics.go`), the only recovery path for a grant the pipeline lost
+  (crash between claim and grant, grant error): it reads `AllAchievements` once per mode (sandbox, real), takes the max
+  `achievements.StarsFor` per key (a non-empty `unlocked_at` floors a reset counter like `folded_streak` at 1 star),
+  reads `OwnedIDs` once per kind with a qualifying row and `Grant`s only unowned rows (reason
+  `achievement:<key>:<stars>:backfill`). Best-effort, bounded by `earnedGrantTimeout` (3s); every error is logged and
+  the list is still served, including items granted in the same call. Steady state: 2 progress reads + ≤4 ownership
+  reads, zero writes. A nil progress reader keeps the plain list. `cosmetics.Decor` (frame, hat, accessory, badges) is the
   single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
   persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
   `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`

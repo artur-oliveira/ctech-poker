@@ -110,3 +110,13 @@ func maxStars(tiers []Tier) int {
 	}
 	return most
 }
+
+// StarsFor is the stars a count has earned on key: the highest tier whose
+// threshold it reaches (stateFor's rule), 0 for an unknown key.
+func StarsFor(key string, count int) int {
+	achievement, ok := achievementForKey(key)
+	if !ok {
+		return 0
+	}
+	return stateFor(achievement, count).Stars
+}

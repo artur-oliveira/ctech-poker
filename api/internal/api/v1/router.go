@@ -212,7 +212,12 @@ func Register(app *fiber.App, d Deps) {
 	RegisterSandboxPurchase(router, auth, idem, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, idem, reactionPurchaseSvc, purchaseLimiter)
 	RegisterCosmeticPurchase(router, auth, idem, cosmeticPurchaseSvc, purchaseLimiter)
-	RegisterAvatarCosmeticsOwnership(router, auth, cosmeticPurchaseSvc)
+	// Typed-nil guard: a nil *Store boxed in the interface would deref on read.
+	var earnedProgress achievementProgressReader
+	if achievementStore != nil {
+		earnedProgress = achievementStore
+	}
+	RegisterAvatarCosmeticsOwnership(router, auth, cosmeticPurchaseSvc, earnedProgress)
 	// nil in the narrower test-only wiring (app.registerRoutes).
 	if cosmeticLoadoutSvc != nil {
 		RegisterCosmeticLoadouts(router, auth, cosmeticLoadoutSvc)
