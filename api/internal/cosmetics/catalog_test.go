@@ -170,3 +170,20 @@ func TestDecorEmptyEqual(t *testing.T) {
 		t.Fatal("badge order must matter")
 	}
 }
+
+func TestAvatarCatalogLaunchIDs(t *testing.T) {
+	want := map[Kind][]string{
+		KindFrame:     {"chip-ring"},
+		KindHat:       {"dealer-visor", "crown", "laurel"},
+		KindAccessory: {"bandit-mask"},
+		KindBadge:     {"all-in-hero", "iron-nerve", "rainmaker", "veteran", "social-butterfly"},
+	}
+	for kind, ids := range want {
+		for _, id := range ids {
+			e, ok := byID[catalogKey(kind, id)]
+			if !ok || !e.Premium || e.Source != SourceAchievement {
+				t.Errorf("%s/%s: want premium achievement entry, got %+v (found=%v)", kind, id, e, ok)
+			}
+		}
+	}
+}

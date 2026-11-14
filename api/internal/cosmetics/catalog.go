@@ -130,6 +130,18 @@ var catalog = []CatalogEntry{
 	{Kind: KindFrame, ID: "champion-gold", Premium: true, Source: SourceSeason},
 	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true, Source: SourceSeason},
 	{Kind: KindBadge, ID: "season-2026-q3-champion", Premium: true, Source: SourceSeason},
+
+	// Earnable via achievements (phase 2): granted, never sold.
+	{Kind: KindFrame, ID: "chip-ring", Premium: true, Source: SourceAchievement},
+	{Kind: KindHat, ID: "dealer-visor", Premium: true, Source: SourceAchievement},
+	{Kind: KindHat, ID: "crown", Premium: true, Source: SourceAchievement},
+	{Kind: KindHat, ID: "laurel", Premium: true, Source: SourceAchievement},
+	{Kind: KindAccessory, ID: "bandit-mask", Premium: true, Source: SourceAchievement},
+	{Kind: KindBadge, ID: "all-in-hero", Premium: true, Source: SourceAchievement},
+	{Kind: KindBadge, ID: "iron-nerve", Premium: true, Source: SourceAchievement},
+	{Kind: KindBadge, ID: "rainmaker", Premium: true, Source: SourceAchievement},
+	{Kind: KindBadge, ID: "veteran", Premium: true, Source: SourceAchievement},
+	{Kind: KindBadge, ID: "social-butterfly", Premium: true, Source: SourceAchievement},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
