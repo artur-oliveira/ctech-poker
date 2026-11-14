@@ -316,14 +316,26 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 	}
 	userID := c.Locals(localsUserID).(string)
 
-	renamed := req.Name != nil
-	if renamed {
+	// The seat's name and cosmetics are a table-actor cache filled at join
+	// time and never re-read (#64). Push once, on every return path, after any
+	// identity field was actually written: a later field failing (400/500)
+	// must not leave opponents on the old identity. The table side is
+	// idempotent and a no-op when nothing changed.
+	identityChanged := false
+	defer func() {
+		if identityChanged {
+			h.pushIdentity(c.Context(), userID)
+		}
+	}()
+
+	if req.Name != nil {
 		if _, err := h.players.SetName(c.Context(), userID, *req.Name); err != nil {
 			if errors.Is(err, player.ErrEmptyName) {
 				return problem.BadRequest("name must not be empty").Send(c)
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
 	}
 	if req.WalletMode != nil {
 		if *req.WalletMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
@@ -394,7 +406,6 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return internalProblem("failed to update profile showcase layout", err).Send(c)
 		}
 	}
-	equipping := req.EquippedFrameID != nil || req.EquippedHatID != nil || req.EquippedAccessoryID != nil || req.EquippedBadgeIDs != nil
 	if req.EquippedFrameID != nil {
 		if _, err := h.players.SetEquippedFrame(c.Context(), userID, *req.EquippedFrameID); err != nil {
 			if errors.Is(err, player.ErrInvalidFrame) {
@@ -405,6 +416,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
 	}
 	if req.EquippedHatID != nil {
 		if _, err := h.players.SetEquippedHat(c.Context(), userID, *req.EquippedHatID); err != nil {
@@ -416,6 +428,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
 	}
 	if req.EquippedAccessoryID != nil {
 		if _, err := h.players.SetEquippedAccessory(c.Context(), userID, *req.EquippedAccessoryID); err != nil {
@@ -427,6 +440,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
 	}
 	if req.EquippedBadgeIDs != nil {
 		if _, err := h.players.SetEquippedBadges(c.Context(), userID, *req.EquippedBadgeIDs); err != nil {
@@ -438,6 +452,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
 	}
 	if req.BetPresetMode != nil {
 		if _, err := h.players.SetBetPresetMode(c.Context(), userID, *req.BetPresetMode); err != nil {
@@ -455,13 +470,6 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return internalProblem("failed to update favorite reactions", err).Send(c)
 		}
 	}
-	if renamed || equipping {
-		// The seat's name and cosmetics are a table-actor cache filled at join
-		// time and never re-read (#64); one push after all writes refreshes
-		// them. The table side is idempotent and a no-op when nothing changed.
-		h.pushIdentity(c.Context(), userID)
-	}
-
 	profile, err := h.players.GetOrCreate(c.Context(), userID)
 	if err != nil {
 		return internalProblem("failed to load player profile", err).Send(c)
