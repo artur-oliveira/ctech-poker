@@ -2,7 +2,8 @@
 import type {RefObject} from 'react';
 import {useEffect, useRef, useState} from 'react';
 import Image from 'next/image';
-import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
+import Link from 'next/link';
+import {Check, Coins, LoaderCircle, QrCode, ShieldCheck, UserRoundPen} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@aoctech/ui';
 import {
@@ -17,12 +18,21 @@ import {
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
+import {AvatarItemPreview, cosmeticItemLabel, isAvatarStoreKind} from '@/components/store/CosmeticStoreSection';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 import {usePurchaseStatus} from '@/lib/hooks/usePurchaseStatus';
 import {moneyExact} from '@/lib/chips';
 
 
 function purchaseError(error: unknown) {
+  // The idem key is fresh per click, so after a sale window closes a retry on a
+  // Pix that is still open lands here: the QR code is in the history, say so.
+  if (error instanceof ApiError && error.problem?.code === 'not_available') {
+    return 'Este item saiu da loja. Se você já gerou um Pix, ele continua em Compras e estornos.';
+  }
+  if (error instanceof ApiError && error.problem?.code === 'not_purchasable') {
+    return 'Este item é liberado por conquista, não por compra.';
+  }
   if (error instanceof ApiError && error.status === 409) {
     return 'Este item já é seu ou existe uma compra dele em andamento. Atualize a compra para continuar.';
   }
@@ -30,10 +40,6 @@ function purchaseError(error: unknown) {
     return 'Não foi possível usar este meio de pagamento para este item.';
   }
   return 'Não foi possível iniciar a compra agora. Tente novamente.';
-}
-
-function labelFor(kind: CosmeticKind, itemId: string) {
-  return kind === 'deck' ? DECK_VARIANTS[itemId as DeckVariantId]?.label : TABLE_THEMES[itemId as TableThemeId]?.label;
 }
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
@@ -47,6 +53,8 @@ const ACES = ['As', 'Ah', 'Ad', 'Ac'];
  * Decorative to the purchase decision (price/name are already text), so the
  * visual is aria-hidden and a single sr-only label describes the combo. */
 function CosmeticPreview({kind, itemId, pairedItemId}: { kind: CosmeticKind; itemId: string; pairedItemId?: string }) {
+  if (isAvatarStoreKind(kind)) return <span className="cosmetic-preview-avatar" aria-hidden="true">
+    <AvatarItemPreview kind={kind} id={itemId} size={88}/></span>;
   const feltId = (kind === 'felt' ? itemId : pairedItemId) as TableThemeId | undefined;
   const deckId = (kind === 'deck' ? itemId : pairedItemId) as DeckVariantId | undefined;
   // Falls back to the classic felt so an unresolved paired theme (e.g. the
@@ -94,7 +102,8 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
   const [started, setStarted] = useState<CosmeticPurchase | undefined>(initialPurchase);
   const [pendingMethod, setPendingMethod] = useState<CosmeticPurchaseMethod | null>(null);
   const [error, setError] = useState('');
-  const label = entry && labelFor(kind, entry.id);
+  const label = entry && cosmeticItemLabel(kind, entry.id);
+  const avatar = isAvatarStoreKind(kind);
   const startedId = started?.purchase_id;
 
   // The purchase's live status is server state, so it lives in the query cache
@@ -140,6 +149,11 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
       queryClient.setQueryData(cosmeticPurchaseKey(kind, next.purchase_id), next);
     } catch (caught) {
       setError(purchaseError(caught));
+      // A closed window also changed the catalog (available: false) and maybe
+      // the history (the Pix to resume): refresh both behind the dialog.
+      if (caught instanceof ApiError && caught.problem?.code === 'not_available') {
+        void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
+      }
     } finally {
       setPendingMethod(null);
     }
@@ -153,13 +167,16 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
         <span className="cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id} pairedItemId={pairedItemId}/></span>
         <DialogTitle>{confirmed ? `${label} liberado` : `Liberar ${label}`}</DialogTitle>
         <DialogDescription>{confirmed
-          ? 'O item é seu para sempre e já pode ser usado em qualquer mesa.'
+          ? avatar ? 'O item é seu para sempre. Equipe no perfil para aparecer em qualquer mesa.'
+            : 'O item é seu para sempre e já pode ser usado em qualquer mesa.'
           : 'Uma compra, uso permanente. Escolha como pagar; não há assinatura nem consumo por uso.'}</DialogDescription>
       </DialogHeader>
 
       {confirmed ? <div className="reaction-purchase-success" role="status" aria-live="polite">
         <span><Check aria-hidden="true"/></span>
-        <div><strong>Pronto para a mesa</strong><p>Feche esta janela e selecione o item na sua próxima mão.</p></div>
+        <div><strong>{avatar ? 'Pronto para equipar' : 'Pronto para a mesa'}</strong>
+          <p>{avatar ? 'Escolha o item em Visual do avatar, no seu perfil.'
+            : 'Feche esta janela e selecione o item na sua próxima mão.'}</p></div>
       </div> : active && purchase?.method === 'pix' ? <>
         <PixPaymentView purchase={purchase} amountDetail={label}
           paymentNote="O pagamento libera apenas este item cosmético e não altera fichas nem saldo de jogo."/>
@@ -193,7 +210,9 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
       {error && <p className="reaction-purchase-error" role="alert">{error}</p>}
 
       <DialogFooter>
-        {confirmed ? <Button type="button" onClick={onCloseAction}>Usar na mesa</Button>
+        {confirmed && avatar ? <Button render={<Link href="/player-profile"/>}>
+            <UserRoundPen aria-hidden="true"/> Equipar no perfil</Button>
+          : confirmed ? <Button type="button" onClick={onCloseAction}>Usar na mesa</Button>
           : expired ? <><Button type="button" variant="ghost" onClick={onCloseAction}>Agora não</Button>
             <Button type="button" disabled={pendingMethod !== null} onClick={() => void buy('pix')}>Gerar novo Pix</Button></>
           : <Button type="button" variant="ghost" disabled={pendingMethod !== null} onClick={onCloseAction}>

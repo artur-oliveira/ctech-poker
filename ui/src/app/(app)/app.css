@@ -6109,6 +6109,39 @@ button.deck-grid-slot:hover {
     color: var(--muted-rose);
     font-size: var(--font-size-compact)
 }
+/* Avatar items (frame, hat, accessory): the owned row's way to the profile picker,
+   and actions side by side when a refund sits next to it. */
+.cosmetic-store-action:has(.cosmetic-store-equip) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px
+}
+.cosmetic-store-equip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding-inline: 4px;
+    color: var(--gold-pale);
+    font-size: var(--font-size-compact);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: var(--white-22);
+    text-underline-offset: 3px
+}
+.cosmetic-store-equip:hover {
+    text-decoration-color: currentColor
+}
+.cosmetic-store-equip:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--rounded-control)
+}
+.cosmetic-store-equip svg {
+    width: 14px;
+    height: 14px
+}
 .felt-swatch {
     display: inline-block;
     width: 40px;

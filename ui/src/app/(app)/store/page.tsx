@@ -1,7 +1,9 @@
 'use client';
 import {useCallback, useRef, useState} from 'react';
 import {useInfiniteQuery, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Bookmark, ChevronRight, Clock3, Coins, Layers, Palette, ShoppingBag, Sparkles} from 'lucide-react';
+import {
+  Bookmark, ChevronRight, CircleUserRound, Clock3, Coins, Crown, Glasses, Layers, Palette, ShoppingBag, Sparkles
+} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
 import {DAILY_REWARD_ANCHOR, DailyRewardBanner} from '@/components/store/DailyRewardBanner';
 import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
@@ -12,7 +14,10 @@ import {RefundConfirmationDialog} from '@/components/store/RefundConfirmationDia
 import {reactionActivityRows, ReactionStoreSection} from '@/components/reactions/ReactionStoreSection';
 import {ReactionPurchaseDialog} from '@/components/reactions/ReactionPurchaseDialog';
 import {ReactionRefundDialog} from '@/components/reactions/ReactionRefundDialog';
-import {cosmeticActivityRows, DeckStoreSection, FeltStoreSection} from '@/components/store/CosmeticStoreSection';
+import {
+  AccessoryStoreSection, cosmeticActivityRows, DeckStoreSection, FeltStoreSection, FrameStoreSection, HatStoreSection
+} from '@/components/store/CosmeticStoreSection';
+import {AvatarStoreDepartment} from '@/components/store/AvatarStoreDepartment';
 import {CosmeticLoadoutSection} from '@/components/store/CosmeticLoadoutSection';
 import {PurchaseActivityList} from '@/components/store/PurchaseActivityList';
 import {CosmeticPurchaseDialog} from '@/components/store/CosmeticPurchaseDialog';
@@ -46,6 +51,7 @@ import {
   refundReactionPurchase
 } from '@/lib/api/reactionPurchases';
 import {
+  type AvatarStoreKind,
   type CosmeticCatalogEntry,
   type CosmeticPurchase,
   getCosmeticPurchase,
@@ -82,6 +88,30 @@ function usePurchaseHistory<T>(queryKey: readonly unknown[], fetchPage: (cursor?
     hasMore: query.hasNextPage,
     isLoadingMore: query.isFetchingNextPage,
     loadMore: () => void query.fetchNextPage(),
+  };
+}
+
+// An avatar department (frame, hat, accessory) is below the fold, so unlike the
+// four eager catalogs its catalog waits for the section too: first paint adds no
+// request. Until the section has been in view the grid reports loading, so it
+// is a skeleton or a whole grid, never one without its prices or actions.
+function useAvatarDepartment(kind: AvatarStoreKind, released: string, activitySeen: boolean) {
+  const [ref, seen] = useInViewOnce();
+  const catalog = useQuery({
+    queryKey: ['wallet', 'cosmetic-catalog', kind], queryFn: () => listCosmeticCatalog(kind), enabled: seen,
+  });
+  const purchases = usePurchaseHistory(['wallet', 'cosmetic-purchases', kind],
+    cursor => listCosmeticPurchases(kind, cursor), seen || activitySeen);
+  const premium = (catalog.data ?? []).filter(entry => entry.premium);
+  return {
+    ref, catalog, purchases,
+    isLoading: !seen || catalog.isLoading || purchases.isLoading,
+    retry: () => {
+      void catalog.refetch();
+      void purchases.refetch();
+    },
+    // Directory counter, only once this department has actually been read.
+    counter: catalog.data && `${premium.filter(entry => entry.owned).length} de ${premium.length} ${released}`,
   };
 }
 
@@ -122,6 +152,20 @@ export default function Store() {
   const [loadoutsRef, loadoutsSeen] = useInViewOnce();
   const [chipsRef, chipsSeen] = useInViewOnce();
   const [activityRef, activitySeen] = useInViewOnce();
+  const frames = useAvatarDepartment('frame', 'liberadas', activitySeen);
+  const hats = useAvatarDepartment('hat', 'liberados', activitySeen);
+  const accessories = useAvatarDepartment('accessory', 'liberados', activitySeen);
+  const avatarDepartments = [
+    {kind: 'frame', anchor: 'molduras', title: 'Molduras', icon: CircleUserRound, Grid: FrameStoreSection, dept: frames,
+      hint: 'Borda ao redor da sua foto',
+      description: 'Uma borda ao redor da sua foto em qualquer mesa. Libere uma vez e equipe no perfil.'},
+    {kind: 'hat', anchor: 'chapeus', title: 'Chapéus', icon: Crown, Grid: HatStoreSection, dept: hats,
+      hint: 'Sobre a sua foto',
+      description: 'Um chapéu sobre a sua foto. Alguns se compram, outros só vêm com conquistas.'},
+    {kind: 'accessory', anchor: 'acessorios', title: 'Acessórios', icon: Glasses, Grid: AccessoryStoreSection,
+      dept: accessories, hint: 'Óculos, bigode e mais',
+      description: 'Óculos, bigode e outros detalhes no rosto do avatar. Libere uma vez e equipe no perfil.'},
+  ] as const;
 
   const skus = useQuery({
     queryKey: ['wallet', 'skus'], queryFn: listSkus,
@@ -239,7 +283,7 @@ export default function Store() {
           icon={ShoppingBag}
           eyebrow="REAÇÕES E FICHAS"
           title="Loja"
-          description="Reações permanentes, baralhos, feltros e fichas para a próxima mesa."
+          description="Reações permanentes, baralhos, feltros, visual do avatar e fichas para a próxima mesa."
         />
 
         <DailyRewardBanner/>
@@ -263,6 +307,11 @@ export default function Store() {
               : `${ownedFeltCount} de ${premiumFeltCount} liberados`}</small></span>
             <ChevronRight aria-hidden="true"/>
           </a>
+          {avatarDepartments.map(({anchor, title, icon: Icon, hint, dept}) => <a key={anchor} href={`#${anchor}`}>
+            <span className="store-directory-icon"><Icon aria-hidden="true"/></span>
+            <span><b>{title}</b><small>{dept.counter || hint}</small></span>
+            <ChevronRight aria-hidden="true"/>
+          </a>)}
           <a href="#loadouts">
             <span className="store-directory-icon"><Bookmark aria-hidden="true"/></span>
             <span><b>Combos</b><small>Baralho + feltro salvos juntos</small></span>
@@ -374,6 +423,13 @@ export default function Store() {
                                 openFrom(trigger, () => setFeltRefundTarget(purchase))}/>
           </section>
 
+          {avatarDepartments.map(({dept, ...department}) =>
+            <AvatarStoreDepartment key={department.kind} {...department} sectionRef={dept.ref}
+                                   catalog={dept.catalog.data ?? []} purchases={dept.purchases.items}
+                                   isLoading={dept.isLoading} isError={dept.catalog.isError}
+                                   onRetryAction={dept.retry} sandboxBalance={player.data?.sandbox_balance}
+                                   finalFocusRef={purchaseTriggerRef} openFrom={openFrom}/>)}
+
           <CosmeticLoadoutSection sectionRef={loadoutsRef} seen={loadoutsSeen}
                                   deckVariant={player.data?.deck_variant} tableTheme={player.data?.table_theme}/>
 
@@ -447,6 +503,18 @@ export default function Store() {
                   loadingLabel="Carregando compras de cosméticos…"
                   errorLabel="Não foi possível carregar as compras de baralhos e feltros."
                   emptyLabel="Suas compras de baralhos e feltros aparecerão aqui."/>
+              </section>
+              <section aria-labelledby="avatar-activity-title">
+                <h3 id="avatar-activity-title">Visual do avatar</h3>
+                <PurchaseActivityList
+                  rows={cosmeticActivityRows([...frames.purchases.items, ...hats.purchases.items,
+                    ...accessories.purchases.items])}
+                  isLoading={frames.purchases.isLoading || hats.purchases.isLoading || accessories.purchases.isLoading}
+                  isError={frames.purchases.isError || hats.purchases.isError || accessories.purchases.isError}
+                  onRetryAction={() => [frames, hats, accessories].forEach(dept => void dept.purchases.refetch())}
+                  loadingLabel="Carregando compras do avatar…"
+                  errorLabel="Não foi possível carregar as compras de molduras, chapéus e acessórios."
+                  emptyLabel="Suas compras de molduras, chapéus e acessórios aparecerão aqui."/>
               </section>
             </div>
           </section>

@@ -26,6 +26,9 @@ export interface ApiProblem {
   title?: string;
   detail?: string;
   request_id?: string;
+  // Stable machine-readable reason (api-commons `problem.WithCode`), e.g.
+  // `not_available` when a cosmetic's sale window has closed.
+  code?: string;
   // RFC 9457 extension members (#319): structured recovery guidance a
   // service sets only when it actually knows the answer (a rate limiter's
   // own window, an expired-token response). Absent means "no guidance",

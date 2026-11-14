@@ -133,4 +133,32 @@ describe('CosmeticPurchaseDialog', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Fechar e acompanhar depois'}));
     expect(onCloseAction).toHaveBeenCalledOnce();
   });
+  describe('avatar items', () => {
+    const hat: CosmeticCatalogEntry = {kind: 'hat', id: 'top-hat', premium: true, source: 'purchase', available: true,
+      price_cents: 300, price_fichas: 300_000};
+
+    test('buys a hat through the same purchase call', async () => {
+      createCosmeticPurchase.mockResolvedValue(purchase({kind: 'hat', item_id: 'top-hat', status: 'pending',
+        pix_copia_e_cola: '000201'}));
+      render(<CosmeticPurchaseDialog kind="hat" entry={hat} onCloseAction={vi.fn()}/>, {wrapper});
+      expect(screen.getByRole('heading', {name: 'Liberar Cartola'})).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', {name: /R\$\s?3,00 via Pix/}));
+      expect(createCosmeticPurchase).toHaveBeenCalledWith('hat', 'top-hat', 'pix');
+      expect(await screen.findByLabelText('Pix copia e cola')).toHaveValue('000201');
+    });
+
+    test('a closed sale window points to the pending purchase in the history', async () => {
+      createCosmeticPurchase.mockRejectedValue(new ApiError('closed', 409, {code: 'not_available'}));
+      render(<CosmeticPurchaseDialog kind="hat" entry={hat} onCloseAction={vi.fn()}/>, {wrapper});
+      await userEvent.click(screen.getByRole('button', {name: /via Pix/}));
+      expect(await screen.findByRole('alert')).toHaveTextContent(/saiu da loja.*Compras e estornos/);
+    });
+
+    test('a confirmed hat sends the player to the profile to equip it', () => {
+      render(<CosmeticPurchaseDialog kind="hat" entry={hat}
+        initialPurchase={purchase({kind: 'hat', item_id: 'top-hat', status: 'confirmed'})}
+        onCloseAction={vi.fn()}/>, {wrapper});
+      expect(screen.getByText(/Equipar no perfil/).closest('a')).toHaveAttribute('href', '/player-profile');
+    });
+  });
 });
