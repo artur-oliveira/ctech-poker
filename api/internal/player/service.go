@@ -39,6 +39,12 @@ const maxEquippedBadges = 3
 // storage one.
 const maxReactionWheelSize = 8
 
+// maxFavoritesPerKind caps favorite reactions per kind: up to three on the
+// player's own seat and up to three thrown at someone, so the table's quick
+// bar can map them to keys 3-8. Legacy profiles (at most three in total) stay
+// valid.
+const maxFavoritesPerKind = 3
+
 // StatsGoalKeys is the fixed, known set of pokerstats metrics a player may set
 // a personal goal for (#331) — mirrors pokerstats.Stats' rate fields.
 var StatsGoalKeys = map[string]bool{
@@ -378,20 +384,29 @@ func (s *Service) SetBetPresetMode(ctx context.Context, userID, mode string) (*P
 	return s.store.GetOrCreate(ctx, userID)
 }
 
-// SetFavoriteReactions mirrors SetShowcase's validation shape exactly.
+// SetFavoriteReactions (at most maxFavoritesPerKind of each kind) mirrors SetShowcase's validation shape exactly.
 // Favoriting a premium reaction the player doesn't yet own is allowed — it's
 // a UI shortcut to the buy flow, not a claim of ownership;
 // Actor.handleReaction's ownership check is what actually gates use
 // (docs/specs/2026-08-12-premium-reactions.md).
 func (s *Service) SetFavoriteReactions(ctx context.Context, userID string, favorites []string) (*PlayerProfile, error) {
-	if len(favorites) > 3 {
+	if len(favorites) > 2*maxFavoritesPerKind {
 		return nil, ErrInvalidFavoriteReactions
 	}
 	seen := make(map[string]bool, len(favorites))
 	normalized := make([]string, 0, len(favorites))
+	var selfCount, targetCount int
 	for _, id := range favorites {
 		id = strings.TrimSpace(id)
 		if id == "" || !reactions.IsKnown(id) || seen[id] {
+			return nil, ErrInvalidFavoriteReactions
+		}
+		if reactions.IsTargeted(id) {
+			targetCount++
+		} else {
+			selfCount++
+		}
+		if selfCount > maxFavoritesPerKind || targetCount > maxFavoritesPerKind {
 			return nil, ErrInvalidFavoriteReactions
 		}
 		seen[id] = true

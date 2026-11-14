@@ -413,7 +413,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 	if req.FavoriteReactions != nil {
 		if _, err := h.players.SetFavoriteReactions(c.Context(), userID, *req.FavoriteReactions); err != nil {
 			if errors.Is(err, player.ErrInvalidFavoriteReactions) {
-				return problem.BadRequest("favorite_reactions must contain up to three valid unique reaction ids").Send(c)
+				return problem.BadRequest("favorite_reactions must contain up to three self and three targeted valid unique reaction ids").Send(c)
 			}
 			return internalProblem("failed to update favorite reactions", err).Send(c)
 		}

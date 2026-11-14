@@ -300,8 +300,14 @@ func TestSetFavoriteReactionsValidatesCountAndCatalog(t *testing.T) {
 	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
 	svc := NewService(store)
 
-	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"clap", "cold", "fire", "poop"}); !errors.Is(err, ErrInvalidFavoriteReactions) {
-		t.Fatalf("expected rejection of a 4th favorite, got %v", err)
+	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"clap", "cold", "fire", "laugh"}); !errors.Is(err, ErrInvalidFavoriteReactions) {
+		t.Fatalf("expected rejection of a 4th self favorite, got %v", err)
+	}
+	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"chip", "coffee", "clover", "tear"}); !errors.Is(err, ErrInvalidFavoriteReactions) {
+		t.Fatalf("expected rejection of a 4th targeted favorite, got %v", err)
+	}
+	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"clap", "cold", "fire", "chip", "coffee", "clover"}); err != nil {
+		t.Fatalf("three self plus three targeted must be accepted, got %v", err)
 	}
 	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"not-a-reaction"}); !errors.Is(err, ErrInvalidFavoriteReactions) {
 		t.Fatalf("expected rejection of an unknown reaction id, got %v", err)
