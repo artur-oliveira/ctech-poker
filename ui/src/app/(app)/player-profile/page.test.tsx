@@ -147,6 +147,23 @@ describe('/player-profile', () => {
     expect(screen.getByRole('button', {name: /Loja/})).toHaveAttribute('href', '/store');
   });
 
+  test('the identity avatar wears the equipped hat and accessory', () => {
+    mocks.state.player = {...player, equipped_hat_id: 'crown', equipped_accessory_id: 'monocle'};
+    render(<PlayerProfilePage/>);
+    const identity = document.querySelector('.player-profile-avatar');
+    expect(identity?.querySelectorAll('.player-avatar-art > svg')).toHaveLength(2);
+  });
+
+  test('a refetch with a different hat resets the decoration picks', () => {
+    mocks.state.player = {...player, equipped_hat_id: 'crown'};
+    const {rerender} = render(<PlayerProfilePage/>);
+    expect(screen.getByRole('radio', {name: 'Coroa'})).toBeChecked();
+    mocks.state.player = {...player, equipped_hat_id: 'top-hat'};
+    rerender(<PlayerProfilePage/>);
+    expect(screen.getByRole('radio', {name: 'Cartola'})).toBeChecked();
+    expect(screen.getByRole('button', {name: 'Salvar visual do avatar'})).toBeDisabled();
+  });
+
   test('keeps the landmark and the h1 while the profile is still loading', () => {
     mocks.state.player = undefined;
     render(<PlayerProfilePage/>);

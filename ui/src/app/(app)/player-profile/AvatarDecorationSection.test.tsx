@@ -5,6 +5,7 @@ import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {AvatarDecorationSection} from './AvatarDecorationSection';
 import type {PlayerProfile} from '@/lib/api/player';
+import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
 
 const {listOwnedAvatarCosmetics, updateMe, notify} = vi.hoisted(() => ({
   listOwnedAvatarCosmetics: vi.fn(), updateMe: vi.fn(), notify: vi.fn(),
@@ -179,6 +180,18 @@ describe('AvatarDecorationSection', () => {
     await userEvent.click(await screen.findByRole('radio', {name: 'Coroa'}));
     await userEvent.click(saveButton());
     await vi.waitFor(() => expect(notify).toHaveBeenCalledWith('Não foi possível salvar agora. Tente novamente.', 'error'));
+  });
+
+  test('a failed save refetches the profile so the picker resyncs', async () => {
+    updateMe.mockRejectedValue(new Error('boom'));
+    const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    render(<AvatarDecorationSection me={me}/>, {
+      wrapper: ({children}: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    await userEvent.click(await screen.findByRole('radio', {name: 'Coroa'}));
+    await userEvent.click(saveButton());
+    await vi.waitFor(() => expect(invalidate).toHaveBeenCalledWith({queryKey: PLAYER_ME_KEY}));
   });
 
   test('a failed owned read offers a retry', async () => {

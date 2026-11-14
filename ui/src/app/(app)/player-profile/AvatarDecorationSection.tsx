@@ -100,7 +100,12 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
       queryClient.setQueryData(PLAYER_ME_KEY, profile);
       pushNotification('Visual do avatar atualizado.', 'info');
     },
-    onError: () => pushNotification('Não foi possível salvar agora. Tente novamente.', 'error')
+    // Fields apply one by one server-side: a late rejection can leave earlier
+    // slots saved, so resync with what the server actually holds.
+    onError: () => {
+      void queryClient.invalidateQueries({queryKey: PLAYER_ME_KEY});
+      pushNotification('Não foi possível salvar agora. Tente novamente.', 'error');
+    }
   });
 
   function toggleBadge(id: string) {
