@@ -45,6 +45,9 @@ type UpdatePlayerRequest struct {
 	// unequips.
 	EquippedFrameID  *string   `json:"equipped_frame_id"`
 	EquippedBadgeIDs *[]string `json:"equipped_badge_ids"`
+	// EquippedHatID/EquippedAccessoryID: same semantics as EquippedFrameID.
+	EquippedHatID       *string `json:"equipped_hat_id"`
+	EquippedAccessoryID *string `json:"equipped_accessory_id"`
 }
 
 type sessionLogReader interface {
@@ -387,6 +390,28 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			if errors.Is(err, player.ErrCosmeticNotOwned) {
 				return problem.BadRequest("equipped_frame_id is not owned").Send(c)
+			}
+			return internalProblem("failed to update player profile", err).Send(c)
+		}
+	}
+	if req.EquippedHatID != nil {
+		if _, err := h.players.SetEquippedHat(c.Context(), userID, *req.EquippedHatID); err != nil {
+			if errors.Is(err, player.ErrInvalidHat) {
+				return problem.BadRequest("equipped_hat_id must be a known hat").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("equipped_hat_id is not owned").Send(c)
+			}
+			return internalProblem("failed to update player profile", err).Send(c)
+		}
+	}
+	if req.EquippedAccessoryID != nil {
+		if _, err := h.players.SetEquippedAccessory(c.Context(), userID, *req.EquippedAccessoryID); err != nil {
+			if errors.Is(err, player.ErrInvalidAccessory) {
+				return problem.BadRequest("equipped_accessory_id must be a known accessory").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("equipped_accessory_id is not owned").Send(c)
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}

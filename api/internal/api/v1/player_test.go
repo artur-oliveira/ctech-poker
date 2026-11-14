@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -240,6 +241,16 @@ func (s *fakePlayerStore) SetStatsGoals(_ context.Context, id string, goals map[
 func (s *fakePlayerStore) SetEquippedFrame(_ context.Context, id string, frameID string) error {
 	s.profile.UserID = id
 	s.profile.EquippedFrameID = frameID
+	return nil
+}
+func (s *fakePlayerStore) SetEquippedHat(_ context.Context, id string, v string) error {
+	s.profile.UserID = id
+	s.profile.EquippedHatID = v
+	return nil
+}
+func (s *fakePlayerStore) SetEquippedAccessory(_ context.Context, id string, v string) error {
+	s.profile.UserID = id
+	s.profile.EquippedAccessoryID = v
 	return nil
 }
 func (s *fakePlayerStore) SetEquippedBadges(_ context.Context, id string, badgeIDs []string) error {
@@ -993,5 +1004,47 @@ func TestUpdateMeBetPresetMode(t *testing.T) {
 	}
 	if store.profile.BetPresetMode != "bb" {
 		t.Fatalf("BetPresetMode = %q after a rejected write, want the previous %q", store.profile.BetPresetMode, "bb")
+	}
+}
+
+type ownsAll struct{ owned bool }
+
+func (o ownsAll) IsOwned(context.Context, string, cosmetics.Kind, string) (bool, error) {
+	return o.owned, nil
+}
+
+func TestPatchProfileEquipHat(t *testing.T) {
+	restore := cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "crown", Source: cosmetics.SourceSeason},
+		{Kind: cosmetics.KindAccessory, ID: "shades", Source: cosmetics.SourceSeason},
+	})
+	defer restore()
+	run := func(owned bool, body string) (int, *fakePlayerStore) {
+		store := &fakePlayerStore{}
+		h := &playerHandlers{players: player.NewService(store).WithCosmetics(ownsAll{owned})}
+		app := fiber.New()
+		auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
+		app.Post("/players/me", auth, h.updateMe)
+		req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, store
+	}
+	for _, body := range []string{`{"equipped_hat_id":"nope"}`, `{"equipped_accessory_id":"nope"}`} {
+		if code, _ := run(true, body); code != fiber.StatusBadRequest {
+			t.Fatalf("%s: %d, want 400", body, code)
+		}
+	}
+	for _, body := range []string{`{"equipped_hat_id":"crown"}`, `{"equipped_accessory_id":"shades"}`} {
+		if code, _ := run(false, body); code != fiber.StatusBadRequest {
+			t.Fatalf("%s unowned: %d, want 400", body, code)
+		}
+	}
+	code, store := run(true, `{"equipped_hat_id":"crown","equipped_accessory_id":"shades"}`)
+	if code != fiber.StatusOK || store.profile.EquippedHatID != "crown" || store.profile.EquippedAccessoryID != "shades" {
+		t.Fatalf("code=%d profile=%+v", code, store.profile)
 	}
 }

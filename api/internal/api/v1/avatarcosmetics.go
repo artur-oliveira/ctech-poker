@@ -14,7 +14,7 @@ import (
 // wallet-priced deck/felt purchases, and frame/badge ownership is granted
 // (cosmeticpurchase.Service.Grant), never sold.
 func RegisterAvatarCosmeticsOwnership(router fiber.Router, auth fiber.Handler, svc *cosmeticpurchase.Service) {
-	router.Get("/players/me/cosmetics/:kind/owned", auth, validFrameOrBadgeKind, func(c fiber.Ctx) error {
+	router.Get("/players/me/cosmetics/:kind/owned", auth, validAvatarKind, func(c fiber.Ctx) error {
 		kind := cosmetics.Kind(c.Params("kind"))
 		userID := c.Locals(localsUserID).(string)
 		owned, err := svc.OwnedIDs(c.Context(), userID, kind)
@@ -29,10 +29,10 @@ func RegisterAvatarCosmeticsOwnership(router fiber.Router, auth fiber.Handler, s
 	})
 }
 
-func validFrameOrBadgeKind(c fiber.Ctx) error {
+func validAvatarKind(c fiber.Ctx) error {
 	kind := cosmetics.Kind(c.Params("kind"))
-	if kind != cosmetics.KindFrame && kind != cosmetics.KindBadge {
-		return problem.BadRequest("kind must be \"frame\" or \"badge\"").Send(c)
+	if !cosmetics.IsAvatarKind(kind) {
+		return problem.BadRequest("kind must be \"frame\", \"hat\", \"accessory\" or \"badge\"").Send(c)
 	}
 	return c.Next()
 }

@@ -1,5 +1,7 @@
 package player
 
+import "gopkg.aoctech.app/poker/api/internal/cosmetics"
+
 const CurrentPokerTermsVersion = "2.1"
 
 // Wallet modes a player can pick in their profile — which balance the lobby
@@ -98,15 +100,19 @@ type PlayerProfile struct {
 	// equipped", not an error. Ownership of a non-empty value is
 	// cosmeticpurchase.Service.IsOwned, reused rather than reimplemented; see
 	// Service.SetEquippedFrame/SetEquippedBadges.
-	EquippedFrameID   string   `dynamodbav:"equipped_frame_id,omitempty" json:"equipped_frame_id,omitempty"`
-	EquippedBadgeIDs  []string `dynamodbav:"equipped_badge_ids,omitempty" json:"equipped_badge_ids,omitempty"`
-	PokerTermsVersion string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`
-	TermsAcceptedAt   string   `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
-	AvatarKey         string   `dynamodbav:"avatar_key,omitempty" json:"-"`
-	AvatarVersion     int      `dynamodbav:"avatar_version,omitempty" json:"-"`
-	AvatarBlocked     bool     `dynamodbav:"avatar_blocked,omitempty" json:"-"`
-	CreatedAt         string   `dynamodbav:"created_at" json:"-"`
-	UpdatedAt         string   `dynamodbav:"updated_at" json:"-"`
+	EquippedFrameID  string   `dynamodbav:"equipped_frame_id,omitempty" json:"equipped_frame_id,omitempty"`
+	EquippedBadgeIDs []string `dynamodbav:"equipped_badge_ids,omitempty" json:"equipped_badge_ids,omitempty"`
+	// EquippedHatID/EquippedAccessoryID are the avatar-cosmetics hat and
+	// accessory slots; same semantics as EquippedFrameID.
+	EquippedHatID       string `dynamodbav:"equipped_hat_id,omitempty" json:"equipped_hat_id,omitempty"`
+	EquippedAccessoryID string `dynamodbav:"equipped_accessory_id,omitempty" json:"equipped_accessory_id,omitempty"`
+	PokerTermsVersion   string `dynamodbav:"poker_terms_version,omitempty" json:"-"`
+	TermsAcceptedAt     string `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
+	AvatarKey           string `dynamodbav:"avatar_key,omitempty" json:"-"`
+	AvatarVersion       int    `dynamodbav:"avatar_version,omitempty" json:"-"`
+	AvatarBlocked       bool   `dynamodbav:"avatar_blocked,omitempty" json:"-"`
+	CreatedAt           string `dynamodbav:"created_at" json:"-"`
+	UpdatedAt           string `dynamodbav:"updated_at" json:"-"`
 }
 
 func (p *PlayerProfile) TermsAccepted() bool {
@@ -148,4 +154,10 @@ func (p *PlayerProfile) EffectiveBetPresetMode() string {
 		return DefaultBetPresetMode
 	}
 	return p.BetPresetMode
+}
+
+// Decor is the player's equipped avatar decoration, in the shape the table
+// and identity payloads carry.
+func (p *PlayerProfile) Decor() cosmetics.Decor {
+	return cosmetics.Decor{Frame: p.EquippedFrameID, Hat: p.EquippedHatID, Accessory: p.EquippedAccessoryID, Badges: p.EquippedBadgeIDs}
 }
