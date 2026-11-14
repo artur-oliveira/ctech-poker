@@ -274,7 +274,7 @@ Frames, hats and accessories are inline SVG components registered by id in `src/
 
 - **Tokens.** Art fills only with `var(--cosmetic-*)`, and each token aliases a palette token, so no new hex was needed: `--cosmetic-gold` = `--gold`, `--cosmetic-gold-pale` = `--gold-pale`, `--cosmetic-oxblood` = `--brand`, `--cosmetic-felt` = `--felt`, `--cosmetic-walnut` = `--table-rail`, `--cosmetic-paper` = `--paper`, `--cosmetic-ink` = `--ink`, `--cosmetic-wine` = `--wine`.
 - **Box.** Every art piece is drawn in `viewBox="0 0 64 64"` with the avatar circle centred, r=32. Nothing is drawn outside the box (no overflow, no `overflow: visible` ancestors).
-- **Layer order**, bottom to top: avatar image, accessory (eye line, y 24-40; mustache y 40-48), hat (y 0-26, overlapping the avatar top), frame (ring, stroke fully inside the box).
+- **Layer order**, bottom to top: avatar image, accessory (eye line, y 24-40; mustache y 40-48), hat (hat zone y 0-26, overlapping the avatar top), frame (ring, stroke fully inside the box). The headset is the one accessory with two zones: its band stays in the hat zone (y 0-26, round cap included) and its ear cup and mic sit on the eye line (y 24-40); `accessories.test.tsx` checks each shape against one of the two.
 - **No outline.** Decoration never uses CSS `outline`; that stays reserved for focus and for the folded/all-in seat states, which a frame must not hide.
 - **Accessibility.** Art is `aria-hidden`, `focusable="false"`, `pointer-events: none`; the avatar's accessible name is unchanged.
 
