@@ -295,14 +295,14 @@ func (s *countingPlayerStore) GetMany(ctx context.Context, ids []string) (map[st
 	return s.fakeMultiPlayerStore.GetMany(ctx, ids)
 }
 
-func decorBoardApp(t *testing.T) (*fiber.App, *countingPlayerStore) {
+func decorBoardApp(t *testing.T, showcasePublic bool) (*fiber.App, *countingPlayerStore) {
 	t.Helper()
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{
 		"sandbox#p1": {PlayerID: "p1", PlayerName: "Old", HandsPlayed: 5, HandsWon: 3},
 		"sandbox#p2": {PlayerID: "p2", PlayerName: "Sem Perfil", HandsPlayed: 5, HandsWon: 1},
 	}}
 	ps := &countingPlayerStore{fakeMultiPlayerStore: fakeMultiPlayerStore{profiles: map[string]player.PlayerProfile{
-		"p1": {Name: "New", AvatarKey: "av/p1.webp", EquippedFrameID: "f1", EquippedHatID: "h1", EquippedAccessoryID: "a1", EquippedBadgeIDs: []string{"b1"}},
+		"p1": {Name: "New", ShowcasePublic: showcasePublic, AvatarKey: "av/p1.webp", EquippedFrameID: "f1", EquippedHatID: "h1", EquippedAccessoryID: "a1", EquippedBadgeIDs: []string{"b1"}},
 	}}}
 	app := fiber.New()
 	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), leaderboard.NewServiceWithStore(store), player.NewService(ps), "https://cdn.example.com", nil)
@@ -329,7 +329,7 @@ func topEntries(t *testing.T, app *fiber.App) map[string]leaderboard.Entry {
 }
 
 func TestTopIncludesAvatarAndDecor(t *testing.T) {
-	app, _ := decorBoardApp(t)
+	app, _ := decorBoardApp(t, true)
 	e := topEntries(t, app)["p1"]
 	if e.AvatarURL != "https://cdn.example.com/p1.webp" || e.EquippedFrameID != "f1" || e.EquippedHatID != "h1" ||
 		e.EquippedAccessoryID != "a1" || len(e.EquippedBadgeIDs) != 1 || e.EquippedBadgeIDs[0] != "b1" {
@@ -337,8 +337,32 @@ func TestTopIncludesAvatarAndDecor(t *testing.T) {
 	}
 }
 
+func TestTopHidesAvatarWhenShowcasePrivate(t *testing.T) {
+	app, _ := decorBoardApp(t, false)
+	e := topEntries(t, app)["p1"]
+	if e.AvatarURL != "" || e.EquippedFrameID != "f1" || e.EquippedHatID != "h1" || e.EquippedAccessoryID != "a1" ||
+		len(e.EquippedBadgeIDs) != 1 {
+		t.Fatalf("private showcase: avatar must be hidden, decor kept: %+v", e)
+	}
+}
+
+func TestMeShowsOwnAvatarWhenShowcasePrivate(t *testing.T) {
+	app, _ := decorBoardApp(t, false)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var me meResponse
+	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+		t.Fatal(err)
+	}
+	if me.Entry == nil || me.Entry.AvatarURL != "https://cdn.example.com/p1.webp" {
+		t.Fatalf("me entry = %+v, want own avatar regardless of showcase", me.Entry)
+	}
+}
+
 func TestTopMissingProfileKeepsRow(t *testing.T) {
-	app, _ := decorBoardApp(t)
+	app, _ := decorBoardApp(t, true)
 	e, ok := topEntries(t, app)["p2"]
 	if !ok || e.PlayerName != "Sem Perfil" || e.AvatarURL != "" || e.EquippedFrameID != "" || e.EquippedHatID != "" ||
 		e.EquippedAccessoryID != "" || len(e.EquippedBadgeIDs) != 0 {
@@ -347,7 +371,7 @@ func TestTopMissingProfileKeepsRow(t *testing.T) {
 }
 
 func TestTopStillOneBatchGet(t *testing.T) {
-	app, ps := decorBoardApp(t)
+	app, ps := decorBoardApp(t, true)
 	topEntries(t, app)
 	if ps.getMany != 1 {
 		t.Fatalf("GetMany calls = %d, want 1 per page", ps.getMany)
@@ -355,7 +379,7 @@ func TestTopStillOneBatchGet(t *testing.T) {
 }
 
 func TestMeIncludesAvatarAndDecor(t *testing.T) {
-	app, ps := decorBoardApp(t)
+	app, ps := decorBoardApp(t, true)
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil))
 	if err != nil || resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)

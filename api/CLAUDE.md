@@ -621,9 +621,10 @@ players. `GET /tables/:tableId/hands/:handId/history` sits behind the same auth 
 **`GET /leaderboard` is deliberately PUBLIC (fixed 2026-09-06).** B9 had put it behind `authMiddleware` too, which
 broke the ranking page — it is linkable and meant to be readable without an account. It is mounted with an IP rate
 limiter (`leaderboardReadLimiter`, 120/min) instead of `auth`, the same shape `RegisterAvatars` uses for its public
-reads. It exposes nothing a signed-in player could not already read and takes no caller-supplied player id, so there
-is no IDOR surface. `GET /leaderboard/me` keeps `auth` — it ranks the JWT's own `sub`. Because
-`enforceReadOnlyScope` runs *inside* `authMiddleware`, `poker:leaderboard:read` now gates `/leaderboard/me` only.
+reads. It always exposes name, stats and equipped decoration ids, but a player's uploaded avatar only when their
+showcase is public (`ShowcasePublic`; `/leaderboard/me` shows the caller's own avatar regardless), and takes no
+caller-supplied player id, so there is no IDOR surface. `GET /leaderboard/me` keeps `auth` — it ranks the JWT's own
+`sub`. Because `enforceReadOnlyScope` runs *inside* `authMiddleware`, `poker:leaderboard:read` now gates `/leaderboard/me` only.
 See `docs/specs/2026-09-06-public-leaderboard.md`. Do not re-mount the public board behind `auth`.
 `playerID := claims.Sub` is kept everywhere (IDOR safety). There is still **no scope / kyc / role check** on user
 routes — none is defined for poker's user surface today; revisit before real-money mode ships if scopes are added to the
@@ -858,7 +859,7 @@ catalog.
   persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
   `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`
   (`identityCmdFor` and the buy-in sender do): `SetPlayerIdentityForActor` replaces name/avatar/badge/decor as one
-  unit, so omitting it blanks the decor. `PATCH /players/me` pushes the identity to the table once after the write
+  unit, so omitting it blanks the decor. `POST /players/me` pushes the identity to the table once after the write
   (equip is live, no reconnect). Leaderboard rows resolve avatar + decor at read time from the same single `GetMany`
   (`dynamodbav:"-"`, never stored), like `PlayerName`. `cosmetics.Equipped` / `Equipped.Map()` is the read-side wire
   shape (`equipped_frame_id`, `equipped_hat_id`, `equipped_accessory_id`, `equipped_badge_ids`) for showcase, people

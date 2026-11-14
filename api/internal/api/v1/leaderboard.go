@@ -27,10 +27,11 @@ type leaderboardHandlers struct {
 //
 // `GET /leaderboard` is deliberately PUBLIC: the ranking page is linkable and
 // meant to be readable without an account (it was briefly put behind the auth
-// middleware under B9, which broke that). It exposes nothing a signed-in
-// player could not already read — display name, hands played/won, achievement
-// points — and never a player id the caller supplied, so there is no IDOR
-// surface. It carries an IP rate limiter instead of auth, the same shape
+// middleware under B9, which broke that). It always exposes the display
+// name, stats and equipped decoration ids (catalog ids, not user content); the
+// uploaded avatar only for players whose showcase is public (ShowcasePublic).
+// It never takes a player id from the caller, so there is no IDOR surface. It
+// carries an IP rate limiter instead of auth, the same shape
 // `RegisterAvatars` uses for its public reads.
 //
 // `GET /leaderboard/me` stays behind `auth`: it derives the player from the
@@ -58,8 +59,10 @@ func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboa
 // the same profile, in place — the read-time half of #64's fix, the
 // same one resolveOpponentProfiles applies to hand history. One BatchGetItem
 // per rendered page. An id with no profile (or a profile with no name) keeps
-// whatever the row stored, so this can never blank a board.
-func (h *leaderboardHandlers) resolveProfiles(ctx context.Context, entries []leaderboard.Entry) error {
+// whatever the row stored, so this can never blank a board. The uploaded
+// avatar is filled only when ownEntry (the caller's own /leaderboard/me row)
+// or the player's showcase is public; decoration ids are always filled.
+func (h *leaderboardHandlers) resolveProfiles(ctx context.Context, entries []leaderboard.Entry, ownEntry bool) error {
 	if h.players == nil || len(entries) == 0 {
 		return nil
 	}
@@ -79,7 +82,9 @@ func (h *leaderboardHandlers) resolveProfiles(ctx context.Context, entries []lea
 		}
 		if profile, ok := profiles[entries[i].PlayerID]; ok {
 			decor := profile.Decor()
-			entries[i].AvatarURL = player.AvatarURL(&profile, h.avatarBaseURL)
+			if ownEntry || profile.ShowcasePublic {
+				entries[i].AvatarURL = player.AvatarURL(&profile, h.avatarBaseURL)
+			}
 			entries[i].EquippedFrameID, entries[i].EquippedHatID = decor.Frame, decor.Hat
 			entries[i].EquippedAccessoryID, entries[i].EquippedBadgeIDs = decor.Accessory, decor.Badges
 		}
@@ -94,7 +99,7 @@ func (h *leaderboardHandlers) top(c fiber.Ctx) error {
 	if err != nil {
 		return problem.BadRequest(err.Error()).Send(c)
 	}
-	if err := h.resolveProfiles(c.Context(), entries); err != nil {
+	if err := h.resolveProfiles(c.Context(), entries, false); err != nil {
 		return internalProblem("failed to resolve player names", err).Send(c)
 	}
 	return sendPage(c, entries, lastKey, cursor)
@@ -120,7 +125,7 @@ func (h *leaderboardHandlers) me(c fiber.Ctx) error {
 		return c.JSON(meResponse{Ranked: false})
 	}
 	entries := []leaderboard.Entry{info.Entry}
-	if err := h.resolveProfiles(c.Context(), entries); err != nil {
+	if err := h.resolveProfiles(c.Context(), entries, true); err != nil {
 		return internalProblem("failed to resolve player names", err).Send(c)
 	}
 	return c.JSON(meResponse{Ranked: true, Rank: &info.Rank, Total: &info.Total, Entry: &entries[0]})
