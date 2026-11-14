@@ -40,6 +40,9 @@ func TestProductsAreTheOnesTheWalletSold(t *testing.T) {
 		"poker_deck_casino": 200, "poker_deck_bicycle": 200, "poker_deck_vintage": 200,
 		"poker_deck_golden": 500, "poker_deck_pink": 500, "poker_deck_alt": 500,
 		"poker_felt_midnight": 1000, "poker_felt_burgundy": 1000, "poker_felt_ocean": 1000,
+		"poker_frame_felt_ring": 600, "poker_frame_walnut_rail": 800, "poker_frame_oxblood_edge": 1000,
+		"poker_hat_top_hat": 300, "poker_hat_cowboy": 400, "poker_hat_beanie": 200,
+		"poker_accessory_shades": 300, "poker_accessory_monocle": 500, "poker_accessory_mustache": 200, "poker_accessory_headset": 400,
 	}
 	got := Products()
 	if len(got) != len(want) {
