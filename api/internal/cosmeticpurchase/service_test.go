@@ -4,7 +4,10 @@ package cosmeticpurchase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -448,5 +451,238 @@ func TestGrantRepeatInsideWindowIsNoop(t *testing.T) {
 		if err := svc.Grant(context.Background(), "p1", cosmetics.KindHat, "ltd-hat", "r"); err != nil {
 			t.Fatalf("grant %d: %v", i, err)
 		}
+	}
+}
+
+// uniquePlayer keeps these tests re-runnable against a long-lived DynamoDB
+// Local container: the tables are shared, ownership is per player.
+func uniquePlayer(prefix string) string {
+	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+}
+
+// allSKUsWithAvatars is allCosmeticSKUs plus every purchasable avatar SKU, at
+// the catalog's fichas price / 1000 (the cents the wallet would report).
+func allSKUsWithAvatars() []walletclient.ProductSKU {
+	skus := allCosmeticSKUs()
+	for _, kind := range []cosmetics.Kind{cosmetics.KindFrame, cosmetics.KindHat, cosmetics.KindAccessory} {
+		for _, e := range cosmetics.All(kind) {
+			if e.Source == cosmetics.SourcePurchase {
+				skus = append(skus, walletclient.ProductSKU{ID: e.SKU, PriceCents: e.PriceFichas / 1000})
+			}
+		}
+	}
+	return skus
+}
+
+func TestListCatalogIncludesEarnableWithoutPrice(t *testing.T) {
+	ctx := context.Background()
+	w := &fakeWallet{skus: allSKUsWithAvatars()}
+	svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+	playerID := uniquePlayer("player-catalog-earnable")
+	if err := svc.Grant(ctx, playerID, cosmetics.KindFrame, "chip-ring", "achievement:hands_played:3"); err != nil {
+		t.Fatalf("Grant: %v", err)
+	}
+	entries, err := svc.ListCatalog(ctx, playerID, cosmetics.KindFrame)
+	if err != nil {
+		t.Fatalf("ListCatalog(frame): %v", err)
+	}
+	byID := map[string]CatalogEntry{}
+	for _, e := range entries {
+		byID[e.ID] = e
+	}
+	earned := byID["chip-ring"]
+	if earned.Source != string(cosmetics.SourceAchievement) || !earned.Premium || !earned.Owned || !earned.Available ||
+		earned.PriceCents != 0 || earned.PriceFichas != 0 {
+		t.Fatalf("earned achievement frame: %+v", earned)
+	}
+	locked := byID["season-2026-q3"]
+	if locked.Source != string(cosmetics.SourceSeason) || locked.Owned || locked.PriceCents != 0 || locked.PriceFichas != 0 {
+		t.Fatalf("locked season frame: %+v", locked)
+	}
+	sold := byID["felt-ring"]
+	if sold.Source != string(cosmetics.SourcePurchase) || sold.PriceCents != 600 || sold.PriceFichas != 600_000 || sold.Owned || !sold.Available {
+		t.Fatalf("purchasable frame: %+v", sold)
+	}
+	raw, _ := json.Marshal(earned)
+	if strings.Contains(string(raw), "price") {
+		t.Fatalf("earnable entry must carry no price field: %s", raw)
+	}
+
+	deck, err := svc.ListCatalog(ctx, playerID, cosmetics.KindDeck)
+	if err != nil {
+		t.Fatalf("ListCatalog(deck): %v", err)
+	}
+	for _, e := range deck {
+		if e.Source != "" || !e.Available {
+			t.Fatalf("deck entry gained a source or lost availability: %+v", e)
+		}
+	}
+}
+
+// assertNothingWritten checks a refused purchase left no reservation, no
+// history row and never reached the wallet.
+func assertNothingWritten(t *testing.T, w *fakeWallet, entitlements *EntitlementStore, store *Store, playerID string, kind cosmetics.Kind, itemID, idemKey string) {
+	t.Helper()
+	ctx := context.Background()
+	if ent, err := entitlements.Get(ctx, playerID, kind, itemID); err != nil || ent != nil {
+		t.Fatalf("refused purchase left entitlement %+v (err=%v)", ent, err)
+	}
+	purchaseID := sandboxPurchaseID(purchaseRequestKey(playerID, kind, itemID, methodFichas, idemKey))
+	if rec, err := store.Get(ctx, playerID, purchaseID); err != nil || rec != nil {
+		t.Fatalf("refused purchase left history %+v (err=%v)", rec, err)
+	}
+	if w.debits != 0 || len(w.purchaseKeys) != 0 {
+		t.Fatalf("refused purchase reached the wallet: debits=%d purchases=%d", w.debits, len(w.purchaseKeys))
+	}
+}
+
+func TestCreateRejectsNonPurchasable(t *testing.T) {
+	cases := []struct {
+		kind   cosmetics.Kind
+		itemID string
+	}{
+		{cosmetics.KindHat, "crown"},             // achievement
+		{cosmetics.KindFrame, "season-2026-q3"},  // season
+		{cosmetics.KindBadge, "veteran"},         // badges are never sold
+		{cosmetics.KindAccessory, "bandit-mask"}, // achievement
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.kind)+"/"+tc.itemID, func(t *testing.T) {
+			ctx := context.Background()
+			w := &fakeWallet{purchase: &walletclient.ProductPurchase{PurchaseID: "prdp-never", Status: "pending"}}
+			entitlements, store := newTestEntitlementStore(t), newTestStore(t)
+			svc := NewService(w, entitlements, store)
+			playerID := uniquePlayer("player-not-purchasable")
+			if _, err := svc.CreateSandbox(ctx, playerID, tc.kind, tc.itemID, "idem-np"); !errors.Is(err, ErrNotPurchasable) {
+				t.Fatalf("CreateSandbox = %v, want ErrNotPurchasable", err)
+			}
+			if _, _, err := svc.CreateReal(ctx, playerID, tc.kind, tc.itemID, "idem-np"); !errors.Is(err, ErrNotPurchasable) {
+				t.Fatalf("CreateReal = %v, want ErrNotPurchasable", err)
+			}
+			assertNothingWritten(t, w, entitlements, store, playerID, tc.kind, tc.itemID, "idem-np")
+		})
+	}
+}
+
+// Not parallel: swaps the package-level cosmetics catalog.
+func TestCreateRejectsOutsideWindow(t *testing.T) {
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	defer cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "closed-hat", Premium: true, Source: cosmetics.SourcePurchase, SKU: "poker_hat_closed", PriceFichas: 100_000, Until: now},
+		{Kind: cosmetics.KindHat, ID: "future-hat", Premium: true, Source: cosmetics.SourcePurchase, SKU: "poker_hat_future", PriceFichas: 100_000, From: now.Add(time.Hour)},
+	})()
+	for _, itemID := range []string{"closed-hat", "future-hat"} {
+		t.Run(itemID, func(t *testing.T) {
+			ctx := context.Background()
+			w := &fakeWallet{purchase: &walletclient.ProductPurchase{PurchaseID: "prdp-never", Status: "pending"}}
+			entitlements, store := newTestEntitlementStore(t), newTestStore(t)
+			svc := NewService(w, entitlements, store)
+			svc.now = func() time.Time { return now } // Until is exclusive, From is in the future
+			playerID := uniquePlayer("player-window")
+			if _, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, itemID, "idem-window"); !errors.Is(err, ErrNotAvailable) {
+				t.Fatalf("CreateSandbox = %v, want ErrNotAvailable", err)
+			}
+			if _, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, itemID, "idem-window"); !errors.Is(err, ErrNotAvailable) {
+				t.Fatalf("CreateReal = %v, want ErrNotAvailable", err)
+			}
+			assertNothingWritten(t, w, entitlements, store, playerID, cosmetics.KindHat, itemID, "idem-window")
+		})
+	}
+}
+
+// Not parallel: swaps the package-level cosmetics catalog.
+func TestIdempotentReplayAfterWindowClosedStillResolves(t *testing.T) {
+	until := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	const sku = "poker_hat_ltd"
+	defer cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "ltd-hat", Premium: true, Source: cosmetics.SourcePurchase, SKU: sku, PriceFichas: 100_000, Until: until},
+	})()
+	ctx := context.Background()
+
+	t.Run("fichas", func(t *testing.T) {
+		w := &fakeWallet{}
+		svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+		playerID := uniquePlayer("player-replay-fichas")
+		svc.now = func() time.Time { return until.Add(-time.Minute) }
+		first, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-replay")
+		if err != nil {
+			t.Fatalf("CreateSandbox inside window: %v", err)
+		}
+		svc.now = func() time.Time { return until.Add(time.Hour) }
+		second, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-replay")
+		if err != nil || second.PurchaseID != first.PurchaseID || second.Status != "confirmed" {
+			t.Fatalf("replay after close: rec=%+v err=%v", second, err)
+		}
+		if w.debits != 1 {
+			t.Fatalf("replay debited %d times, want 1", w.debits)
+		}
+		other := uniquePlayer("player-replay-fichas-other")
+		if _, err := svc.CreateSandbox(ctx, other, cosmetics.KindHat, "ltd-hat", "idem-replay"); !errors.Is(err, ErrNotAvailable) {
+			t.Fatalf("fresh purchase after close = %v, want ErrNotAvailable", err)
+		}
+	})
+
+	t.Run("pix", func(t *testing.T) {
+		playerID := uniquePlayer("player-replay-pix")
+		purchaseID := "prdp-replay-" + playerID
+		pending := &walletclient.ProductPurchase{PurchaseID: purchaseID, UserID: playerID, SKU: sku, Amount: 100, Status: "pending"}
+		w := &fakeWallet{purchase: pending, getResult: pending}
+		svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+		svc.now = func() time.Time { return until.Add(-time.Minute) }
+		first, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-replay")
+		if err != nil {
+			t.Fatalf("CreateReal inside window: %v", err)
+		}
+		svc.now = func() time.Time { return until.Add(time.Hour) }
+		second, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-replay")
+		if err != nil || second.PurchaseID != first.PurchaseID {
+			t.Fatalf("replay after close: rec=%+v err=%v", second, err)
+		}
+		if len(w.purchaseKeys) != 1 {
+			t.Fatalf("replay opened %d wallet purchases, want 1", len(w.purchaseKeys))
+		}
+		if _, _, err := svc.CreateReal(ctx, playerID, cosmetics.KindHat, "ltd-hat", "idem-other-key"); !errors.Is(err, ErrNotAvailable) {
+			t.Fatalf("new key after close = %v, want ErrNotAvailable", err)
+		}
+	})
+}
+
+func TestSandboxPurchaseOfAvatarItemGrantsOwnership(t *testing.T) {
+	ctx := context.Background()
+	w := &fakeWallet{}
+	svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+	playerID := uniquePlayer("player-avatar-buy")
+	rec, err := svc.CreateSandbox(ctx, playerID, cosmetics.KindHat, "top-hat", "idem-top-hat")
+	if err != nil {
+		t.Fatalf("CreateSandbox(top-hat): %v", err)
+	}
+	if rec.Status != "confirmed" || rec.Kind != string(cosmetics.KindHat) || rec.PriceFichas != 300_000 {
+		t.Fatalf("unexpected record: %+v", rec)
+	}
+	if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindHat, "top-hat"); err != nil || !owned {
+		t.Fatalf("top-hat not owned after purchase: owned=%v err=%v", owned, err)
+	}
+	if w.debits != 1 {
+		t.Fatalf("debits=%d, want 1", w.debits)
+	}
+}
+
+// The wallet webhook resolves a PIX purchase by SKU alone; an avatar SKU must
+// map back to its own kind so the entitlement lands in the right slot.
+func TestConfirmFromWebhookGrantsAvatarEntitlement(t *testing.T) {
+	ctx := context.Background()
+	playerID := uniquePlayer("player-avatar-webhook")
+	purchaseID := "prdp-avatar-" + playerID
+	w := &fakeWallet{getResult: &walletclient.ProductPurchase{PurchaseID: purchaseID, UserID: playerID, SKU: "poker_accessory_monocle", Amount: 500, Status: "confirmed"}}
+	svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
+	if !svc.HandlesSKU("poker_accessory_monocle") {
+		t.Fatal("avatar SKU not routed to cosmeticpurchase")
+	}
+	rec, _, err := svc.ConfirmFromWebhook(ctx, purchaseID)
+	if err != nil || rec.Kind != string(cosmetics.KindAccessory) || rec.ItemID != "monocle" {
+		t.Fatalf("ConfirmFromWebhook: rec=%+v err=%v", rec, err)
+	}
+	if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindAccessory, "monocle"); err != nil || !owned {
+		t.Fatalf("monocle not owned after webhook: owned=%v err=%v", owned, err)
 	}
 }

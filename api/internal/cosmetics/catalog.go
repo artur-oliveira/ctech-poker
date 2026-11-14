@@ -191,6 +191,19 @@ func IsPremium(kind Kind, id string) bool {
 	return ok && e.Premium
 }
 
+// Purchasable reports whether an entry is sold through cosmeticpurchase: an
+// avatar item with Source purchase, or a deck/felt item (no Source) with a SKU.
+// Earnable (achievement/season) items are granted, never sold.
+func (e CatalogEntry) Purchasable() bool {
+	return e.Source == SourcePurchase || (e.Source == "" && e.SKU != "")
+}
+
+// Purchasable is CatalogEntry.Purchasable by (kind, id); false if unknown.
+func Purchasable(kind Kind, id string) bool {
+	e, ok := byID[catalogKey(kind, id)]
+	return ok && e.Purchasable()
+}
+
 // SKUFor returns the wallet SKU and fichas price for a premium item, or
 // ok=false for an unknown or free one.
 func SKUFor(kind Kind, id string) (sku string, priceFichas int64, ok bool) {

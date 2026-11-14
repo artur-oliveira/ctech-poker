@@ -853,8 +853,12 @@ catalog.
   `CatalogEntry.Source` (`purchase|achievement|season`, avatar kinds only; empty for deck/felt): `purchase` requires
   `SKU` and `PriceFichas > 0`, `achievement`/`season` forbid both (pinned by a catalog test). `From` (inclusive) /
   `Until` (exclusive) bound the sale window, zero = open; `cosmetics.Available` evaluates it and
-  `cosmeticpurchase.Grant` honours it with `ErrNotAvailable`. Purchase-window enforcement lands in phase 3 with the
-  purchasable kinds; ownership is permanent once granted. `cosmetics.Decor` (frame, hat, accessory, badges) is the
+  `cosmeticpurchase.Grant` honours it with `ErrNotAvailable`. Phase 3 sells frame/hat/accessory `purchase` items
+  through the same `/wallet/cosmetic-purchase/:kind` routes (badge stays 400: never sold); `CreateSandbox`/`CreateReal`
+  refuse an earnable item with `ErrNotPurchasable` (400 `not_purchasable`) and a closed window with `ErrNotAvailable`
+  (409 `not_available`) before any write, while a same-key replay of an in-window purchase still resolves; webhook,
+  refresh and refund are never window-gated. `ListCatalog` returns earnable entries with `source` and no price; ownership
+  is permanent once granted. `cosmetics.Decor` (frame, hat, accessory, badges) is the
   single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
   persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
   `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`

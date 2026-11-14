@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
@@ -165,5 +166,76 @@ func TestCreateCosmeticPurchaseUnknownKindRejectedBeforeCreate(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 for an unknown kind, got %d", resp.StatusCode)
+	}
+}
+
+// avatarProductSKUs is every purchasable avatar SKU at fichas/1000 cents.
+func avatarProductSKUs() []walletclient.ProductSKU {
+	skus := allCosmeticProductSKUs()
+	for _, kind := range []cosmetics.Kind{cosmetics.KindFrame, cosmetics.KindHat, cosmetics.KindAccessory} {
+		for _, e := range cosmetics.All(kind) {
+			if e.SKU != "" {
+				skus = append(skus, walletclient.ProductSKU{ID: e.SKU, PriceCents: e.PriceFichas / 1000})
+			}
+		}
+	}
+	return skus
+}
+
+func TestPurchaseRouteAcceptsAvatarKindsRejectsBadge(t *testing.T) {
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{skus: avatarProductSKUs()}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
+	app := newCosmeticPurchaseApp(svc)
+	cases := map[string]int{
+		"deck": http.StatusOK, "felt": http.StatusOK,
+		"frame": http.StatusOK, "hat": http.StatusOK, "accessory": http.StatusOK,
+		"badge": http.StatusBadRequest, "hats": http.StatusBadRequest,
+	}
+	for kind, want := range cases {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/v1.0/wallet/cosmetic-purchase/"+kind+"/catalog", nil))
+		if err != nil {
+			t.Fatalf("%s: app.Test: %v", kind, err)
+		}
+		if resp.StatusCode != want {
+			t.Fatalf("%s catalog: status %d, want %d", kind, resp.StatusCode, want)
+		}
+	}
+}
+
+// An earnable item is refused before any store or wallet call.
+func TestCreateCosmeticPurchaseEarnableItemNotPurchasable(t *testing.T) {
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
+	app := newCosmeticPurchaseApp(svc)
+	for _, method := range []string{"fichas", "pix"} {
+		body, _ := json.Marshal(map[string]string{"item_id": "crown", "method": method})
+		req := httptest.NewRequest(http.MethodPost, "/v1.0/wallet/cosmetic-purchase/hat/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		var p struct {
+			Code string `json:"code"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&p)
+		if resp.StatusCode != http.StatusBadRequest || p.Code != problemCodeNotPurchasable {
+			t.Fatalf("%s: status=%d code=%q, want 400 %q", method, resp.StatusCode, p.Code, problemCodeNotPurchasable)
+		}
+	}
+}
+
+func TestCosmeticPurchaseProblemCodes(t *testing.T) {
+	cases := []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{cosmeticpurchase.ErrNotPurchasable, http.StatusBadRequest, problemCodeNotPurchasable},
+		{cosmeticpurchase.ErrNotAvailable, http.StatusConflict, problemCodeNotAvailable},
+	}
+	for _, tc := range cases {
+		p := cosmeticPurchaseProblem(tc.err, nil)
+		if p.Status != tc.status || p.Code != tc.code {
+			t.Fatalf("%v: status=%d code=%q, want %d %q", tc.err, p.Status, p.Code, tc.status, tc.code)
+		}
 	}
 }

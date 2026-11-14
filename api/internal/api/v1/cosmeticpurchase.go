@@ -12,6 +12,12 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 )
 
+// Stable problem codes a client branches on (never on the detail text).
+const (
+	problemCodeNotPurchasable = "not_purchasable"
+	problemCodeNotAvailable   = "not_available"
+)
+
 type cosmeticPurchaseHandlers struct{ svc *cosmeticpurchase.Service }
 
 type CosmeticPurchaseCreateRequest struct {
@@ -26,8 +32,7 @@ type CosmeticPurchaseRefundRequest struct {
 
 // RegisterCosmeticPurchase mounts /wallet/cosmetic-purchase/:kind, mirroring
 // RegisterReactionPurchase's catalog/create/list/get/refund route shape. The
-// :kind path param is validated against cosmetics.KindDeck/KindFelt before
-// any service call.
+// :kind path param is validated by validCosmeticKind before any service call.
 func RegisterCosmeticPurchase(router fiber.Router, auth, idem fiber.Handler, svc *cosmeticpurchase.Service, purchaseLimiter *ratelimit.Limiter) {
 	h := &cosmeticPurchaseHandlers{svc: svc}
 	g := router.Group("/wallet/cosmetic-purchase/:kind", auth, optional(idem), validCosmeticKind)
@@ -38,10 +43,13 @@ func RegisterCosmeticPurchase(router fiber.Router, auth, idem fiber.Handler, svc
 	g.Post("/:id/refund", h.refund)
 }
 
+// validCosmeticKind accepts the kinds sold here: deck, felt and the avatar
+// slots except badge (badges are only ever granted).
 func validCosmeticKind(c fiber.Ctx) error {
 	kind := cosmetics.Kind(c.Params("kind"))
-	if kind != cosmetics.KindDeck && kind != cosmetics.KindFelt {
-		return problem.BadRequest("kind must be \"deck\" or \"felt\"").Send(c)
+	sold := kind == cosmetics.KindDeck || kind == cosmetics.KindFelt || (cosmetics.IsAvatarKind(kind) && kind != cosmetics.KindBadge)
+	if !sold {
+		return problem.BadRequest("kind must be \"deck\", \"felt\", \"frame\", \"hat\" or \"accessory\"").Send(c)
 	}
 	return c.Next()
 }
@@ -144,6 +152,10 @@ func cosmeticPurchaseProblem(err error, c fiber.Ctx) *problem.Problem {
 		return problem.Conflict(err.Error())
 	case errors.Is(err, cosmeticpurchase.ErrUnknownItem), errors.Is(err, cosmeticpurchase.ErrNotPremium):
 		return problem.BadRequest(err.Error())
+	case errors.Is(err, cosmeticpurchase.ErrNotPurchasable):
+		return problem.BadRequest("cosmetic is earned, not sold").WithCode(problemCodeNotPurchasable)
+	case errors.Is(err, cosmeticpurchase.ErrNotAvailable):
+		return problem.Conflict("cosmetic is outside its sale window").WithCode(problemCodeNotAvailable)
 	default:
 		return walletOrInternalProblem(err, "cosmetic purchase failed", c)
 	}
