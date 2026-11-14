@@ -1,6 +1,6 @@
 # Avatar cosmetics: borders, hats, accessories, badges
 
-Status: approved; phase 1 and 2 implemented, phase 3 pending. Date: 2026-11-14. Builds on issue #292 (seasonal frames and badges).
+Status: all phases implemented on branches `feat/avatar-cosmetics`, `feat/avatar-cosmetics-ui`, `feat/avatar-cosmetics-shop`; pending: season-grant trigger, real-handset and WebKit verification, social-butterfly mapping review. Date: 2026-11-14. Builds on issue #292 (seasonal frames and badges).
 
 ## Intent
 
@@ -121,6 +121,47 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
 2. **Art and rendering:** SVG set, `PlayerAvatar`, seat, profile preview, leaderboard rows, tokens, `DESIGN.md`, layout-gate and render-budget tests, real handset pass.
    *Phase 2 as built* (plan `docs/plans/2026-11-14-avatar-cosmetics-phase2.md`, branch `feat/avatar-cosmetics-ui`): deviations from the line above. The server catalog entries for the **earnable** items (achievement/season sources) landed in phase 2, not 3, so those ids are equippable as soon as they are granted; the **purchasable** items' art ships now but has no catalog entry, SKU or price, so it stays unobtainable until phase 3. Badges are hidden on the 24px landscape ring seat (a 12px badge covered a quarter of the chip) and shown everywhere else. The real-handset pass was not done in phase 2 and the WebKit layout gate runs only in CI.
 3. **Obtaining:** purchasable kinds in store (fichas + PIX), `products` entries, achievement grant table and WS toast, backfill, season trigger if the hook exists.
+   *Phase 3 as built* (plan `docs/plans/2026-11-14-avatar-cosmetics-phase3.md`, branch `feat/avatar-cosmetics-shop`):
+   frame/hat/accessory `purchase` items are sold through the existing `/wallet/cosmetic-purchase/:kind` routes (badges
+   stay refused, never sold). `CreateSandbox`/`CreateReal` refuse an earnable item (400 `not_purchasable`) and a
+   closed window (409 `not_available`) before any write; a same-key replay, webhook, refresh and refund are not
+   window-gated. `ListCatalog` carries `source` and `available`. `Grant` now returns `(created bool, err)` so the
+   pipeline announces only new items. Achievement grants run in `handPipeline.announceUnlocks` after the hand-counter
+   claim and send `cosmetic_unlocked` (`ServerMessage` fields 22/23); the backfill is a self-heal on
+   `GET /players/me/cosmetics/:kind/owned` (no Lambda), bounded at 3s. The store gains three lazy departments
+   (Molduras, Chapéus, Acessórios). **No season trigger**: season items and windows exist but no period-close hook
+   was found, so nothing grants them yet.
+
+   Prices (cents in `internal/catalog/catalog.go` `products`, fichas = cents x 1000 in the cosmetics catalog):
+
+   | Kind | Item | SKU | Cents | Fichas |
+   |---|---|---|---|---|
+   | frame | felt-ring | `poker_frame_felt_ring` | 600 | 600 000 |
+   | frame | walnut-rail | `poker_frame_walnut_rail` | 800 | 800 000 |
+   | frame | oxblood-edge | `poker_frame_oxblood_edge` | 1000 | 1 000 000 |
+   | hat | beanie | `poker_hat_beanie` | 200 | 200 000 |
+   | hat | top-hat | `poker_hat_top_hat` | 300 | 300 000 |
+   | hat | cowboy | `poker_hat_cowboy` | 400 | 400 000 |
+   | accessory | mustache | `poker_accessory_mustache` | 200 | 200 000 |
+   | accessory | shades | `poker_accessory_shades` | 300 | 300 000 |
+   | accessory | headset | `poker_accessory_headset` | 400 | 400 000 |
+   | accessory | monocle | `poker_accessory_monocle` | 500 | 500 000 |
+
+   Grant table (`cosmetics.AchievementGrants`; a tier-skipping unlock grants every row with `row.Stars <= stars`;
+   reason `achievement:<key>:<stars>`, `...:backfill` from the self-heal):
+
+   | Achievement | Stars | Kind | Item |
+   |---|---|---|---|
+   | hands_played | 1 | hat | dealer-visor |
+   | hands_played | 2 | badge | veteran |
+   | hands_played | 3 | frame | chip-ring |
+   | wins | 3 | hat | laurel |
+   | wins | 4 | hat | crown |
+   | bluff | 2 | accessory | bandit-mask |
+   | all_in | 3 | badge | all-in-hero |
+   | folded_streak | 1 | badge | iron-nerve |
+   | sandbox_chips_earned | 3 | badge | rainmaker |
+   | won_full_table | 1 | badge | social-butterfly (provisional: no social achievement exists) |
 
 ## Tests
 

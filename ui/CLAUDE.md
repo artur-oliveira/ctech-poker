@@ -175,14 +175,31 @@ off by default — do not build UI that assumes real money is on.
   `PURCHASE_POLL_BUDGET`, and seeds `initialData` so opening a dialog costs no read. **Never arm a
   `setInterval` to watch a purchase**; `purchasePollCount()` exists so "at most N reads per pending
   purchase" stays assertable. See `docs/2026-09-04-purchase-status-one-lifecycle.md` and #227.
-- **The store's initial load is the profile plus the four catalogs.** The catalogs own every
-  ownership flag and the directory's "N de M liberadas" counters, so they stay eager; the four
-  purchase histories are additive (receipts, resume, refund) and each waits for its own department
-  to come into view through `lib/hooks/useInViewOnce.ts` — a one-way latch that starts *armed*
+- **The store's initial load is the profile plus four catalogs: sandbox packs (`skus`), reactions,
+  deck and felt.** Those own the above-the-fold ownership flags and the directory's "N de M
+  liberadas" counters, so they stay eager. The three avatar departments (Molduras, Chapéus,
+  Acessórios: `useAvatarDepartment` in `store/page.tsx`, `AvatarStoreDepartment`) are lazy for
+  catalog *and* history: both wait for that section's `useInViewOnce` (the history also arms
+  when "Compras e estornos" comes into view), so first paint costs no extra request
+  (`page.budget.test.tsx`); until then the grid reports loading and the directory shows the
+  department hint instead of a counter. The deck/felt/reaction/sandbox purchase histories are
+  additive (receipts, resume, refund) and each waits for its own department to come into view through `lib/hooks/useInViewOnce.ts` — a one-way latch that starts *armed*
   wherever there is no `IntersectionObserver`, so a missing observer can only cost a request, never
   hide a section. A deferred history reports `isLoading`: the department's grid must not paint
   without its resume/refund actions and then flip back to a skeleton. Wallet invalidation stays on
   the `['wallet']` root on purpose. See `docs/2026-09-04-store-initial-load-budget.md` and #206.
+- **Avatar item states in the store (phase 3, spec `docs/specs/2026-11-14-avatar-cosmetics.md`).**
+  `CosmeticStoreSection`'s grid reads `source` and `available` from the catalog: owned is "Na
+  coleção" plus "Equipar no perfil" (link to `/player-profile`); an `achievement`/`season` item
+  is "Conquista" (never priced or sold); a closed window (`available === false`) or a premium
+  entry with no `price_cents` is "Indisponível" (never sellable); otherwise "A liberar". An
+  in-flight purchase wins over all of these. Copy stays gender/number-neutral across the three
+  kinds ("Item liberado: <item>" as the confirmed dialog title). A 409 `not_available` in
+  `CosmeticPurchaseDialog` points to "Compras e estornos": the idempotency key is fresh per
+  click, so a retry after the window closes cannot resume an open Pix, the history can. Badges
+  have no department (never sold). The unlock toast: `useTableRealtimeSession` turns a
+  `cosmetic_unlocked` frame (`cosmetic_kind`, `cosmetic_id`) into `pushNotification("Novo item
+  desbloqueado: <label>. Equipe em Perfil.")`, label from `avatarItemLabel` (raw id fallback).
 - **One clock for the whole table.** `lib/hooks/useSharedTicker.ts` runs a single `setInterval` at
   the shortest cadence anyone asked for and notifies each subscriber on its own period. Every
   countdown goes through `useLiveNow` (which subscribes to it) — the action bar, each timed seat,

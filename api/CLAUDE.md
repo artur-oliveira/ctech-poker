@@ -848,7 +848,7 @@ catalog.
   gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
   single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
   issue needed no change.
-- **Avatar cosmetics (spec `docs/specs/2026-11-14-avatar-cosmetics.md`, phase 1).** Four slots: frame, hat, accessory,
+- **Avatar cosmetics (spec `docs/specs/2026-11-14-avatar-cosmetics.md`, phases 1-3).** Four slots: frame, hat, accessory,
   badge (max 3). `cosmetics.Kind == Slot` for avatar items (`IsAvatarKind`), so there is no separate `Slot` field.
   `CatalogEntry.Source` (`purchase|achievement|season`, avatar kinds only; empty for deck/felt): `purchase` requires
   `SKU` and `PriceFichas > 0`, `achievement`/`season` forbid both (pinned by a catalog test). `From` (inclusive) /
@@ -857,10 +857,19 @@ catalog.
   through the same `/wallet/cosmetic-purchase/:kind` routes (badge stays 400: never sold); `CreateSandbox`/`CreateReal`
   refuse an earnable item with `ErrNotPurchasable` (400 `not_purchasable`) and a closed window with `ErrNotAvailable`
   (409 `not_available`) before any write, while a same-key replay of an in-window purchase still resolves; webhook,
-  refresh and refund are never window-gated. `ListCatalog` returns earnable entries with `source` and no price; ownership
-  is permanent once granted. **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
+  refresh and refund are never window-gated. `ListCatalog` (frame/hat/accessory too) sets `source` and `available`
+  (`cosmetics.Available` now) on every entry and prices only `CatalogEntry.Purchasable()` ones (avatar `purchase`
+  source, or deck/felt with a SKU; `cosmetics.Purchasable(kind, id)` by id); earnable entries carry no price. Ownership
+  is permanent once granted. **Prices** live in two places only, both poker-owned: fichas in the cosmetics catalog
+  (`internal/cosmetics/catalog.go`, fichas = cents x 1000) and cents in `internal/catalog/catalog.go` `products`
+  (nothing is registered in wallet or billing; `catalog.TestCosmeticSKUsMatchProducts` pins SKUs and the ratio): frames
+  `poker_frame_felt_ring` 600, `poker_frame_walnut_rail` 800, `poker_frame_oxblood_edge` 1000; hats `poker_hat_beanie`
+  200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400; accessories `poker_accessory_mustache` 200,
+  `poker_accessory_shades` 300, `poker_accessory_headset` 400, `poker_accessory_monocle` 500 (cents). **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
   (inside the `ClaimHandCounters` branch, so once per hand) sends the `achievement_unlocked` frame, then for each
-  `cosmetics.GrantsFor(key, stars)` row calls `cosmeticpurchase.Service.Grant` (reason `achievement:<key>:<stars>`;
+  `cosmetics.GrantsFor(key, stars)` row (every `cosmetics.AchievementGrants` row with `row.Stars <= stars`, so a
+  tier-skipping unlock grants the lower rows too; the table is ordered by stars within a key so toasts arrive in tier
+  order; lower rows are retried on each higher-tier unlock, a `ponytail:` note in `handpipeline.go`) calls `cosmeticpurchase.Service.Grant` (reason `achievement:<key>:<stars>`;
   returns `created`, true only when it wrote the entitlement) and, only when created, sends
   `ServerMessage{type:"cosmetic_unlocked", cosmetic_kind, cosmetic_id}` (proto fields 22/23) to `tableID#playerID`.
   A grant error is logged and skipped, never aborting the other unlocks, the leaderboard or the hand. Cost: zero unless
@@ -869,10 +878,14 @@ catalog.
   first runs `grantEarned` (`internal/api/v1/avatarcosmetics.go`), the only recovery path for a grant the pipeline lost
   (crash between claim and grant, grant error): it reads `AllAchievements` once per mode (sandbox, real), takes the max
   `achievements.StarsFor` per key (a non-empty `unlocked_at` floors a reset counter like `folded_streak` at 1 star),
-  reads `OwnedIDs` once per kind with a qualifying row and `Grant`s only unowned rows (reason
-  `achievement:<key>:<stars>:backfill`). Best-effort, bounded by `earnedGrantTimeout` (3s); every error is logged and
-  the list is still served, including items granted in the same call. Steady state: 2 progress reads + ≤4 ownership
-  reads, zero writes. A nil progress reader keeps the plain list. `cosmetics.Decor` (frame, hat, accessory, badges) is the
+  skips rows outside their window (`cosmetics.Available`; `Grant` would only refuse them), reads `OwnedIDs` once
+  per kind with a qualifying row and `Grant`s only unowned rows (reason `achievement:<key>:<stars>:backfill`). The
+  `unlocked_at` floor recovers star-1 rows only: a reset counter that earned 2+ stars and fell back is not re-derived. Best-effort, bounded by `earnedGrantTimeout` (3s, a var for the test); the
+  list itself runs on the request ctx, never the timed-out one. Every error is logged and the list is still served,
+  including items granted in the same call. Steady state **per call**: 2 progress reads + ≤4 ownership reads, zero
+  writes; `/player-profile` fires one call per kind (frame, hat, accessory, badge: 4 in parallel), so a profile open costs that 4 times.
+  **Known gaps:** season-source items exist (with windows) but nothing grants them yet, no period-close hook; the
+  `social-butterfly` -> `won_full_table` 1-star mapping is provisional (no social/hosting achievement exists). A nil progress reader keeps the plain list. `cosmetics.Decor` (frame, hat, accessory, badges) is the
   single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
   persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
   `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`

@@ -38,7 +38,7 @@ export default function ProfileGuide() {
       },
       {
         id: 'moldura-emblemas', title: 'Visual do avatar', summary: 'Borda, chapéu, acessório e emblemas, equipados ao redor da sua foto.',
-        body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. As listas só mostram o que você já tem; não há compra aqui.</p>
+        body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. As listas só mostram o que você já tem; não há compra aqui. Novos itens ficam em <b>Molduras</b>, <b>Chapéus</b> e <b>Acessórios</b>, na Loja, à venda ou liberados por conquistas.</p>
           <GuideSteps><li><span>Escolha uma borda, um chapéu e um acessório, ou <b>Nenhuma</b> (borda) e <b>Nenhum</b> (chapéu, acessório) para não usar.</span></li>
           <li><span>Marque até três emblemas.</span></li>
           <li><span>Toque em <b>Salvar visual do avatar</b>. O botão só acende quando algo mudou.</span></li></GuideSteps>
