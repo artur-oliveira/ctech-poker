@@ -1,6 +1,6 @@
 # Avatar cosmetics: borders, hats, accessories, badges
 
-Status: design, awaiting review. Date: 2026-11-14. Builds on issue #292 (seasonal frames and badges).
+Status: approved; phase 1 implemented, phases 2-3 pending. Date: 2026-11-14. Builds on issue #292 (seasonal frames and badges).
 
 ## Intent
 
@@ -57,10 +57,11 @@ purchases (fichas or PIX) or from seasons. The model must allow seasonal drops l
 
 ### Catalog (`cosmetics`)
 
-`CatalogEntry` gains `Slot`, `Source`, `From`/`Until` (`time.Time`, zero = open). `Kind` stays the storage key prefix
+`CatalogEntry` gains `Source`, `From`/`Until` (`time.Time`, zero = open). `Kind` stays the storage key prefix
 (`frame`, `hat`, `accessory`, `badge`); for avatar items Kind equals Slot. New kinds: `KindHat`, `KindAccessory`.
 `Source=purchase` requires a `SKU` and `PriceFichas`; `Source=achievement|season` forbids a price. A catalog test pins this.
 Window rules: `Until` closes new purchases and new grants; `From` opens them. Already-owned items keep working forever.
+Phase 1 enforces the window in `Grant` only (`ErrNotAvailable`); purchase-window enforcement lands in phase 3 with the purchasable kinds.
 Time source is the injected clock (never `time.Now` in services).
 
 ### Obtaining

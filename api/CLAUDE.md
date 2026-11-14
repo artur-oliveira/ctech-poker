@@ -847,6 +847,24 @@ catalog.
   gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
   single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
   issue needed no change.
+- **Avatar cosmetics (spec `docs/specs/2026-11-14-avatar-cosmetics.md`, phase 1).** Four slots: frame, hat, accessory,
+  badge (max 3). `cosmetics.Kind == Slot` for avatar items (`IsAvatarKind`), so there is no separate `Slot` field.
+  `CatalogEntry.Source` (`purchase|achievement|season`, avatar kinds only; empty for deck/felt): `purchase` requires
+  `SKU` and `PriceFichas > 0`, `achievement`/`season` forbid both (pinned by a catalog test). `From` (inclusive) /
+  `Until` (exclusive) bound the sale window, zero = open; `cosmetics.Available` evaluates it and
+  `cosmeticpurchase.Grant` honours it with `ErrNotAvailable`. Purchase-window enforcement lands in phase 3 with the
+  purchasable kinds; ownership is permanent once granted. `cosmetics.Decor` (frame, hat, accessory, badges) is the
+  single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
+  persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
+  `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`
+  (`identityCmdFor` and the buy-in sender do): `SetPlayerIdentityForActor` replaces name/avatar/badge/decor as one
+  unit, so omitting it blanks the decor. `PATCH /players/me` pushes the identity to the table once after the write
+  (equip is live, no reconnect). Leaderboard rows resolve avatar + decor at read time from the same single `GetMany`
+  (`dynamodbav:"-"`, never stored), like `PlayerName`. `cosmetics.Equipped` / `Equipped.Map()` is the read-side wire
+  shape (`equipped_frame_id`, `equipped_hat_id`, `equipped_accessory_id`, `equipped_badge_ids`) for showcase, people
+  and hand-opponent payloads. Refund of an equipped avatar item is refused: `appliedCosmeticIDs` (`internal/app/app.go`)
+  feeds `cosmeticpurchase.isCurrentSelection`. Test seam: `cosmetics.WithCatalogForTest` swaps the catalog and
+  indexes; not parallel-safe.
 - **Issue #198 fixed: a hand costs one `poker_achievement_progress` write per player, not one per applicable
   achievement.** `achievements.Service.RecordHand` used to call `Increment`/`IncrementStreak` per counter per player —
   hands played, time bank, win, category, earnings, pocket pair, full table/heads-up, all-in, showdown outcomes,
