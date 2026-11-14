@@ -154,6 +154,9 @@ export type ServerMessage = {
   snapshot?: TableSnapshot;
   key?: string;
   stars?: number;
+  // cosmetic_unlocked: the avatar item an achievement just granted.
+  cosmetic_kind?: string;
+  cosmetic_id?: string;
   player_id?: string;
   message?: string;
   code?: string;

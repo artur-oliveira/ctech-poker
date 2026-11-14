@@ -5,6 +5,8 @@ import type {WSStatus} from '@aoctech/ws-client';
 import type {MockScenario} from '@/lib/mockConfig';
 import type {ActionPreselection, PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playSound} from '@/lib/sound';
+import {pushNotification} from '@/lib/notify';
+import {avatarItemLabel, type AvatarSlot} from '@/lib/avatarCosmetics';
 import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
 import {CHAT_HISTORY_LIMIT} from '@/lib/chat';
 import {
@@ -498,6 +500,11 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       key: message.key,
       stars: message.stars || 1
     });
+    if (message.type === 'cosmetic_unlocked' && message.cosmetic_kind && message.cosmetic_id) {
+      // Unknown kind (new server slot, old client) falls back to the raw id.
+      const label = avatarItemLabel(message.cosmetic_kind as AvatarSlot, message.cosmetic_id);
+      pushNotification(`Novo item desbloqueado: ${label}. Equipe em Perfil.`, 'info');
+    }
     if (message.type === 'chat' && message.message && !isSuppressed(message.player_id)) {
       const chatMessage = message.message;
       const player = message.player_id || '?';
