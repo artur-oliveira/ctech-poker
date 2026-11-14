@@ -60,14 +60,22 @@ func TestShowcaseExposesDecor(t *testing.T) {
 }
 
 func TestPrivateShowcaseExposesNoDecor(t *testing.T) {
-	private := decoredProfile
-	private.ShowcasePublic = false
-	h := &playerHandlers{players: player.NewService(&fakePlayerStore{profile: private}), sessions: &mockHistoryReader{}, achievements: mockAchievementReader{}}
-	app := fiber.New()
-	app.Get("/players/:playerId/showcase", h.showcase)
-	status, body := getJSON(t, app, "/players/u1/showcase")
+	get := func(public bool) (int, map[string]any) {
+		profile := decoredProfile
+		profile.ShowcasePublic = public
+		h := &playerHandlers{players: player.NewService(&fakePlayerStore{profile: profile}), sessions: &mockHistoryReader{}, achievements: mockAchievementReader{}}
+		app := fiber.New()
+		app.Get("/players/:playerId/showcase", h.showcase)
+		return getJSON(t, app, "/players/u1/showcase")
+	}
+	if status, body := get(true); status != fiber.StatusOK {
+		t.Fatalf("public status = %d", status)
+	} else {
+		assertDecor(t, body)
+	}
+	status, body := get(false)
 	if status != fiber.StatusNotFound {
-		t.Fatalf("status = %d, want 404", status)
+		t.Fatalf("private status = %d, want 404", status)
 	}
 	assertNoDecor(t, body)
 }

@@ -5,6 +5,7 @@
 package cosmetics
 
 import (
+	"encoding/json"
 	"slices"
 	"time"
 )
@@ -67,6 +68,15 @@ type Equipped struct {
 	HatID       string   `json:"equipped_hat_id,omitempty"`
 	AccessoryID string   `json:"equipped_accessory_id,omitempty"`
 	BadgeIDs    []string `json:"equipped_badge_ids,omitempty"`
+}
+
+// Map is the same omit-empty wire shape for map payloads; the json tags above
+// stay the single source of the names.
+func (e Equipped) Map() map[string]any {
+	raw, _ := json.Marshal(e) // plain strings/slice: cannot fail
+	m := map[string]any{}
+	_ = json.Unmarshal(raw, &m)
+	return m
 }
 
 func (d Decor) Equipped() Equipped {
