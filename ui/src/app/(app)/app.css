@@ -11,6 +11,13 @@
  * otherwise it belongs in renderer.css. Table-only rules go one level deeper, in
  * (app)/table/table.css.
  */
+/* Every page route reserves the scrollbar's lane. /people is short enough not
+   to scroll while /store, /lobby and the rest do, so the centred 1160px column
+   jumped ~8px sideways on every navigation between them. The table is a
+   fixed-viewport stage with no .app-page, so it keeps its full width. */
+html:has(.app-page) {
+    scrollbar-gutter: stable
+}
 .network-status {
     position: fixed;
     top: 0;
@@ -3723,7 +3730,30 @@
     }
 .store-reward {
         grid-template-columns: auto minmax(0, 1fr);
-        padding: 22px 20px
+        gap: 12px 14px;
+        padding: 14px 16px
+    }
+.store-reward-icon {
+        width: 40px;
+        height: 40px
+    }
+.store-reward-icon svg {
+        width: 20px;
+        height: 20px
+    }
+.store-reward-count {
+        right: -6px;
+        bottom: -6px;
+        min-width: 18px;
+        line-height: 18px
+    }
+.store-reward-copy h2 {
+        margin-bottom: 2px;
+        font-size: var(--font-size-body)
+    }
+.store-reward-copy p {
+        font-size: var(--font-size-compact);
+        line-height: 1.45
     }
 .store-reward > button {
         grid-column: 1 / -1;
@@ -5605,6 +5635,15 @@ button.deck-grid-slot:hover {
 .store-directory a + a {
     border-inline-start: 1px solid var(--control-border)
 }
+/* The directory is a 3x2 grid inside one outline: dividers only between cells,
+   never against the outline (the first cell of each row has no left rule, the
+   second row gets a top rule). */
+.store-directory a:nth-child(3n + 1) {
+    border-inline-start: 0
+}
+.store-directory a:nth-child(n + 4) {
+    border-top: 1px solid var(--control-border)
+}
 .store-directory a:hover,
 .store-directory a:focus-visible {
     background: var(--white-08)
@@ -5665,7 +5704,89 @@ button.deck-grid-slot:hover {
 }
 .store-department-reward {
     max-width: 640px;
-    margin: 0 auto 38px
+    margin: 0 auto 38px;
+    scroll-margin-top: 96px
+}
+/* Claimable-reward call to action, shown above the directory. Gold is the
+   store's value colour; the only motion is a slow flame glow (opacity), dropped
+   under reduced motion. */
+.store-reward-banner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    max-width: 900px;
+    margin: -10px auto 24px;
+    padding: 14px 18px;
+    border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+    border-radius: var(--rounded-panel);
+    background: linear-gradient(100deg, color-mix(in srgb, var(--gold) 14%, var(--surface-control)), var(--surface-control) 70%)
+}
+.store-reward-banner-icon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--gold-33);
+    color: var(--gold)
+}
+.store-reward-banner-icon::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: inherit;
+    box-shadow: 0 0 18px var(--gold);
+    opacity: .35;
+    animation: store-reward-glow 2.6s ease-in-out infinite
+}
+.store-reward-banner-icon svg {
+    width: 22px;
+    height: 22px
+}
+.store-reward-banner p {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    min-width: 0
+}
+.store-reward-banner b {
+    font-size: var(--font-size-body)
+}
+.store-reward-banner small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
+}
+.store-reward-banner button svg {
+    width: 16px;
+    height: 16px
+}
+@keyframes store-reward-glow {
+    50% {
+        opacity: .08
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+.store-reward-banner-icon::after {
+        animation: none
+    }
+}
+@media (max-width: 600px) {
+.store-reward-banner {
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px 12px;
+        margin-top: 0;
+        padding: 12px 14px
+    }
+.store-reward-banner-icon {
+        width: 38px;
+        height: 38px
+    }
+.store-reward-banner button {
+        grid-column: 1 / -1;
+        width: 100%
+    }
 }
 .store-subsection-heading {
     margin: 0 0 18px
@@ -6315,9 +6436,7 @@ button.deck-grid-slot:hover {
 .reaction-favorite-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-    max-height: min(420px, 52dvh);
-    overflow-y: auto
+    gap: 6px
 }
 @media (max-width: 700px) {
 .store-directory {
@@ -6361,8 +6480,7 @@ button.deck-grid-slot:hover {
     .cosmetic-store-state {
         justify-self: start
     }
-.reaction-payment-options,
-    .reaction-favorite-list {
+.reaction-payment-options {
         grid-template-columns: 1fr
     }
 .reaction-refund-summary > div {

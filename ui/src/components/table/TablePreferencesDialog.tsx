@@ -85,12 +85,14 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
     {showTrigger && <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Preferências da mesa"/>}>
       <Settings2/>
     </DialogTrigger>}
-    <DialogContent>
+    <DialogContent className="table-preferences-dialog">
       <DialogHeader>
         <DialogTitle>Preferências da mesa</DialogTitle>
         <DialogDescription>Personalize a experiência e escolha como prefere jogar nesta mesa.</DialogDescription>
       </DialogHeader>
       <div className="table-preferences">
+        <section className="table-preferences-col" aria-label="Mesa e jogo">
+          <h3>Mesa e jogo</h3>
         <div>
           <Label id="table-theme-label">Tema do feltro</Label>
           <Select aria-labelledby="table-theme-label" value={theme} disabled={save.isPending}
@@ -118,6 +120,28 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
           <small className="table-preference-hint">Pote sugere frações do pote em todas as rodadas; Big blind,
             múltiplos do big blind. {save.isError && <b role="alert">Não foi possível salvar. Tente de novo.</b>}</small>
         </div>
+        {runItTwiceAvailable && <div className="table-preference-toggle">
+          <span><Repeat2 aria-hidden="true"/><span><Label id="run-it-twice-label">Rodar duas vezes</Label>
+            <small>Em all-ins, divide cada pote entre dois boards. Só acontece quando todos os jogadores envolvidos também ativaram.</small>
+          </span></span>
+            <Switch aria-labelledby="run-it-twice-label" checked={runItTwice}
+                    onCheckedChange={checked => onRunItTwiceChange?.(checked)}/>
+        </div>}
+        <div className="table-preference-toggle">
+          <span><Lightbulb aria-hidden="true"/><span><Label id="equity-trainer-label">Treinador</Label>
+            <small>Explica sua mão depois que você age. Nunca aparece durante a sua decisão nem em dinheiro real.</small></span></span>
+          <Switch aria-labelledby="equity-trainer-label" checked={preferences.equityTrainer}
+                  onCheckedChange={checked => update({equityTrainer: checked})}/>
+        </div>
+        <div>
+          <Label id="reality-check-label">Lembrete de sessão</Label>
+          <Select aria-labelledby="reality-check-label" value={String(preferences.realityCheckMinutes)}
+                  onValueChange={value => update({realityCheckMinutes: Number(value)})}
+                  options={REALITY_OPTIONS}/>
+        </div>
+        </section>
+        <section className="table-preferences-col" aria-label="Som, voz e atalhos">
+          <h3>Som, voz e atalhos</h3>
         <div className="table-preference-toggle">
           <span><AudioLines aria-hidden="true"/><span><Label id="sound-effects-label">Sons da mesa</Label>
             <small>Cartas, fichas e alertas. Começa sem som até você ativar.</small></span></span>
@@ -130,24 +154,11 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
           <Switch aria-labelledby="dealer-voice-label" checked={preferences.dealerVoice}
                   onCheckedChange={checked => update({dealerVoice: checked})}/>
         </div>
-        {runItTwiceAvailable && <div className="table-preference-toggle table-preference-gameplay">
-          <span><Repeat2 aria-hidden="true"/><span><Label id="run-it-twice-label">Rodar duas vezes</Label>
-            <small>Em all-ins, divide cada pote entre dois boards. Só acontece quando todos os jogadores envolvidos também ativaram.</small>
-          </span></span>
-            <Switch aria-labelledby="run-it-twice-label" checked={runItTwice}
-                    onCheckedChange={checked => onRunItTwiceChange?.(checked)}/>
-        </div>}
         <div className="table-preference-toggle">
           <span><Mic aria-hidden="true"/><span><Label id="voice-actions-label">Comandos por voz</Label>
             <small>Push-to-talk. O jogo recebe somente a ação reconhecida, nunca o áudio.</small></span></span>
           <Switch aria-labelledby="voice-actions-label" checked={preferences.voiceCommands}
                   onCheckedChange={checked => update({voiceCommands: checked})}/>
-        </div>
-        <div className="table-preference-toggle">
-          <span><Lightbulb aria-hidden="true"/><span><Label id="equity-trainer-label">Treinador</Label>
-            <small>Explica sua mão depois que você age. Nunca aparece durante a sua decisão nem em dinheiro real.</small></span></span>
-          <Switch aria-labelledby="equity-trainer-label" checked={preferences.equityTrainer}
-                  onCheckedChange={checked => update({equityTrainer: checked})}/>
         </div>
         <div className="table-preference-toggle">
           <span><Keyboard aria-hidden="true"/><span><Label id="keyboard-shortcuts-label">Atalhos de teclado</Label>
@@ -164,12 +175,7 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
           <div><dt>A</dt><dd>Máximo / All In</dd></div>
           <div><dt>← →</dt><dd>Ajustar valor</dd></div>
         </dl>}
-        <div>
-          <Label id="reality-check-label">Lembrete de sessão</Label>
-          <Select aria-labelledby="reality-check-label" value={String(preferences.realityCheckMinutes)}
-                  onValueChange={value => update({realityCheckMinutes: Number(value)})}
-                  options={REALITY_OPTIONS}/>
-        </div>
+        </section>
       </div>
     </DialogContent>
   </Dialog>;

@@ -179,8 +179,8 @@ function TableContent() {
     (profile?.favorite_reactions || []).filter(isTableReaction), [profile?.favorite_reactions]);
   const editPlayerNote = useCallback((seat: {player_id: string; name?: string}) =>
     setNoteOpponent({player_id: seat.player_id, name: seat.name}), []);
-  const renderPlayerActions = useCallback((seat: {player_id: string; name?: string}) =>
-    <PlayerActionsMenu
+  const renderPlayerActions = useCallback((seat: {player_id: string; name?: string}, trigger: React.ReactNode) =>
+    <PlayerActionsMenu trigger={trigger}
       target={{
         player_id: seat.player_id, name: seat.name,
         relationship: relationshipsByID[seat.player_id]?.relationship,

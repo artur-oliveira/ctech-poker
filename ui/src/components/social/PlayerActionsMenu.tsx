@@ -1,5 +1,5 @@
 'use client';
-import {useState} from 'react';
+import {type ReactNode, useState} from 'react';
 import Link from 'next/link';
 import {
   BellOff, Flag, MoreVertical, NotebookPen, ShieldBan, ShieldCheck, UserMinus, UserPlus, UserRoundSearch, Volume2
@@ -33,7 +33,7 @@ const FRIEND_ACTION: Record<SocialRelationship, {kind: SocialActionKind; label: 
  * this same component, so the safety actions cannot drift apart between
  * surfaces. Poker itself is never affected — nothing here touches seats,
  * stacks, actions or matchmaking. */
-export function PlayerActionsMenu({target, actions, surface, tableId, handId, onEditNoteAction, onBlockedAction}: {
+export function PlayerActionsMenu({target, actions, surface, tableId, handId, onEditNoteAction, onBlockedAction, trigger}: {
   target: PlayerActionsTarget;
   actions: SocialActionState;
   surface: ReportSurface;
@@ -43,6 +43,9 @@ export function PlayerActionsMenu({target, actions, surface, tableId, handId, on
   // Lets the table drop the target's rendered content before the round-trip
   // (and put it back if the server rejects the block).
   onBlockedAction?: (blocked: boolean) => Promise<boolean> | boolean;
+  // The table seat makes the player's avatar the button instead of a 3-dot
+  // badge: whatever is passed here becomes the trigger's content.
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [confirmingBlock, setConfirmingBlock] = useState(false);
@@ -70,9 +73,10 @@ export function PlayerActionsMenu({target, actions, surface, tableId, handId, on
       setOpen(next);
       if (!next) setConfirmingBlock(false);
     }}>
-      <PopoverTrigger render={<Button type="button" variant="ghost" size="icon"
-                                     aria-label={`Ações para ${name}`}/>}>
-        <MoreVertical aria-hidden="true"/>
+      <PopoverTrigger render={trigger
+        ? <button type="button" className="seat-avatar-trigger" aria-label={`Detalhes de ${name}`}/>
+        : <Button type="button" variant="ghost" size="icon" aria-label={`Ações para ${name}`}/>}>
+        {trigger ?? <MoreVertical aria-hidden="true"/>}
       </PopoverTrigger>
       <PopoverContent className="social-actions-menu">
         <p className="social-actions-name">{name}</p>

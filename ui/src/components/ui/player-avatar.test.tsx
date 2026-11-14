@@ -1,5 +1,5 @@
 import {fireEvent, render, screen} from '@testing-library/react';
-import {describe, expect, test} from 'vitest';
+import {afterEach, describe, expect, test, vi} from 'vitest';
 import {PlayerAvatar} from './player-avatar';
 
 describe('PlayerAvatar', () => {
@@ -34,4 +34,23 @@ describe('PlayerAvatar', () => {
     expect(screen.getByTitle('Top 10 da Temporada')).toBeInTheDocument();
     expect(screen.getByTitle('Campeão da Temporada')).toBeInTheDocument();
   });
+
+  test('the photo cannot be dragged to another tab or saved from a context menu', async () => {
+    // jsdom never loads images; let the avatar's preloader succeed.
+    class LoadedImage {
+      onload: (() => void) | null = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', LoadedImage);
+    const {container} = render(<PlayerAvatar name="Ana Beatriz" avatarUrl="/ana.jpg"/>);
+    const image = await vi.waitFor(() => {
+      const found = container.querySelector('img');
+      if (!found) throw new Error('image not mounted');
+      return found;
+    });
+    expect(image).toHaveAttribute('draggable', 'false');
+    expect(fireEvent.contextMenu(image)).toBe(false);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
 });

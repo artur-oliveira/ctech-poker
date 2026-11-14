@@ -9,12 +9,58 @@
  * /share, /profile, /lobby and the (marketing) landing demo render those same components,
  * so their CSS has to stay in the sheet those routes load.
  */
-.table-preference-gameplay {
-    padding-block: 12px;
-    border-block: 1px solid var(--white-12)
+/* Two columns on desktop so the whole dialog is on screen at once; one column
+   (and the dialog's own scroll) only where the viewport cannot hold both. */
+.table-preferences-dialog {
+    max-width: min(54rem, calc(100% - 2rem))
 }
-.table-preference-gameplay small {
-    max-width: 42ch
+.table-preferences {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px
+}
+.table-preferences-col {
+    display: grid;
+    gap: 10px
+}
+.table-preferences-col > h3 {
+    margin: 0;
+    color: var(--gold-pale);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    letter-spacing: .1em;
+    text-transform: uppercase
+}
+/* Every row is the same card, so selects, switches and the legend read as one
+   family instead of three kinds of control. */
+.table-preferences-col > div:not(.table-shortcuts-legend) {
+    padding: 10px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat)
+}
+.table-preferences-col > div:not(.table-preference-toggle) {
+    display: grid;
+    gap: 8px
+}
+.table-preferences-col > .table-preference-toggle {
+    min-height: 60px
+}
+/* One icon box for every row, so the label column lines up down the card. */
+.table-preferences-col .table-preference-toggle > span:first-child > svg {
+    flex: none;
+    width: 20px;
+    height: 20px
+}
+.table-preferences-col .table-preference-toggle > span:first-child > span {
+    min-width: 0
+}
+.table-preferences-col .table-shortcuts-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+}
+@media (max-width: 760px) {
+.table-preferences {
+        grid-template-columns: 1fr
+    }
 }
 .table-shortcuts-legend {
     display: grid;
@@ -465,26 +511,65 @@
     }
 }
 .reaction-favorites-dialog {
-    max-width: 600px
+    max-width: min(58rem, calc(100% - 2rem))
 }
-.reaction-favorite-count {
-    margin: -8px 0 10px;
+/* Two columns, one per kind, so the 30 reactions fit a desktop dialog without
+   scrolling it; on a phone they stack and the dialog scrolls as a whole. */
+.reaction-favorite-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px
+}
+.reaction-favorite-column > header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--control-border)
+}
+.reaction-favorite-column > header > svg {
+    width: 18px;
+    height: 18px;
+    color: var(--gold)
+}
+.reaction-favorite-column > header > span {
+    display: grid;
+    flex: 1;
+    min-width: 0
+}
+.reaction-favorite-column > header b {
+    font-size: var(--font-size-body)
+}
+.reaction-favorite-column > header small {
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+.reaction-favorite-column > header output {
     color: var(--gold-pale);
     font: 600 var(--font-size-compact) var(--font-mono)
 }
 .reaction-favorite-list button {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: auto;
     align-items: center;
     gap: 8px;
-    min-height: 46px;
-    padding: 7px 10px;
+    min-height: 40px;
+    padding: 4px 10px;
     text-align: left;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-control);
     background: var(--surface-seat);
     color: var(--paper);
     cursor: pointer
+}
+.reaction-favorite-list button > span:nth-child(2) {
+    overflow: hidden;
+    font-size: var(--font-size-compact);
+    text-overflow: ellipsis;
+    white-space: nowrap
 }
 .reaction-favorite-list button[aria-pressed="true"] {
     border-color: var(--gold);
@@ -494,6 +579,18 @@
     opacity: .45;
     cursor: not-allowed
 }
+.reaction-favorite-list kbd {
+    min-width: 22px;
+    padding: 1px 6px;
+    border: 1px solid var(--gold);
+    border-radius: var(--rounded-xs);
+    color: var(--gold-pale);
+    font: 700 var(--font-size-compact) var(--font-mono);
+    text-align: center
+}
+.reaction-favorite-check {
+    display: none
+}
 .reaction-favorite-glyph {
     font-size: 21px
 }
@@ -501,6 +598,11 @@
     width: 15px;
     height: 15px;
     color: var(--gold)
+}
+@media (max-width: 700px) {
+.reaction-favorite-columns {
+        grid-template-columns: 1fr
+    }
 }
 
 /* Seats slide in and out (#8). The independent `translate` property, not

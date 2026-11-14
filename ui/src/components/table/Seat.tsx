@@ -184,12 +184,13 @@ function SeatImpl({
   // bubble and restarts its CSS lifecycle instead of jumping mid-animation.
   chatBubble?: { id: string; message: string };
   // The live table's player menu (profile, friendship, note, mute, block,
-  // report). When present it replaces the bare note trigger, which was a
-  // single unlabelled affordance for what is now a whole set of actions.
+  // report). It receives the avatar as its `trigger`: the photo itself is the
+  // button, on desktop and on touch, and the bare note trigger only remains for
+  // surfaces that mount a seat without a menu.
   // Hand-history replay reuses this seat without one.
   // Same reason it is a render function and not a node: an element built per
   // seat per render is a new identity every time.
-  renderActionsMenu?: (seat: SeatView) => ReactNode;
+  renderActionsMenu?: (seat: SeatView, trigger: ReactNode) => ReactNode;
   // TableStage owns visual geometry. Keeping it presentation-only means the
   // server-authored player order and all hidden-card data remain untouched.
   layoutPosition?: SeatLayoutPosition;
@@ -319,12 +320,6 @@ function SeatImpl({
   const chips = useChipFormat();
   const exact = useChipExact();
   const unit = useChipUnit();
-  // Tapping the seat body opens the player menu on touch (the trigger button
-  // stretches to cover the card — see .seat-actions-trigger in renderer.css).
-  // While a reaction is being aimed, the whole seat belongs to the reaction
-  // layer instead: the attribute goes away, the overlay shrinks back to its
-  // flat badge, and the tap lands on .seat-reaction-target.
-  const seatTapOpensMenu = !reactionTargetLabel;
   return <div ref={leaving ? undefined : seatElementRef}
               data-seat-leaving={leaving ? '' : undefined}
               data-seat-joining={joining ? '' : undefined}
@@ -390,13 +385,11 @@ function SeatImpl({
         animationDelay: `${(i % 4) * 20}ms`
       } as CSSProperties}/>)}
     </span>}
-    <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
-                  isViewer={isViewer} decorative/>
-    {!isViewer && renderActionsMenu && <span className="seat-actions-trigger"
-                                              data-seat-tap={seatTapOpensMenu ? '' : undefined}>
+    {!isViewer && renderActionsMenu ? renderActionsMenu(seat, <>
+      <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url} decorative/>
       {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
-      {renderActionsMenu(seat)}
-    </span>}
+    </>) : <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
+                         isViewer={isViewer} decorative/>}
     {!isViewer && !renderActionsMenu && onEditNote && <button type="button"
                                         className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
                                         aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}

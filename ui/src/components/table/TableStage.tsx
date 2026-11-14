@@ -268,7 +268,7 @@ type Props = {
   waitingAction?: ReactNode;
   chatBubbles?: Record<string, { id: string; message: string }>;
   // Live table only: builds the per-seat player menu. Replay passes nothing.
-  renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number]) => ReactNode;
+  renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number], trigger: ReactNode) => ReactNode;
 };
 
 function TableStageImpl({

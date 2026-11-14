@@ -2031,9 +2031,8 @@
     border: 2px solid var(--gold);
     padding: 1px 5px
 }
-/* Bottom-right corner: top-right is .seat-actions-trigger's territory (it
-   sits above this badge, z-index 5), so sharing that corner hid the
-   hourglass behind the trigger entirely for every opponent seat. Bottom-left
+/* Bottom-right corner: top-right belonged to the old menu badge and the avatar
+   button (z-index 5) still outranks this badge. Bottom-left
    is .seat-streak's; this is the only free corner left. The normal
    decision-clock ring (.seat-turn-ring) and this one share the same gold
    stroke (matching ActionBar's own "time bank active" color) since they
@@ -4971,31 +4970,6 @@
 }
 .stage-v-ring .game-seat.all_in .seat-avatar {
     box-shadow: 0 0 0 3px var(--gold)
-}
-/* The player-actions trigger is a fixed 28px badge everywhere else, but that
-   reads as nearly the size of the avatar itself on the shrunk portrait ring
-   — scale it down with the chip like .seat-note-trigger already does. */
-.stage-v-ring .seat-actions-trigger {
-    --note-size: max(16px, var(--seat-size) * .46);
-    top: calc(var(--seat-size) * -.1);
-    right: calc(var(--seat-size) * -.1)
-}
-.stage-v-ring .seat-actions-trigger button {
-    width: var(--note-size);
-    height: var(--note-size)
-}
-.stage-v-ring .seat-actions-trigger button svg {
-    width: calc(var(--note-size) * .6);
-    height: calc(var(--note-size) * .6)
-}
-.stage-v-ring .seat-actions-trigger .player-note-dot {
-    top: 0;
-    right: 0;
-    width: calc(var(--note-size) * .37);
-    height: calc(var(--note-size) * .37)
-}
-.stage-v-ring .seat-actions-trigger button::before {
-    inset: calc((var(--note-size) - 44px) / 2)
 }
 /* Caption below the avatar (chip count only, the name lives in the avatar's
    initials and stays in the DOM for assistive tech); hole cards float above,
@@ -8428,7 +8402,8 @@ html:has(.has-tab-bar) {
     max-width: 900px;
     margin: -10px auto 48px;
     overflow: hidden;
-    border-block: 1px solid var(--control-border)
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel)
 }
 .reaction-store-item.owned {
     border-color: color-mix(in srgb, var(--gold) 38%, transparent);
@@ -8540,63 +8515,85 @@ html:has(.has-tab-bar) {
     cursor: not-allowed;
     opacity: .6
 }
-/* A flat affordance inside the seat card, not a chip floating off its corner:
-   the circular badge read as a second, louder control than the seat it belongs
-   to and hung over the neighbouring stack at 9-max. Quiet by default, full
-   strength once the seat is hovered or anything inside it has focus, and never
-   over the stack or the hole cards. The note dot stays at full opacity in both
-   states — it is information, not an affordance. */
-.seat-actions-trigger {
-    position: absolute;
-    z-index: 5;
-    top: 3px;
-    right: 3px;
-    display: grid;
-    place-items: center
-}
-.seat-actions-trigger .player-note-dot {
-    position: absolute;
-    top: 1px;
-    right: 1px;
-    width: 8px;
-    height: 8px;
-    z-index: 1
-}
-.seat-actions-trigger button {
+/* The avatar IS the player-menu button (it replaced the 3-dot badge). The box is
+   the avatar itself; the 44px finger target is a transparent pseudo, and the
+   hover/open ring is a second pseudo so it never fights the avatar's own
+   all-in box-shadow or folded outline. */
+.seat-avatar-trigger {
     position: relative;
-    width: 22px;
-    height: 22px;
+    z-index: 5;
+    display: flex;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
     min-width: 0;
     min-height: 0;
     padding: 0;
     border: 0;
     border-radius: var(--rounded-pill);
     background: transparent;
-    color: var(--muted-rose);
-    opacity: .6;
-    transition: opacity 150ms var(--ease-out-quart), background-color 150ms var(--ease-out-quart)
+    color: inherit;
+    cursor: pointer;
+    transition: transform 150ms var(--ease-out-quart)
 }
-.seat-actions-trigger button svg {
-    width: 15px;
-    height: 15px
+/* `.game button` pins every game button to 44px (specificity 0,1,1); the avatar
+   is a circle whose finger target is the ::before below, so it opts out. */
+.game-seat .seat-avatar-trigger {
+    min-width: 0;
+    min-height: 0
 }
-.game-seat:hover .seat-actions-trigger button,
-.game-seat:focus-within .seat-actions-trigger button,
-.seat-actions-trigger button[aria-expanded='true'] {
-    opacity: 1;
-    background: var(--surface-control)
+.seat-avatar-trigger .seat-avatar {
+    width: 100%;
+    height: 100%;
+    flex: 1 1 auto
 }
-@media (prefers-reduced-motion: reduce) {
-    .seat-actions-trigger button {
-        transition: none
-    }
-}
-/* Same invisible-padding trick as .seat-note-trigger: keep the 44px touch
-   target without inflating the visible badge. */
-.seat-actions-trigger button::before {
+.seat-avatar-trigger::before {
     content: '';
     position: absolute;
-    inset: -8px
+    inset: min(0px, calc((var(--seat-size, 32px) - 44px) / 2))
+}
+.seat-avatar-trigger::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 2px solid transparent;
+    border-radius: inherit;
+    pointer-events: none;
+    transition: border-color 150ms var(--ease-out-quart)
+}
+.seat-avatar-trigger:hover::after {
+    border-color: color-mix(in srgb, var(--gold) 60%, transparent)
+}
+.seat-avatar-trigger[aria-expanded='true']::after {
+    border-color: var(--gold)
+}
+.seat-avatar-trigger:focus-visible {
+    outline: none
+}
+.seat-avatar-trigger:focus-visible::after {
+    border-color: var(--focus-ring)
+}
+.seat-avatar-trigger:active {
+    transform: scale(.96)
+}
+.seat-avatar-trigger .player-note-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    z-index: 1;
+    width: 9px;
+    height: 9px
+}
+.stage-v-ring .seat-avatar-trigger {
+    flex: none;
+    width: 100%;
+    height: 100%
+}
+@media (prefers-reduced-motion: reduce) {
+    .seat-avatar-trigger,
+    .seat-avatar-trigger::after {
+        transition: none
+    }
 }
 @media (max-width: 640px) {
 /* Bottom sheet instead of a side panel: a 420px rail on a 360px viewport
@@ -8908,52 +8905,6 @@ html:has(.has-tab-bar) {
     }
 }
 
-/* ---------------------------------------------------------------------------
-   Touch: the seat body IS the player menu (#5). There is no hover to reveal a
-   trigger with, and a 22px badge on a 40px avatar chip is not a tap target, so
-   on coarse pointers the trigger stretches over the whole seat and its icon
-   goes away. `data-seat-tap` is Seat's own gate: while a reaction is being
-   aimed at this seat the attribute is absent, the overlay collapses back to
-   the badge, and the tap belongs to .seat-reaction-target (z-index 8) instead.
-   Keyboard is unaffected — it is the same <button>, still focusable, still
-   named "Ações para <jogador>".
-
-   `(pointer: coarse)` alone, not `(hover: none), (pointer: coarse)`: every real
-   touch device reports a coarse primary pointer, while a headless browser can
-   report `hover: none` with a fine pointer and would then screenshot the touch
-   variant of a desktop table (which is exactly what the guide capture did). */
-@media (pointer: coarse) {
-    .seat-actions-trigger[data-seat-tap] {
-        position: absolute;
-        z-index: 3;
-        inset: 0;
-        display: block
-    }
-
-    .seat-actions-trigger[data-seat-tap] button,
-    .stage-v-ring .seat-actions-trigger[data-seat-tap] button {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        border-radius: inherit;
-        background: transparent;
-        opacity: 1
-    }
-
-    .seat-actions-trigger[data-seat-tap] button svg {
-        display: none
-    }
-
-    .seat-actions-trigger[data-seat-tap] button::before {
-        inset: 0
-    }
-
-    .seat-actions-trigger[data-seat-tap] .player-note-dot {
-        top: 2px;
-        right: 2px
-    }
-}
 
 /* ---------------------------------------------------------------------------
    Touch: the seat's state WORD goes, its state does not (#round-2 item 1).

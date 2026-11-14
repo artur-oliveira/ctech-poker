@@ -351,17 +351,21 @@ describe('ReactionRefundDialog', () => {
 describe('ReactionFavoritesDialog', () => {
   const owned = new Set<string>(['fire']);
 
-  test('caps the selection at three and lets a slot be freed', async () => {
+  test('caps the selection at three per kind and lets a slot be freed', async () => {
     render(<ReactionFavoritesDialog open favorites={['clap', 'laugh'] as TableReactionID[]} owned={owned}
       saving={false} onOpenChangeAction={vi.fn()} onSaveAction={vi.fn()}/>);
-    expect(screen.getByRole('status')).toHaveTextContent('2 de 3 selecionadas');
+    const [self, target] = screen.getAllByRole('status');
+    expect(self).toHaveTextContent('2 de 3');
+    expect(target).toHaveTextContent('0 de 3');
 
     await userEvent.click(screen.getByRole('button', {name: /Uau/}));
-    expect(screen.getByRole('status')).toHaveTextContent('3 de 3 selecionadas');
+    expect(self).toHaveTextContent('3 de 3');
     expect(screen.getByRole('button', {name: /Raiva/})).toBeDisabled();
+    // The other kind has its own budget.
+    expect(screen.getByRole('button', {name: /Jogar ficha/})).toBeEnabled();
 
     await userEvent.click(screen.getByRole('button', {name: /Uau/}));
-    expect(screen.getByRole('status')).toHaveTextContent('2 de 3 selecionadas');
+    expect(self).toHaveTextContent('2 de 3');
     expect(screen.getByRole('button', {name: /Raiva/})).toBeEnabled();
   });
 
