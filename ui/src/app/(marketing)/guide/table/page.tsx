@@ -55,7 +55,9 @@ export default function TableGuide() {
           vira um HUD em destaque logo acima da barra de ações, com suas cartas maiores. Cada avatar do anel tem a
           própria pilha na sua coluna (embaixo dele, ou acima quando são as cartas que ficam embaixo), no mesmo
           dourado das fichas, com o tom ajustado por feltro para o número ficar legível sobre qualquer um deles. O
-          nome continua disponível para leitores de tela e aparece nos assentos em tela larga.</p>
+          nome do jogador aparece numa linha curta acima da pilha; em celulares muito baixos (menos de 620px de
+          altura) ele sai da tela para dar espaço, continua disponível para leitores de tela e aparece nos assentos
+          em tela larga.</p>
         <p>Nessa faixa estreita não cabe o rótulo de estado escrito, então ele sai da tela e o estado passa a ser
           desenhado no avatar: <b>contorno tracejado</b> em cinza para quem desistiu, <b>anel dourado contínuo</b>
           para quem está all-in, um <b>selo de sinal cortado</b> para quem caiu da conexão, e cinza sem cartas nem

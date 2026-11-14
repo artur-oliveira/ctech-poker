@@ -1817,6 +1817,13 @@
     white-space: nowrap;
     text-overflow: ellipsis
 }
+/* Name first, stack second: the name is what you scan for, so it takes the
+   compact size and paper weight while the gold stack stays at the tiny one. */
+.seat-info b {
+    color: var(--paper);
+    font-size: var(--font-size-compact);
+    font-weight: 700
+}
 .seat-info span {
     color: var(--gold);
     margin-top: 3px
@@ -4896,7 +4903,7 @@
     top: -3px;
     left: -3px;
     padding: 1px 4px;
-    font-size: 8px
+    font-size: 9px
 }
 .stage-v-ring .seat-role.is-dealer {
     padding: 0 3px
@@ -4905,7 +4912,7 @@
     bottom: -3px;
     left: -3px;
     padding: 1px 4px;
-    font-size: 8px
+    font-size: 9px
 }
 .stage-v-ring .seat-timebank-ring rect {
     rx: 50%;
@@ -4990,13 +4997,40 @@
 .seat-stack-unit {
     font-style: normal
 }
-.stage-v-ring .seat-info b,
 .stage-v-ring .seat-info .seat-state {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%)
+}
+/* The name is back on the ring: with a photo avatar there are no initials to
+   say who sits where, and a caption of only "5K" left the table anonymous. One
+   9px line, ellipsised inside the lane, paper on the felt with a soft shadow so
+   it also reads over the room backdrop at the top arc. */
+.stage-v-ring .seat-info b {
+    max-width: 100%;
+    color: var(--paper);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.15;
+    text-shadow: 0 1px 2px var(--black-06), 0 0 3px var(--black-06)
+}
+.stage-v-ring .seat-info span {
+    margin-top: 0
+}
+/* The shortest handsets (320x568) have no headroom above the top seat for a
+   second caption line: heads-up pushed its caption 2px past the stage. There
+   the name goes back to the accessibility tree and the avatar carries identity,
+   as it did before the name returned. */
+@media (max-height: 620px) {
+.stage-v-ring .seat-info b {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
 }
 .stage-v-ring .seat-info span {
     display: block;
@@ -8521,11 +8555,13 @@ html:has(.has-tab-bar) {
    all-in box-shadow or folded outline. */
 .seat-avatar-trigger {
     position: relative;
-    z-index: 5;
+    /* Under the role/streak/time-bank badges (z-index 4) that straddle the
+       avatar's corners; above the hole cards (1). */
+    z-index: 3;
     display: flex;
-    flex: 0 0 32px;
-    width: 32px;
-    height: 32px;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
     min-width: 0;
     min-height: 0;
     padding: 0;
@@ -8550,7 +8586,7 @@ html:has(.has-tab-bar) {
 .seat-avatar-trigger::before {
     content: '';
     position: absolute;
-    inset: min(0px, calc((var(--seat-size, 32px) - 44px) / 2))
+    inset: min(0px, calc((var(--seat-size, 36px) - 44px) / 2))
 }
 .seat-avatar-trigger::after {
     content: '';
