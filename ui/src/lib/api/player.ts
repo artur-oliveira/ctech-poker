@@ -117,6 +117,8 @@ export async function updateMe(input: {
   bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
   equipped_frame_id?: string;
+  equipped_hat_id?: string;
+  equipped_accessory_id?: string;
   equipped_badge_ids?: string[];
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;

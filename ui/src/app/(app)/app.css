@@ -7685,7 +7685,19 @@ button.deck-grid-slot:hover {
 .avatar-decoration-preview {
     display: flex;
     justify-content: center;
+    align-items: flex-end;
+    gap: 32px;
     margin-bottom: 4px
+}
+.avatar-decoration-preview figure {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    margin: 0
+}
+.avatar-decoration-preview figcaption {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
 }
 .avatar-decoration-group {
     margin: 16px 0 0;
@@ -7709,31 +7721,82 @@ button.deck-grid-slot:hover {
     flex-wrap: wrap;
     gap: 8px
 }
+/* Native radio under a chip face: arrow keys and form semantics come free;
+   the input stays in the label's box so its focus lands on the chip. */
 .avatar-decoration-option {
+    position: relative;
+    display: flex;
+    cursor: pointer
+}
+.avatar-decoration-option input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer
+}
+.avatar-decoration-option-face {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    height: 40px;
-    padding: 0 14px;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px 0 6px;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-control);
     background: var(--surface-control);
     color: var(--on-brand);
-    font: 600 var(--font-size-compact) inherit;
-    cursor: pointer
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    transition: background-color .2s, border-color .2s
 }
-.avatar-decoration-option[aria-checked='true'] {
-    border-color: var(--brand);
+.avatar-decoration-option:hover .avatar-decoration-option-face {
+    background: var(--surface-control-hover)
+}
+.avatar-decoration-option input:checked + .avatar-decoration-option-face {
+    border-color: var(--brand-bright);
     background: color-mix(in srgb, var(--brand) 18%, var(--surface-control))
 }
-.avatar-decoration-option svg {
+.avatar-decoration-option input:focus-visible + .avatar-decoration-option-face {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px
+}
+/* A neutral stand-in for the photo: the art's 64x64 box is the avatar circle. */
+.avatar-decoration-swatch {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--rounded-pill);
+    background: color-mix(in srgb, var(--text-secondary) 55%, var(--surface-seat));
+    box-shadow: inset 0 0 0 1px var(--white-13);
+    color: var(--surface-seat)
+}
+.avatar-decoration-swatch > svg:not(.lucide) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%
+}
+.avatar-decoration-swatch > .lucide {
     width: 15px;
     height: 15px
+}
+.avatar-decoration-check {
+    width: 16px;
+    height: 16px;
+    color: var(--brand-bright-7)
+}
+@media (prefers-reduced-motion: reduce) {
+    .avatar-decoration-option-face {
+        transition: none
+    }
 }
 .avatar-decoration-badges-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 0 20px;
     margin: 0;
     padding: 0;
     list-style: none
@@ -7742,6 +7805,7 @@ button.deck-grid-slot:hover {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    min-height: 44px;
     color: var(--on-brand);
     font-size: var(--font-size-body);
     cursor: pointer

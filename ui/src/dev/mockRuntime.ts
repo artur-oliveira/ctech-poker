@@ -13,7 +13,7 @@ import {TABLE_REACTIONS} from '@/lib/reactions';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import type {CosmeticLoadout} from '@/lib/api/cosmeticLoadouts';
 import type {TableThemeId} from '@/lib/tablePreferences';
-import {AVATAR_BADGES, AVATAR_FRAMES, type AvatarBadgeId, type AvatarFrameId} from '@/lib/avatarCosmetics';
+import {AVATAR_ITEMS, type AvatarSlot} from '@/lib/avatarCosmetics';
 import type {
   ActionPreselection,
   HandHistoryAction,
@@ -273,6 +273,8 @@ const mockProfile = {
   // One of each owned, so the equip picker (#292) has something to show
   // without a purchase flow standing behind it in mock-land.
   equipped_frame_id: '' as string,
+  equipped_hat_id: '' as string,
+  equipped_accessory_id: '' as string,
   equipped_badge_ids: [] as string[],
   poker_terms_accepted: true,
   showcase_public: true,
@@ -299,10 +301,14 @@ type MockSandboxPurchase = SandboxPurchase & {
 
 const mockSandboxPurchases: MockSandboxPurchase[] = [];
 
-// #292: one frame and one badge already owned, so the equip UI has something
-// to pick from without wiring a purchase/grant flow into mock-land.
-const mockOwnedFrameIDs: AvatarFrameId[] = Object.keys(AVATAR_FRAMES).slice(0, 1) as AvatarFrameId[];
-const mockOwnedBadgeIDs: AvatarBadgeId[] = Object.keys(AVATAR_BADGES) as AvatarBadgeId[];
+// #292: a spread of owned items in every slot (not all of them, so the
+// picker's "owned only" rule is visible), without a purchase/grant flow.
+const mockOwnedAvatarIDs: Record<AvatarSlot, string[]> = {
+  frame: Object.keys(AVATAR_ITEMS.frame).slice(0, 4),
+  hat: Object.keys(AVATAR_ITEMS.hat).slice(0, 4),
+  accessory: Object.keys(AVATAR_ITEMS.accessory).slice(0, 3),
+  badge: Object.keys(AVATAR_ITEMS.badge),
+};
 
 // #313: saved cosmetic loadouts, capped the same as the server
 // (internal/cosmeticloadout.maxLoadoutsPerPlayer).
@@ -828,15 +834,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       if (!body.table_theme.trim()) fail(400, 'table_theme must not be empty', config);
       mockProfile.table_theme = body.table_theme;
     }
-    if (typeof body.equipped_frame_id === 'string') {
-      if (body.equipped_frame_id && !(body.equipped_frame_id in AVATAR_FRAMES && mockOwnedFrameIDs.includes(body.equipped_frame_id))) {
-        fail(400, 'equipped_frame_id is not owned', config);
-      }
-      mockProfile.equipped_frame_id = body.equipped_frame_id;
+    for (const slot of ['frame', 'hat', 'accessory'] as const) {
+      const field = `equipped_${slot}_id` as const;
+      const id = body[field];
+      if (typeof id !== 'string') continue;
+      if (id && !mockOwnedAvatarIDs[slot].includes(id)) fail(400, `${field} is not owned`, config);
+      mockProfile[field] = id;
     }
     if (Array.isArray(body.equipped_badge_ids)) {
       if (body.equipped_badge_ids.length > 3 || new Set(body.equipped_badge_ids).size !== body.equipped_badge_ids.length ||
-        body.equipped_badge_ids.some((id: unknown) => typeof id !== 'string' || !mockOwnedBadgeIDs.includes(id as AvatarBadgeId))) {
+        body.equipped_badge_ids.some((id: unknown) => typeof id !== 'string' || !mockOwnedAvatarIDs.badge.includes(id as string))) {
         fail(400, 'invalid equipped badges', config);
       }
       mockProfile.equipped_badge_ids = [...body.equipped_badge_ids];
@@ -1282,11 +1289,9 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok(page([]), config);
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-catalog')) return ok(page([]), config);
 
-  // #292: which frame/badge ids this player owns — the equip picker's only read.
-  const ownedCosmeticsMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/cosmetics\/(frame|badge)\/owned$/) : null;
-  if (ownedCosmeticsMatch) {
-    return ok(page(ownedCosmeticsMatch[1] === 'frame' ? mockOwnedFrameIDs : mockOwnedBadgeIDs), config);
-  }
+  // #292: which ids this player owns per slot — the equip picker's only read.
+  const ownedCosmeticsMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/cosmetics\/(frame|hat|accessory|badge)\/owned$/) : null;
+  if (ownedCosmeticsMatch) return ok(page(mockOwnedAvatarIDs[ownedCosmeticsMatch[1] as AvatarSlot]), config);
 
   // #313: saved cosmetic loadouts.
   if (method === 'GET' && path === '/v1.0/players/me/cosmetic-loadouts') {
