@@ -3,6 +3,7 @@
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
 import type {HandItem} from '@/lib/api/player';
+import type {Entry} from '@/lib/api/gamification';
 import type {DeckVariantId} from '@/lib/cardVariants';
 import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
@@ -12,7 +13,7 @@ import {TABLE_REACTIONS} from '@/lib/reactions';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import type {CosmeticLoadout} from '@/lib/api/cosmeticLoadouts';
 import type {TableThemeId} from '@/lib/tablePreferences';
-import {AVATAR_BADGES, AVATAR_FRAMES, type AvatarBadgeId, type AvatarFrameId} from '@/lib/avatarCosmetics';
+import {AVATAR_ITEMS, type AvatarSlot} from '@/lib/avatarCosmetics';
 import type {
   ActionPreselection,
   HandHistoryAction,
@@ -269,9 +270,12 @@ const mockProfile = {
   wallet_mode: 'sandbox' as 'sandbox' | 'real',
   deck_variant: 'four-color' as DeckVariantId,
   table_theme: 'classic' as TableThemeId,
-  // One of each owned, so the equip picker (#292) has something to show
-  // without a purchase flow standing behind it in mock-land.
+  // Nothing equipped yet; mockOwnedAvatarIDs below owns items in all four
+  // slots, so the equip picker (#292) has something to show without a
+  // purchase flow standing behind it in mock-land.
   equipped_frame_id: '' as string,
+  equipped_hat_id: '' as string,
+  equipped_accessory_id: '' as string,
   equipped_badge_ids: [] as string[],
   poker_terms_accepted: true,
   showcase_public: true,
@@ -298,10 +302,14 @@ type MockSandboxPurchase = SandboxPurchase & {
 
 const mockSandboxPurchases: MockSandboxPurchase[] = [];
 
-// #292: one frame and one badge already owned, so the equip UI has something
-// to pick from without wiring a purchase/grant flow into mock-land.
-const mockOwnedFrameIDs: AvatarFrameId[] = Object.keys(AVATAR_FRAMES).slice(0, 1) as AvatarFrameId[];
-const mockOwnedBadgeIDs: AvatarBadgeId[] = Object.keys(AVATAR_BADGES) as AvatarBadgeId[];
+// #292: a spread of owned items in every slot (not all of them, so the
+// picker's "owned only" rule is visible), without a purchase/grant flow.
+const mockOwnedAvatarIDs: Record<AvatarSlot, string[]> = {
+  frame: Object.keys(AVATAR_ITEMS.frame).slice(0, 4),
+  hat: Object.keys(AVATAR_ITEMS.hat).slice(0, 4),
+  accessory: Object.keys(AVATAR_ITEMS.accessory).slice(0, 3),
+  badge: Object.keys(AVATAR_ITEMS.badge),
+};
 
 // #313: saved cosmetic loadouts, capped the same as the server
 // (internal/cosmeticloadout.maxLoadoutsPerPlayer).
@@ -827,15 +835,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       if (!body.table_theme.trim()) fail(400, 'table_theme must not be empty', config);
       mockProfile.table_theme = body.table_theme;
     }
-    if (typeof body.equipped_frame_id === 'string') {
-      if (body.equipped_frame_id && !(body.equipped_frame_id in AVATAR_FRAMES && mockOwnedFrameIDs.includes(body.equipped_frame_id))) {
-        fail(400, 'equipped_frame_id is not owned', config);
-      }
-      mockProfile.equipped_frame_id = body.equipped_frame_id;
+    for (const slot of ['frame', 'hat', 'accessory'] as const) {
+      const field = `equipped_${slot}_id` as const;
+      const id = body[field];
+      if (typeof id !== 'string') continue;
+      if (id && !mockOwnedAvatarIDs[slot].includes(id)) fail(400, `${field} is not owned`, config);
+      mockProfile[field] = id;
     }
     if (Array.isArray(body.equipped_badge_ids)) {
       if (body.equipped_badge_ids.length > 3 || new Set(body.equipped_badge_ids).size !== body.equipped_badge_ids.length ||
-        body.equipped_badge_ids.some((id: unknown) => typeof id !== 'string' || !mockOwnedBadgeIDs.includes(id as AvatarBadgeId))) {
+        body.equipped_badge_ids.some((id: unknown) => typeof id !== 'string' || !mockOwnedAvatarIDs.badge.includes(id as string))) {
         fail(400, 'invalid equipped badges', config);
       }
       mockProfile.equipped_badge_ids = [...body.equipped_badge_ids];
@@ -1188,10 +1197,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     // ranking page's filters are exercisable offline: a month holds a fraction
     // of a lifetime's hands, and rows arrive already ordered by the metric
     // asked for (the client only re-sorts within the page it received).
-    const lifetime = [
-      {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},
+    const lifetime: Entry[] = [
+      {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286,
+        equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown', equipped_accessory_id: 'monocle',
+        equipped_badge_ids: ['all-in-hero', 'veteran']},
       {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
-      {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
+      {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244,
+        equipped_frame_id: 'chip-ring', equipped_badge_ids: ['iron-nerve']},
+      {player_id: 'caio_goiânia', player_name: 'Caio', hands_played: 160, hands_won: 38, win_rate: .238,
+        equipped_frame_id: 'felt-ring', equipped_hat_id: 'cowboy', equipped_badge_ids: ['rainmaker']},
+      {player_id: 'nina_recife', player_name: 'Nina', hands_played: 121, hands_won: 25, win_rate: .207},
     ];
     const rows = config.params?.period === 'month'
       ? lifetime.map(entry => ({
@@ -1275,11 +1290,9 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok(page([]), config);
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-catalog')) return ok(page([]), config);
 
-  // #292: which frame/badge ids this player owns — the equip picker's only read.
-  const ownedCosmeticsMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/cosmetics\/(frame|badge)\/owned$/) : null;
-  if (ownedCosmeticsMatch) {
-    return ok(page(ownedCosmeticsMatch[1] === 'frame' ? mockOwnedFrameIDs : mockOwnedBadgeIDs), config);
-  }
+  // #292: which ids this player owns per slot — the equip picker's only read.
+  const ownedCosmeticsMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/cosmetics\/(frame|hat|accessory|badge)\/owned$/) : null;
+  if (ownedCosmeticsMatch) return ok(page(mockOwnedAvatarIDs[ownedCosmeticsMatch[1] as AvatarSlot]), config);
 
   // #313: saved cosmetic loadouts.
   if (method === 'GET' && path === '/v1.0/players/me/cosmetic-loadouts') {
@@ -1342,6 +1355,12 @@ const baseSeats = () => [
     player_id: 'bia_sp',
     name: 'Bia',
     playstyle_badge: 'explorer',
+    // Fully decorated, so dev:mock and the e2e layout gate exercise a seat
+    // wearing every cosmetic slot.
+    frame_id: 'champion-gold',
+    hat_id: 'crown',
+    accessory_id: 'monocle',
+    badge_ids: ['all-in-hero', 'veteran'],
     stack: 3925,
     state: 'active',
     dealt_in: true,
@@ -1351,6 +1370,9 @@ const baseSeats = () => [
   {
     player_id: 'leo_rio',
     name: 'Léo',
+    // A folded seat with a frame and a badge: the dashed folded outline must stay visible.
+    frame_id: 'chip-ring',
+    badge_ids: ['iron-nerve'],
     stack: 6100,
     state: 'folded',
     dealt_in: true,
@@ -1360,17 +1382,25 @@ const baseSeats = () => [
   {
     player_id: 'nina_recife',
     name: 'Nina',
+    frame_id: 'walnut-rail',
+    hat_id: 'top-hat',
+    accessory_id: 'headset',
+    badge_ids: ['rainmaker', 'social-butterfly', 'season-2026-q3-top10'],
     stack: 2775,
     state: 'active',
     dealt_in: true,
     contributed: 75,
     hole_cards: ['back', 'back']
   },
-  // Nameless on purpose — exercises the is-pending-name placeholder in dev.
-  {player_id: 'gui_bh', stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
+  // Nameless on purpose — exercises the is-pending-name placeholder in dev;
+  // decorated so the sitting-out greyscale covers the art and badges too.
+  {player_id: 'gui_bh', frame_id: 'oxblood-edge', hat_id: 'beanie', accessory_id: 'shades', badge_ids: ['veteran'],
+    stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
   {
     player_id: 'joao_floripa',
     name: 'João',
+    hat_id: 'dealer-visor',
+    accessory_id: 'bandit-mask',
     stack: 4375,
     state: 'active',
     dealt_in: true,
@@ -1380,6 +1410,10 @@ const baseSeats = () => [
   {
     player_id: 'mari_belém',
     name: 'Mari',
+    frame_id: 'season-2026-q3',
+    hat_id: 'laurel',
+    accessory_id: 'mustache',
+    badge_ids: ['season-2026-q3-champion'],
     stack: 8200,
     state: 'active',
     dealt_in: true,
@@ -1389,6 +1423,10 @@ const baseSeats = () => [
   {
     player_id: 'caio_goiânia',
     name: 'Caio',
+    // All-in with a frame: the all-in glow must still read around the ring.
+    frame_id: 'felt-ring',
+    hat_id: 'cowboy',
+    badge_ids: ['all-in-hero'],
     stack: 3400,
     state: 'all_in',
     dealt_in: true,
@@ -1435,6 +1473,10 @@ function fullHandSeats(): SeatView[] {
       player_id: 'bia_sp',
       name: 'Bia',
       playstyle_badge: 'explorer',
+      frame_id: 'champion-gold',
+      hat_id: 'crown',
+      accessory_id: 'monocle',
+      badge_ids: ['all-in-hero', 'veteran'],
       stack: 3925,
       state: 'active',
       dealt_in: true,

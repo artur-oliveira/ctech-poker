@@ -13,6 +13,7 @@ import {useOptionalSession} from "@/lib/auth/session";
 import {getViewerId} from '@/lib/utils';
 import {AppPage} from '@/components/AppPageChrome';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {decorProps} from '@/lib/avatarCosmetics';
 import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
 import {ProfileMilestones} from '@/components/ProfileMilestones';
@@ -133,7 +134,8 @@ function ProfileContent() {
           : <>
           <header>
             <PlayerAvatar className="profile-showcase-avatar" name={showcase.data.name}
-                          avatarUrl={showcase.data.avatar_url} size={68}/>
+                          avatarUrl={showcase.data.avatar_url} size={68}
+                          {...decorProps(showcase.data)}/>
             <div>
               <small>VITRINE DO JOGADOR</small>
               <h1>{showcase.data.name || 'Jogador'}</h1>

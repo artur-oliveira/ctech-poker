@@ -3,6 +3,7 @@ import {apiClient} from './client';
 import type {DeckVariantId} from '../cardVariants';
 import type {PlaystyleBadge} from '../playstyle';
 import type {TableThemeId} from '../tablePreferences';
+import type {EquippedCosmetics} from '../avatarCosmetics';
 
 export type WalletMode = 'sandbox' | 'real';
 
@@ -48,7 +49,7 @@ export function normalizeShowcaseLayout(layout?: ShowcaseLayout): ShowcaseLayout
   return {order, hidden};
 }
 
-export interface PlayerProfile {
+export interface PlayerProfile extends EquippedCosmetics {
   user_id: string;
   name?: string;
   avatar_url?: string;
@@ -72,11 +73,9 @@ export interface PlayerProfile {
   bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
   playstyle?: PlaystyleBadge[];
-  // Seasonal avatar decorations (#292). Both are equip-only fields: which
-  // frames/badges exist and which this player owns comes from
+  // Equipped avatar cosmetics (#292) come from EquippedCosmetics. Equip-only:
+  // which items exist and which this player owns comes from
   // listOwnedAvatarCosmetics, never from the profile itself.
-  equipped_frame_id?: string;
-  equipped_badge_ids?: string[];
   // Populated only when the player has a wallet-alert threshold configured
   // (#304) AND the current balance crosses it — absent or empty otherwise.
   // Notification-only: never used here to gate a purchase or any other
@@ -118,12 +117,14 @@ export async function updateMe(input: {
   bet_preset_mode?: BetPresetMode;
   showcase_layout?: ShowcaseLayout;
   equipped_frame_id?: string;
+  equipped_hat_id?: string;
+  equipped_accessory_id?: string;
   equipped_badge_ids?: string[];
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }
 
-export interface ProfileShowcase {
+export interface ProfileShowcase extends EquippedCosmetics {
   player_id: string;
   name?: string;
   avatar_url?: string;
@@ -196,7 +197,7 @@ export async function getSessions(cursor?: string) {
 
 export type HandOutcome = 'won' | 'lost' | 'tied';
 
-export interface OpponentSummary {
+export interface OpponentSummary extends EquippedCosmetics {
   player_id: string;
   name?: string;
   avatar_url?: string;

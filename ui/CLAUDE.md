@@ -233,6 +233,34 @@ off by default — do not build UI that assumes real money is on.
   `AvatarImage` is never draggable or saveable (`draggable=false`, `pointer-events:none`,
   no context menu): a photo is identity, not a download. The render prop takes the
   seat *and* the trigger, both stable per seat, so the renders-per-snapshot budget holds.
+  **Avatar cosmetics (#292, spec `docs/specs/2026-11-14-avatar-cosmetics.md`).** A frame, a hat,
+  an accessory and up to three badges are composed client-side over the avatar. The registry is
+  `lib/avatarCosmetics.ts`: `AVATAR_ITEMS` (ids and pt-BR labels per slot), `avatarItemLabel`
+  (unknown id falls back to the raw id), `EquippedCosmetics` (the REST `equipped_*` fields) and
+  `decorProps` (those fields to `PlayerAvatar` props, keeping the array reference). Art lives in
+  `components/avatar/`: `FRAME_ART`, `HAT_ART`, `ACCESSORY_ART` (inline SVG in a 64x64 box, the
+  avatar circle r=32, paint only `var(--cosmetic-*)`) and `BADGE_ART` + `BADGE_TONE` (a lucide
+  glyph plus a tone). Layer order is accessory < hat < frame; the frame is an SVG ring overlay,
+  never CSS `outline` (that stays for focus and the folded/all-in states). DESIGN.md "Avatar
+  cosmetics art contract" holds the zones. `PlayerAvatar` takes `frameId`/`hatId`/`accessoryId`/
+  `badgeIds`; with none of them its markup is **byte-identical** to a plain avatar, and an id the
+  registry does not know renders nothing (an unknown badge falls back to a medal glyph). `Seat`
+  forwards the four proto fields (`frame_id`, `hat_id`, `accessory_id`, `badge_ids`) and memoises
+  `badgeIds` on its content, so a fresh array per frame does not cost a render. Seat CSS hooks in
+  `renderer.css`: the wrapper fills the trigger only as `.game-seat > .player-avatar-decorated`
+  (and the trigger's), the art and badge row follow the sitting-out/disconnected/pending
+  greyscale of the portrait ring, and the badge row is hidden on the 24px landscape ring seat.
+  Badge size is 40% of the avatar clamped to 12-20px: a CSS formula on seats
+  (`min(20px, max(12px, var(--seat-size) * .4))`), an inline `--avatar-badge-size` when
+  `PlayerAvatar` gets a `size` (the header menu passes 36 for that reason). Leaderboard rows
+  and the podium decorate every player but show a photo only for showcase-public players (the
+  server sends `avatar_url` only for them). The
+  `/player-profile` pickers (`AvatarDecorationSection`) list owned ids only, plus "Nenhuma"
+  (borda) / "Nenhum" (chapéu, acessório) and an equipped id that is no longer owned, so the
+  picker always matches the preview; save sends only the changed fields. Known dead code, left
+  on purpose: the `[data-slot='avatar']` rules at `app.css` (`.player-profile-avatar`) and
+  `renderer.css` (`.profile-menu-avatar`) were found dead in the phase 2 review and are not
+  removed in that change.
 - **Favorite reactions are 3 + 3, pinned to keys 3-8.** The server caps favorites at three
   per kind (`maxFavoritesPerKind`, `targeted` from the catalogue) and `favoriteSlots`
   (`lib/reactions.ts`) pins self ones to 3-5 and thrown ones to 6-8 whatever the counts, so a

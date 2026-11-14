@@ -1,4 +1,4 @@
-import {type CSSProperties, memo, type ReactNode, useCallback, useEffect, useState} from 'react';
+import {type CSSProperties, memo, type ReactNode, useCallback, useEffect, useMemo, useState} from 'react';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
@@ -310,6 +310,12 @@ function SeatImpl({
   // "Ausente" there reads as if the ready click did nothing.
   const sittingOutReady = seat.state === 'sitting_out' && seat.ready === true;
   const playstyle = seat.playstyle_badge ? playstyleMeta(seat.playstyle_badge) : undefined;
+  // Every decoded frame carries a fresh badge_ids array; key the prop on its
+  // content so PlayerAvatar sees one identity while the badges are unchanged.
+  const badgeKey = seat.badge_ids?.join(',') ?? '';
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content, not identity
+  const badgeIds = useMemo(() => seat.badge_ids, [badgeKey]);
+  const avatarDecor = {frameId: seat.frame_id, hatId: seat.hat_id, accessoryId: seat.accessory_id, badgeIds};
   const seatStyle = layoutPosition ? {
     '--seat-s': layoutPosition.s,
     '--seat-t': layoutPosition.t,
@@ -386,10 +392,10 @@ function SeatImpl({
       } as CSSProperties}/>)}
     </span>}
     {!isViewer && renderActionsMenu ? renderActionsMenu(seat, <>
-      <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url} decorative/>
+      <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url} decorative {...avatarDecor}/>
       {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
     </>) : <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
-                         isViewer={isViewer} decorative/>}
+                         isViewer={isViewer} decorative {...avatarDecor}/>}
     {!isViewer && !renderActionsMenu && onEditNote && <button type="button"
                                         className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
                                         aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}

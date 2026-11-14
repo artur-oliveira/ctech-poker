@@ -11,6 +11,12 @@ export interface SeatView {
   name?: string;
   avatar_url?: string;
   playstyle_badge?: string;
+  // Equipped cosmetics (proto Seat 22-25). The decoded proto object is the
+  // SeatView, so these keep the proto names; badge_ids decodes as [] when none.
+  frame_id?: string;
+  hat_id?: string;
+  accessory_id?: string;
+  badge_ids?: string[];
   run_it_twice?: boolean;
   auto_rebuy?: boolean;
   connection_state?: 'connected' | 'disconnected';

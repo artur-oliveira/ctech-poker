@@ -69,7 +69,7 @@ export default function PlayerProfilePage() {
           ? <>
             <IdentitySection key={`identity:${me.name ?? ''}:${me.avatar_url ?? ''}`} me={me}/>
             <AvatarDecorationSection
-              key={`avatar-decoration:${me.equipped_frame_id ?? ''}:${(me.equipped_badge_ids || []).join(',')}`}
+              key={`avatar-decoration:${me.equipped_frame_id ?? ''}:${me.equipped_hat_id ?? ''}:${me.equipped_accessory_id ?? ''}:${(me.equipped_badge_ids || []).join(',')}`}
               me={me}/>
             <ShowcaseSection
               key={`showcase:${me.showcase_public}:${me.playstyle_public}:${me.table_public}:${(me.featured_achievements || []).join(',')}:${JSON.stringify(me.showcase_layout || {})}`}

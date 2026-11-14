@@ -71,6 +71,29 @@ describe('community leaderboard page', () => {
       .getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
   });
 
+  // The board response already carries avatar_url (public showcases only) and
+  // the equipped cosmetics: the row and podium render them, no extra request.
+  test('rows and podium show the avatar with its decoration; a row without a photo shows initials', () => {
+    mocks.boardQuery = boardState([
+      {...entries[0], avatar_url: 'https://cdn.test/ana.png', equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown'},
+      entries[1], entries[2],
+      {...entries[3], avatar_url: 'https://cdn.test/dani.png', equipped_frame_id: 'chip-ring',
+        equipped_accessory_id: 'monocle', equipped_badge_ids: ['veteran']},
+      {player_id: 'fifth', player_name: 'Edu Lima', hands_played: 40, hands_won: 2, win_rate: .05},
+    ]);
+    render(<Ranking/>);
+
+    const podiumFirst = screen.getByLabelText('Pódio do ranking').querySelector('.podium-card.rank-1')!;
+    expect(podiumFirst.querySelectorAll('.player-avatar-art > svg')).toHaveLength(2);
+    const dani = screen.getByText('Dani').closest('article')!;
+    expect(dani.querySelector('.player-avatar-decorated')).toBeInTheDocument();
+    expect(dani.querySelectorAll('.player-avatar-art > svg')).toHaveLength(2);
+    expect(dani.querySelectorAll('.player-avatar-badge')).toHaveLength(1);
+    const edu = screen.getByText('Edu Lima').closest('article')!;
+    expect(edu.querySelector('.player-avatar-decorated')).not.toBeInTheDocument();
+    expect(within(edu).getByText('EL')).toBeInTheDocument();
+  });
+
   test('uses a list without podium for fewer than three entries and singularizes one player', () => {
     mocks.boardQuery = boardState([entries[1]]);
     mocks.rankQuery = rankState({ranked: true, rank: 1, total: 1, entry: entries[1]});

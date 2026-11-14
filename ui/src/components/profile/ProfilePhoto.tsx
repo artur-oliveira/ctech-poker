@@ -12,21 +12,24 @@ import {useAvatarRemove, useAvatarUpload} from '@/lib/hooks/useProfileEdits';
  * `useAvatarUpload`'s, so the two surfaces cannot drift on what a photo costs
  * or what the player is told afterwards.
  */
-export function ProfilePhotoEditor({name, avatarUrl, size, className, frameId, badgeIds}: {
+export function ProfilePhotoEditor({name, avatarUrl, size, className, frameId, hatId, accessoryId, badgeIds}: {
   name?: string;
   avatarUrl?: string;
   size: number;
   className: string;
-  /** Equipped seasonal frame/badges (#292) — only `/player-profile` passes
-   * these today; the header popover renders the plain avatar it always has. */
+  /** Equipped cosmetics (#292) — only `/player-profile` passes these today
+   * (spread `decorProps(me)`); the header popover renders the plain avatar. */
   frameId?: string;
+  hatId?: string;
+  accessoryId?: string;
   badgeIds?: string[];
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const upload = useAvatarUpload();
 
   return <div className={className}>
-    <PlayerAvatar name={name} avatarUrl={avatarUrl} size={size} frameId={frameId} badgeIds={badgeIds}/>
+    <PlayerAvatar name={name} avatarUrl={avatarUrl} size={size} frameId={frameId} hatId={hatId}
+                  accessoryId={accessoryId} badgeIds={badgeIds}/>
     <Button type="button" size="icon" className="profile-avatar-camera absolute" disabled={upload.isPending}
             aria-label={avatarUrl ? 'Trocar foto de perfil' : 'Adicionar foto de perfil'}
             onClick={() => fileInput.current?.click()}>

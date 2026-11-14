@@ -89,6 +89,13 @@ describe('PeopleList', () => {
     expect(loadMore).toHaveBeenCalled();
   });
 
+  test('decorates the row avatar with the equipped cosmetics', () => {
+    const {container} = renderWithClient(<PeopleList variant="friends" items={[player({relationship: 'friend',
+      equipped_frame_id: 'chip-ring', equipped_badge_ids: ['veteran']})]} actions={actionState()} emptyTitle="vazio"/>);
+    expect(container.querySelector('.people-row .player-avatar-art > svg')).toBeInTheDocument();
+    expect(container.querySelectorAll('.people-row .player-avatar-badge')).toHaveLength(1);
+  });
+
   test('answers an incoming request from the row itself', async () => {
     const actions = actionState();
     renderWithClient(<PeopleList variant="incoming" items={[player({relationship: 'incoming'})]} actions={actions}

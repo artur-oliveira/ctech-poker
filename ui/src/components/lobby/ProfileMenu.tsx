@@ -19,6 +19,7 @@ import {
 import {getMe, type WalletMode} from '@/lib/api/player';
 import {endSession, logout} from '@/lib/auth/oauth';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {decorProps} from '@/lib/avatarCosmetics';
 import {Button, Input, Skeleton} from '@aoctech/ui';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {ProfilePhotoEditor, ProfilePhotoRemoveButton} from '@/components/profile/ProfilePhoto';
@@ -112,7 +113,7 @@ export function ProfileMenu() {
         {balanceLabel}
       </Link>
       <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Abrir perfil"/>}>
-        <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url}/>
+        <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url} size={36} {...decorProps(me)}/>
       </PopoverTrigger>
     </div>
     <PopoverContent className="profile-menu-content" aria-label="Perfil e preferências">

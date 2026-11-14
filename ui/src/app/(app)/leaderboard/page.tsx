@@ -20,6 +20,8 @@ import {RecoveryState} from '@/components/RecoveryState';
 import type {WalletMode} from '@/lib/api/player';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {FilterGroup} from '@/components/FilterGroup';
+import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {decorProps} from '@/lib/avatarCosmetics';
 
 // The intro stagger reads as motion only while the eye can still follow each
 // row landing; past ~10 it is just latency before the list is usable. Rows
@@ -79,9 +81,12 @@ function RankingRow({entry, rank, viewer, metric}: {
   const {lead, support, aside} = figures(entry, metric);
   return <>
     <b>{String(rank).padStart(2, '0')}</b>
-    <span>
-      {playerName(entry.player_id, viewer, entry.player_name)}{isViewer && ' (Você)'}
-      <small>{aside}</small>
+    <span className="ranking-player">
+      <PlayerAvatar name={entry.player_name} avatarUrl={entry.avatar_url} size={28} decorative {...decorProps(entry)}/>
+      <span>
+        {playerName(entry.player_id, viewer, entry.player_name)}{isViewer && ' (Você)'}
+        <small>{aside}</small>
+      </span>
     </span>
     <strong>
       {lead}
@@ -255,6 +260,8 @@ export default function Ranking() {
                                className={`podium-card rank-${rank}${isViewer ? ' viewer' : ''}`}>
                         {rank === 1 && <Crown className="podium-crown" aria-hidden="true"/>}
                         <span className="podium-badge">{rank}º Lugar</span>
+                        <PlayerAvatar name={player.player_name} avatarUrl={player.avatar_url}
+                                      size={rank === 1 ? 64 : 56} decorative {...decorProps(player)}/>
                         <strong className="podium-name">
                           {playerName(player.player_id, viewer, player.player_name)}
                           {isViewer && ' (Você)'}

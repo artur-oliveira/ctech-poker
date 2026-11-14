@@ -465,4 +465,33 @@ describe('Seat chip amounts and the touch tap target', () => {
                    reactionTargetLabel="Jogar tomate" onReactionTarget={vi.fn()}/>);
     expect(container.querySelector('.seat-reaction-target')).toBeInTheDocument();
   });
+
+  // Equipped cosmetics ride the proto seat (frame_id/hat_id/accessory_id/
+  // badge_ids). The state hooks (folded dashed outline, all-in ring) target
+  // `.seat-avatar`, so the decoration wrapper must leave that class on the
+  // avatar itself, on both the plain path and the menu-trigger path.
+  const decorated = {frame_id: 'champion-gold', hat_id: 'crown', accessory_id: 'monocle',
+    badge_ids: ['all-in-hero', 'veteran']};
+  test.each(['folded', 'all_in'])('a %s seat keeps .seat-avatar and renders its cosmetics', state => {
+    const {container} = render_({seat: seat({state, ...decorated})});
+    const seatEl = container.querySelector(`.game-seat.${state}`)!;
+    const avatar = seatEl.querySelector('.player-avatar-decorated > .seat-avatar');
+    expect(avatar).toBeInTheDocument();
+    expect(seatEl.querySelectorAll('.player-avatar-art > svg')).toHaveLength(3);
+    expect(seatEl.querySelectorAll('.player-avatar-badge')).toHaveLength(2);
+  });
+
+  test('the menu trigger avatar carries the cosmetics too', () => {
+    const {container} = render_({seat: seat({state: 'all_in', ...decorated}),
+      renderActionsMenu: (_, trigger) => <button type="button" className="seat-avatar-trigger">{trigger}</button>});
+    const trigger = container.querySelector('.seat-avatar-trigger')!;
+    expect(trigger.querySelector('.player-avatar-decorated > .seat-avatar')).toBeInTheDocument();
+    expect(trigger.querySelectorAll('.player-avatar-badge')).toHaveLength(2);
+  });
+
+  test('a seat with no cosmetics renders the bare avatar', () => {
+    const {container} = render_();
+    expect(container.querySelector('.player-avatar-decorated')).not.toBeInTheDocument();
+    expect(container.querySelector('.game-seat > .seat-avatar')).toBeInTheDocument();
+  });
 });

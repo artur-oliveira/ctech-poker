@@ -2,6 +2,7 @@
 import {useState} from 'react';
 import {Button, Field, Input} from '@aoctech/ui';
 import {ProfilePhotoEditor, ProfilePhotoRemoveButton} from '@/components/profile/ProfilePhoto';
+import {decorProps} from '@/lib/avatarCosmetics';
 import {type PlayerProfile} from '@/lib/api/player';
 import {useProfileNameSave} from '@/lib/hooks/useProfileEdits';
 
@@ -27,7 +28,7 @@ export function IdentitySection({me}: {me: PlayerProfile}) {
     </header>
     <div className="player-profile-identity">
       <ProfilePhotoEditor className="player-profile-avatar" name={me.name} avatarUrl={me.avatar_url} size={96}
-                          frameId={me.equipped_frame_id} badgeIds={me.equipped_badge_ids}/>
+                          {...decorProps(me)}/>
       <form className="player-profile-name" onSubmit={event => {
         event.preventDefault();
         if (changed) save.saveName(name);

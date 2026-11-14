@@ -138,6 +138,9 @@ jobs:
               # renderer.css holds the seat/rail/felt geometry (route-scoped aggregate,
               # #84). #506 changed only it and the cross-browser job was skipped.
               - 'ui/src/app/renderer.css'
+              - 'ui/src/components/avatar/**'
+              - 'ui/src/components/ui/player-avatar.tsx'
+              - 'ui/src/dev/mockRuntime.ts'
               - 'ui/src/components/table/**'
               - 'ui/src/components/reactions/**'
               - 'ui/src/lib/hooks/useTable*.ts'

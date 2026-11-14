@@ -1,6 +1,6 @@
 # Avatar cosmetics: borders, hats, accessories, badges
 
-Status: approved; phase 1 implemented, phases 2-3 pending. Date: 2026-11-14. Builds on issue #292 (seasonal frames and badges).
+Status: approved; phase 1 and 2 implemented, phase 3 pending. Date: 2026-11-14. Builds on issue #292 (seasonal frames and badges).
 
 ## Intent
 
@@ -119,6 +119,7 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
 
 1. **Backend and wire:** catalog fields, new kinds, window enforcement, profile fields, equip validation, refund guard, proto + snapshots + identity push, leaderboard payload.
 2. **Art and rendering:** SVG set, `PlayerAvatar`, seat, profile preview, leaderboard rows, tokens, `DESIGN.md`, layout-gate and render-budget tests, real handset pass.
+   *Phase 2 as built* (plan `docs/plans/2026-11-14-avatar-cosmetics-phase2.md`, branch `feat/avatar-cosmetics-ui`): deviations from the line above. The server catalog entries for the **earnable** items (achievement/season sources) landed in phase 2, not 3, so those ids are equippable as soon as they are granted; the **purchasable** items' art ships now but has no catalog entry, SKU or price, so it stays unobtainable until phase 3. Badges are hidden on the 24px landscape ring seat (a 12px badge covered a quarter of the chip) and shown everywhere else. The real-handset pass was not done in phase 2 and the WebKit layout gate runs only in CI.
 3. **Obtaining:** purchasable kinds in store (fichas + PIX), `products` entries, achievement grant table and WS toast, backfill, season trigger if the hook exists.
 
 ## Tests

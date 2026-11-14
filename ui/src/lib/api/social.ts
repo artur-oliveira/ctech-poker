@@ -1,6 +1,7 @@
 import type {Page} from './client';
 import {apiClient} from './client';
 import type {Room} from './rooms';
+import type {EquippedCosmetics} from '../avatarCosmetics';
 
 export type SocialRelationship = 'none' | 'outgoing' | 'incoming' | 'friend';
 export type PresenceStatus = 'online' | 'offline' | 'in_table';
@@ -9,7 +10,7 @@ export type SocialEventStatus = 'pending' | 'accepted' | 'declined';
 
 /** Minimal social DTO. The server never publishes whether the *other* player
  * blocked the viewer, so there is deliberately no `blocked_by_other` here. */
-export interface SocialPlayer {
+export interface SocialPlayer extends EquippedCosmetics {
   player_id: string;
   name?: string;
   avatar_url?: string;
@@ -25,7 +26,7 @@ export interface SocialPlayer {
   room_id?: string;
 }
 
-export interface SocialInboxEvent {
+export interface SocialInboxEvent extends EquippedCosmetics {
   event_id: string;
   type: SocialEventType;
   actor_id: string;
