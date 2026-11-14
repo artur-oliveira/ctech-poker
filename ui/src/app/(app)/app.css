@@ -7546,44 +7546,6 @@ button.deck-grid-slot:hover {
     width: 16px;
     height: 16px
 }
-/* Seasonal avatar frame/badges (#292) — decorative composition, never
-   server-rendered. `player-avatar-decorated` only exists in the DOM when
-   badges are equipped (see PlayerAvatar); a frame alone stays on the plain
-   [data-slot='avatar'] element with no extra wrapper, so every caller that
-   never passes frameId/badgeIds (every seat, every other avatar in the app)
-   renders byte-identical to before this field existed. */
-[data-slot='avatar'][data-frame] {
-    outline: 3px solid var(--gold-pale);
-    outline-offset: 2px
-}
-[data-slot='avatar'][data-frame='champion-gold'] {
-    outline-color: var(--gold)
-}
-.player-avatar-decorated {
-    position: relative;
-    display: inline-flex
-}
-.player-avatar-badges {
-    position: absolute;
-    left: -4px;
-    bottom: -4px;
-    display: flex;
-    gap: 2px
-}
-.player-avatar-badge {
-    display: grid;
-    place-items: center;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--ink);
-    border-radius: var(--rounded-pill);
-    background: var(--gold);
-    color: var(--gold-ink)
-}
-.player-avatar-badge svg {
-    width: 11px;
-    height: 11px
-}
 .player-profile-name {
     display: grid;
     gap: 14px;

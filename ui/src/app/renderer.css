@@ -4972,7 +4972,10 @@
    pending-entry only need it here, where no state word is painted. */
 .stage-v-ring .game-seat.sitting_out .seat-avatar,
 .stage-v-ring .game-seat.disconnected .seat-avatar,
-.stage-v-ring .game-seat.is-pending-name .seat-avatar {
+.stage-v-ring .game-seat.is-pending-name .seat-avatar,
+.stage-v-ring .game-seat.sitting_out .player-avatar-art,
+.stage-v-ring .game-seat.disconnected .player-avatar-art,
+.stage-v-ring .game-seat.is-pending-name .player-avatar-art {
     filter: grayscale(1) opacity(.65)
 }
 .stage-v-ring .game-seat.all_in .seat-avatar {
@@ -5981,7 +5984,8 @@
 
     /* "Você" already identifies the hero HUD; removing the duplicate avatar
        buys enough width to keep the primary stack value untruncated. */
-    .stage-v > .game-seat.viewer .seat-avatar {
+    .stage-v > .game-seat.viewer .seat-avatar,
+    .stage-v > .game-seat.viewer .player-avatar-decorated {
         display: none
     }
 }
@@ -6126,7 +6130,8 @@
         top: calc(100% + 2px)
     }
 /* --- the viewer's own card strip (right column, above the dock) --- */
-    .stage-h > .game-seat.viewer .seat-avatar {
+    .stage-h > .game-seat.viewer .seat-avatar,
+    .stage-h > .game-seat.viewer .player-avatar-decorated {
         display: none
     }
 .stage-h > .game-seat.viewer .seat-cards {
@@ -8630,6 +8635,59 @@ html:has(.has-tab-bar) {
     .seat-avatar-trigger::after {
         transition: none
     }
+}
+/* Equipped avatar cosmetics (#292, DESIGN.md "Avatar cosmetics art contract").
+   PlayerAvatar adds this wrapper only when something is equipped; it takes the
+   avatar's place without changing its geometry: content-sized where the avatar
+   has its own size, the whole slot where the avatar fills its parent (the menu
+   trigger, the ring chip). Here, not app.css, because Seat renders it on
+   /table, /hands, /share and the landing demo as well as the profile. */
+.player-avatar-decorated {
+    --avatar-badge-size: 20px;
+    position: relative;
+    display: inline-flex;
+    flex: none
+}
+.seat-avatar-trigger > .player-avatar-decorated,
+.stage-v-ring .player-avatar-decorated {
+    width: 100%;
+    height: 100%
+}
+/* Exactly the avatar's box (the art's 64x64 viewBox is that box). Everything
+   paints inside it, so the all-in box-shadow and folded outline, both outside
+   the box, stay visible; and the trigger's ::after ring comes later in tree
+   order, so it paints over the art. */
+.player-avatar-art,
+.player-avatar-art > svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none
+}
+.game-seat .player-avatar-decorated {
+    --avatar-badge-size: max(12px, var(--seat-size, 36px) * .4)
+}
+.player-avatar-badges {
+    position: absolute;
+    left: calc(var(--avatar-badge-size) * -.2);
+    bottom: calc(var(--avatar-badge-size) * -.2);
+    display: flex;
+    gap: 2px
+}
+.player-avatar-badge {
+    display: grid;
+    place-items: center;
+    width: var(--avatar-badge-size);
+    height: var(--avatar-badge-size);
+    border: 2px solid var(--ink);
+    border-radius: var(--rounded-pill);
+    background: var(--gold);
+    color: var(--gold-ink)
+}
+.player-avatar-badge svg {
+    width: calc(var(--avatar-badge-size) * .55);
+    height: calc(var(--avatar-badge-size) * .55)
 }
 @media (max-width: 640px) {
 /* Bottom sheet instead of a side panel: a 420px rail on a 360px viewport

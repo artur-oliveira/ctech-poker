@@ -3,39 +3,58 @@ import type {CSSProperties} from 'react';
 import {Medal} from 'lucide-react';
 import {Avatar, AvatarFallback, AvatarImage} from './avatar';
 import {avatarBadgeLabel} from '@/lib/avatarCosmetics';
+import {ACCESSORY_ART} from '@/components/avatar/accessories';
+import {BADGE_ART} from '@/components/avatar/badges';
+import {FRAME_ART} from '@/components/avatar/frames';
+import {HAT_ART} from '@/components/avatar/hats';
 import {cn, initials} from '@/lib/utils';
 
-export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className, decorative = false, frameId, badgeIds}: {
+export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className, decorative = false,
+                               frameId, hatId, accessoryId, badgeIds}: {
   name?: string;
   avatarUrl?: string;
   size?: number;
   isViewer?: boolean;
   className?: string;
   decorative?: boolean;
-  /** Equipped seasonal avatar frame (#292) — `data-frame` selects the ring
-   * style in CSS. `undefined` (every caller except the profile screens)
-   * renders byte-identical to before this field existed. */
+  /** Equipped cosmetics (#292), composed client-side over the avatar as SVG
+   * art in its 64x64 box (DESIGN.md "Avatar cosmetics art contract"). With
+   * none set the markup is byte-identical to a plain avatar; an id the
+   * registry doesn't know renders nothing. Pass primitives (and a memoised
+   * `badgeIds`) so a memoised `Seat` keeps its render budget. */
   frameId?: string;
-  /** Up to three equipped seasonal badges (#292), rendered as a small row
-   * under the avatar. Composition, not server rendering, per the issue's own
-   * "client composes, server never renders the avatar" decision. */
+  hatId?: string;
+  accessoryId?: string;
+  /** Up to three equipped badges, a small row under the avatar. */
   badgeIds?: string[];
 }) {
   const label = isViewer ? 'Você' : name || 'Jogador';
   const style = size ? {width: size, height: size} as CSSProperties : undefined;
   const avatar = <Avatar className={cn(className)} style={style}
-                         data-frame={frameId || undefined} role={decorative ? undefined : 'img'}
+                         role={decorative ? undefined : 'img'}
                          aria-label={decorative ? undefined : `Avatar de ${label}`} aria-hidden={decorative || undefined}>
     {avatarUrl && <AvatarImage src={avatarUrl} alt=""/>}
     <AvatarFallback>{isViewer ? 'EU' : initials(name)}</AvatarFallback>
   </Avatar>;
-  if (!badgeIds?.length) return avatar;
+  if (!frameId && !hatId && !accessoryId && !badgeIds?.length) return avatar;
+  // Bottom to top: accessory, hat, frame (the ring sits over the photo edge).
+  const Accessory = accessoryId ? ACCESSORY_ART[accessoryId] : undefined;
+  const Hat = hatId ? HAT_ART[hatId] : undefined;
+  const Frame = frameId ? FRAME_ART[frameId] : undefined;
   return <span className="player-avatar-decorated">
     {avatar}
-    <span className="player-avatar-badges" aria-hidden="true">
-      {badgeIds.map(id => <span key={id} className="player-avatar-badge" title={avatarBadgeLabel(id)}>
-        <Medal aria-hidden="true"/>
-      </span>)}
-    </span>
+    {(frameId || hatId || accessoryId) && <span className="player-avatar-art" aria-hidden="true">
+      {Accessory && <Accessory/>}
+      {Hat && <Hat/>}
+      {Frame && <Frame/>}
+    </span>}
+    {!!badgeIds?.length && <span className="player-avatar-badges" aria-hidden="true">
+      {badgeIds.map(id => {
+        const Glyph = BADGE_ART[id] ?? Medal;
+        return <span key={id} className="player-avatar-badge" title={avatarBadgeLabel(id)}>
+          <Glyph aria-hidden="true"/>
+        </span>;
+      })}
+    </span>}
   </span>;
 }
