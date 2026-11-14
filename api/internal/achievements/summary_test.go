@@ -65,3 +65,23 @@ func TestBuildSummaryFoldsWholeCatalog(t *testing.T) {
 		t.Fatal("totals.MaxStars unset")
 	}
 }
+
+func TestStarsFor(t *testing.T) {
+	cases := []struct {
+		key   string
+		count int
+		want  int
+	}{
+		{KeyHandsPlayed, 0, 0},
+		{KeyHandsPlayed, 99, 0},
+		{KeyHandsPlayed, 100, 1},
+		{KeyHandsPlayed, 1000, 2},
+		{KeyHandsPlayed, 999999, 5}, // past the top tier: highest stars, skipped tiers included
+		{"no_such_key", 1000, 0},
+	}
+	for _, c := range cases {
+		if got := StarsFor(c.key, c.count); got != c.want {
+			t.Errorf("StarsFor(%q, %d) = %d, want %d", c.key, c.count, got, c.want)
+		}
+	}
+}

@@ -123,9 +123,9 @@ var catalog = []CatalogEntry{
 	{Kind: KindFelt, ID: "burgundy", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_burgundy"},
 	{Kind: KindFelt, ID: "ocean", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_ocean"},
 
-	// Frames/badges are always Premium (so ownership is never universal —
-	// see the KindFrame/KindBadge doc comment above) but carry no SKU/price:
-	// they are granted, not sold.
+	// Season frames/badges: always Premium (so ownership is never universal —
+	// see the KindFrame/KindBadge doc comment above), no SKU/price and no
+	// From/Until window yet; nothing grants them until a season-close hook exists.
 	{Kind: KindFrame, ID: "season-2026-q3", Premium: true, Source: SourceSeason},
 	{Kind: KindFrame, ID: "champion-gold", Premium: true, Source: SourceSeason},
 	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true, Source: SourceSeason},
@@ -142,6 +142,18 @@ var catalog = []CatalogEntry{
 	{Kind: KindBadge, ID: "rainmaker", Premium: true, Source: SourceAchievement},
 	{Kind: KindBadge, ID: "veteran", Premium: true, Source: SourceAchievement},
 	{Kind: KindBadge, ID: "social-butterfly", Premium: true, Source: SourceAchievement},
+
+	// Sold for fichas or Pix (phase 3); fichas = cents x 1000.
+	{Kind: KindFrame, ID: "felt-ring", Premium: true, Source: SourcePurchase, PriceFichas: 600000, SKU: "poker_frame_felt_ring"},
+	{Kind: KindFrame, ID: "walnut-rail", Premium: true, Source: SourcePurchase, PriceFichas: 800000, SKU: "poker_frame_walnut_rail"},
+	{Kind: KindFrame, ID: "oxblood-edge", Premium: true, Source: SourcePurchase, PriceFichas: 1000000, SKU: "poker_frame_oxblood_edge"},
+	{Kind: KindHat, ID: "top-hat", Premium: true, Source: SourcePurchase, PriceFichas: 300000, SKU: "poker_hat_top_hat"},
+	{Kind: KindHat, ID: "cowboy", Premium: true, Source: SourcePurchase, PriceFichas: 400000, SKU: "poker_hat_cowboy"},
+	{Kind: KindHat, ID: "beanie", Premium: true, Source: SourcePurchase, PriceFichas: 200000, SKU: "poker_hat_beanie"},
+	{Kind: KindAccessory, ID: "shades", Premium: true, Source: SourcePurchase, PriceFichas: 300000, SKU: "poker_accessory_shades"},
+	{Kind: KindAccessory, ID: "monocle", Premium: true, Source: SourcePurchase, PriceFichas: 500000, SKU: "poker_accessory_monocle"},
+	{Kind: KindAccessory, ID: "mustache", Premium: true, Source: SourcePurchase, PriceFichas: 200000, SKU: "poker_accessory_mustache"},
+	{Kind: KindAccessory, ID: "headset", Premium: true, Source: SourcePurchase, PriceFichas: 400000, SKU: "poker_accessory_headset"},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
@@ -177,6 +189,19 @@ func IsKnown(kind Kind, id string) bool {
 func IsPremium(kind Kind, id string) bool {
 	e, ok := byID[catalogKey(kind, id)]
 	return ok && e.Premium
+}
+
+// Purchasable reports whether an entry is sold through cosmeticpurchase: an
+// avatar item with Source purchase, or a deck/felt item (no Source) with a SKU.
+// Earnable (achievement/season) items are granted, never sold.
+func (e CatalogEntry) Purchasable() bool {
+	return e.Source == SourcePurchase || (e.Source == "" && e.SKU != "")
+}
+
+// Purchasable is CatalogEntry.Purchasable by (kind, id); false if unknown.
+func Purchasable(kind Kind, id string) bool {
+	e, ok := byID[catalogKey(kind, id)]
+	return ok && e.Purchasable()
 }
 
 // SKUFor returns the wallet SKU and fichas price for a premium item, or

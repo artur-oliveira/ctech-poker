@@ -305,9 +305,11 @@ const mockSandboxPurchases: MockSandboxPurchase[] = [];
 // #292: a spread of owned items in every slot (not all of them, so the
 // picker's "owned only" rule is visible), without a purchase/grant flow.
 const mockOwnedAvatarIDs: Record<AvatarSlot, string[]> = {
-  frame: Object.keys(AVATAR_ITEMS.frame).slice(0, 4),
-  hat: Object.keys(AVATAR_ITEMS.hat).slice(0, 4),
-  accessory: Object.keys(AVATAR_ITEMS.accessory).slice(0, 3),
+  // A mix per slot, so the store shows owned, earned-but-locked (chip-ring,
+  // laurel) and purchasable items side by side.
+  frame: ['season-2026-q3', 'champion-gold', 'felt-ring'],
+  hat: ['dealer-visor', 'crown', 'top-hat'],
+  accessory: ['bandit-mask', 'shades'],
   badge: Object.keys(AVATAR_ITEMS.badge),
 };
 
@@ -1285,6 +1287,29 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     ];
     // Nothing is bought in mock-land, so only the free items come back owned.
     const entries = (kind === 'deck' ? deckCatalog : feltCatalog).map(entry => ({...entry, owned: !entry.premium}));
+    return ok(page(entries), config);
+  }
+  // Avatar items (frame, hat, accessory): every store state on one page. Owned
+  // follows mockOwnedAvatarIDs (what the profile picker lists), earned ones
+  // carry no price, and the cowboy hat's sale window is closed.
+  const avatarCatalogMatch = method === 'GET' ? path.match(/^\/v1\.0\/wallet\/cosmetic-purchase\/(frame|hat|accessory)\/catalog$/) : null;
+  if (avatarCatalogMatch) {
+    const kind = avatarCatalogMatch[1] as 'frame' | 'hat' | 'accessory';
+    const earned: Record<string, 'achievement' | 'season'> = {
+      'season-2026-q3': 'season', 'champion-gold': 'season', 'chip-ring': 'achievement', 'dealer-visor': 'achievement',
+      'crown': 'achievement', 'laurel': 'achievement', 'bandit-mask': 'achievement',
+    };
+    const cents: Record<string, number> = {
+      'felt-ring': 600, 'walnut-rail': 800, 'oxblood-edge': 1000, 'top-hat': 300, 'cowboy': 400, 'beanie': 200,
+      'shades': 300, 'monocle': 500, 'mustache': 200, 'headset': 400,
+    };
+    const entries = Object.keys(AVATAR_ITEMS[kind]).map(id => {
+      const owned = mockOwnedAvatarIDs[kind].includes(id);
+      return earned[id]
+        ? {kind, id, premium: true, owned, source: earned[id], available: true}
+        : {kind, id, premium: true, owned, source: 'purchase', available: owned || id !== 'cowboy',
+          price_cents: cents[id], price_fichas: cents[id] * 1000};
+    });
     return ok(page(entries), config);
   }
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok(page([]), config);

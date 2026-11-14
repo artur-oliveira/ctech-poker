@@ -329,6 +329,15 @@ func TestThePixNamesWhatWasBoughtAndLivesAnHour(t *testing.T) {
 	if got := strings.Join(b.payerMessages, " | "); got != "Pacote de 55.000 fichas | Poker: baralho golden" {
 		t.Fatalf("messages = %q", got)
 	}
+	for sku, want := range map[string]string{
+		"poker_frame_felt_ring":  "Poker: moldura felt ring",
+		"poker_hat_top_hat":      "Poker: chapéu top hat",
+		"poker_accessory_shades": "Poker: acessório shades",
+	} {
+		if got := productMessage(sku); got != want {
+			t.Errorf("%s = %q, want %q", sku, got, want)
+		}
+	}
 	for _, l := range b.lifetimes {
 		if l != time.Hour {
 			t.Fatalf("lifetime = %v", l)

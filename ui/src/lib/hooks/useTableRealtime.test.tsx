@@ -2,6 +2,7 @@ import {act, renderHook, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import type {ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playSound} from '@/lib/sound';
+import {pushNotification} from '@/lib/notify';
 import {useTableRealtime} from './useTableRealtime';
 import {MIGRATION_NOTICE_FALLBACK} from '@/lib/tableResilience';
 
@@ -49,7 +50,10 @@ vi.mock('@/lib/api/client', () => ({
 }));
 
 vi.mock('@/lib/auth/oauth', () => ({doRefresh: auth.refresh}));
+const queryClient = vi.hoisted(() => ({invalidateQueries: vi.fn()}));
+vi.mock('@tanstack/react-query', () => ({useQueryClient: () => queryClient}));
 vi.mock('@/lib/sound', () => ({playSound: vi.fn()}));
+vi.mock('@/lib/notify', () => ({pushNotification: vi.fn()}));
 vi.mock('@/lib/network/NetworkProvider', () => ({
   useApiLiveness: () => ({status: 'available', reason: null, checkedAt: 1}),
 }));
@@ -680,6 +684,44 @@ describe('useTableRealtime', () => {
     expect(result.current.unlock).toBeNull();
   });
   
+  describe('cosmetic_unlocked', () => {
+    const notified = () => vi.mocked(pushNotification).mock.calls;
+    beforeEach(() => vi.mocked(pushNotification).mockClear());
+
+    test('notifies once with the item label', () => {
+      renderHook(() => useTableRealtime('table-1', VIEWER));
+      receive({type: 'cosmetic_unlocked', cosmetic_kind: 'hat', cosmetic_id: 'crown'});
+      expect(notified()).toEqual([['Novo item desbloqueado: Coroa. Equipe em Perfil.', 'info']]);
+    });
+
+    test('refreshes the owned and catalog queries once per frame', () => {
+      queryClient.invalidateQueries.mockClear();
+      renderHook(() => useTableRealtime('table-1', VIEWER));
+      receive({type: 'cosmetic_unlocked', cosmetic_kind: 'hat', cosmetic_id: 'crown'});
+      expect(queryClient.invalidateQueries.mock.calls).toEqual([
+        [{queryKey: ['wallet', 'avatar-cosmetic-owned']}],
+        [{queryKey: ['wallet', 'cosmetic-catalog']}],
+      ]);
+    });
+
+    test('unknown id and unknown kind fall back to the id', () => {
+      renderHook(() => useTableRealtime('table-1', VIEWER));
+      receive({type: 'cosmetic_unlocked', cosmetic_kind: 'hat', cosmetic_id: 'new-hat'});
+      receive({type: 'cosmetic_unlocked', cosmetic_kind: 'wing', cosmetic_id: 'crown'});
+      expect(notified().map(([text]) => text)).toEqual([
+        'Novo item desbloqueado: new-hat. Equipe em Perfil.',
+        'Novo item desbloqueado: crown. Equipe em Perfil.',
+      ]);
+    });
+
+    test('ignores a frame without id or kind', () => {
+      renderHook(() => useTableRealtime('table-1', VIEWER));
+      receive({type: 'cosmetic_unlocked', cosmetic_kind: 'hat'});
+      receive({type: 'cosmetic_unlocked', cosmetic_id: 'crown'});
+      expect(notified()).toEqual([]);
+    });
+  });
+
   test('updates only equity that belongs to the latest snapshot version', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     receive({type: 'state', snapshot: snapshot({snapshot_version: 7})});

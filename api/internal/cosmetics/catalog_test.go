@@ -1,6 +1,7 @@
 package cosmetics
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -115,6 +116,17 @@ func TestAvatarCatalogInvariants(t *testing.T) {
 	}
 }
 
+// ListCatalog no longer fails loud (ErrCatalogMismatch) for a premium entry
+// that is not purchasable, so a premium deck/felt entry missing its SKU or
+// price would silently show no price; pin it here instead.
+func TestPremiumDeckFeltHaveSKUAndPrice(t *testing.T) {
+	for _, e := range catalog {
+		if e.Premium && e.Source == "" && (e.SKU == "" || e.PriceFichas <= 0) {
+			t.Fatalf("%v/%s premium without Source needs SKU and price", e.Kind, e.ID)
+		}
+	}
+}
+
 func TestAvailable(t *testing.T) {
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	until := from.Add(24 * time.Hour)
@@ -184,6 +196,30 @@ func TestAvatarCatalogLaunchIDs(t *testing.T) {
 			if !ok || !e.Premium || e.Source != SourceAchievement {
 				t.Errorf("%s/%s: want premium achievement entry, got %+v (found=%v)", kind, id, e, ok)
 			}
+		}
+	}
+}
+
+func TestAvatarPurchasableCatalog(t *testing.T) {
+	want := []struct {
+		kind  Kind
+		id    string
+		cents int64
+	}{
+		{KindFrame, "felt-ring", 600}, {KindFrame, "walnut-rail", 800}, {KindFrame, "oxblood-edge", 1000},
+		{KindHat, "top-hat", 300}, {KindHat, "cowboy", 400}, {KindHat, "beanie", 200},
+		{KindAccessory, "shades", 300}, {KindAccessory, "monocle", 500}, {KindAccessory, "mustache", 200}, {KindAccessory, "headset", 400},
+	}
+	for _, w := range want {
+		var got *CatalogEntry
+		for _, e := range All(w.kind) {
+			if e.ID == w.id {
+				got = &e
+			}
+		}
+		sku := "poker_" + string(w.kind) + "_" + strings.ReplaceAll(w.id, "-", "_")
+		if got == nil || !got.Premium || got.Source != SourcePurchase || got.SKU != sku || got.PriceFichas != w.cents*1000 || !got.From.IsZero() || !got.Until.IsZero() {
+			t.Errorf("%s/%s = %+v, want purchase %s %d fichas", w.kind, w.id, got, sku, w.cents*1000)
 		}
 	}
 }

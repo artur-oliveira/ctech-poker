@@ -71,8 +71,11 @@ whenever a players store is wired) are all **fixed**; older docs that still list
   implemented** on branch `feat/avatar-cosmetics`; phase 2 (art and rendering: SVG set, `PlayerAvatar`, seat, profile
   pickers, leaderboard rows, earnable catalog ids), plan
   [`plans/2026-11-14-avatar-cosmetics-phase2.md`](plans/2026-11-14-avatar-cosmetics-phase2.md), **implemented** on
-  branch `feat/avatar-cosmetics-ui`; phase 3 (obtaining: purchasable kinds in the store, grants, backfill)
-  **designed**.
+  branch `feat/avatar-cosmetics-ui`; phase 3 (obtaining: frames/hats/accessories sold for fichas or Pix, achievement
+  grant table with the `cosmetic_unlocked` toast, self-heal backfill on the owned read), plan
+  [`plans/2026-11-14-avatar-cosmetics-phase3.md`](plans/2026-11-14-avatar-cosmetics-phase3.md), **implemented** on
+  branch `feat/avatar-cosmetics-shop`. Pending: season-grant trigger, real-handset and WebKit verification,
+  social-butterfly mapping review.
 - [`2026-09-18-handeval-equity-optimization`](specs/2026-09-18-handeval-equity-optimization.md) — packed perfect-hash evaluation, precomputed preflop equity, lazy sampling, exact heads-up rivers, and benchmark results.
 
 - `plans/2026-08-16-social-friends-safety-and-recent.md` — plano full-stack de amizade mútua, presença, convites

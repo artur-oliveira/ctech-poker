@@ -33,7 +33,7 @@ export default function AchievementsGuide() {
       },
       {
         id: 'secretas', title: 'Conquistas secretas e avisos', summary: 'Metas secretas entram no catálogo depois do primeiro marco.',
-        body: <><p>Algumas situações raras não são antecipadas. Ao alcançar o primeiro nível, a conquista passa a aparecer no catálogo e um aviso de desbloqueio surge onde você estiver, inclusive na mesa, sem cobrir o resultado da mão.</p>
+        body: <><p>Algumas situações raras não são antecipadas. Ao alcançar o primeiro nível, a conquista passa a aparecer no catálogo e um aviso de desbloqueio surge onde você estiver, inclusive na mesa, sem cobrir o resultado da mão. Quando a conquista também libera um item de avatar, um segundo aviso informa o item (por exemplo, &ldquo;Novo item desbloqueado: Coroa. Equipe em Perfil.&rdquo;).</p>
           <p>O aviso conta o evento; a página de Conquistas continua sendo a fonte do progresso total e do próximo requisito.</p></>
       },
       {

@@ -29,8 +29,10 @@ function pageState(rows: unknown[], overrides: Record<string, unknown> = {}) {
 }
 
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: ({queryKey}: { queryKey: string[] }) =>
-    mocks.queryState[queryKey.join('.')] ?? queryState(undefined),
+  useQuery: ({queryKey, enabled = true}: { queryKey: string[]; enabled?: boolean }) => {
+    mocks.enabledFor[queryKey.join('.')] = enabled;
+    return mocks.queryState[queryKey.join('.')] ?? queryState(undefined);
+  },
   useInfiniteQuery: ({queryKey, enabled = true}: { queryKey: string[]; enabled?: boolean }) => {
     mocks.enabledFor[queryKey.join('.')] = enabled;
     return {
@@ -573,5 +575,62 @@ describe('store cosmetics and reactions', () => {
       .getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.queryState['wallet.cosmetic-catalog.felt'].refetch).toHaveBeenCalledOnce();
     expect(mocks.queryState['wallet.cosmetic-purchases.felt'].refetch).toHaveBeenCalledOnce();
+  });
+  // Task 7 / store initial-load budget: the avatar departments are below the
+  // fold, so neither their catalogs nor their histories are part of first paint.
+  test('defers each avatar catalog and history until its own department comes into view', () => {
+    const observed: {callback: IntersectionObserverCallback; ids: string[]}[] = [];
+    vi.stubGlobal('IntersectionObserver', class {
+      ids: string[] = [];
+      constructor(public callback: IntersectionObserverCallback) {
+        observed.push({callback, ids: this.ids});
+      }
+      observe = (node: Element) => void this.ids.push(node.id);
+      disconnect = vi.fn();
+      unobserve = vi.fn();
+    });
+    mocks.queryState['wallet.cosmetic-catalog.hat'] = queryState([
+      {kind: 'hat', id: 'top-hat', premium: true, owned: false, source: 'purchase', available: true,
+        price_cents: 300, price_fichas: 300_000},
+    ]);
+    try {
+      render(<Store/>);
+      for (const kind of ['frame', 'hat', 'accessory']) {
+        expect(mocks.enabledFor[`wallet.cosmetic-catalog.${kind}`]).toBe(false);
+        expect(mocks.enabledFor[`wallet.cosmetic-purchases.${kind}`]).toBe(false);
+      }
+      // A department not reached yet is a skeleton, never a half-painted grid.
+      expect(screen.getByText('Carregando chapéus…')).toBeInTheDocument();
+      expect(screen.queryByRole('list', {name: 'Catálogo de chapéus'})).not.toBeInTheDocument();
+
+      const hats = observed.find(entry => entry.ids.includes('chapeus'))!;
+      act(() => hats.callback([{isIntersecting: true} as IntersectionObserverEntry], {} as IntersectionObserver));
+      expect(mocks.enabledFor['wallet.cosmetic-catalog.hat']).toBe(true);
+      expect(mocks.enabledFor['wallet.cosmetic-purchases.hat']).toBe(true);
+      expect(mocks.enabledFor['wallet.cosmetic-catalog.frame']).toBe(false);
+      expect(mocks.enabledFor['wallet.cosmetic-catalog.accessory']).toBe(false);
+      expect(screen.getByRole('list', {name: 'Catálogo de chapéus'})).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test('lists the avatar departments in the directory with their anchors', () => {
+    render(<Store/>);
+    const directory = screen.getByRole('navigation', {name: 'Seções da loja'});
+    for (const [name, anchor] of [['Molduras', 'molduras'], ['Chapéus', 'chapeus'], ['Acessórios', 'acessorios']]) {
+      expect(within(directory).getByText(name).closest('a')).toHaveAttribute('href', `#${anchor}`);
+      expect(screen.getByRole('heading', {level: 2, name}).closest('section')).toHaveAttribute('id', anchor);
+    }
+  });
+
+  test('a purchasable hat opens its purchase dialog', async () => {
+    mocks.queryState['wallet.cosmetic-catalog.hat'] = queryState([
+      {kind: 'hat', id: 'top-hat', premium: true, owned: false, source: 'purchase', available: true,
+        price_cents: 300, price_fichas: 300_000},
+    ]);
+    render(<Store/>);
+    fireEvent.click(within(screen.getByRole('list', {name: 'Catálogo de chapéus'})).getByRole('button', {name: 'Liberar'}));
+    expect(await screen.findByRole('heading', {name: 'Liberar Cartola'})).toBeInTheDocument();
   });
 });

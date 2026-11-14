@@ -8,15 +8,13 @@ import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, Di
 import {ApiError} from '@/lib/api/client';
 import type {CosmeticKind, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 import {cardPath} from '@/lib/cards';
-import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
+import type {DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
 import {moneyExact} from '@/lib/chips';
-
-function labelFor(kind: CosmeticKind, itemId: string) {
-  return kind === 'deck' ? DECK_VARIANTS[itemId as DeckVariantId]?.label : TABLE_THEMES[itemId as TableThemeId]?.label;
-}
+import {AvatarItemPreview, cosmeticItemLabel, isAvatarStoreKind} from '@/components/store/CosmeticStoreSection';
 
 function CosmeticPreview({kind, itemId}: { kind: CosmeticKind; itemId: string }) {
+  if (isAvatarStoreKind(kind)) return <AvatarItemPreview kind={kind} id={itemId} size={32}/>;
   if (kind === 'deck') return <Image src={cardPath('As', itemId as DeckVariantId)} alt="" width={32} height={45}/>;
   const theme = TABLE_THEMES[itemId as TableThemeId];
   return <span className="felt-swatch"
@@ -40,7 +38,7 @@ export function CosmeticRefundDialog({kind, purchase, finalFocusRef, onCloseActi
   const [state, setState] = useState<'confirm' | 'pending' | 'success' | 'error'>('confirm');
   const [error, setError] = useState('');
   if (!purchase) return null;
-  const label = labelFor(kind, purchase.item_id);
+  const label = cosmeticItemLabel(kind, purchase.item_id);
 
   async function confirm() {
     setState('pending');

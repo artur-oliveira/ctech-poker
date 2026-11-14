@@ -41,7 +41,7 @@ const TOPICS = [
   },
   {
     href: '/guide/store', icon: ShoppingBag, title: 'Loja', time: '5 min',
-    description: 'Reações premium, baralhos, feltros, recompensa diária, pacotes via Pix e estornos.',
+    description: 'Reações premium, baralhos, feltros, visual do avatar, recompensa diária, pacotes via Pix e estornos.',
     features: ['Premium', 'Pix', 'Estornos']
   },
   {

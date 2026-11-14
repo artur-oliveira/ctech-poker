@@ -2,6 +2,8 @@ import {act, renderHook, waitFor as rtlWaitFor} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {useTableRealtime} from './useTableRealtime';
 
+const queryClient = vi.hoisted(() => ({invalidateQueries: vi.fn()}));
+vi.mock('@tanstack/react-query', () => ({useQueryClient: () => queryClient}));
 vi.mock('@aoctech/ws-client', () => ({
   useWebSocket: () => ({status: 'disconnected', attempt: 0, send: vi.fn(() => false), reconnect: vi.fn()}),
   MAX_RECONNECT_ATTEMPTS: 8,

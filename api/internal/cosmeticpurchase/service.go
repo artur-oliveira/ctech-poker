@@ -24,6 +24,7 @@ var (
 	ErrUnknownItem        = errors.New("cosmeticpurchase: unknown cosmetic")
 	ErrNotAvailable       = errors.New("cosmeticpurchase: item is outside its sale window")
 	ErrNotPremium         = errors.New("cosmeticpurchase: cosmetic is not premium")
+	ErrNotPurchasable     = errors.New("cosmeticpurchase: cosmetic is earned, not sold")
 	ErrInUse              = errors.New("cosmeticpurchase: cosmetic is the player's current selection, cannot refund")
 	ErrAlreadyOwned       = errors.New("cosmeticpurchase: cosmetic already owned")
 	ErrPurchasePending    = errors.New("cosmeticpurchase: another purchase is already in progress")
@@ -64,6 +65,11 @@ type CatalogEntry struct {
 	Owned       bool  `json:"owned"`
 	PriceCents  int64 `json:"price_cents,omitempty"`
 	PriceFichas int64 `json:"price_fichas,omitempty"`
+	// Source is how an avatar item is obtained (purchase|achievement|season);
+	// empty for deck/felt. Earnable entries carry no price.
+	Source string `json:"source,omitempty"`
+	// Available reports whether the item is inside its sale window now.
+	Available bool `json:"available"`
 }
 
 // currentSelectionFunc reports the ids of kind the player currently has
@@ -143,10 +149,16 @@ func (s *Service) ListCatalog(ctx context.Context, playerID string, kind cosmeti
 		priceBySKU[sku.ID] = sku.PriceCents
 	}
 	all := cosmetics.All(kind)
+	now := s.now()
 	out := make([]CatalogEntry, 0, len(all))
 	for _, e := range all {
-		entry := CatalogEntry{ID: e.ID, Premium: e.Premium, Kind: string(e.Kind), Owned: !e.Premium || owned[e.ID]}
-		if e.Premium {
+		entry := CatalogEntry{
+			ID: e.ID, Premium: e.Premium, Kind: string(e.Kind), Owned: !e.Premium || owned[e.ID],
+			Source: string(e.Source), Available: cosmetics.Available(kind, e.ID, now),
+		}
+		// Earnable (achievement/season) items are granted, never sold: no
+		// price and no wallet SKU to match.
+		if e.Premium && e.Purchasable() {
 			entry.PriceFichas = e.PriceFichas
 			price, found := priceBySKU[e.SKU]
 			if !found || price <= 0 {
@@ -159,18 +171,58 @@ func (s *Service) ListCatalog(ctx context.Context, playerID string, kind cosmeti
 	return out, nil
 }
 
+// purchasableSKU resolves the SKU and fichas price of an item a player may
+// buy, refusing an unknown, free or earnable one before anything is written.
+// An earnable item is Premium with no SKU: it must never reach the wallet.
+func purchasableSKU(kind cosmetics.Kind, itemID string) (string, int64, error) {
+	sku, priceFichas, ok := cosmetics.SKUFor(kind, itemID)
+	switch {
+	case !ok && !cosmetics.IsKnown(kind, itemID):
+		return "", 0, ErrUnknownItem
+	case !ok:
+		return "", 0, ErrNotPremium
+	case !cosmetics.Purchasable(kind, itemID) || sku == "" || priceFichas <= 0:
+		return "", 0, ErrNotPurchasable
+	}
+	return sku, priceFichas, nil
+}
+
+// requireOpenWindow refuses a fresh purchase outside the item's sale window
+// with ErrNotAvailable, before any reservation is written. A replay of a
+// purchase this same request (player, item, method, idempotency key) already
+// reserved inside the window is let through, so it resolves to its existing
+// record instead of failing after the window closes: that intent was accepted
+// in-window and may already have moved money. One extra GetItem, only when the
+// window is closed.
+func (s *Service) requireOpenWindow(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, requestKey string) error {
+	if cosmetics.Available(kind, itemID, s.now()) {
+		return nil
+	}
+	ent, err := s.entitlements.Get(ctx, playerID, kind, itemID)
+	if err != nil {
+		return err
+	}
+	if ent != nil && ent.RequestKey == requestKey {
+		return nil
+	}
+	if ent.active() {
+		return ErrAlreadyOwned // owning it is the truer answer than "window closed"
+	}
+	return ErrNotAvailable
+}
+
 // CreateReal first reserves the single purchasable slot, then opens a PIX
 // purchase and atomically links its local history. The reservation is not
 // ownership: only a wallet-confirmed status activates it.
 func (s *Service) CreateReal(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, idemKey string) (Record, walletclient.ProductPurchase, error) {
-	sku, priceFichas, ok := cosmetics.SKUFor(kind, itemID)
-	if !ok {
-		if !cosmetics.IsKnown(kind, itemID) {
-			return Record{}, walletclient.ProductPurchase{}, ErrUnknownItem
-		}
-		return Record{}, walletclient.ProductPurchase{}, ErrNotPremium
+	sku, priceFichas, err := purchasableSKU(kind, itemID)
+	if err != nil {
+		return Record{}, walletclient.ProductPurchase{}, err
 	}
 	requestKey := purchaseRequestKey(playerID, kind, itemID, methodPIX, idemKey)
+	if err := s.requireOpenWindow(ctx, playerID, kind, itemID, requestKey); err != nil {
+		return Record{}, walletclient.ProductPurchase{}, err
+	}
 	reservation, created, err := s.entitlements.Reserve(ctx, Entitlement{
 		PlayerID: playerID, Kind: string(kind), ItemID: itemID, PurchaseMethod: methodPIX,
 		Status: statusPending, RequestKey: requestKey, IdemKey: idemKey, CreatedAt: s.now().UTC().Format(time.RFC3339Nano),
@@ -393,15 +445,15 @@ func (s *Service) syncProductPurchase(ctx context.Context, purchase *walletclien
 // its idempotent wallet debit. A successful debit atomically confirms history
 // and ownership; an ambiguous call can be resumed without charging twice.
 func (s *Service) CreateSandbox(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, idemKey string) (Record, error) {
-	_, priceFichas, ok := cosmetics.SKUFor(kind, itemID)
-	if !ok {
-		if !cosmetics.IsKnown(kind, itemID) {
-			return Record{}, ErrUnknownItem
-		}
-		return Record{}, ErrNotPremium
+	_, priceFichas, err := purchasableSKU(kind, itemID)
+	if err != nil {
+		return Record{}, err
+	}
+	requestKey := purchaseRequestKey(playerID, kind, itemID, methodFichas, idemKey)
+	if err := s.requireOpenWindow(ctx, playerID, kind, itemID, requestKey); err != nil {
+		return Record{}, err
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
-	requestKey := purchaseRequestKey(playerID, kind, itemID, methodFichas, idemKey)
 	purchaseID := sandboxPurchaseID(requestKey)
 	rec := Record{
 		PlayerID: playerID, PurchaseID: purchaseID, Kind: string(kind), ItemID: itemID, Method: methodFichas,
@@ -588,10 +640,9 @@ func (s *Service) IsOwned(ctx context.Context, playerID string, kind cosmetics.K
 }
 
 // OwnedIDs lists the item ids of kind this player owns, with no wallet call
-// at all — the read the frame/badge equip UI needs (#292): those kinds are
-// never sold through this service's wallet routes (validCosmeticKind only
-// ever accepts deck/felt), so ListCatalog's wallet-price merge does not apply
-// to them and would fail on their empty SKU.
+// at all — the read the avatar equip UI needs (#292). Badges are never sold
+// (validCosmeticKind refuses them), so they have no ListCatalog; frames, hats
+// and accessories do, since phase 3 sells their purchase-source items.
 func (s *Service) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.Kind) (map[string]bool, error) {
 	return s.entitlements.OwnedIDs(ctx, playerID, kind)
 }
@@ -603,18 +654,20 @@ func (s *Service) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.
 // (e.g. "season:2026-q3-top10"), stored in the same PurchaseID column a real
 // purchase would use. A repeat grant of an already-active entitlement is a
 // no-op, not an error, so a retried or duplicated milestone trigger can never
-// double-write or fail loudly for something already true.
-func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) error {
+// double-write or fail loudly for something already true. created is true only
+// when this call wrote the active entitlement; every no-op and error reports
+// false, which is what lets the hand pipeline announce a new item exactly once.
+func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) (bool, error) {
 	if !cosmetics.IsKnown(kind, itemID) {
-		return ErrUnknownItem
+		return false, ErrUnknownItem
 	}
 	if !cosmetics.Available(kind, itemID, s.now()) {
 		// Window closed: an already-owned item stays an idempotent no-op so a
 		// retried grant is safe; anything else must not create ownership.
 		if ent, err := s.entitlements.Get(ctx, playerID, kind, itemID); err == nil && ent != nil && ent.active() {
-			return nil
+			return false, nil
 		}
-		return ErrNotAvailable
+		return false, ErrNotAvailable
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	err := s.entitlements.Put(ctx, Entitlement{
@@ -625,13 +678,13 @@ func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kin
 		if dynamo.IsConditionFailed(err) {
 			existing, getErr := s.entitlements.Get(ctx, playerID, kind, itemID)
 			if getErr == nil && existing.active() {
-				return nil
+				return false, nil
 			}
 		}
-		return fmt.Errorf("cosmeticpurchase: grant entitlement: %w", err)
+		return false, fmt.Errorf("cosmeticpurchase: grant entitlement: %w", err)
 	}
 	s.invalidate(ctx, playerID, kind, itemID)
-	return nil
+	return true, nil
 }
 
 // Refresh is the polling safety net. PIX purchases are always re-verified with

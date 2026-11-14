@@ -346,7 +346,7 @@ export interface ClientMessage {
 
 /** ServerMessage is sent from the server to the client. */
 export interface ServerMessage {
-  /** "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "cosmetic_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count" */
+  /** "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "cosmetic_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count" | "cosmetic_unlocked" */
   type: string;
   /** payload fields */
   conn_id: string;
@@ -396,6 +396,10 @@ export interface ServerMessage {
     | undefined;
   /** for social_inbox_count */
   unread_count: number;
+  /** for cosmetic_unlocked: avatar slot of the newly granted item (frame|hat|accessory|badge) */
+  cosmetic_kind: string;
+  /** for cosmetic_unlocked: catalog id of the newly granted item (the client owns the art) */
+  cosmetic_id: string;
 }
 
 /**
@@ -4586,6 +4590,8 @@ function createBaseServerMessage(): ServerMessage {
     purchase_id: "",
     social_event: undefined,
     unread_count: 0,
+    cosmetic_kind: "",
+    cosmetic_id: "",
   };
 }
 
@@ -4653,6 +4659,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     if (message.unread_count !== 0) {
       writer.uint32(168).int32(message.unread_count);
+    }
+    if (message.cosmetic_kind !== "") {
+      writer.uint32(178).string(message.cosmetic_kind);
+    }
+    if (message.cosmetic_id !== "") {
+      writer.uint32(186).string(message.cosmetic_id);
     }
     return writer;
   },
@@ -4838,6 +4850,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.unread_count = reader.int32();
             continue;
           }
+          case 22: {
+            if (tag !== 178) {
+              break;
+            }
+
+            message.cosmetic_kind = reader.string();
+            continue;
+          }
+          case 23: {
+            if (tag !== 186) {
+              break;
+            }
+
+            message.cosmetic_id = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -4917,6 +4945,16 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         : isSet(object.unread_count)
         ? globalThis.Number(object.unread_count)
         : 0,
+      cosmetic_kind: isSet(object.cosmeticKind)
+        ? globalThis.String(object.cosmeticKind)
+        : isSet(object.cosmetic_kind)
+        ? globalThis.String(object.cosmetic_kind)
+        : "",
+      cosmetic_id: isSet(object.cosmeticId)
+        ? globalThis.String(object.cosmeticId)
+        : isSet(object.cosmetic_id)
+        ? globalThis.String(object.cosmetic_id)
+        : "",
     };
   },
 
@@ -4985,6 +5023,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     if (message.unread_count !== 0) {
       obj.unreadCount = Math.round(message.unread_count);
     }
+    if (message.cosmetic_kind !== "") {
+      obj.cosmeticKind = message.cosmetic_kind;
+    }
+    if (message.cosmetic_id !== "") {
+      obj.cosmeticId = message.cosmetic_id;
+    }
     return obj;
   },
 
@@ -5018,6 +5062,8 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       ? SocialEvent.fromPartial(object.social_event)
       : undefined;
     message.unread_count = object.unread_count ?? 0;
+    message.cosmetic_kind = object.cosmetic_kind ?? "";
+    message.cosmetic_id = object.cosmetic_id ?? "";
     return message;
   },
 };

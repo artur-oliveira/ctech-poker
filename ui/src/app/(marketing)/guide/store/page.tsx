@@ -5,18 +5,19 @@ import {GuideBullets, GuideCallout, GuideLink, GuidePage, GuideSteps, GuideTerm,
 
 export default function StoreGuide() {
   return <GuidePage icon={ShoppingBag} eyebrow="LOJA" title="Reações, cosméticos e fichas"
-    description="Reações premium, baralhos, feltros, recompensa diária, pacotes via Pix e o histórico de tudo o que você liberou."
+    description="Reações premium, baralhos, feltros, molduras, chapéus, acessórios, recompensa diária, pacotes via Pix e o histórico de tudo o que você liberou."
     currentHref="/guide/store" next={{href: '/guide/profile', label: 'Configurar meu perfil'}} sections={[
       {
-        id: 'secoes', title: 'Os seis departamentos', summary: 'O diretório no topo leva direto à seção certa.',
+        id: 'secoes', title: 'Os nove departamentos', summary: 'O diretório no topo leva direto à seção certa.',
         image: {src: '/guide/store-live.webp', alt: 'Loja com o diretório de reações, baralhos, feltro, combos, fichas e compras'},
         body: <><p>Abra a <b>Loja</b> na navegação ou toque no saldo ao lado do avatar. Cada entrada do diretório mostra quantos itens você já liberou; a de fichas mostra o saldo atual.</p>
           <GuideBullets><li><span><b>Reações premium:</b> seis gestos além dos gratuitos.</span></li>
             <li><span><b>Baralhos:</b> variações de cor e desenho das cartas.</span></li>
             <li><span><b>Feltro:</b> os temas de mesa além do Clássico.</span></li>
+            <li><span><b>Molduras, Chapéus e Acessórios:</b> o visual do avatar, mostrado ao redor da sua foto em qualquer mesa.</span></li>
             <li><span><b>Combos:</b> baralho e feltro salvos juntos, com nome, para aplicar os dois de uma vez.</span></li>
             <li><span><b>Fichas:</b> saldo, recompensa diária e pacotes.</span></li>
-            <li><span><b>Compras e estornos:</b> recibos de reações, baralhos e feltros. As compras de fichas ficam na própria seção de fichas.</span></li></GuideBullets>
+            <li><span><b>Compras e estornos:</b> recibos de reações, baralhos, feltros e itens do avatar. As compras de fichas ficam na própria seção de fichas.</span></li></GuideBullets>
           <GuideCallout kind="safe" title="Fichas não são dinheiro">O saldo de fichas serve para buy-ins, não pode ser sacado e não vira moeda real.</GuideCallout></>
       },
       {
@@ -28,6 +29,16 @@ export default function StoreGuide() {
           <li><span>Confirmado, o item já vale em qualquer mesa: a reação entra no painel, o baralho aparece em <b>Seu perfil</b>, na seção <b>Sua mesa</b>, e o feltro nas preferências da mesa.</span></li></GuideSteps>
           <p>Reações premium bloqueadas continuam visíveis na mesa com um cadeado; tocar nelas abre a compra sem tirar você da partida. Até três reações na sua cadeira e até três para outro jogador, premium ou não, podem virar atalho fixo, com uma tecla de 3 a 8 no computador.</p>
           <GuideCallout kind="info" title="Estorno enquanto o item não foi usado">Um cosmético só pode ser estornado se nunca tiver sido selecionado. O servidor verifica isso antes de autorizar, e o item volta a ficar bloqueado.</GuideCallout></>
+      },
+      {
+        id: 'avatar', title: 'Molduras, chapéus e acessórios', summary: 'Alguns itens do avatar se compram; outros só vêm com conquistas ou temporadas.',
+        body: <><p>Cada item mostra uma prévia sobre o avatar e um estado:</p>
+          <GuideTerms><GuideTerm term="A liberar">À venda. Libere com fichas ou Pix, como um baralho ou um feltro.</GuideTerm>
+          <GuideTerm term="Conquista">Não se compra: o item é seu quando você atinge a conquista ligada a ele.</GuideTerm>
+          <GuideTerm term="Temporada">Não se compra: itens sazonais vêm das temporadas do ranking.</GuideTerm>
+          <GuideTerm term="Indisponível">Fora de venda agora. Um Pix que você já gerou continua em <b>Compras e estornos</b>.</GuideTerm>
+          <GuideTerm term="Na coleção">Já é seu. <b>Equipar no perfil</b> leva ao seu perfil para usá-lo.</GuideTerm></GuideTerms>
+          <p>Quando uma conquista libera um item durante a partida, um aviso na mesa diz qual foi. Os emblemas não aparecem na Loja: todos vêm de conquistas e temporadas.</p></>
       },
       {
         id: 'combos', title: 'Salvar e aplicar um combo', summary: 'Baralho e feltro salvos juntos, com um nome, para trocar os dois em um só toque.',

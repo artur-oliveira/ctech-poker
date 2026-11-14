@@ -1,6 +1,8 @@
 import {apiClient, type Page} from './client';
 
-export type CosmeticKind = 'deck' | 'felt';
+export type CosmeticKind = 'deck' | 'felt' | 'frame' | 'hat' | 'accessory';
+/** The avatar slots the store sells (badges are earned only, never sold). */
+export type AvatarStoreKind = Exclude<CosmeticKind, 'deck' | 'felt'>;
 export type CosmeticPurchaseMethod = 'pix' | 'fichas';
 
 export interface CosmeticCatalogEntry {
@@ -11,6 +13,11 @@ export interface CosmeticCatalogEntry {
   owned?: boolean;
   price_cents?: number;
   price_fichas?: number;
+  // Avatar kinds only (deck/felt omit both). An earnable entry (achievement,
+  // season) carries no price and is never sold; `available: false` means the
+  // sale window is closed for a player who does not own it yet.
+  source?: 'purchase' | 'achievement' | 'season';
+  available?: boolean;
 }
 
 export interface CosmeticPurchase {

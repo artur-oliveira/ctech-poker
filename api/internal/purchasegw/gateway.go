@@ -396,11 +396,11 @@ func productMessage(sku string) string {
 	if !ok {
 		return "Poker: " + sku
 	}
-	label := map[string]string{"reaction": "reação", "deck": "baralho", "felt": "feltro"}[kind]
+	label := map[string]string{"reaction": "reação", "deck": "baralho", "felt": "feltro", "frame": "moldura", "hat": "chapéu", "accessory": "acessório"}[kind]
 	if label == "" {
 		label = kind
 	}
-	return "Poker: " + label + " " + name
+	return "Poker: " + label + " " + strings.ReplaceAll(name, "_", " ")
 }
 
 // groupThousands writes 55000 as 55.000, the way the player reads chips.
