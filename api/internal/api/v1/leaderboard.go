@@ -19,6 +19,8 @@ type leaderboardHandlers struct {
 	// old name on the board forever (#64). nil in tests that don't care;
 	// then the stored copy is served as-is.
 	players *player.Service
+	// avatarBaseURL builds each row's avatar URL (cfg.AvatarBaseURL).
+	avatarBaseURL string
 }
 
 // RegisterLeaderboard mounts the public board and the caller-scoped one.
@@ -45,18 +47,19 @@ func boardParam(c fiber.Ctx) leaderboard.Board {
 	}
 }
 
-func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service, readLimiter *ratelimit.Limiter) {
-	h := &leaderboardHandlers{svc: svc, players: players}
+func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service, players *player.Service, avatarBaseURL string, readLimiter *ratelimit.Limiter) {
+	h := &leaderboardHandlers{svc: svc, players: players, avatarBaseURL: avatarBaseURL}
 	router.Get("/leaderboard", rateLimit(readLimiter, ipKey("leaderboard:top")), h.top)
 	router.Get("/leaderboard/me", auth, h.me)
 }
 
-// resolveNames overwrites every entry's denormalized PlayerName with the
-// canonical profile name, in place — the read-time half of #64's fix, the
+// resolveProfiles overwrites every entry's denormalized PlayerName with the
+// canonical profile name and fills its avatar URL and equipped decoration from
+// the same profile, in place — the read-time half of #64's fix, the
 // same one resolveOpponentProfiles applies to hand history. One BatchGetItem
 // per rendered page. An id with no profile (or a profile with no name) keeps
 // whatever the row stored, so this can never blank a board.
-func (h *leaderboardHandlers) resolveNames(ctx context.Context, entries []leaderboard.Entry) error {
+func (h *leaderboardHandlers) resolveProfiles(ctx context.Context, entries []leaderboard.Entry) error {
 	if h.players == nil || len(entries) == 0 {
 		return nil
 	}
@@ -74,6 +77,12 @@ func (h *leaderboardHandlers) resolveNames(ctx context.Context, entries []leader
 		if profile, ok := profiles[entries[i].PlayerID]; ok && profile.Name != "" {
 			entries[i].PlayerName = profile.Name
 		}
+		if profile, ok := profiles[entries[i].PlayerID]; ok {
+			decor := profile.Decor()
+			entries[i].AvatarURL = player.AvatarURL(&profile, h.avatarBaseURL)
+			entries[i].EquippedFrameID, entries[i].EquippedHatID = decor.Frame, decor.Hat
+			entries[i].EquippedAccessoryID, entries[i].EquippedBadgeIDs = decor.Accessory, decor.Badges
+		}
 	}
 	return nil
 }
@@ -85,7 +94,7 @@ func (h *leaderboardHandlers) top(c fiber.Ctx) error {
 	if err != nil {
 		return problem.BadRequest(err.Error()).Send(c)
 	}
-	if err := h.resolveNames(c.Context(), entries); err != nil {
+	if err := h.resolveProfiles(c.Context(), entries); err != nil {
 		return internalProblem("failed to resolve player names", err).Send(c)
 	}
 	return sendPage(c, entries, lastKey, cursor)
@@ -111,7 +120,7 @@ func (h *leaderboardHandlers) me(c fiber.Ctx) error {
 		return c.JSON(meResponse{Ranked: false})
 	}
 	entries := []leaderboard.Entry{info.Entry}
-	if err := h.resolveNames(c.Context(), entries); err != nil {
+	if err := h.resolveProfiles(c.Context(), entries); err != nil {
 		return internalProblem("failed to resolve player names", err).Send(c)
 	}
 	return c.JSON(meResponse{Ranked: true, Rank: &info.Rank, Total: &info.Total, Entry: &entries[0]})

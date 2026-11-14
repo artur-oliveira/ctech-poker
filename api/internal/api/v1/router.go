@@ -207,7 +207,7 @@ func Register(app *fiber.App, d Deps) {
 	RegisterHighlights(router, auth, sessionStore, highlightsStore)
 	RegisterPokerStats(router, auth, pokerStatsStore, players)
 	RegisterMatchups(router, auth, matchupStore)
-	RegisterLeaderboard(router, auth, leaderboardSvc, players, leaderboardReadLimiter)
+	RegisterLeaderboard(router, auth, leaderboardSvc, players, cfg.AvatarBaseURL, leaderboardReadLimiter)
 	RegisterDailyReward(router, auth, idem, dailyRewardSvc, spinLimiter)
 	RegisterSandboxPurchase(router, auth, idem, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, idem, reactionPurchaseSvc, purchaseLimiter)

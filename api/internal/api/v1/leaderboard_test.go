@@ -115,7 +115,7 @@ func TestLeaderboardMeUnranked(t *testing.T) {
 	app := fiber.New()
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("nobody"), svc, nil, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("nobody"), svc, nil, "", nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil)
 	resp, err := app.Test(req)
@@ -141,7 +141,7 @@ func TestLeaderboardMeRanked(t *testing.T) {
 		"sandbox#p2": {PlayerID: "p2", HandsPlayed: 5, HandsWon: 1},
 	}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("p2"), svc, nil, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p2"), svc, nil, "", nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil)
 	resp, err := app.Test(req)
@@ -168,7 +168,7 @@ func TestLeaderboardMeRequiresAuth(t *testing.T) {
 	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), deny, svc, nil, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), deny, svc, nil, "", nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me", nil)
 	resp, err := app.Test(req)
@@ -193,7 +193,7 @@ func TestLeaderboardResolvesRenamedPlayerName(t *testing.T) {
 	}})
 	svc := leaderboard.NewServiceWithStore(store)
 	app := fiber.New()
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), svc, players, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), svc, players, "", nil)
 
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox&metric=hands_won", nil))
 	if err != nil || resp.StatusCode != fiber.StatusOK {
@@ -241,7 +241,7 @@ func TestLeaderboardPeriodParam(t *testing.T) {
 	}}
 	svc := leaderboard.NewServiceWithStore(store)
 	app := fiber.New()
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("newcomer"), svc, nil, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("newcomer"), svc, nil, "", nil)
 
 	for _, tc := range []struct {
 		query string
@@ -281,5 +281,90 @@ func TestLeaderboardPeriodParam(t *testing.T) {
 	}
 	if !me.Ranked || me.Rank == nil || *me.Rank != 1 || me.Total == nil || *me.Total != 1 {
 		t.Fatalf("expected the newcomer ranked 1 of 1 on this month's board, got %+v", me)
+	}
+}
+
+// countingPlayerStore counts the BatchGetItem calls a page makes.
+type countingPlayerStore struct {
+	fakeMultiPlayerStore
+	getMany int
+}
+
+func (s *countingPlayerStore) GetMany(ctx context.Context, ids []string) (map[string]player.PlayerProfile, error) {
+	s.getMany++
+	return s.fakeMultiPlayerStore.GetMany(ctx, ids)
+}
+
+func decorBoardApp(t *testing.T) (*fiber.App, *countingPlayerStore) {
+	t.Helper()
+	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{
+		"sandbox#p1": {PlayerID: "p1", PlayerName: "Old", HandsPlayed: 5, HandsWon: 3},
+		"sandbox#p2": {PlayerID: "p2", PlayerName: "Sem Perfil", HandsPlayed: 5, HandsWon: 1},
+	}}
+	ps := &countingPlayerStore{fakeMultiPlayerStore: fakeMultiPlayerStore{profiles: map[string]player.PlayerProfile{
+		"p1": {Name: "New", AvatarKey: "av/p1.webp", EquippedFrameID: "f1", EquippedHatID: "h1", EquippedAccessoryID: "a1", EquippedBadgeIDs: []string{"b1"}},
+	}}}
+	app := fiber.New()
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), leaderboard.NewServiceWithStore(store), player.NewService(ps), "https://cdn.example.com", nil)
+	return app, ps
+}
+
+func topEntries(t *testing.T, app *fiber.App) map[string]leaderboard.Entry {
+	t.Helper()
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox&metric=hands_won", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var page struct {
+		Data []leaderboard.Entry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]leaderboard.Entry{}
+	for _, e := range page.Data {
+		out[e.PlayerID] = e
+	}
+	return out
+}
+
+func TestTopIncludesAvatarAndDecor(t *testing.T) {
+	app, _ := decorBoardApp(t)
+	e := topEntries(t, app)["p1"]
+	if e.AvatarURL != "https://cdn.example.com/p1.webp" || e.EquippedFrameID != "f1" || e.EquippedHatID != "h1" ||
+		e.EquippedAccessoryID != "a1" || len(e.EquippedBadgeIDs) != 1 || e.EquippedBadgeIDs[0] != "b1" {
+		t.Fatalf("entry missing avatar/decor: %+v", e)
+	}
+}
+
+func TestTopMissingProfileKeepsRow(t *testing.T) {
+	app, _ := decorBoardApp(t)
+	e, ok := topEntries(t, app)["p2"]
+	if !ok || e.PlayerName != "Sem Perfil" || e.AvatarURL != "" || e.EquippedFrameID != "" || e.EquippedHatID != "" ||
+		e.EquippedAccessoryID != "" || len(e.EquippedBadgeIDs) != 0 {
+		t.Fatalf("row without profile = %+v (ok=%v)", e, ok)
+	}
+}
+
+func TestTopStillOneBatchGet(t *testing.T) {
+	app, ps := decorBoardApp(t)
+	topEntries(t, app)
+	if ps.getMany != 1 {
+		t.Fatalf("GetMany calls = %d, want 1 per page", ps.getMany)
+	}
+}
+
+func TestMeIncludesAvatarAndDecor(t *testing.T) {
+	app, ps := decorBoardApp(t)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var me meResponse
+	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+		t.Fatal(err)
+	}
+	if me.Entry == nil || me.Entry.AvatarURL != "https://cdn.example.com/p1.webp" || me.Entry.EquippedHatID != "h1" || ps.getMany != 1 {
+		t.Fatalf("me entry = %+v, GetMany calls = %d", me.Entry, ps.getMany)
 	}
 }

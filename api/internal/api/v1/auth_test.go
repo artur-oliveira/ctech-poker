@@ -115,7 +115,7 @@ func TestLeaderboardTopIsPublic(t *testing.T) {
 	app := fiber.New()
 	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
-	RegisterLeaderboard(app.Group("/v1.0"), deny, leaderboard.NewServiceWithStore(store), nil, nil)
+	RegisterLeaderboard(app.Group("/v1.0"), deny, leaderboard.NewServiceWithStore(store), nil, "", nil)
 
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox", nil))
 	if err != nil || resp.StatusCode != fiber.StatusOK {
