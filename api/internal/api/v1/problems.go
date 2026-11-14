@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/poker/api/internal/responsible"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
@@ -66,6 +67,14 @@ func walletProblem(err error) (p *problem.Problem, ok bool) {
 	var werr *walletclient.Error
 	if !errors.As(err, &werr) {
 		return nil, false
+	}
+	// A wallet 401/403 is poker's own service credential being refused, never
+	// the player's: relaying it makes the UI treat a healthy session as
+	// expired (refresh, retry, 401 again, forced logout). Report it as a
+	// retryable outage instead and keep the wallet's detail out of the response.
+	if werr.Status == http.StatusUnauthorized || werr.Status == http.StatusForbidden {
+		observability.Error(context.Background(), "wallet rejected poker's service credential", werr, "wallet_status", werr.Status)
+		return unavailable("the wallet is temporarily unavailable, retry shortly"), true
 	}
 	p = problem.New(werr.Status, werr.Type, werr.Title, werr.Detail)
 	// #319: propagate the wallet's own next_action/retry_after_seconds verbatim.
