@@ -46,4 +46,7 @@ func TestEquipPushesIdentityToTable(t *testing.T) {
 	if n := patch(`{"bet_preset_mode":"bb"}`); n != 0 {
 		t.Fatalf("non-equip pushes = %d, want 0", n)
 	}
+	if n := patch(`{"name":"Ana","equipped_hat_id":"crown"}`); n != 1 {
+		t.Fatalf("rename+equip pushes = %d, want 1", n)
+	}
 }
