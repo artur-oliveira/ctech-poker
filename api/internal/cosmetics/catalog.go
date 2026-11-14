@@ -123,9 +123,9 @@ var catalog = []CatalogEntry{
 	{Kind: KindFelt, ID: "burgundy", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_burgundy"},
 	{Kind: KindFelt, ID: "ocean", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_ocean"},
 
-	// Frames/badges are always Premium (so ownership is never universal —
-	// see the KindFrame/KindBadge doc comment above) but carry no SKU/price:
-	// they are granted, not sold.
+	// Season frames/badges: always Premium (so ownership is never universal —
+	// see the KindFrame/KindBadge doc comment above), no SKU/price and no
+	// From/Until window yet; nothing grants them until a season-close hook exists.
 	{Kind: KindFrame, ID: "season-2026-q3", Premium: true, Source: SourceSeason},
 	{Kind: KindFrame, ID: "champion-gold", Premium: true, Source: SourceSeason},
 	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true, Source: SourceSeason},

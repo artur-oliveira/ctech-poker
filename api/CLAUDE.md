@@ -866,7 +866,9 @@ catalog.
   `poker_frame_felt_ring` 600, `poker_frame_walnut_rail` 800, `poker_frame_oxblood_edge` 1000; hats `poker_hat_beanie`
   200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400; accessories `poker_accessory_mustache` 200,
   `poker_accessory_shades` 300, `poker_accessory_headset` 400, `poker_accessory_monocle` 500 (cents). **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
-  (inside the `ClaimHandCounters` branch, so once per hand) sends the `achievement_unlocked` frame, then for each
+  (inside the `ClaimHandCounters` branch, so once per hand) sends the `achievement_unlocked` frames, then
+  `handPipeline.grantUnlocks` runs AFTER `leaderboard.RecordUnlocks`/`RecordHand` (a slow grant must not eat the shared
+  pipeline timeout the non-retried increments need) and for each
   `cosmetics.GrantsFor(key, stars)` row (every `cosmetics.AchievementGrants` row with `row.Stars <= stars`, so a
   tier-skipping unlock grants the lower rows too; the table is ordered by stars within a key so toasts arrive in tier
   order; lower rows are retried on each higher-tier unlock, a `ponytail:` note in `handpipeline.go`) calls `cosmeticpurchase.Service.Grant` (reason `achievement:<key>:<stars>`;
@@ -882,9 +884,9 @@ catalog.
   per kind with a qualifying row and `Grant`s only unowned rows (reason `achievement:<key>:<stars>:backfill`). The
   `unlocked_at` floor recovers star-1 rows only: a reset counter that earned 2+ stars and fell back is not re-derived. Best-effort, bounded by `earnedGrantTimeout` (3s, a var for the test); the
   list itself runs on the request ctx, never the timed-out one. Every error is logged and the list is still served,
-  including items granted in the same call. Steady state **per call**: 2 progress reads + ≤4 ownership reads, zero
+  including items granted in the same call (usually; at worst on the next read, `OwnedIDs` is an eventually consistent Query). Steady state **per call**: 2 progress reads + ≤4 ownership reads, zero
   writes; `/player-profile` fires one call per kind (frame, hat, accessory, badge: 4 in parallel), so a profile open costs that 4 times.
-  **Known gaps:** season-source items exist (with windows) but nothing grants them yet, no period-close hook; the
+  **Known gaps:** season-source items exist (no From/Until window yet) but nothing grants them yet, no period-close hook; the
   `social-butterfly` -> `won_full_table` 1-star mapping is provisional (no social/hosting achievement exists). A nil progress reader keeps the plain list. `cosmetics.Decor` (frame, hat, accessory, badges) is the
   single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
   persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
