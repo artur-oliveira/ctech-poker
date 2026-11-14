@@ -1,6 +1,6 @@
 module gopkg.aoctech.app/poker/api
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/aws/aws-lambda-go v1.55.1
@@ -50,7 +50,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.5 // indirect
 	github.com/gofiber/schema v1.8.8 // indirect
 	github.com/gofiber/utils/v2 v2.6.1 // indirect
-	github.com/klauspost/compress v1.20.1 // indirect
+	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
