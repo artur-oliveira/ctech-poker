@@ -14,8 +14,12 @@ import (
 )
 
 // earnedGrantTimeout bounds the self-heal before the owned list is read: a
-// slow progress/entitlement read must never slow the picker materially.
-const earnedGrantTimeout = 3 * time.Second
+// slow progress/entitlement read must never slow the picker materially. A var
+// so the timeout test runs in milliseconds.
+var earnedGrantTimeout = 3 * time.Second
+
+// now is the clock for sale-window checks; a var as the test seam.
+var now = time.Now
 
 // avatarOwnership is the slice of *cosmeticpurchase.Service this route uses;
 // an interface so the route and its self-heal test without DynamoDB.
@@ -95,9 +99,11 @@ func grantEarned(ctx context.Context, progress achievementProgressReader, svc av
 		}
 	}
 	owned := map[cosmetics.Kind]map[string]bool{}
+	t := now()
 	for _, row := range cosmetics.AchievementGrants {
 		earned := stars[row.Key]
-		if earned < row.Stars {
+		// Outside its window Grant would only fail (and WARN) on every call.
+		if earned < row.Stars || !cosmetics.Available(row.Kind, row.ID, t) {
 			continue
 		}
 		ids, ok := owned[row.Kind]

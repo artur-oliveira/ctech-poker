@@ -41,7 +41,10 @@ type fakeOwnership struct {
 	reasons  []string
 }
 
-func (f *fakeOwnership) OwnedIDs(_ context.Context, _ string, kind cosmetics.Kind) (map[string]bool, error) {
+func (f *fakeOwnership) OwnedIDs(ctx context.Context, _ string, kind cosmetics.Kind) (map[string]bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	out := map[string]bool{}
 	for id := range f.owned[kind] {
 		out[id] = true
@@ -203,7 +206,12 @@ func TestOwnedReadGrantErrorDoesNotFailRoute(t *testing.T) {
 	}
 }
 
+// The listing must run on a fresh ctx: the fake OwnedIDs fails on a done ctx,
+// so reusing the timed-out self-heal ctx would return 500.
 func TestOwnedReadSelfHealIsBoundedByTimeout(t *testing.T) {
+	old := earnedGrantTimeout
+	earnedGrantTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { earnedGrantTimeout = old })
 	own := &fakeOwnership{owned: map[cosmetics.Kind]map[string]bool{cosmetics.KindHat: {"beanie": true}}}
 	start := time.Now()
 	ids := ownedCall(t, own, &fakeProgress{block: true}, "hat")
@@ -212,5 +220,23 @@ func TestOwnedReadSelfHealIsBoundedByTimeout(t *testing.T) {
 	}
 	if !slices.Equal(ids, []string{"beanie"}) {
 		t.Fatalf("owned list = %v", ids)
+	}
+}
+
+// A windowed achievement item outside its window is skipped before Grant: no
+// conditional write that would fail and WARN on every owned-list call.
+func TestOwnedReadSkipsAchievementItemOutsideWindow(t *testing.T) {
+	restore := cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "dealer-visor", Premium: true, Source: cosmetics.SourceAchievement,
+			Until: time.Now().Add(-time.Hour)},
+	})
+	t.Cleanup(restore)
+	own := &fakeOwnership{}
+	progress := &fakeProgress{rows: map[string][]achievements.PlayerAchievementProgress{
+		roomstore.CurrencyModeSandbox: handsPlayed(100), // stars 1: qualifies for dealer-visor
+	}}
+	ownedCall(t, own, progress, "hat")
+	if len(own.reasons) != 0 {
+		t.Fatalf("grants = %v, want none for a closed-window item", own.reasons)
 	}
 }
