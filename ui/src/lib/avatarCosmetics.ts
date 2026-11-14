@@ -51,6 +51,25 @@ export function avatarItemLabel(slot: AvatarSlot, id: string): string {
   return AVATAR_ITEMS[slot]?.[id]?.label ?? id;
 }
 
+/** The equipped cosmetics phase 1 adds to every REST payload that decorates
+ * a player (leaderboard entries, showcase, people, hand opponents,
+ * `/players/me`). All optional: an older server or a bare player sends none. */
+export interface EquippedCosmetics {
+  equipped_frame_id?: string;
+  equipped_hat_id?: string;
+  equipped_accessory_id?: string;
+  equipped_badge_ids?: string[];
+}
+
+/** REST `equipped_*` fields to `PlayerAvatar`'s props. `badgeIds` keeps the
+ * payload's array reference (query data is structurally shared). */
+export const decorProps = (e?: EquippedCosmetics) => ({
+  frameId: e?.equipped_frame_id,
+  hatId: e?.equipped_hat_id,
+  accessoryId: e?.equipped_accessory_id,
+  badgeIds: e?.equipped_badge_ids,
+});
+
 export type AvatarFrameId = string;
 export type AvatarBadgeId = string;
 export const AVATAR_FRAMES = AVATAR_ITEMS.frame;

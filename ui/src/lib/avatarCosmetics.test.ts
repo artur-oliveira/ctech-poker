@@ -3,7 +3,7 @@ import {describe, expect, test, vi} from 'vitest';
 const get = vi.fn();
 vi.mock('./api/client', () => ({apiClient: {get: (...a: unknown[]) => get(...a)}}));
 
-import {AVATAR_ITEMS, avatarBadgeLabel, avatarFrameLabel, avatarItemLabel, listOwnedAvatarCosmetics} from './avatarCosmetics';
+import {AVATAR_ITEMS, avatarBadgeLabel, decorProps, avatarFrameLabel, avatarItemLabel, listOwnedAvatarCosmetics} from './avatarCosmetics';
 
 describe('avatarCosmetics', () => {
   test('registry has the launch set: 6 frames, 6 hats, 5 accessories, 7 badges with pt-BR labels', () => {
@@ -48,5 +48,15 @@ describe('avatarCosmetics', () => {
     });
     expect(await listOwnedAvatarCosmetics('frame')).toEqual(['season-2026-q3']);
     expect(get).toHaveBeenCalledWith('/v1.0/players/me/cosmetics/frame/owned', {silentError: true});
+  });
+
+  test('decorProps maps the REST equipped_* fields to PlayerAvatar props, absent stays undefined', () => {
+    const badges = ['all-in-hero'];
+    expect(decorProps({equipped_frame_id: 'chip-ring', equipped_hat_id: 'crown', equipped_accessory_id: 'monocle',
+      equipped_badge_ids: badges})).toEqual({frameId: 'chip-ring', hatId: 'crown', accessoryId: 'monocle', badgeIds: badges});
+    // Same reference: query data is structurally shared, so a memoised child keeps its identity.
+    expect(decorProps({equipped_badge_ids: badges}).badgeIds).toBe(badges);
+    expect(decorProps({})).toEqual({frameId: undefined, hatId: undefined, accessoryId: undefined, badgeIds: undefined});
+    expect(decorProps(undefined)).toEqual({frameId: undefined, hatId: undefined, accessoryId: undefined, badgeIds: undefined});
   });
 });

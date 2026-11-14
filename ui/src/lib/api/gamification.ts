@@ -6,10 +6,13 @@
 import type {Page} from './client';
 import {apiClient} from './client';
 import type {WalletMode} from './player';
+import type {EquippedCosmetics} from '../avatarCosmetics';
 
-export interface Entry {
+export interface Entry extends EquippedCosmetics {
   player_id: string;
   player_name?: string;
+  /** Sent only for a public showcase, or on the caller's own `/leaderboard/me` entry. */
+  avatar_url?: string;
   hands_played: number;
   hands_won: number;
   win_rate: number
