@@ -3,6 +3,7 @@ package player
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -67,6 +68,14 @@ func (s *memoryStore) SetStatsGoals(_ context.Context, _ string, goals map[strin
 }
 func (s *memoryStore) SetEquippedFrame(_ context.Context, _ string, frameID string) error {
 	s.profile.EquippedFrameID = frameID
+	return nil
+}
+func (s *memoryStore) SetEquippedHat(_ context.Context, _ string, id string) error {
+	s.profile.EquippedHatID = id
+	return nil
+}
+func (s *memoryStore) SetEquippedAccessory(_ context.Context, _ string, id string) error {
+	s.profile.EquippedAccessoryID = id
 	return nil
 }
 func (s *memoryStore) SetEquippedBadges(_ context.Context, _ string, badgeIDs []string) error {
@@ -535,5 +544,65 @@ func TestSetEquippedBadgesValidatesCountUniquenessAndOwnership(t *testing.T) {
 	}
 	if len(profile.EquippedBadgeIDs) != 2 {
 		t.Fatalf("unexpected equipped badges: %+v", profile.EquippedBadgeIDs)
+	}
+}
+
+func TestSetEquippedHatAndAccessory(t *testing.T) {
+	restore := cosmetics.WithCatalogForTest([]cosmetics.CatalogEntry{
+		{Kind: cosmetics.KindHat, ID: "crown", Source: cosmetics.SourceSeason},
+		{Kind: cosmetics.KindAccessory, ID: "shades", Source: cosmetics.SourceSeason},
+	})
+	defer restore()
+	cases := []struct {
+		name    string
+		set     func(*Service, string) (*PlayerProfile, error)
+		get     func(*PlayerProfile) string
+		id      string
+		invalid error
+	}{
+		{"hat", func(s *Service, id string) (*PlayerProfile, error) {
+			return s.SetEquippedHat(context.Background(), "user-1", id)
+		},
+			func(p *PlayerProfile) string { return p.EquippedHatID }, "crown", ErrInvalidHat},
+		{"accessory", func(s *Service, id string) (*PlayerProfile, error) {
+			return s.SetEquippedAccessory(context.Background(), "user-1", id)
+		}, func(p *PlayerProfile) string { return p.EquippedAccessoryID }, "shades", ErrInvalidAccessory},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+			svc := NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: false})
+			if _, err := tc.set(svc, "nope"); !errors.Is(err, tc.invalid) {
+				t.Fatalf("unknown: got %v", err)
+			}
+			if _, err := tc.set(svc, tc.id); !errors.Is(err, ErrCosmeticNotOwned) {
+				t.Fatalf("unowned: got %v", err)
+			}
+			if p, err := tc.set(svc, ""); err != nil || tc.get(p) != "" {
+				t.Fatalf("unequip: %+v %v", p, err)
+			}
+			svc = NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: true})
+			if p, err := tc.set(svc, tc.id); err != nil || tc.get(p) != tc.id {
+				t.Fatalf("equip: %+v %v", p, err)
+			}
+		})
+	}
+}
+
+func TestDecor(t *testing.T) {
+	p := PlayerProfile{EquippedFrameID: "f", EquippedHatID: "h", EquippedAccessoryID: "a", EquippedBadgeIDs: []string{"b2", "b1"}}
+	want := cosmetics.Decor{Frame: "f", Hat: "h", Accessory: "a", Badges: []string{"b2", "b1"}}
+	if got := p.Decor(); !got.Equal(want) {
+		t.Fatalf("Decor() = %+v, want %+v", got, want)
+	}
+}
+
+func TestEquipBadgesKeepsOrder(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store).WithCosmetics(&fakeCosmeticsChecker{owned: true})
+	in := []string{"season-2026-q3-champion", "season-2026-q3-top10"}
+	p, err := svc.SetEquippedBadges(context.Background(), "user-1", in)
+	if err != nil || !reflect.DeepEqual(p.EquippedBadgeIDs, in) {
+		t.Fatalf("got %+v err=%v", p, err)
 	}
 }

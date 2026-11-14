@@ -27,6 +27,8 @@ var ErrInvalidReactionWheel = errors.New("player: invalid reaction wheel")
 var ErrReactionNotOwned = errors.New("player: reaction is premium and not owned")
 var ErrInvalidStatsGoals = errors.New("player: invalid stats goals")
 var ErrInvalidFrame = errors.New("player: frame_id must be a known frame")
+var ErrInvalidHat = errors.New("player: hat_id must be a known hat")
+var ErrInvalidAccessory = errors.New("player: accessory_id must be a known accessory")
 var ErrInvalidBadges = errors.New("player: badge_ids must contain up to three unique known badges")
 
 // maxEquippedBadges bounds the equipped-badges slice — a UI-driven ceiling
@@ -69,6 +71,8 @@ type profileStore interface {
 	SetReactionWheel(context.Context, string, []string) error
 	SetStatsGoals(context.Context, string, map[string]float64) error
 	SetEquippedFrame(context.Context, string, string) error
+	SetEquippedHat(context.Context, string, string) error
+	SetEquippedAccessory(context.Context, string, string) error
 	SetEquippedBadges(context.Context, string, []string) error
 }
 
@@ -484,16 +488,38 @@ func (s *Service) SetStatsGoals(ctx context.Context, userID string, goals map[st
 // and, since every frame catalog entry is premium, must already be owned —
 // same requireCosmetic path SetDeckVariant/SetTableTheme already use.
 func (s *Service) SetEquippedFrame(ctx context.Context, userID, frameID string) (*PlayerProfile, error) {
-	frameID = strings.TrimSpace(frameID)
-	if frameID != "" {
-		if !cosmetics.IsKnown(cosmetics.KindFrame, frameID) {
-			return nil, ErrInvalidFrame
+	return s.setEquippedItem(ctx, userID, cosmetics.KindFrame, frameID, ErrInvalidFrame)
+}
+
+// SetEquippedHat and SetEquippedAccessory follow SetEquippedFrame's rules.
+func (s *Service) SetEquippedHat(ctx context.Context, userID, id string) (*PlayerProfile, error) {
+	return s.setEquippedItem(ctx, userID, cosmetics.KindHat, id, ErrInvalidHat)
+}
+
+func (s *Service) SetEquippedAccessory(ctx context.Context, userID, id string) (*PlayerProfile, error) {
+	return s.setEquippedItem(ctx, userID, cosmetics.KindAccessory, id, ErrInvalidAccessory)
+}
+
+func (s *Service) setEquippedItem(ctx context.Context, userID string, kind cosmetics.Kind, id string, invalid error) (*PlayerProfile, error) {
+	id = strings.TrimSpace(id)
+	if id != "" {
+		if !cosmetics.IsKnown(kind, id) {
+			return nil, invalid
 		}
-		if err := s.requireCosmetic(ctx, userID, cosmetics.KindFrame, frameID); err != nil {
+		if err := s.requireCosmetic(ctx, userID, kind, id); err != nil {
 			return nil, err
 		}
 	}
-	if err := s.store.SetEquippedFrame(ctx, userID, frameID); err != nil {
+	var err error
+	switch kind {
+	case cosmetics.KindHat:
+		err = s.store.SetEquippedHat(ctx, userID, id)
+	case cosmetics.KindAccessory:
+		err = s.store.SetEquippedAccessory(ctx, userID, id)
+	default:
+		err = s.store.SetEquippedFrame(ctx, userID, id)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

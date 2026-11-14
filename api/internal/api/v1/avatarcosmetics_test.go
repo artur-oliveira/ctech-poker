@@ -26,13 +26,13 @@ func TestAvatarCosmeticsOwnershipRejectsUnknownKind(t *testing.T) {
 	}
 }
 
-func TestAvatarCosmeticsOwnershipReturnsOwnedIDs(t *testing.T) {
+func TestOwnedRouteAcceptsHatAndAccessory(t *testing.T) {
 	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := fiber.New()
 	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
 	RegisterAvatarCosmeticsOwnership(app, auth, svc)
 
-	for _, kind := range []string{"frame", "badge"} {
+	for _, kind := range []string{"frame", "hat", "accessory", "badge"} {
 		req := httptest.NewRequest(fiber.MethodGet, "/players/me/cosmetics/"+kind+"/owned", nil)
 		resp, err := app.Test(req)
 		if err != nil {

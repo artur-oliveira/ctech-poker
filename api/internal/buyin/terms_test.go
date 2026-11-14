@@ -67,6 +67,10 @@ func (unacceptedProfiles) SetStatsGoals(context.Context, string, map[string]floa
 	return nil
 }
 func (unacceptedProfiles) SetEquippedFrame(context.Context, string, string) error { return nil }
+func (unacceptedProfiles) SetEquippedHat(context.Context, string, string) error   { return nil }
+func (unacceptedProfiles) SetEquippedAccessory(context.Context, string, string) error {
+	return nil
+}
 func (unacceptedProfiles) SetEquippedBadges(context.Context, string, []string) error {
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 var (
 	ErrNotFound           = errors.New("cosmeticpurchase: not found")
 	ErrUnknownItem        = errors.New("cosmeticpurchase: unknown cosmetic")
+	ErrNotAvailable       = errors.New("cosmeticpurchase: item is outside its sale window")
 	ErrNotPremium         = errors.New("cosmeticpurchase: cosmetic is not premium")
 	ErrInUse              = errors.New("cosmeticpurchase: cosmetic is the player's current selection, cannot refund")
 	ErrAlreadyOwned       = errors.New("cosmeticpurchase: cosmetic already owned")
@@ -64,11 +66,12 @@ type CatalogEntry struct {
 	PriceFichas int64 `json:"price_fichas,omitempty"`
 }
 
-// currentSelectionFunc reports the player's currently-applied deck/felt id
-// for kind. Injected the same way SetOwnershipInvalidator injects a callback,
-// to avoid an import cycle with the player package (which itself depends on
+// currentSelectionFunc reports the ids of kind the player currently has
+// applied (one for deck/felt/frame/hat/accessory, several for badge).
+// Injected the same way SetOwnershipInvalidator injects a callback, to avoid an
+// import cycle with the player package (which itself depends on
 // cosmeticpurchase for ownership checks).
-type currentSelectionFunc func(ctx context.Context, playerID string, kind cosmetics.Kind) (string, error)
+type currentSelectionFunc func(ctx context.Context, playerID string, kind cosmetics.Kind) ([]string, error)
 
 type Service struct {
 	wallet              wallet
@@ -453,10 +456,11 @@ func (s *Service) CreateSandbox(ctx context.Context, playerID string, kind cosme
 	return rec, nil
 }
 
-// isCurrentSelection reports whether itemID is the player's currently-applied
-// deck/felt — the cosmetic equivalent of a reaction's "used" flag. Refund is
-// allowed only if the item was never applied, mirroring reactions' "never
-// sent" rule generalized to "never selected."
+// isCurrentSelection reports whether itemID is currently applied by the player
+// (deck, felt, frame, hat, accessory, or any equipped badge) — the cosmetic
+// equivalent of a reaction's "used" flag. Refund is allowed only if the item
+// was never applied, mirroring reactions' "never sent" rule generalized to
+// "never selected."
 func (s *Service) isCurrentSelection(ctx context.Context, playerID string, kind cosmetics.Kind, itemID string) (bool, error) {
 	if s.currentSelection == nil {
 		return false, nil
@@ -465,7 +469,7 @@ func (s *Service) isCurrentSelection(ctx context.Context, playerID string, kind 
 	if err != nil {
 		return false, err
 	}
-	return current == itemID, nil
+	return slices.Contains(current, itemID), nil
 }
 
 // Refund loads the Record to get Kind/ItemID/Method, then checks the item
@@ -603,6 +607,14 @@ func (s *Service) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.
 func (s *Service) Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) error {
 	if !cosmetics.IsKnown(kind, itemID) {
 		return ErrUnknownItem
+	}
+	if !cosmetics.Available(kind, itemID, s.now()) {
+		// Window closed: an already-owned item stays an idempotent no-op so a
+		// retried grant is safe; anything else must not create ownership.
+		if ent, err := s.entitlements.Get(ctx, playerID, kind, itemID); err == nil && ent != nil && ent.active() {
+			return nil
+		}
+		return ErrNotAvailable
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	err := s.entitlements.Put(ctx, Entitlement{

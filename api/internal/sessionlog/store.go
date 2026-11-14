@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 )
 
 // sessionSK builds the sort key for a session item: a nanosecond timestamp
@@ -167,6 +168,9 @@ type OpponentSummary struct {
 	PlayerID  string   `dynamodbav:"player_id" json:"player_id"`
 	Name      string   `dynamodbav:"name,omitempty" json:"name,omitempty"`
 	AvatarURL string   `dynamodbav:"avatar_url,omitempty" json:"avatar_url,omitempty"`
+	// Equipped is resolved live from the opponent's profile like AvatarURL and
+	// never stored with the hand.
+	cosmetics.Equipped `dynamodbav:"-"`
 	HoleCards []string `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
 	// Won is explicit so a 3+-way hand's history is readable without
 	// inferring the winner from the viewer's own Outcome — that inference

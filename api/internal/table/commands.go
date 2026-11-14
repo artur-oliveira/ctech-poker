@@ -3,6 +3,7 @@ package table
 import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -317,6 +318,7 @@ type SetIdentityCmd struct {
 	Name           string
 	AvatarURL      string
 	PlaystyleBadge string
+	Decor          cosmetics.Decor
 	Reply          chan error
 }
 

@@ -1,8 +1,14 @@
-// Package cosmetics is the poker-owned source of truth for which deck and
-// felt cosmetic ids exist and which are premium — a game-design fact, not a
-// money fact, same rationale as internal/reactions (see
-// docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
+// Package cosmetics is the poker-owned source of truth for which deck, felt
+// and avatar (frame, hat, accessory, badge) cosmetic ids exist and which are
+// premium — a game-design fact, not a money fact, same rationale as
+// internal/reactions (see docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
 package cosmetics
+
+import (
+	"encoding/json"
+	"slices"
+	"time"
+)
 
 // Kind distinguishes the two cosmetic catalogs. Deck and felt ids don't
 // collide today, but byID/bySKU key on the (Kind, ID) pair regardless so the
@@ -13,17 +19,75 @@ const (
 	KindDeck Kind = "deck"
 	KindFelt Kind = "felt"
 	// KindFrame and KindBadge back issue #292 (seasonal avatar frames and
-	// badges). They are premium-only entries: unlike deck/felt, they are
-	// never sold through cosmeticpurchase's wallet flow (no SKU/PriceFichas,
-	// and cosmeticpurchase's :kind route param only ever accepts deck/felt —
-	// see internal/api/v1/cosmeticpurchase.go's validCosmeticKind), so
-	// ownership is granted directly via cosmeticpurchase.Service.Grant on a
-	// season/achievement milestone instead of a purchase. That trigger itself
-	// (which milestone unlocks which frame/badge) is still an open product
-	// decision per #292 — this catalog only fixes which ids exist.
+	// badges). Like hat/accessory they are avatar kinds: sold through
+	// cosmeticpurchase only when their Source is purchase, otherwise granted
+	// directly via cosmeticpurchase.Service.Grant on a season/achievement
+	// milestone. Which milestone unlocks which item is a product decision
+	// (#292); this catalog only fixes which ids exist.
 	KindFrame Kind = "frame"
 	KindBadge Kind = "badge"
+	// KindHat and KindAccessory are the remaining avatar decoration slots.
+	KindHat       Kind = "hat"
+	KindAccessory Kind = "accessory"
 )
+
+// Source says how an avatar item is obtained. Deck/felt entries leave it empty.
+type Source string
+
+const (
+	SourcePurchase    Source = "purchase"
+	SourceAchievement Source = "achievement"
+	SourceSeason      Source = "season"
+)
+
+// IsAvatarKind reports whether kind is an avatar decoration (frame, hat, accessory, badge).
+func IsAvatarKind(kind Kind) bool {
+	switch kind {
+	case KindFrame, KindHat, KindAccessory, KindBadge:
+		return true
+	}
+	return false
+}
+
+// Decor is the set of avatar decorations a player has equipped.
+type Decor struct {
+	Frame     string   `dynamodbav:"frame,omitempty" json:"frame,omitempty"`
+	Hat       string   `dynamodbav:"hat,omitempty" json:"hat,omitempty"`
+	Accessory string   `dynamodbav:"accessory,omitempty" json:"accessory,omitempty"`
+	Badges    []string `dynamodbav:"badges,omitempty" json:"badges,omitempty"`
+}
+
+// Equipped is Decor's read-side wire shape for payloads that decorate another
+// player (people, hand opponents); the json names match the leaderboard's.
+// Embed it with `dynamodbav:"-"` so it is never persisted.
+type Equipped struct {
+	FrameID     string   `json:"equipped_frame_id,omitempty"`
+	HatID       string   `json:"equipped_hat_id,omitempty"`
+	AccessoryID string   `json:"equipped_accessory_id,omitempty"`
+	BadgeIDs    []string `json:"equipped_badge_ids,omitempty"`
+}
+
+// Map is the same omit-empty wire shape for map payloads; the json tags above
+// stay the single source of the names.
+func (e Equipped) Map() map[string]any {
+	raw, _ := json.Marshal(e) // plain strings/slice: cannot fail
+	m := map[string]any{}
+	_ = json.Unmarshal(raw, &m)
+	return m
+}
+
+func (d Decor) Equipped() Equipped {
+	return Equipped{FrameID: d.Frame, HatID: d.Hat, AccessoryID: d.Accessory, BadgeIDs: d.Badges}
+}
+
+func (d Decor) Empty() bool {
+	return d.Frame == "" && d.Hat == "" && d.Accessory == "" && len(d.Badges) == 0
+}
+
+// Equal compares field by field; nil and empty Badges are equal, badge order matters.
+func (d Decor) Equal(o Decor) bool {
+	return d.Frame == o.Frame && d.Hat == o.Hat && d.Accessory == o.Accessory && slices.Equal(d.Badges, o.Badges)
+}
 
 // CatalogEntry mirrors reactions.ReactionCatalogEntry's shape. PriceFichas is
 // fixed here (never client-supplied); PriceCents for the same item is fixed
@@ -35,6 +99,11 @@ type CatalogEntry struct {
 	Premium     bool
 	PriceFichas int64  // 0 if !Premium
 	SKU         string // wallet ProductSKU ID. "" if !Premium.
+	// Source is set on avatar kinds only: purchase requires SKU and
+	// PriceFichas > 0; achievement/season forbid both.
+	Source Source
+	// From/Until bound the sale window; the zero value means open.
+	From, Until time.Time
 }
 
 var catalog = []CatalogEntry{
@@ -57,31 +126,36 @@ var catalog = []CatalogEntry{
 	// Frames/badges are always Premium (so ownership is never universal —
 	// see the KindFrame/KindBadge doc comment above) but carry no SKU/price:
 	// they are granted, not sold.
-	{Kind: KindFrame, ID: "season-2026-q3", Premium: true},
-	{Kind: KindFrame, ID: "champion-gold", Premium: true},
-	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true},
-	{Kind: KindBadge, ID: "season-2026-q3-champion", Premium: true},
+	{Kind: KindFrame, ID: "season-2026-q3", Premium: true, Source: SourceSeason},
+	{Kind: KindFrame, ID: "champion-gold", Premium: true, Source: SourceSeason},
+	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true, Source: SourceSeason},
+	{Kind: KindBadge, ID: "season-2026-q3-champion", Premium: true, Source: SourceSeason},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
 
-var byID = func() map[string]CatalogEntry {
-	m := make(map[string]CatalogEntry, len(catalog))
-	for _, e := range catalog {
-		m[catalogKey(e.Kind, e.ID)] = e
-	}
-	return m
-}()
+var byID, bySKU = buildIndexes(catalog)
 
-var bySKU = func() map[string]CatalogEntry {
-	m := make(map[string]CatalogEntry)
-	for _, e := range catalog {
+func buildIndexes(entries []CatalogEntry) (id, sku map[string]CatalogEntry) {
+	id = make(map[string]CatalogEntry, len(entries))
+	sku = make(map[string]CatalogEntry)
+	for _, e := range entries {
+		id[catalogKey(e.Kind, e.ID)] = e
 		if e.SKU != "" {
-			m[e.SKU] = e
+			sku[e.SKU] = e
 		}
 	}
-	return m
-}()
+	return id, sku
+}
+
+// Available reports whether the item exists and now falls inside its sale window.
+func Available(kind Kind, id string, now time.Time) bool {
+	e, ok := byID[catalogKey(kind, id)]
+	if !ok {
+		return false
+	}
+	return (e.From.IsZero() || !now.Before(e.From)) && (e.Until.IsZero() || now.Before(e.Until))
+}
 
 func IsKnown(kind Kind, id string) bool {
 	_, ok := byID[catalogKey(kind, id)]

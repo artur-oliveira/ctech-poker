@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -173,5 +174,20 @@ func TestTableConnectionTrackerReplaysAllLiveConnections(t *testing.T) {
 	}
 	if got := len(tracker.listTable("table-b")); got != 1 {
 		t.Fatalf("table scopes leaked into each other, got %d", got)
+	}
+}
+
+func TestSeatConversionCarriesDecor(t *testing.T) {
+	proto := ConvertSnapshot(hand.Snapshot{Seats: []hand.SeatView{
+		{PlayerID: "p1", FrameID: "gold", HatID: "crown", AccessoryID: "shades", BadgeIDs: []string{"b2", "b1"}},
+		{PlayerID: "p2"},
+	}})
+	s := proto.Seats[0]
+	if s.FrameId == nil || *s.FrameId != "gold" || *s.HatId != "crown" || *s.AccessoryId != "shades" || !slices.Equal(s.BadgeIds, []string{"b2", "b1"}) {
+		t.Fatalf("seat 0 = %+v", s)
+	}
+	e := proto.Seats[1]
+	if e.FrameId != nil || e.HatId != nil || e.AccessoryId != nil || len(e.BadgeIds) != 0 {
+		t.Fatalf("empty seat should carry nothing: %+v", e)
 	}
 }

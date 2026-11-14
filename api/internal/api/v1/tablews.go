@@ -1052,6 +1052,12 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		if s.PlaystyleBadge != "" {
 			playstyleBadge = &s.PlaystyleBadge
 		}
+		optID := func(v string) *string {
+			if v == "" {
+				return nil
+			}
+			return &v
+		}
 		var runItTwice *bool
 		if s.RunItTwice {
 			enabled := true
@@ -1067,6 +1073,10 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			Name:              s.Name,
 			AvatarUrl:         avatarURL,
 			PlaystyleBadge:    playstyleBadge,
+			FrameId:           optID(s.FrameID),
+			HatId:             optID(s.HatID),
+			AccessoryId:       optID(s.AccessoryID),
+			BadgeIds:          slices.Clone(s.BadgeIDs),
 			RunItTwice:        runItTwice,
 			AutoRebuy:         autoRebuy,
 			ConnectionState:   s.ConnectionState,

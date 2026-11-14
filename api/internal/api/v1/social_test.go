@@ -374,6 +374,10 @@ func (s *fakeMultiProfileStore) SetStatsGoals(context.Context, string, map[strin
 	return nil
 }
 func (s *fakeMultiProfileStore) SetEquippedFrame(context.Context, string, string) error { return nil }
+func (s *fakeMultiProfileStore) SetEquippedHat(context.Context, string, string) error   { return nil }
+func (s *fakeMultiProfileStore) SetEquippedAccessory(context.Context, string, string) error {
+	return nil
+}
 func (s *fakeMultiProfileStore) SetEquippedBadges(context.Context, string, []string) error {
 	return nil
 }

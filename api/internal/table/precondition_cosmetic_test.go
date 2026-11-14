@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -94,4 +95,28 @@ func actorMidHand(t *testing.T) (*Actor, string, string) {
 		other = "p2"
 	}
 	return a, current, other
+}
+
+func TestSetIdentityDecorCommitsOnceThenNoOps(t *testing.T) {
+	a, _, _ := actorMidHand(t)
+	cmd := SetIdentityCmd{PlayerID: "p1", Decor: cosmetics.Decor{Frame: "gold", Badges: []string{"b1"}}}
+	before := a.version
+	if err := a.handleSetIdentity(context.Background(), cmd); err != nil {
+		t.Fatal(err)
+	}
+	if a.version != before+1 {
+		t.Fatalf("version %d -> %d, want one commit", before, a.version)
+	}
+	if err := a.handleSetIdentity(context.Background(), cmd); err != nil {
+		t.Fatal(err)
+	}
+	if a.version != before+1 {
+		t.Fatalf("repeat bumped version to %d", a.version)
+	}
+	if err := a.handleSetIdentity(context.Background(), SetIdentityCmd{PlayerID: "p1"}); err != nil {
+		t.Fatal(err)
+	}
+	if a.version != before+2 {
+		t.Fatalf("clearing decor with all else empty should commit; version %d", a.version)
+	}
 }

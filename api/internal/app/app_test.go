@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
@@ -532,5 +534,33 @@ func TestDispatchGamificationPipelineBoundsConcurrencyAndQueue(t *testing.T) {
 	wg.Wait()
 	if got := peak.Load(); got > maxConcurrentHandPipelines {
 		t.Fatalf("peak concurrency was %d, over the %d limit", got, maxConcurrentHandPipelines)
+	}
+}
+
+func TestAppliedCosmeticIDs(t *testing.T) {
+	p := &player.PlayerProfile{
+		DeckVariant: "d1", TableTheme: "f1",
+		EquippedFrameID: "fr", EquippedHatID: "ht", EquippedAccessoryID: "ac",
+		EquippedBadgeIDs: []string{"b1", "b2", "b3"},
+	}
+	cases := []struct {
+		kind cosmetics.Kind
+		want []string
+	}{
+		{cosmetics.KindDeck, []string{p.EffectiveDeckVariant()}},
+		{cosmetics.KindFelt, []string{p.EffectiveTableTheme()}},
+		{cosmetics.KindFrame, []string{"fr"}},
+		{cosmetics.KindHat, []string{"ht"}},
+		{cosmetics.KindAccessory, []string{"ac"}},
+		{cosmetics.KindBadge, []string{"b1", "b2", "b3"}},
+	}
+	for _, c := range cases {
+		if got := appliedCosmeticIDs(p, c.kind); !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %v, want %v", c.kind, got, c.want)
+		}
+	}
+	// Nothing equipped must yield no ids (a "" must never match an item).
+	if got := appliedCosmeticIDs(&player.PlayerProfile{}, cosmetics.KindFrame); len(got) != 0 {
+		t.Errorf("empty frame slot: got %v, want none", got)
 	}
 }

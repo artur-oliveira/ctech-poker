@@ -477,19 +477,31 @@ func (s *Store) SetReactionWheel(ctx context.Context, userID string, reactionIDs
 	return nil
 }
 
-func (s *Store) SetEquippedFrame(ctx context.Context, userID, frameID string) error {
+func (s *Store) SetEquippedFrame(ctx context.Context, userID, id string) error {
+	return s.setEquipped(ctx, userID, "equipped_frame_id", id)
+}
+
+func (s *Store) SetEquippedHat(ctx context.Context, userID, id string) error {
+	return s.setEquipped(ctx, userID, "equipped_hat_id", id)
+}
+
+func (s *Store) SetEquippedAccessory(ctx context.Context, userID, id string) error {
+	return s.setEquipped(ctx, userID, "equipped_accessory_id", id)
+}
+
+func (s *Store) setEquipped(ctx context.Context, userID, attr, value string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err
 	}
 	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
-		"equipped_frame_id": frameID,
-		"updated_at":        dynamo.NowStr(),
+		attr:         value,
+		"updated_at": dynamo.NowStr(),
 	})
 	if err != nil {
-		return fmt.Errorf("player: set equipped frame: %w", err)
+		return fmt.Errorf("player: set %s: %w", attr, err)
 	}
 	if !ok {
-		return fmt.Errorf("player: profile disappeared while setting equipped frame")
+		return fmt.Errorf("player: profile disappeared while setting %s", attr)
 	}
 	return nil
 }

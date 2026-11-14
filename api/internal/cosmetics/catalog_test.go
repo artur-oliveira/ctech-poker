@@ -1,6 +1,9 @@
 package cosmetics
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCatalogRows(t *testing.T) {
 	cases := []struct {
@@ -81,5 +84,89 @@ func TestAllReturnsOnlyRequestedKind(t *testing.T) {
 	felt := All(KindFelt)
 	if len(felt) != 4 {
 		t.Fatalf("All(KindFelt) len = %d, want 4", len(felt))
+	}
+}
+
+func TestAvatarCatalogInvariants(t *testing.T) {
+	seen := map[string]bool{}
+	for _, e := range catalog {
+		if seen[catalogKey(e.Kind, e.ID)] {
+			t.Fatalf("duplicate %v/%s", e.Kind, e.ID)
+		}
+		seen[catalogKey(e.Kind, e.ID)] = true
+		if !IsAvatarKind(e.Kind) {
+			continue
+		}
+		switch e.Source {
+		case SourcePurchase:
+			if e.SKU == "" || e.PriceFichas <= 0 {
+				t.Fatalf("%v/%s purchase needs SKU and price", e.Kind, e.ID)
+			}
+		case SourceAchievement, SourceSeason:
+			if e.SKU != "" || e.PriceFichas != 0 {
+				t.Fatalf("%v/%s non-purchase must have no SKU/price", e.Kind, e.ID)
+			}
+		default:
+			t.Fatalf("%v/%s has no Source", e.Kind, e.ID)
+		}
+		if !e.From.IsZero() && !e.Until.IsZero() && !e.From.Before(e.Until) {
+			t.Fatalf("%v/%s From must be before Until", e.Kind, e.ID)
+		}
+	}
+}
+
+func TestAvailable(t *testing.T) {
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	until := from.Add(24 * time.Hour)
+	restore := WithCatalogForTest([]CatalogEntry{
+		{Kind: KindHat, ID: "windowed", Source: SourceSeason, From: from, Until: until},
+		{Kind: KindHat, ID: "open", Source: SourceSeason},
+	})
+	defer restore()
+	cases := []struct {
+		id   string
+		now  time.Time
+		want bool
+	}{
+		{"windowed", from.Add(-time.Second), false},
+		{"windowed", from.Add(time.Hour), true},
+		{"windowed", until.Add(time.Second), false},
+		{"open", from.Add(-1000 * time.Hour), true},
+		{"nope", from, false},
+	}
+	for _, c := range cases {
+		if got := Available(KindHat, c.id, c.now); got != c.want {
+			t.Fatalf("Available(%s, %v) = %v, want %v", c.id, c.now, got, c.want)
+		}
+	}
+}
+
+func TestWithCatalogForTestSwapsAndRestores(t *testing.T) {
+	restore := WithCatalogForTest([]CatalogEntry{{Kind: KindHat, ID: "x", Source: SourcePurchase, SKU: "s", PriceFichas: 1}})
+	if !IsKnown(KindHat, "x") || IsKnown(KindDeck, "casino") {
+		t.Fatal("catalog not swapped")
+	}
+	if _, _, _, ok := ItemForSKU("s"); !ok {
+		t.Fatal("bySKU not rebuilt")
+	}
+	restore()
+	if IsKnown(KindHat, "x") || !IsKnown(KindDeck, "casino") {
+		t.Fatal("catalog not restored")
+	}
+	if _, _, _, ok := ItemForSKU("s"); ok {
+		t.Fatal("bySKU not restored")
+	}
+}
+
+func TestDecorEmptyEqual(t *testing.T) {
+	if !(Decor{}).Empty() || !(Decor{Badges: []string{}}).Empty() || (Decor{Hat: "h"}).Empty() {
+		t.Fatal("Empty wrong")
+	}
+	if !(Decor{}).Equal(Decor{Badges: []string{}}) {
+		t.Fatal("nil badges must equal empty")
+	}
+	a := Decor{Frame: "f", Badges: []string{"a", "b"}}
+	if !a.Equal(Decor{Frame: "f", Badges: []string{"a", "b"}}) || a.Equal(Decor{Frame: "f", Badges: []string{"b", "a"}}) {
+		t.Fatal("badge order must matter")
 	}
 }

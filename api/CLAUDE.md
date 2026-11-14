@@ -621,9 +621,10 @@ players. `GET /tables/:tableId/hands/:handId/history` sits behind the same auth 
 **`GET /leaderboard` is deliberately PUBLIC (fixed 2026-09-06).** B9 had put it behind `authMiddleware` too, which
 broke the ranking page — it is linkable and meant to be readable without an account. It is mounted with an IP rate
 limiter (`leaderboardReadLimiter`, 120/min) instead of `auth`, the same shape `RegisterAvatars` uses for its public
-reads. It exposes nothing a signed-in player could not already read and takes no caller-supplied player id, so there
-is no IDOR surface. `GET /leaderboard/me` keeps `auth` — it ranks the JWT's own `sub`. Because
-`enforceReadOnlyScope` runs *inside* `authMiddleware`, `poker:leaderboard:read` now gates `/leaderboard/me` only.
+reads. It always exposes name, stats and equipped decoration ids, but a player's uploaded avatar only when their
+showcase is public (`ShowcasePublic`; `/leaderboard/me` shows the caller's own avatar regardless), and takes no
+caller-supplied player id, so there is no IDOR surface. `GET /leaderboard/me` keeps `auth` — it ranks the JWT's own
+`sub`. Because `enforceReadOnlyScope` runs *inside* `authMiddleware`, `poker:leaderboard:read` now gates `/leaderboard/me` only.
 See `docs/specs/2026-09-06-public-leaderboard.md`. Do not re-mount the public board behind `auth`.
 `playerID := claims.Sub` is kept everywhere (IDOR safety). There is still **no scope / kyc / role check** on user
 routes — none is defined for poker's user surface today; revisit before real-money mode ships if scopes are added to the
@@ -838,7 +839,7 @@ catalog.
   still written (they are the fallback when a profile no longer resolves) but no consumer serves its own copy any more:
   `player.Service.GetMany` is the single resolution point (it now chunks at `player.MaxBatchProfileIDs` internally, so
   no caller has to), `resolveOpponentProfiles` (`internal/api/v1/player.go`) overwrites `OpponentSummary.Name` +
-  `AvatarURL` on every hand-history read, and `leaderboardHandlers.resolveNames` (`internal/api/v1/leaderboard.go`)
+  `AvatarURL` on every hand-history read, and `leaderboardHandlers.resolveProfiles` (`internal/api/v1/leaderboard.go`)
   overwrites `Entry.PlayerName` on `GET /leaderboard` and `/leaderboard/me` — one `BatchGetItem` per rendered page.
   Existing rows are therefore correct on their next read with no migration job. Live seats are the one write-side push:
   `POST /players/me` with a new `name` calls `tableIdentityPusher.push` (`internal/api/v1/tableidentity.go`), which
@@ -847,6 +848,24 @@ catalog.
   gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
   single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
   issue needed no change.
+- **Avatar cosmetics (spec `docs/specs/2026-11-14-avatar-cosmetics.md`, phase 1).** Four slots: frame, hat, accessory,
+  badge (max 3). `cosmetics.Kind == Slot` for avatar items (`IsAvatarKind`), so there is no separate `Slot` field.
+  `CatalogEntry.Source` (`purchase|achievement|season`, avatar kinds only; empty for deck/felt): `purchase` requires
+  `SKU` and `PriceFichas > 0`, `achievement`/`season` forbid both (pinned by a catalog test). `From` (inclusive) /
+  `Until` (exclusive) bound the sale window, zero = open; `cosmetics.Available` evaluates it and
+  `cosmeticpurchase.Grant` honours it with `ErrNotAvailable`. Purchase-window enforcement lands in phase 3 with the
+  purchasable kinds; ownership is permanent once granted. `cosmetics.Decor` (frame, hat, accessory, badges) is the
+  single identity unit: `PlayerProfile.Decor()` -> `SetIdentityCmd` -> `hand.Player.Decor` (`*Decor`, nil == empty,
+  persisted as snake_case attributes) -> `SeatView` -> proto `Seat` fields 22-25 (`frame_id`, `hat_id`, `accessory_id`,
+  `badge_ids`; **ids only**, the client owns the art). **Every** `SetIdentityCmd` sender must pass `Decor`
+  (`identityCmdFor` and the buy-in sender do): `SetPlayerIdentityForActor` replaces name/avatar/badge/decor as one
+  unit, so omitting it blanks the decor. `POST /players/me` pushes the identity to the table once after the write
+  (equip is live, no reconnect). Leaderboard rows resolve avatar + decor at read time from the same single `GetMany`
+  (`dynamodbav:"-"`, never stored), like `PlayerName`. `cosmetics.Equipped` / `Equipped.Map()` is the read-side wire
+  shape (`equipped_frame_id`, `equipped_hat_id`, `equipped_accessory_id`, `equipped_badge_ids`) for showcase, people
+  and hand-opponent payloads. Refund of an equipped avatar item is refused: `appliedCosmeticIDs` (`internal/app/app.go`)
+  feeds `cosmeticpurchase.isCurrentSelection`. Test seam: `cosmetics.WithCatalogForTest` swaps the catalog and
+  indexes; not parallel-safe.
 - **Issue #198 fixed: a hand costs one `poker_achievement_progress` write per player, not one per applicable
   achievement.** `achievements.Service.RecordHand` used to call `Increment`/`IncrementStreak` per counter per player —
   hands played, time bank, win, category, earnings, pocket pair, full table/heads-up, all-in, showdown outcomes,

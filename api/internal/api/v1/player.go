@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -45,6 +47,9 @@ type UpdatePlayerRequest struct {
 	// unequips.
 	EquippedFrameID  *string   `json:"equipped_frame_id"`
 	EquippedBadgeIDs *[]string `json:"equipped_badge_ids"`
+	// EquippedHatID/EquippedAccessoryID: same semantics as EquippedFrameID.
+	EquippedHatID       *string `json:"equipped_hat_id"`
+	EquippedAccessoryID *string `json:"equipped_accessory_id"`
 }
 
 type sessionLogReader interface {
@@ -83,7 +88,7 @@ type playerHandlers struct {
 	// identity pushes a renamed display name into the table the player is
 	// seated at, so opponents stop seeing the old one without a reconnect
 	// (#64). nil wherever the WS/table stack isn't wired (tests).
-	identity *tableIdentityPusher
+	identity identityPusher
 	// settlements backs GET /players/me/settlements (#333). nil in the
 	// narrower test-only registerRoutes wiring.
 	settlements settlementReader
@@ -95,6 +100,18 @@ type playerHandlers struct {
 	// balance-alert annotation on the profile response (#304). nil wherever
 	// the narrower test wiring doesn't provide one — every use guards on it.
 	walletAlerts *walletalert.Service
+}
+
+// identityPusher is the seam the profile handler pushes through; nil in the
+// narrower test wiring.
+type identityPusher interface {
+	push(ctx context.Context, playerID string)
+}
+
+func (h *playerHandlers) pushIdentity(ctx context.Context, playerID string) {
+	if h.identity != nil {
+		h.identity.push(ctx, playerID)
+	}
 }
 
 // leaderboardRanker is the one method the showcase needs from
@@ -109,7 +126,7 @@ type leaderboardRanker interface {
 // under the same resource and share the same auth-derived playerID.
 func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *ratelimit.Limiter, stats pokerStatsReader, extras ...any) {
 	var reportSvc *reports.Service
-	var identity *tableIdentityPusher
+	var identity identityPusher
 	var settlements settlementReader
 	var ranks leaderboardRanker
 	var walletAlerts *walletalert.Service
@@ -118,7 +135,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 		case *reports.Service:
 			reportSvc = value
 		case *tableIdentityPusher:
-			identity = value
+			identity = value // push is nil-receiver safe
 		case *leaderboard.Service:
 			// A typed nil would still be non-nil once boxed in the interface,
 			// and MyRank would deref its store — the narrower test wiring
@@ -299,6 +316,18 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 	}
 	userID := c.Locals(localsUserID).(string)
 
+	// The seat's name and cosmetics are a table-actor cache filled at join
+	// time and never re-read (#64). Push once, on every return path, after any
+	// identity field was actually written: a later field failing (400/500)
+	// must not leave opponents on the old identity. The table side is
+	// idempotent and a no-op when nothing changed.
+	identityChanged := false
+	defer func() {
+		if identityChanged {
+			h.pushIdentity(c.Context(), userID)
+		}
+	}()
+
 	if req.Name != nil {
 		if _, err := h.players.SetName(c.Context(), userID, *req.Name); err != nil {
 			if errors.Is(err, player.ErrEmptyName) {
@@ -306,10 +335,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
-		// The seat's name is a cache the table actor filled at join time and
-		// never re-reads, so a rename would otherwise stay invisible to
-		// everyone at the table until this player reconnected (#64).
-		h.identity.push(c.Context(), userID)
+		identityChanged = true
 	}
 	if req.WalletMode != nil {
 		if *req.WalletMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
@@ -390,6 +416,31 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
+	}
+	if req.EquippedHatID != nil {
+		if _, err := h.players.SetEquippedHat(c.Context(), userID, *req.EquippedHatID); err != nil {
+			if errors.Is(err, player.ErrInvalidHat) {
+				return problem.BadRequest("equipped_hat_id must be a known hat").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("equipped_hat_id is not owned").Send(c)
+			}
+			return internalProblem("failed to update player profile", err).Send(c)
+		}
+		identityChanged = true
+	}
+	if req.EquippedAccessoryID != nil {
+		if _, err := h.players.SetEquippedAccessory(c.Context(), userID, *req.EquippedAccessoryID); err != nil {
+			if errors.Is(err, player.ErrInvalidAccessory) {
+				return problem.BadRequest("equipped_accessory_id must be a known accessory").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("equipped_accessory_id is not owned").Send(c)
+			}
+			return internalProblem("failed to update player profile", err).Send(c)
+		}
+		identityChanged = true
 	}
 	if req.EquippedBadgeIDs != nil {
 		if _, err := h.players.SetEquippedBadges(c.Context(), userID, *req.EquippedBadgeIDs); err != nil {
@@ -401,6 +452,7 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return internalProblem("failed to update player profile", err).Send(c)
 		}
+		identityChanged = true
 	}
 	if req.BetPresetMode != nil {
 		if _, err := h.players.SetBetPresetMode(c.Context(), userID, *req.BetPresetMode); err != nil {
@@ -418,7 +470,6 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return internalProblem("failed to update favorite reactions", err).Send(c)
 		}
 	}
-
 	profile, err := h.players.GetOrCreate(c.Context(), userID)
 	if err != nil {
 		return internalProblem("failed to load player profile", err).Send(c)
@@ -580,10 +631,11 @@ func (h *playerHandlers) resolveOpponentProfiles(ctx context.Context, hands []se
 			opp := &hands[i].Opponents[j]
 			profile, ok := profiles[opp.PlayerID]
 			if !ok {
-				opp.AvatarURL = ""
+				opp.AvatarURL, opp.Equipped = "", cosmetics.Equipped{}
 				continue
 			}
 			opp.AvatarURL = player.AvatarURL(&profile, baseURL)
+			opp.Equipped = profile.Decor().Equipped()
 			if profile.Name != "" {
 				opp.Name = profile.Name
 			}
@@ -660,6 +712,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		"showcase_layout":       profile.ShowcaseLayout,
 		"milestones":            h.profileMilestones(c, profile, counts[achievements.KeyHandsPlayed]),
 	}
+	maps.Copy(response, profile.Decor().Equipped().Map())
 	// CreatedAt is stored but json:"-" on the profile itself; the showcase is
 	// the one place it is public, and only because ShowcasePublic gated the
 	// whole response above (#330).
@@ -736,7 +789,7 @@ func (h *playerHandlers) avatarBaseURL() string {
 }
 
 func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.Map {
-	return fiber.Map{
+	m := fiber.Map{
 		"user_id":                 profile.UserID,
 		"name":                    profile.Name,
 		"friend_code":             profile.FriendCode,
@@ -754,4 +807,6 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,
 	}
+	maps.Copy(m, profile.Decor().Equipped().Map())
+	return m
 }

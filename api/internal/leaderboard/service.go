@@ -18,6 +18,14 @@ type Entry struct {
 	HandsWon          int     `dynamodbav:"hands_won" json:"hands_won"`
 	AchievementPoints int     `dynamodbav:"achievement_points" json:"achievement_points"`
 	WinRate           float64 `dynamodbav:"win_rate_score" json:"win_rate"`
+
+	// Read-time decoration resolved from the player profile by the API layer.
+	// Never persisted (dynamodbav:"-"), so equipping never rewrites a ranking.
+	AvatarURL           string   `dynamodbav:"-" json:"avatar_url,omitempty"`
+	EquippedFrameID     string   `dynamodbav:"-" json:"equipped_frame_id,omitempty"`
+	EquippedHatID       string   `dynamodbav:"-" json:"equipped_hat_id,omitempty"`
+	EquippedAccessoryID string   `dynamodbav:"-" json:"equipped_accessory_id,omitempty"`
+	EquippedBadgeIDs    []string `dynamodbav:"-" json:"equipped_badge_ids,omitempty"`
 }
 
 // RankInfo is a player's exact position on a mode/metric leaderboard,

@@ -368,7 +368,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 			}
 			nameReply := make(chan error, 1)
 			if err := actor.Dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
-				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: nameReply}); err != nil {
+				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), PlaystyleBadge: playstyleBadge, Decor: profile.Decor(), Reply: nameReply}); err != nil {
 				observability.Warn(ctx, "buyin table identity dispatch failed", err, "table_id", roomID)
 			}
 		}

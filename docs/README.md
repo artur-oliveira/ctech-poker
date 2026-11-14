@@ -65,6 +65,11 @@ whenever a players store is wired) are all **fixed**; older docs that still list
 
 ## Other reference material
 
+- [`2026-11-14-avatar-cosmetics`](specs/2026-11-14-avatar-cosmetics.md) — avatar frames, hats, accessories and badges
+  (sources, sale windows, equipped decor on seats, profiles and leaderboard); plan
+  [`plans/2026-11-14-avatar-cosmetics-phase1.md`](plans/2026-11-14-avatar-cosmetics-phase1.md). **Phase 1 (backend)
+  implemented** on branch `feat/avatar-cosmetics`; phases 2-3 (frontend, purchasable kinds and window enforcement)
+  **designed**.
 - [`2026-09-18-handeval-equity-optimization`](specs/2026-09-18-handeval-equity-optimization.md) — packed perfect-hash evaluation, precomputed preflop equity, lazy sampling, exact heads-up rivers, and benchmark results.
 
 - `plans/2026-08-16-social-friends-safety-and-recent.md` — plano full-stack de amizade mútua, presença, convites

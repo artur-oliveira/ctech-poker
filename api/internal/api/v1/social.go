@@ -12,6 +12,7 @@ import (
 	"gopkg.aoctech.app/api-commons/problem"
 	"gopkg.aoctech.app/api-commons/ratelimit"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
@@ -73,9 +74,10 @@ type socialHandlers struct {
 }
 
 type socialPlayerResponse struct {
-	PlayerID     string              `json:"player_id"`
-	Name         string              `json:"name,omitempty"`
-	AvatarURL    string              `json:"avatar_url,omitempty"`
+	PlayerID  string `json:"player_id"`
+	Name      string `json:"name,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	cosmetics.Equipped
 	FriendCode   string              `json:"friend_code,omitempty"`
 	Relationship social.Relationship `json:"relationship"`
 	Muted        bool                `json:"muted"`
@@ -115,6 +117,7 @@ type socialInboxEventResponse struct {
 	social.Event
 	ActorName      string `json:"actor_name,omitempty"`
 	ActorAvatarURL string `json:"actor_avatar_url,omitempty"`
+	cosmetics.Equipped
 	// HandsTogether/LastPlayedAt give a table_invite (in particular a rematch
 	// invite) shared-history context, resolved from the viewer's own bounded
 	// recentplayers.List call — never a new O(n) read (#337).
@@ -274,6 +277,7 @@ func (h *socialHandlers) hydrateInboxActors(ctx context.Context, viewerID string
 		if profile, ok := profiles[events[i].ActorPlayerID]; ok {
 			response.ActorName = profile.Name
 			response.ActorAvatarURL = player.AvatarURL(&profile, h.avatarBaseURL)
+			response.Equipped = profile.Decor().Equipped()
 		}
 		if events[i].Type == social.EventTableInvite {
 			if recent, ok := recentByOpponent[events[i].ActorPlayerID]; ok {
@@ -734,6 +738,7 @@ func (h *socialHandlers) response(profile *player.PlayerProfile, edge *social.Ed
 	state.PlayerID = profile.UserID
 	state.Name = profile.Name
 	state.AvatarURL = player.AvatarURL(profile, h.avatarBaseURL)
+	state.Equipped = profile.Decor().Equipped()
 	if includeFriendCode {
 		state.FriendCode = profile.FriendCode
 	}
