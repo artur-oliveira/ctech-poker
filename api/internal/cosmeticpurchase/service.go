@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -65,11 +66,11 @@ type CatalogEntry struct {
 	PriceFichas int64 `json:"price_fichas,omitempty"`
 }
 
-// currentSelectionFunc reports the player's currently-applied deck/felt id
-// for kind. Injected the same way SetOwnershipInvalidator injects a callback,
+// currentSelectionFunc reports the ids of kind the player currently has
+// applied (one for deck/felt/frame/hat/accessory, several for badge). Injected the same way SetOwnershipInvalidator injects a callback,
 // to avoid an import cycle with the player package (which itself depends on
 // cosmeticpurchase for ownership checks).
-type currentSelectionFunc func(ctx context.Context, playerID string, kind cosmetics.Kind) (string, error)
+type currentSelectionFunc func(ctx context.Context, playerID string, kind cosmetics.Kind) ([]string, error)
 
 type Service struct {
 	wallet              wallet
@@ -454,8 +455,10 @@ func (s *Service) CreateSandbox(ctx context.Context, playerID string, kind cosme
 	return rec, nil
 }
 
-// isCurrentSelection reports whether itemID is the player's currently-applied
-// deck/felt — the cosmetic equivalent of a reaction's "used" flag. Refund is
+// isCurrentSelection reports whether itemID is currently applied by the player
+// (deck, felt, frame, hat, accessory, or any equipped badge) — the cosmetic
+// equivalent of a reaction's "used" flag. Refund is
+// avatar/deck/felt item (badges: any of the equipped set) — the cosmetic equivalent of a reaction's "used" flag. Refund is
 // allowed only if the item was never applied, mirroring reactions' "never
 // sent" rule generalized to "never selected."
 func (s *Service) isCurrentSelection(ctx context.Context, playerID string, kind cosmetics.Kind, itemID string) (bool, error) {
@@ -466,7 +469,7 @@ func (s *Service) isCurrentSelection(ctx context.Context, playerID string, kind 
 	if err != nil {
 		return false, err
 	}
-	return current == itemID, nil
+	return slices.Contains(current, itemID), nil
 }
 
 // Refund loads the Record to get Kind/ItemID/Method, then checks the item

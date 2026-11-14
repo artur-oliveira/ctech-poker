@@ -250,8 +250,8 @@ func TestRefundRejectedWhenCurrentSelection(t *testing.T) {
 		t.Run(string(fx.kind), func(t *testing.T) {
 			entitlements, store := newTestEntitlementStore(t), newTestStore(t)
 			svc := NewService(&fakeWallet{}, entitlements, store)
-			svc.SetCurrentSelectionFunc(func(context.Context, string, cosmetics.Kind) (string, error) {
-				return fx.itemID, nil // the player currently has this item applied
+			svc.SetCurrentSelectionFunc(func(context.Context, string, cosmetics.Kind) ([]string, error) {
+				return []string{"other", fx.itemID}, nil // the player currently has this item applied (badges: one of several)
 			})
 			playerID := "player-refund-in-use-" + string(fx.kind)
 			rec, err := svc.CreateSandbox(context.Background(), playerID, fx.kind, fx.itemID, "idem-sandbox-4")
@@ -270,8 +270,8 @@ func TestRefundSandboxHappyPathRevokesEntitlement(t *testing.T) {
 		t.Run(string(fx.kind), func(t *testing.T) {
 			entitlements, store := newTestEntitlementStore(t), newTestStore(t)
 			svc := NewService(&fakeWallet{}, entitlements, store)
-			svc.SetCurrentSelectionFunc(func(context.Context, string, cosmetics.Kind) (string, error) {
-				return "", nil // the player has never applied this item
+			svc.SetCurrentSelectionFunc(func(context.Context, string, cosmetics.Kind) ([]string, error) {
+				return []string{"other"}, nil // the player has never applied this item
 			})
 			playerID := "player-refund-happy-" + string(fx.kind)
 			rec, err := svc.CreateSandbox(context.Background(), playerID, fx.kind, fx.itemID, "idem-sandbox-5")

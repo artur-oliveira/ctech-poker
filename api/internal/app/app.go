@@ -443,20 +443,38 @@ func wireCosmeticLoadoutApply(loadouts *cosmeticloadout.Service, players *player
 // already depends on cosmeticpurchase for ownership checks), so the callback
 // is injected the same way SetOwnershipInvalidator injects one.
 func wireCosmeticCurrentSelection(cosmeticsSvc *cosmeticpurchase.Service, players *player.Service) {
-	cosmeticsSvc.SetCurrentSelectionFunc(func(ctx context.Context, playerID string, kind cosmetics.Kind) (string, error) {
+	cosmeticsSvc.SetCurrentSelectionFunc(func(ctx context.Context, playerID string, kind cosmetics.Kind) ([]string, error) {
 		profile, err := players.Get(ctx, playerID)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		switch kind {
-		case cosmetics.KindDeck:
-			return profile.EffectiveDeckVariant(), nil
-		case cosmetics.KindFelt:
-			return profile.EffectiveTableTheme(), nil
-		default:
-			return "", nil
-		}
+		return appliedCosmeticIDs(profile, kind), nil
 	})
+}
+
+// appliedCosmeticIDs lists the ids of kind the profile currently has applied:
+// one for deck/felt/frame/hat/accessory, up to several for badge, none when
+// the slot is empty.
+func appliedCosmeticIDs(p *player.PlayerProfile, kind cosmetics.Kind) []string {
+	var id string
+	switch kind {
+	case cosmetics.KindDeck:
+		id = p.EffectiveDeckVariant()
+	case cosmetics.KindFelt:
+		id = p.EffectiveTableTheme()
+	case cosmetics.KindFrame:
+		id = p.EquippedFrameID
+	case cosmetics.KindHat:
+		id = p.EquippedHatID
+	case cosmetics.KindAccessory:
+		id = p.EquippedAccessoryID
+	case cosmetics.KindBadge:
+		return p.EquippedBadgeIDs
+	}
+	if id == "" {
+		return nil
+	}
+	return []string{id}
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
