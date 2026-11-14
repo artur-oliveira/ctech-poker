@@ -42,13 +42,13 @@ purchases (fichas or PIX) or from seasons. The model must allow seasonal drops l
   `purchasegw` re-reads the invoice and checks it was paid at the catalogue price before anything is granted.
 - Purchase routes `/wallet/cosmetic-purchase/:kind` accept only `deck`/`felt`; `validFrameOrBadgeKind` guards the owned-read route.
 - Seat identity pushed to the table is only `{Name, AvatarURL, PlaystyleBadge}` (`tableidentity.go`, `table.SetIdentityCmd`); proto `Seat` last field is 21.
-- Leaderboard `Entry` has no avatar; `resolveNames` (`api/v1/leaderboard.go`) already BatchGets profiles per page.
+- Leaderboard `Entry` has no avatar; `resolveProfiles` (`api/v1/leaderboard.go`) already BatchGets profiles per page.
 - UI: `PlayerAvatar` accepts `frameId`/`badgeIds`; only own profile passes them. Decoration CSS lives in `(app)/app.css`, seats in `renderer.css`.
 - Achievements: `RecordHand` returns `[]TierUnlock{PlayerID, Key, Stars}`; the only consumer is the unlock loop in `app/handpipeline.go`.
 
 ## Approaches considered
 
-- **A. Extend the catalog (chosen).** `Slot`, `Source`, window on `CatalogEntry`; one profile field per new slot; ids on seat, profile and leaderboard payloads.
+- **A. Extend the catalog (chosen).** `Source` and the sale window on `CatalogEntry` (Kind is the slot); one profile field per new slot; ids on seat, profile and leaderboard payloads.
   Trade-off: one field per slot scales poorly, but slots are rare and items are many.
 - **B. Generic `equipped` map, migrate frame/badge.** Cleaner, but a data and proto migration for no user-visible gain now.
 - **C. Copy frame for `hat` and `accessory` only.** Smallest diff; leaves achievement grants, purchase and seasons unanswered.
@@ -94,7 +94,7 @@ Time source is the injected clock (never `time.Now` in services).
 ### Leaderboard
 
 `leaderboard.Entry` response adds `avatar_url`, `equipped_frame_id`, `equipped_hat_id`, `equipped_accessory_id`, `equipped_badge_ids`, filled in
-`resolveNames` from the profiles it already batch-loads (not stored in the leaderboard row, so equipping never rewrites rankings).
+`resolveProfiles` from the profiles it already batch-loads (not stored in the leaderboard row, so equipping never rewrites rankings).
 UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5-minute `LEADERBOARD_STALE_MS` caching stays; request count stays at two GETs.
 
 ### Rendering (ui)

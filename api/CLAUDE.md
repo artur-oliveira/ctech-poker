@@ -839,7 +839,7 @@ catalog.
   still written (they are the fallback when a profile no longer resolves) but no consumer serves its own copy any more:
   `player.Service.GetMany` is the single resolution point (it now chunks at `player.MaxBatchProfileIDs` internally, so
   no caller has to), `resolveOpponentProfiles` (`internal/api/v1/player.go`) overwrites `OpponentSummary.Name` +
-  `AvatarURL` on every hand-history read, and `leaderboardHandlers.resolveNames` (`internal/api/v1/leaderboard.go`)
+  `AvatarURL` on every hand-history read, and `leaderboardHandlers.resolveProfiles` (`internal/api/v1/leaderboard.go`)
   overwrites `Entry.PlayerName` on `GET /leaderboard` and `/leaderboard/me` — one `BatchGetItem` per rendered page.
   Existing rows are therefore correct on their next read with no migration job. Live seats are the one write-side push:
   `POST /players/me` with a new `name` calls `tableIdentityPusher.push` (`internal/api/v1/tableidentity.go`), which

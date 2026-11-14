@@ -7,12 +7,13 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 )
 
-// RegisterAvatarCosmeticsOwnership mounts the one read the seasonal
-// frame/badge equip UI (#292) needs: which ids of a given kind this player
-// owns. Deliberately not RegisterCosmeticPurchase's `/wallet/cosmetic-purchase`
-// group — that group's :kind param, catalog and create/refund routes are
-// wallet-priced deck/felt purchases, and frame/badge ownership is granted
-// (cosmeticpurchase.Service.Grant), never sold.
+// RegisterAvatarCosmeticsOwnership mounts the one read the avatar equip UI
+// (#292) needs: which ids of a given avatar kind (frame, hat, accessory,
+// badge) this player owns. Deliberately not RegisterCosmeticPurchase's
+// `/wallet/cosmetic-purchase` group — that group's :kind param, catalog and
+// create/refund routes are wallet-priced deck/felt purchases. Avatar items are
+// granted today (cosmeticpurchase.Service.Grant); a purchase flow for the
+// purchasable ones is planned and will get its own routes.
 func RegisterAvatarCosmeticsOwnership(router fiber.Router, auth fiber.Handler, svc *cosmeticpurchase.Service) {
 	router.Get("/players/me/cosmetics/:kind/owned", auth, validAvatarKind, func(c fiber.Ctx) error {
 		kind := cosmetics.Kind(c.Params("kind"))
