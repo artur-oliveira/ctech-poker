@@ -115,7 +115,12 @@ type Seat struct {
 	// The player has asked to leave. They are paused (no future hands) and,
 	// once no longer dealt into the current hand, will be removed and cashed
 	// out automatically. Cancelable via cancel_exit until that removal commits.
-	PendingExit   *bool `protobuf:"varint,21,opt,name=pending_exit,json=pendingExit,proto3,oneof" json:"pending_exit,omitempty"`
+	PendingExit *bool `protobuf:"varint,21,opt,name=pending_exit,json=pendingExit,proto3,oneof" json:"pending_exit,omitempty"`
+	// Public equipped cosmetic ids; may be unknown to older clients.
+	FrameId       *string  `protobuf:"bytes,22,opt,name=frame_id,json=frameId,proto3,oneof" json:"frame_id,omitempty"`
+	HatId         *string  `protobuf:"bytes,23,opt,name=hat_id,json=hatId,proto3,oneof" json:"hat_id,omitempty"`
+	AccessoryId   *string  `protobuf:"bytes,24,opt,name=accessory_id,json=accessoryId,proto3,oneof" json:"accessory_id,omitempty"`
+	BadgeIds      []string `protobuf:"bytes,25,rep,name=badge_ids,json=badgeIds,proto3" json:"badge_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -295,6 +300,34 @@ func (x *Seat) GetPendingExit() bool {
 		return *x.PendingExit
 	}
 	return false
+}
+
+func (x *Seat) GetFrameId() string {
+	if x != nil && x.FrameId != nil {
+		return *x.FrameId
+	}
+	return ""
+}
+
+func (x *Seat) GetHatId() string {
+	if x != nil && x.HatId != nil {
+		return *x.HatId
+	}
+	return ""
+}
+
+func (x *Seat) GetAccessoryId() string {
+	if x != nil && x.AccessoryId != nil {
+		return *x.AccessoryId
+	}
+	return ""
+}
+
+func (x *Seat) GetBadgeIds() []string {
+	if x != nil {
+		return x.BadgeIds
+	}
+	return nil
 }
 
 type BlindEscalation struct {
@@ -2022,7 +2055,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xeb\x06\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x95\b\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -2051,7 +2084,12 @@ const file_poker_proto_rawDesc = "" +
 	"\n" +
 	"auto_rebuy\x18\x13 \x01(\bH\aR\tautoRebuy\x88\x01\x01\x12%\n" +
 	"\x0ecurrent_streak\x18\x14 \x01(\x05R\rcurrentStreak\x12&\n" +
-	"\fpending_exit\x18\x15 \x01(\bH\bR\vpendingExit\x88\x01\x01B\t\n" +
+	"\fpending_exit\x18\x15 \x01(\bH\bR\vpendingExit\x88\x01\x01\x12\x1e\n" +
+	"\bframe_id\x18\x16 \x01(\tH\tR\aframeId\x88\x01\x01\x12\x1a\n" +
+	"\x06hat_id\x18\x17 \x01(\tH\n" +
+	"R\x05hatId\x88\x01\x01\x12&\n" +
+	"\faccessory_id\x18\x18 \x01(\tH\vR\vaccessoryId\x88\x01\x01\x12\x1b\n" +
+	"\tbadge_ids\x18\x19 \x03(\tR\bbadgeIdsB\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +
@@ -2060,7 +2098,10 @@ const file_poker_proto_rawDesc = "" +
 	"\x10_playstyle_badgeB\x0f\n" +
 	"\r_run_it_twiceB\r\n" +
 	"\v_auto_rebuyB\x0f\n" +
-	"\r_pending_exit\"n\n" +
+	"\r_pending_exitB\v\n" +
+	"\t_frame_idB\t\n" +
+	"\a_hat_idB\x0f\n" +
+	"\r_accessory_id\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
 	"\n" +

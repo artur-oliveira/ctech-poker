@@ -52,6 +52,11 @@ message Seat {
   // once no longer dealt into the current hand, will be removed and cashed
   // out automatically. Cancelable via cancel_exit until that removal commits.
   optional bool pending_exit = 21;
+  // Public equipped cosmetic ids; may be unknown to older clients.
+  optional string frame_id = 22;
+  optional string hat_id = 23;
+  optional string accessory_id = 24;
+  repeated string badge_ids = 25;
 }
 
 message BlindEscalation {
