@@ -3,6 +3,7 @@
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
 import type {HandItem} from '@/lib/api/player';
+import type {Entry} from '@/lib/api/gamification';
 import type {DeckVariantId} from '@/lib/cardVariants';
 import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
@@ -1188,10 +1189,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     // ranking page's filters are exercisable offline: a month holds a fraction
     // of a lifetime's hands, and rows arrive already ordered by the metric
     // asked for (the client only re-sorts within the page it received).
-    const lifetime = [
-      {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},
+    const lifetime: Entry[] = [
+      {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286,
+        equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown', equipped_accessory_id: 'monocle',
+        equipped_badge_ids: ['all-in-hero', 'veteran']},
       {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
-      {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
+      {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244,
+        equipped_frame_id: 'chip-ring', equipped_badge_ids: ['iron-nerve']},
+      {player_id: 'caio_goiânia', player_name: 'Caio', hands_played: 160, hands_won: 38, win_rate: .238,
+        equipped_frame_id: 'felt-ring', equipped_hat_id: 'cowboy', equipped_badge_ids: ['rainmaker']},
+      {player_id: 'nina_recife', player_name: 'Nina', hands_played: 121, hands_won: 25, win_rate: .207},
     ];
     const rows = config.params?.period === 'month'
       ? lifetime.map(entry => ({
@@ -1342,6 +1349,12 @@ const baseSeats = () => [
     player_id: 'bia_sp',
     name: 'Bia',
     playstyle_badge: 'explorer',
+    // Fully decorated, so dev:mock and the e2e layout gate exercise a seat
+    // wearing every cosmetic slot.
+    frame_id: 'champion-gold',
+    hat_id: 'crown',
+    accessory_id: 'monocle',
+    badge_ids: ['all-in-hero', 'veteran'],
     stack: 3925,
     state: 'active',
     dealt_in: true,
@@ -1351,6 +1364,9 @@ const baseSeats = () => [
   {
     player_id: 'leo_rio',
     name: 'Léo',
+    // A folded seat with a frame and a badge: the dashed folded outline must stay visible.
+    frame_id: 'chip-ring',
+    badge_ids: ['iron-nerve'],
     stack: 6100,
     state: 'folded',
     dealt_in: true,
@@ -1435,6 +1451,10 @@ function fullHandSeats(): SeatView[] {
       player_id: 'bia_sp',
       name: 'Bia',
       playstyle_badge: 'explorer',
+      frame_id: 'champion-gold',
+      hat_id: 'crown',
+      accessory_id: 'monocle',
+      badge_ids: ['all-in-hero', 'veteran'],
       stack: 3925,
       state: 'active',
       dealt_in: true,
