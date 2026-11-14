@@ -268,6 +268,16 @@ The palette reads as a cardroom after dark: oxblood signals intent, green felt l
 
 **A seat's state is never only a word, and never only a hue.** On coarse pointers the state caption is clipped to the accessibility tree — the lane cannot hold it, and the longest of them ("Desconectado") clipped outright — so each state that matters carries a cue that differs by *shape*: all-in a solid gold ring on the avatar backed by an ink ring (so the 3:1 non-text boundary holds against any felt or rail), folded a dashed muted outline plus the grayscale and the half-opacity hole cards it already had, disconnected an explicit wifi-off badge, sitting out grayscale with no badge and no cards. Two states that both mean "not acting" must stay distinguishable from each other, not just from a live seat.
 
+### Avatar cosmetics art contract
+
+Frames, hats and accessories are inline SVG components registered by id in `src/lib/avatarCosmetics.ts` (`AVATAR_ITEMS`, ids and pt-BR labels; unknown ids render nothing); badges are a lucide glyph plus a tone.
+
+- **Tokens.** Art fills only with `var(--cosmetic-*)`, and each token aliases a palette token, so no new hex was needed: `--cosmetic-gold` = `--gold`, `--cosmetic-gold-pale` = `--gold-pale`, `--cosmetic-oxblood` = `--brand`, `--cosmetic-felt` = `--felt`, `--cosmetic-walnut` = `--table-rail`, `--cosmetic-paper` = `--paper`, `--cosmetic-ink` = `--ink`, `--cosmetic-wine` = `--wine`.
+- **Box.** Every art piece is drawn in `viewBox="0 0 64 64"` with the avatar circle centred, r=32. Nothing is drawn outside the box (no overflow, no `overflow: visible` ancestors).
+- **Layer order**, bottom to top: avatar image, accessory (eye line, y 24-40; mustache y 40-48), hat (y 0-26, overlapping the avatar top), frame (ring, stroke fully inside the box).
+- **No outline.** Decoration never uses CSS `outline`; that stays reserved for focus and for the folded/all-in seat states, which a frame must not hide.
+- **Accessibility.** Art is `aria-hidden`, `focusable="false"`, `pointer-events: none`; the avatar's accessible name is unchanged.
+
 ## Typography
 
 **Display Font:** IBM Plex Sans, with ui-sans-serif, system-ui, and sans-serif fallbacks

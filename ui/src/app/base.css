@@ -117,6 +117,17 @@
        and say so in their own [data-table-theme] blocks (renderer.css). See
        DESIGN.md, "Seat stack legibility". */
     --seat-stack-ink: color-mix(in srgb, var(--gold-pale) 75%, #ffffff);
+    /* Avatar cosmetics art (frames/hats/accessories/badges) fills with these
+       names only; each aliases a palette token, so a palette change reaches
+       the art too. No new hex. See DESIGN.md "Avatar cosmetics art contract". */
+    --cosmetic-gold: var(--gold);
+    --cosmetic-gold-pale: var(--gold-pale);
+    --cosmetic-oxblood: var(--brand);
+    --cosmetic-felt: var(--felt);
+    --cosmetic-walnut: var(--table-rail);
+    --cosmetic-paper: var(--paper);
+    --cosmetic-ink: var(--ink);
+    --cosmetic-wine: var(--wine);
     /* Table geometry, one derivation. The rail's inset is authored per side
        (the portrait capsule is pushed down inside its ring to leave the top
        seats' cards room under the header), but the felt is ALWAYS the rail
