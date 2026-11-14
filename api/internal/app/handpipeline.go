@@ -127,28 +127,35 @@ type cosmeticGranter interface {
 	Grant(ctx context.Context, playerID string, kind cosmetics.Kind, itemID, reason string) (created bool, err error)
 }
 
-// announceUnlocks tells each player about their unlocked tiers and grants the
-// avatar items those tiers map to. It runs inside the ClaimHandCounters
-// branch, so at most once per hand; Grant is idempotent on top of that. A
-// grant is best-effort: an error is logged and never stops the remaining
-// unlocks, the leaderboard or the rest of the hand. Order per unlock is the
-// achievement toast first, then one cosmetic_unlocked frame per item this
-// call actually created. Costs DynamoDB only when an unlock maps to an item
-// (one conditional write per item, see TestHandPipelineGrantBudget).
+// announceUnlocks tells each player about their unlocked tiers
+// (achievement_unlocked toast). Pure broadcast, no I/O.
 func (p *handPipeline) announceUnlocks(ctx context.Context, tableID string, unlocks []achievements.TierUnlock) {
 	for _, unlock := range unlocks {
-		key := tableID + "#" + unlock.PlayerID
 		data, err := goproto.Marshal(&pokerproto.ServerMessage{
 			Type:  "achievement_unlocked",
 			Key:   unlock.Key,
 			Stars: int32(unlock.Stars),
 		})
 		if err == nil {
-			p.reg.Broadcast(ctx, key, data)
+			p.reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
 		}
-		if p.cosmetics == nil {
-			continue
-		}
+	}
+}
+
+// grantUnlocks grants the avatar items the unlocked tiers map to. It runs
+// inside the ClaimHandCounters branch, so at most once per hand; Grant is
+// idempotent on top of that. It runs AFTER the leaderboard writes: those are
+// non-retried increments sharing the pipeline timeout, and a slow grant must
+// not eat into it. A grant is best-effort: an error is logged and never stops
+// the remaining unlocks. One cosmetic_unlocked frame per item this call
+// actually created (after the toasts). Costs DynamoDB only when an unlock maps
+// to an item (one conditional write per item, see TestHandPipelineGrantBudget).
+func (p *handPipeline) grantUnlocks(ctx context.Context, tableID string, unlocks []achievements.TierUnlock) {
+	if p.cosmetics == nil {
+		return
+	}
+	for _, unlock := range unlocks {
+		key := tableID + "#" + unlock.PlayerID
 		// ponytail: lower rows are retried on every higher-tier unlock (one
 		// failed conditional write + one read each); add a previousStars field
 		// to achievements.TierUnlock and grant only rows above it if that cost
@@ -332,6 +339,7 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 			slog.Error("achievements record hand failed", "table", tableID, "err", err)
 		}
 		p.announceUnlocks(ctx, tableID, unlocks)
+		// Leaderboard writes before the grants: see grantUnlocks.
 		unlocksErr := p.leaderboard.RecordUnlocks(ctx, mode, unlocks)
 		handErr := p.leaderboard.RecordHand(ctx, mode, outcome, names)
 		if unlocksErr != nil {
@@ -340,6 +348,7 @@ func (p *handPipeline) run(ctx context.Context, tableID, handID string, outcome 
 		if handErr != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", handErr)
 		}
+		p.grantUnlocks(ctx, tableID, unlocks)
 	}
 	if metricsErr == nil {
 		err := p.pokerStats.RecordHand(ctx, mode, tableID, handID, metrics)

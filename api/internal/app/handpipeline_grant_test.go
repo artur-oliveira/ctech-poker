@@ -97,7 +97,7 @@ func TestUnlockGrantsMappedItemAfterAchievementFrame(t *testing.T) {
 	reg, granter := &recordingRegistry{}, newFakeGranter()
 	p := &handPipeline{reg: reg, cosmetics: granter}
 
-	p.announceUnlocks(context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 1}})
+	announceAndGrant(p, context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 1}})
 
 	frames := reg.to("t1#p1")
 	if len(frames) != 2 {
@@ -115,8 +115,8 @@ func TestRepeatedUnlockGrantsNothingTheSecondTime(t *testing.T) {
 	p := &handPipeline{reg: reg, cosmetics: granter}
 	unlocks := []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 1}}
 
-	p.announceUnlocks(context.Background(), "t1", unlocks)
-	p.announceUnlocks(context.Background(), "t1", unlocks)
+	announceAndGrant(p, context.Background(), "t1", unlocks)
+	announceAndGrant(p, context.Background(), "t1", unlocks)
 
 	frames := reg.to("t1#p1")
 	if len(frames) != 3 {
@@ -133,7 +133,7 @@ func TestGrantErrorDoesNotStopOtherUnlocks(t *testing.T) {
 	granter.fail["dealer-visor"] = true
 	p := &handPipeline{reg: reg, cosmetics: granter}
 
-	p.announceUnlocks(context.Background(), "t1", []achievements.TierUnlock{
+	announceAndGrant(p, context.Background(), "t1", []achievements.TierUnlock{
 		{PlayerID: "p1", Key: "hands_played", Stars: 1},
 		{PlayerID: "p2", Key: "wins", Stars: 3},
 	})
@@ -155,7 +155,7 @@ func TestUnmappedUnlockGrantsNothing(t *testing.T) {
 	reg, granter := &recordingRegistry{}, newFakeGranter()
 	p := &handPipeline{reg: reg, cosmetics: granter}
 
-	p.announceUnlocks(context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: achievements.KeyComeback, Stars: 1}})
+	announceAndGrant(p, context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: achievements.KeyComeback, Stars: 1}})
 
 	if len(granter.calls) != 0 {
 		t.Fatalf("unmapped unlock must not grant, got %v", granter.calls)
@@ -169,7 +169,7 @@ func TestTierSkippingUnlockGrantsEveryLowerRow(t *testing.T) {
 	reg, granter := &recordingRegistry{}, newFakeGranter()
 	p := &handPipeline{reg: reg, cosmetics: granter}
 
-	p.announceUnlocks(context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 3}})
+	announceAndGrant(p, context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 3}})
 
 	frames := reg.to("t1#p1")
 	if len(frames) != 4 {
@@ -185,7 +185,7 @@ func TestNilGranterStillAnnouncesAchievements(t *testing.T) {
 	reg := &recordingRegistry{}
 	p := &handPipeline{reg: reg}
 
-	p.announceUnlocks(context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 1}})
+	announceAndGrant(p, context.Background(), "t1", []achievements.TierUnlock{{PlayerID: "p1", Key: "hands_played", Stars: 1}})
 
 	frames := reg.to("t1#p1")
 	if len(frames) != 1 {
@@ -264,4 +264,10 @@ func TestHandPipelineGrantBudget(t *testing.T) {
 	if !touched(with.tables, "poker_cosmetic_entitlements") {
 		t.Errorf("no entitlement was written: tables %v", sortedOps(with.tables))
 	}
+}
+
+// announceAndGrant runs the two steps the pipeline runs around the leaderboard writes.
+func announceAndGrant(p *handPipeline, ctx context.Context, tableID string, unlocks []achievements.TierUnlock) {
+	p.announceUnlocks(ctx, tableID, unlocks)
+	p.grantUnlocks(ctx, tableID, unlocks)
 }
