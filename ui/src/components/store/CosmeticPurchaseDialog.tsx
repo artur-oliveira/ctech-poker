@@ -165,7 +165,7 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
     <DialogContent className="reaction-purchase-dialog cosmetic-purchase-dialog" finalFocus={finalFocusRef}>
       <DialogHeader>
         <span className="cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id} pairedItemId={pairedItemId}/></span>
-        <DialogTitle>{confirmed ? `${label} liberado` : `Liberar ${label}`}</DialogTitle>
+        <DialogTitle>{confirmed ? `Item liberado: ${label}` : `Liberar ${label}`}</DialogTitle>
         <DialogDescription>{confirmed
           ? avatar ? 'O item é seu para sempre. Equipe no perfil para aparecer em qualquer mesa.'
             : 'O item é seu para sempre e já pode ser usado em qualquer mesa.'

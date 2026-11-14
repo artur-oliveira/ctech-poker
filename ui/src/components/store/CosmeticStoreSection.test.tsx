@@ -69,7 +69,7 @@ describe('DeckStoreSection', () => {
 
   test('an unowned premium deck can be bought', async () => {
     renderSection();
-    expect(screen.getAllByText('Não liberada').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('A liberar').length).toBeGreaterThan(0);
     await userEvent.click(screen.getAllByRole('button', {name: 'Liberar'})[0]);
     expect(actions.onBuyAction).toHaveBeenCalledWith(expect.objectContaining({id: 'golden'}), expect.any(HTMLButtonElement));
   });
@@ -77,7 +77,7 @@ describe('DeckStoreSection', () => {
   test('an owned premium deck shows an owned state and can be refunded, no buy button', async () => {
     renderSection([purchase()], {catalog: ownedGoldenCatalog});
     const items = within(screen.getByRole('list', {name: 'Catálogo de baralhos'})).getAllByRole('listitem');
-    const owned = items.find(item => within(item).queryByText('Sua'));
+    const owned = items.find(item => within(item).queryByText('Na coleção'));
     expect(owned).toBeDefined();
     expect(within(owned!).queryByRole('button', {name: 'Liberar'})).not.toBeInTheDocument();
     await userEvent.click(within(owned!).getByRole('button', {name: /Estornar/}));
@@ -89,7 +89,7 @@ describe('DeckStoreSection', () => {
     // legitimately disagree; the owned state must still render.
     renderSection([], {catalog: ownedGoldenCatalog});
     const items = within(screen.getByRole('list', {name: 'Catálogo de baralhos'})).getAllByRole('listitem');
-    const owned = items.find(item => within(item).queryByText('Sua'));
+    const owned = items.find(item => within(item).queryByText('Na coleção'));
     expect(owned).toBeDefined();
     expect(within(owned!).queryByRole('button')).not.toBeInTheDocument();
   });
@@ -191,14 +191,23 @@ describe('avatar item sections', () => {
   test('an owned earned hat shows no price', () => {
     render(<HatStoreSection catalog={[{kind: 'hat', id: 'crown', premium: true, owned: true, source: 'achievement',
       available: true}]} purchases={[]} isLoading={false} isError={false} {...actions}/>);
-    expect(within(item('Coroa')).getByText('Sua')).toBeInTheDocument();
+    expect(within(item('Coroa')).getByText('Na coleção')).toBeInTheDocument();
     expect(within(item('Coroa')).queryByText(/R\$|fichas/)).not.toBeInTheDocument();
+  });
+
+  test('a premium entry the server sent without a price is never sellable', () => {
+    render(<DeckStoreSection catalog={[{kind: 'deck', id: 'golden', premium: true, owned: false}]} purchases={[]}
+      isLoading={false} isError={false} {...actions}/>);
+    const row = within(screen.getByRole('list', {name: 'Catálogo de baralhos'})).getByRole('listitem');
+    expect(within(row).getByText('Indisponível')).toBeInTheDocument();
+    expect(within(row).queryByText(/R\$|fichas/)).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument();
   });
 
   test('an owned hat links to the profile to equip it', () => {
     renderHats();
     const row = item('Gorro');
-    expect(within(row).getByText('Sua')).toBeInTheDocument();
+    expect(within(row).getByText('Na coleção')).toBeInTheDocument();
     expect(within(row).getByRole('link', {name: /Equipar no perfil/})).toHaveAttribute('href', '/player-profile');
     expect(within(row).queryByRole('button', {name: 'Liberar'})).not.toBeInTheDocument();
   });

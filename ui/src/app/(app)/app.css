@@ -6121,7 +6121,7 @@ button.deck-grid-slot:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    min-height: 34px;
+    min-height: 44px;
     padding-inline: 4px;
     color: var(--gold-pale);
     font-size: var(--font-size-compact);
@@ -6511,7 +6511,7 @@ button.deck-grid-slot:hover {
     }
 .cosmetic-store-item {
         /* The state label spans the preview column and a spare one, so a label
-           wider than the 48px preview ("Não liberada", "Conquista") never
+           wider than the 48px preview ("A liberar", "Conquista") never
            pushes the item's name off its column. */
         grid-template-columns: 48px auto minmax(0, 1fr);
         grid-template-areas: "preview copy copy" "state state action"

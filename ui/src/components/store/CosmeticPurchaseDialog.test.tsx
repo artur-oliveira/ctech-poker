@@ -54,6 +54,8 @@ describe('CosmeticPurchaseDialog', () => {
     expect(createCosmeticPurchase).toHaveBeenCalledWith('deck', 'golden', 'fichas');
     expect(await screen.findByText('Pronto para a mesa')).toBeInTheDocument();
     expect(onConfirmedAction).toHaveBeenCalledWith(confirmed);
+    // Neutral wording for every kind: "Dourado liberado" would not agree with "Cartola" or "Óculos Escuros".
+    expect(screen.getByRole('heading', {name: /^Item liberado: /})).toBeInTheDocument();
   });
 
   test('blocks the fichas option when the sandbox balance is short', () => {
@@ -159,6 +161,7 @@ describe('CosmeticPurchaseDialog', () => {
         initialPurchase={purchase({kind: 'hat', item_id: 'top-hat', status: 'confirmed'})}
         onCloseAction={vi.fn()}/>, {wrapper});
       expect(screen.getByText(/Equipar no perfil/).closest('a')).toHaveAttribute('href', '/player-profile');
+      expect(screen.getByRole('heading', {name: 'Item liberado: Cartola'})).toBeInTheDocument();
     });
   });
 });

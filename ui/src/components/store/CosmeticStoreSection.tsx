@@ -68,22 +68,25 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
       const owned = entry.owned;
       const active = purchase?.status === 'pending' || purchase?.status === 'processing';
       const refunding = purchase?.status === 'refunding';
-      // Avatar kinds only; deck/felt never set source or available. An earned
-      // item is never priced or sold, and a closed sale window stops new
-      // purchases but never a Pix already under way (active wins above it).
+      // `source` is set on avatar kinds only; `available` comes with every
+      // kind (always true for deck/felt). An earned item is never priced or
+      // sold, a closed sale window stops new purchases, and a premium entry
+      // without a price is never offered for sale. None of these stops a Pix
+      // already under way (active wins above it).
       const earnable = entry.source === 'achievement' || entry.source === 'season';
-      const unavailable = !owned && !active && !refunding && (earnable || entry.available === false);
+      const unavailable = !owned && !active && !refunding &&
+        (earnable || entry.available === false || entry.price_cents === undefined);
       return <li key={entry.id} className={`cosmetic-store-item${owned ? ' owned' : ''}`}>
         <span className="cosmetic-store-preview" aria-hidden="true">{renderPreview(entry.id)}</span>
         <span className="cosmetic-store-copy"><strong>{labelFor(entry.id)}</strong>
           {entry.premium && !earnable && !unavailable && <small>{moneyExact(entry.price_cents)} <span aria-hidden="true">·</span>
             {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small>}</span>
         {!entry.premium ? <span className="cosmetic-store-free">Grátis</span>
-          : owned ? <span className="cosmetic-store-owned"><Sparkles aria-hidden="true"/> Sua</span>
+          : owned ? <span className="cosmetic-store-owned"><Sparkles aria-hidden="true"/> Na coleção</span>
             : active || refunding ? <span className="cosmetic-store-state">{STATUS_LABEL[purchase!.status]}</span>
               : earnable ? <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> Conquista</span>
                 : unavailable ? <span className="cosmetic-store-state">Indisponível</span>
-                  : <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> Não liberada</span>}
+                  : <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> A liberar</span>}
         <span className="cosmetic-store-action">
           {!entry.premium ? null
             : owned ? <>
