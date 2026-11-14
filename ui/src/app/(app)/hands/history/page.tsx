@@ -28,6 +28,7 @@ import {getHandMeta, HAND_META_KEY, saveHandMeta, type HandMetaStreet} from '@/l
 import {getRelationships} from '@/lib/api/social';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {decorProps} from '@/lib/avatarCosmetics';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {ActionTimeline} from '@/components/hands/ActionTimeline';
@@ -273,7 +274,7 @@ function HandHistoryContent() {
       {(h.opponents || []).map((o, i) => {
         const category = categoryFor(o.hole_cards);
         const identity = <>
-          <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36}/>
+          <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36} {...decorProps(o)}/>
           <b>{o.name || 'Adversário'}</b>
         </>;
         const relationship = o.player_id ? relationshipsByID[o.player_id] : undefined;

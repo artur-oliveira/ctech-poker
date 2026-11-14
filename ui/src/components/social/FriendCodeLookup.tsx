@@ -4,6 +4,7 @@ import {Check, Copy, Search, UserPlus} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
 import {Button, Field, Input} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {decorProps} from '@/lib/avatarCosmetics';
 import {getMe} from '@/lib/api/player';
 import {lookupFriendCode, type SocialPlayer} from '@/lib/api/social';
 import {socialErrorMessage} from '@/lib/social';
@@ -68,7 +69,7 @@ export function FriendCodeLookup({actions}: { actions: SocialActionState }) {
       </div>}
     </Field>
     {found && <div className="friend-code-result">
-        <PlayerAvatar name={found.name} avatarUrl={found.avatar_url} size={40}/>
+        <PlayerAvatar name={found.name} avatarUrl={found.avatar_url} size={40} {...decorProps(found)}/>
         <b>{playerName(found.player_id, undefined, found.name)}</b>
       {sent || found.relationship === 'outgoing' ? <span role="status">Solicitação enviada</span>
         : found.relationship === 'friend' ? <span>Já é seu amigo</span>

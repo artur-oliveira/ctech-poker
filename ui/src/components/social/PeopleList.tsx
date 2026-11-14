@@ -3,6 +3,7 @@ import Link from 'next/link';
 import {Check, RotateCw, UserPlus, X} from 'lucide-react';
 import {Button, SkeletonList} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {decorProps} from '@/lib/avatarCosmetics';
 import type {ReportSurface, SocialPlayer} from '@/lib/api/social';
 import type {SocialActionState} from '@/lib/hooks/useSocialActions';
 import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
@@ -66,7 +67,7 @@ export function PeopleList({
         const busy = actions.pending?.id === player.player_id;
         const name = playerName(player.player_id, undefined, player.name);
         return <li key={player.player_id} className="people-row">
-          <PlayerAvatar name={player.name} avatarUrl={player.avatar_url} size={40}/>
+          <PlayerAvatar name={player.name} avatarUrl={player.avatar_url} size={40} {...decorProps(player)}/>
           <div className="people-row-identity">
             <b>{name}</b>
             <small>

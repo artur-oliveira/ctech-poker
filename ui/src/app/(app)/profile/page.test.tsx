@@ -93,6 +93,16 @@ describe('public player profile page', () => {
     expect(screen.getAllByRole('link', {name: 'Lobby'}).some(link => link.getAttribute('href') === '/lobby')).toBe(true);
   });
   
+  test('the showcase avatar wears the equipped cosmetics', () => {
+    mocks.query = queryState({...(mocks.query as {data: ProfileShowcase}).data, equipped_hat_id: 'crown',
+      equipped_frame_id: 'champion-gold', equipped_badge_ids: ['veteran']});
+    const {container} = render(<ProfilePage/>);
+    const header = container.querySelector('.player-avatar-decorated')!;
+    expect(header.querySelector('.profile-showcase-avatar')).toBeInTheDocument();
+    expect(header.querySelectorAll('.player-avatar-art > svg')).toHaveLength(2);
+    expect(header.querySelectorAll('.player-avatar-badge')).toHaveLength(1);
+  });
+
   test('disables the request without an id and exposes the public navigation', () => {
     mocks.playerID = '';
     mocks.session = {authed: false, checking: false};

@@ -5506,7 +5506,16 @@ button.deck-grid-slot:hover {
     font-weight: 700;
     font-size: 1.05rem;
     color: var(--on-brand);
+    margin-top: 10px;
     margin-bottom: 6px;
+}
+/* The row's avatar sits beside the name; 28px stays inside the two-line
+   name/aside block, so the virtualized row keeps its height. */
+.ranking-player {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0
 }
 .podium-stats {
     display: flex;

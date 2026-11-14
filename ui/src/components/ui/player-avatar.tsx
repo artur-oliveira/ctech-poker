@@ -41,7 +41,10 @@ export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className
   const Accessory = accessoryId ? ACCESSORY_ART[accessoryId] : undefined;
   const Hat = hatId ? HAT_ART[hatId] : undefined;
   const Frame = frameId ? FRAME_ART[frameId] : undefined;
-  return <span className="player-avatar-decorated">
+  // A sized avatar scales its badges like the seat does (40%, 12-20px), so a
+  // 28px leaderboard row does not wear a 20px badge.
+  const badgeSize = size ? {'--avatar-badge-size': `${Math.min(20, Math.max(12, Math.round(size * .4)))}px`} as CSSProperties : undefined;
+  return <span className="player-avatar-decorated" style={badgeSize}>
     {avatar}
     {(frameId || hatId || accessoryId) && <span className="player-avatar-art" aria-hidden="true">
       {Accessory && <Accessory/>}
