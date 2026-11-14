@@ -4,6 +4,11 @@
 // docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
 package cosmetics
 
+import (
+	"slices"
+	"time"
+)
+
 // Kind distinguishes the two cosmetic catalogs. Deck and felt ids don't
 // collide today, but byID/bySKU key on the (Kind, ID) pair regardless so the
 // map never has to assume that forever.
@@ -23,7 +28,43 @@ const (
 	// decision per #292 — this catalog only fixes which ids exist.
 	KindFrame Kind = "frame"
 	KindBadge Kind = "badge"
+	// KindHat and KindAccessory are the remaining avatar decoration slots.
+	KindHat       Kind = "hat"
+	KindAccessory Kind = "accessory"
 )
+
+// Source says how an avatar item is obtained. Deck/felt entries leave it empty.
+type Source string
+
+const (
+	SourcePurchase    Source = "purchase"
+	SourceAchievement Source = "achievement"
+	SourceSeason      Source = "season"
+)
+
+// IsAvatarKind reports whether kind is an avatar decoration (frame, hat, accessory, badge).
+func IsAvatarKind(kind Kind) bool {
+	switch kind {
+	case KindFrame, KindHat, KindAccessory, KindBadge:
+		return true
+	}
+	return false
+}
+
+// Decor is the set of avatar decorations a player has equipped.
+type Decor struct {
+	Frame, Hat, Accessory string
+	Badges                []string
+}
+
+func (d Decor) Empty() bool {
+	return d.Frame == "" && d.Hat == "" && d.Accessory == "" && len(d.Badges) == 0
+}
+
+// Equal compares field by field; nil and empty Badges are equal, badge order matters.
+func (d Decor) Equal(o Decor) bool {
+	return d.Frame == o.Frame && d.Hat == o.Hat && d.Accessory == o.Accessory && slices.Equal(d.Badges, o.Badges)
+}
 
 // CatalogEntry mirrors reactions.ReactionCatalogEntry's shape. PriceFichas is
 // fixed here (never client-supplied); PriceCents for the same item is fixed
@@ -35,6 +76,11 @@ type CatalogEntry struct {
 	Premium     bool
 	PriceFichas int64  // 0 if !Premium
 	SKU         string // wallet ProductSKU ID. "" if !Premium.
+	// Source is set on avatar kinds only: purchase requires SKU and
+	// PriceFichas > 0; achievement/season forbid both.
+	Source Source
+	// From/Until bound the sale window; the zero value means open.
+	From, Until time.Time
 }
 
 var catalog = []CatalogEntry{
@@ -57,31 +103,36 @@ var catalog = []CatalogEntry{
 	// Frames/badges are always Premium (so ownership is never universal —
 	// see the KindFrame/KindBadge doc comment above) but carry no SKU/price:
 	// they are granted, not sold.
-	{Kind: KindFrame, ID: "season-2026-q3", Premium: true},
-	{Kind: KindFrame, ID: "champion-gold", Premium: true},
-	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true},
-	{Kind: KindBadge, ID: "season-2026-q3-champion", Premium: true},
+	{Kind: KindFrame, ID: "season-2026-q3", Premium: true, Source: SourceSeason},
+	{Kind: KindFrame, ID: "champion-gold", Premium: true, Source: SourceSeason},
+	{Kind: KindBadge, ID: "season-2026-q3-top10", Premium: true, Source: SourceSeason},
+	{Kind: KindBadge, ID: "season-2026-q3-champion", Premium: true, Source: SourceSeason},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
 
-var byID = func() map[string]CatalogEntry {
-	m := make(map[string]CatalogEntry, len(catalog))
-	for _, e := range catalog {
-		m[catalogKey(e.Kind, e.ID)] = e
-	}
-	return m
-}()
+var byID, bySKU = buildIndexes(catalog)
 
-var bySKU = func() map[string]CatalogEntry {
-	m := make(map[string]CatalogEntry)
-	for _, e := range catalog {
+func buildIndexes(entries []CatalogEntry) (id, sku map[string]CatalogEntry) {
+	id = make(map[string]CatalogEntry, len(entries))
+	sku = make(map[string]CatalogEntry)
+	for _, e := range entries {
+		id[catalogKey(e.Kind, e.ID)] = e
 		if e.SKU != "" {
-			m[e.SKU] = e
+			sku[e.SKU] = e
 		}
 	}
-	return m
-}()
+	return id, sku
+}
+
+// Available reports whether the item exists and now falls inside its sale window.
+func Available(kind Kind, id string, now time.Time) bool {
+	e, ok := byID[catalogKey(kind, id)]
+	if !ok {
+		return false
+	}
+	return (e.From.IsZero() || !now.Before(e.From)) && (e.Until.IsZero() || now.Before(e.Until))
+}
 
 func IsKnown(kind Kind, id string) bool {
 	_, ok := byID[catalogKey(kind, id)]
