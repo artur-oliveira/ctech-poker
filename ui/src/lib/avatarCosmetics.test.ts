@@ -6,7 +6,7 @@ vi.mock('./api/client', () => ({apiClient: {get: (...a: unknown[]) => get(...a)}
 import {AVATAR_ITEMS, avatarBadgeLabel, hasAvatarItems, decorProps, avatarFrameLabel, avatarItemLabel, listOwnedAvatarCosmetics} from './avatarCosmetics';
 
 describe('avatarCosmetics', () => {
-  test('registry has the launch set: 14 frames, 12 hats, no accessories, 7 badges with pt-BR labels', () => {
+  test('registry has the launch set: 22 frames, 12 hats, 7 ornaments, 7 badges with pt-BR labels', () => {
     const labels = (slot: keyof typeof AVATAR_ITEMS) =>
       Object.fromEntries(Object.entries(AVATAR_ITEMS[slot]).map(([id, v]) => [id, v.label]));
     expect(labels('frame')).toEqual({
@@ -16,6 +16,9 @@ describe('avatarCosmetics', () => {
       'silver-filigree': 'Filigrana de Prata', 'pearl-beads': 'Colar de Pérolas', 'rose-gold': 'Ouro Rosé',
       'obsidian-edge': 'Borda de Obsidiana', 'emerald-cut': 'Esmeralda', 'sapphire-deco': 'Art Déco Safira',
       'olive-branch': 'Ramo de Oliveira', 'suit-ring': 'Naipes',
+      inferno: 'Borda Inferno', 'arcane-aura': 'Aura Arcana', 'storm-ring': 'Anel de Tempestade',
+      'gold-shimmer': 'Ouro Cintilante', 'baroque-gilt': 'Dourado Barroco', 'laurel-wreath': 'Coroa de Louros',
+      'art-nouveau': 'Art Nouveau', 'celtic-knot': 'Nó Celta',
     });
     expect(labels('hat')).toEqual({
       'dealer-visor': 'Viseira do Dealer', crown: 'Coroa', laurel: 'Louros',
@@ -23,7 +26,11 @@ describe('avatarCosmetics', () => {
       fedora: 'Fedora', beret: 'Boina', bowler: 'Chapéu-coco', 'captain-cap': 'Boné de Capitão',
       wizard: 'Chapéu de Mago', 'sun-visor': 'Viseira',
     });
-    expect(labels('accessory')).toEqual({});
+    expect(labels('accessory')).toEqual({
+      'angel-wings': 'Asas de Anjo', 'bat-wings': 'Asas de Morcego', 'gold-wings': 'Asas Douradas',
+      'dragon-wings': 'Asas de Dragão', 'devil-horns': 'Chifres de Diabo', 'ram-horns': 'Chifres de Carneiro',
+      'bull-horns': 'Chifres de Touro',
+    });
     expect(labels('badge')).toEqual({
       'season-2026-q3-top10': 'Top 10 da Temporada', 'season-2026-q3-champion': 'Campeão da Temporada',
       'all-in-hero': 'Herói do All-in', 'iron-nerve': 'Sangue Frio', rainmaker: 'Chuva de Fichas',
@@ -31,9 +38,9 @@ describe('avatarCosmetics', () => {
     });
   });
 
-  test('hasAvatarItems is false only for the empty accessory slot', () => {
+  test('hasAvatarItems is true for every slot now that the accessory slot holds the ornaments', () => {
     expect(['frame', 'hat', 'accessory', 'badge'].map(s => hasAvatarItems(s as keyof typeof AVATAR_ITEMS)))
-      .toEqual([true, true, false, true]);
+      .toEqual([true, true, true, true]);
   });
 
   test('avatarItemLabel falls back to the id for unknown ids and slots', () => {

@@ -94,7 +94,7 @@ function usePurchaseHistory<T>(queryKey: readonly unknown[], fetchPage: (cursor?
 
 // An avatar department (frame, hat, accessory) is below the fold, so unlike the
 // four eager catalogs its catalog waits for the section too: first paint adds no
-// request. A slot this build has no item for (accessory, for now) never reads
+// request. A slot this build has no item for never reads
 // anything and is left out of the page (hasAvatarItems). Until the section has been in view the grid reports loading, so it
 // is a skeleton or a whole grid, never one without its prices or actions.
 function useAvatarDepartment(kind: AvatarStoreKind, released: string, activitySeen: boolean) {
@@ -165,9 +165,9 @@ export default function Store() {
     {kind: 'hat', anchor: 'chapeus', title: 'Chapéus', icon: Crown, Grid: HatStoreSection, dept: hats,
       hint: 'Sobre a sua foto',
       description: 'Um chapéu sobre a sua foto. Alguns se compram, outros só vêm com conquistas.'},
-    {kind: 'accessory', anchor: 'acessorios', title: 'Acessórios', icon: Gem, Grid: AccessoryStoreSection,
-      dept: accessories, hint: 'Detalhes extras no avatar',
-      description: 'Detalhes extras no avatar. Libere uma vez e equipe no perfil.'},
+    {kind: 'accessory', anchor: 'adornos', title: 'Adornos', icon: Gem, Grid: AccessoryStoreSection,
+      dept: accessories, hint: 'Asas e chifres',
+      description: 'Asas abertas atrás da sua foto ou chifres sobre ela. Alguns se compram, outros só vêm com conquistas.'},
   ] as const).filter(department => hasAvatarItems(department.kind));
   const avatarDepts = avatarDepartments.map(department => department.dept);
 
@@ -517,7 +517,7 @@ export default function Store() {
                   onRetryAction={() => avatarDepts.forEach(dept => void dept.purchases.refetch())}
                   loadingLabel="Carregando compras do avatar…"
                   errorLabel="Não foi possível carregar as compras do avatar."
-                  emptyLabel="Suas compras de molduras e chapéus aparecerão aqui."/>
+                  emptyLabel="Suas compras de molduras, chapéus e adornos aparecerão aqui."/>
               </section>
             </div>
           </section>

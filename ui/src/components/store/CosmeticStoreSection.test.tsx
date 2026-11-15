@@ -2,7 +2,7 @@ import {render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {
-  AccessoryStoreSection, cosmeticActivityRows, DeckStoreSection, FeltStoreSection, FrameStoreSection, HatStoreSection
+  AccessoryStoreSection, AvatarItemPreview, cosmeticActivityRows, DeckStoreSection, FeltStoreSection, FrameStoreSection, HatStoreSection
 } from './CosmeticStoreSection';
 import type {CosmeticCatalogEntry, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 
@@ -222,16 +222,32 @@ describe('avatar item sections', () => {
     expect(within(list).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  test('frames render their catalog; an accessory id (no art in this build) is hidden', () => {
+  test('frames and ornaments render their catalog; an id with no art in this build is hidden', () => {
     render(<>
       <FrameStoreSection catalog={[{kind: 'frame', id: 'felt-ring', premium: true, source: 'purchase', available: true,
         price_cents: 600, price_fichas: 600_000}]} purchases={[]} isLoading={false} isError={false} {...actions}/>
       <AccessoryStoreSection catalog={[{kind: 'accessory', id: 'bandit-mask', premium: true, source: 'achievement',
-        available: true}]} purchases={[]} isLoading={false} isError={false} {...actions}/>
+        available: true}, {kind: 'accessory', id: 'bat-wings', premium: true, source: 'purchase', available: true,
+        price_cents: 2000, price_fichas: 6_000_000}]} purchases={[]} isLoading={false} isError={false} {...actions}/>
     </>);
     expect(within(screen.getByRole('list', {name: 'Catálogo de molduras'})).getByText('Borda de Feltro')).toBeInTheDocument();
-    expect(screen.queryByRole('list', {name: 'Catálogo de acessórios'})).not.toBeInTheDocument();
-    expect(screen.getByText('Nenhum acessório disponível no momento.')).toBeInTheDocument();
+    const ornaments = screen.getByRole('list', {name: 'Catálogo de adornos'});
+    expect(within(ornaments).getByText('Asas de Morcego')).toBeInTheDocument();
+    expect(within(ornaments).queryByText('bandit-mask')).not.toBeInTheDocument();
+  });
+
+  test('an ornament preview shrinks its avatar so the spread fits the tile; a frame keeps the full size', () => {
+    const width = (id: string, kind: 'accessory' | 'frame' = 'accessory') => {
+      const {container, unmount} = render(<AvatarItemPreview kind={kind} id={id} size={48}/>);
+      const avatar = container.querySelector<HTMLElement>('.player-avatar-decorated > [aria-hidden=true]:not(.player-avatar-wings):not(.player-avatar-art)');
+      const w = avatar?.style.width;
+      unmount();
+      return w;
+    };
+    // 48 / (1 + 2 x 18/64): the wings' 100-unit span is exactly the tile.
+    expect(width('bat-wings')).toBe('30px');
+    expect(width('devil-horns')).toBe('38px');
+    expect(width('inferno', 'frame')).toBe('48px');
   });
 });
 

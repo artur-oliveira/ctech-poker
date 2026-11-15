@@ -7,6 +7,7 @@ import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {BADGE_ART} from '@/components/avatar/badges';
 import {FRAME_ART} from '@/components/avatar/frames';
 import {HAT_ART} from '@/components/avatar/hats';
+import {ORNAMENT_ART} from '@/components/avatar/ornaments';
 import {type AvatarSlot, avatarItemLabel, hasAvatarItems, listOwnedAvatarCosmetics} from '@/lib/avatarCosmetics';
 import {type PlayerProfile, updateMe} from '@/lib/api/player';
 import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
@@ -24,9 +25,8 @@ const RADIO_SLOTS: Record<RadioSlot, {
     error: 'Não foi possível carregar suas bordas agora.', art: FRAME_ART, field: 'equipped_frame_id'},
   hat: {legend: 'Chapéu', group: 'Chapéu equipado', none: 'Nenhum', loading: 'Carregando chapéus…',
     error: 'Não foi possível carregar seus chapéus agora.', art: HAT_ART, field: 'equipped_hat_id'},
-  // Reserved slot with no art yet: hidden (and never read) while the registry is empty.
-  accessory: {legend: 'Acessório', group: 'Acessório equipado', none: 'Nenhum', loading: 'Carregando acessórios…',
-    error: 'Não foi possível carregar seus acessórios agora.', art: {}, field: 'equipped_accessory_id'},
+  accessory: {legend: 'Adorno', group: 'Adorno equipado', none: 'Nenhum', loading: 'Carregando adornos…',
+    error: 'Não foi possível carregar seus adornos agora.', art: ORNAMENT_ART, field: 'equipped_accessory_id'},
 };
 
 /** The pickers this build can show: a slot without any item has nothing to pick. */
@@ -73,9 +73,8 @@ function SlotOption({name, checked, label, onSelect, children}: {
 }
 
 /**
- * Avatar decoration (#292): one owned frame and hat (and accessory, once that
- * slot has items) and up to three
- * owned badges, saved through the same `POST /players/me` every other profile
+ * Avatar decoration (#292): one owned frame, hat and ornament (accessory
+ * slot) and up to three owned badges, saved through the same `POST /players/me` every other profile
  * field uses. Only owned ids are listed (granted or bought elsewhere; nothing
  * locked to browse here). Both previews render the pending, unsaved choice.
  */
@@ -132,7 +131,7 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
   return <section className="player-profile-section" aria-labelledby="player-profile-avatar-decoration-title">
     <header className="player-profile-section-head">
       <h2 id="player-profile-avatar-decoration-title">Visual do avatar</h2>
-      <p>Borda, chapéu e emblemas aparecem ao redor da sua foto em qualquer mesa e na sua vitrine.</p>
+      <p>Borda, chapéu, adorno e emblemas aparecem ao redor da sua foto em qualquer mesa e na sua vitrine.</p>
     </header>
 
     <div className="avatar-decoration-preview" aria-hidden="true">

@@ -15,6 +15,7 @@ import {AVATAR_ITEMS} from '@/lib/avatarCosmetics';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {FRAME_ART} from '@/components/avatar/frames';
 import {HAT_ART} from '@/components/avatar/hats';
+import {ORNAMENT_ART, ORNAMENT_SPREAD, ORNAMENTS} from '@/components/avatar/ornaments';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -126,10 +127,8 @@ export function FeltStoreSection(props: CosmeticSectionProps) {
     emptyLabel="Nenhum feltro disponível no momento."/>;
 }
 
-// The accessory slot has no art yet (reserved for the next phase), so every
-// accessory id is unlabelled and hidden like any id this build does not know.
-const AVATAR_ART: Record<AvatarStoreKind, Record<string, unknown>> = {frame: FRAME_ART, hat: HAT_ART, accessory: {}};
-const AVATAR_KIND_LABEL: Record<AvatarStoreKind, string> = {frame: 'Borda', hat: 'Chapéu', accessory: 'Acessório'};
+const AVATAR_ART: Record<AvatarStoreKind, Record<string, unknown>> = {frame: FRAME_ART, hat: HAT_ART, accessory: ORNAMENT_ART};
+const AVATAR_KIND_LABEL: Record<AvatarStoreKind, string> = {frame: 'Borda', hat: 'Chapéu', accessory: 'Adorno'};
 
 export const isAvatarStoreKind = (kind: CosmeticKind): kind is AvatarStoreKind => kind in AVATAR_ART;
 
@@ -146,7 +145,10 @@ export function cosmeticItemLabel(kind: CosmeticKind, id: string): string | unde
  * the table and profile use, never a second one. Decorative. */
 export function AvatarItemPreview({kind, id, size}: { kind: AvatarStoreKind; id: string; size: number }) {
   const slot = {frame: {frameId: id}, hat: {hatId: id}, accessory: {accessoryId: id}}[kind];
-  return <PlayerAvatar isViewer decorative size={size} className="text-transparent" {...slot}/>;
+  // Wings and horns reach past the avatar's sides: shrink it so the whole span fits the preview's width.
+  const band = kind === 'accessory' ? ORNAMENTS[id]?.band : undefined;
+  const fit = band ? Math.floor(size / (1 + 2 * ORNAMENT_SPREAD[band])) : size;
+  return <PlayerAvatar isViewer decorative size={fit} className="text-transparent" {...slot}/>;
 }
 
 function avatarSection(kind: AvatarStoreKind, noun: string, plural: string) {
@@ -160,7 +162,7 @@ function avatarSection(kind: AvatarStoreKind, noun: string, plural: string) {
 
 export const FrameStoreSection = avatarSection('frame', 'a moldura', 'molduras');
 export const HatStoreSection = avatarSection('hat', ' chapéu', 'chapéus');
-export const AccessoryStoreSection = avatarSection('accessory', ' acessório', 'acessórios');
+export const AccessoryStoreSection = avatarSection('accessory', ' adorno', 'adornos');
 
 // Maps cosmetic purchases into the shared activity-list row shape. Ids never
 // collide across kinds that matter here, and each row is labelled by its kind.

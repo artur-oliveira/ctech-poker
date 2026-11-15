@@ -35,6 +35,7 @@ const me: PlayerProfile = {
 const OWNED: Record<string, string[]> = {
   frame: ['season-2026-q3', 'chip-ring'],
   hat: ['crown', 'top-hat'],
+  accessory: ['bat-wings', 'devil-horns'],
   badge: ['season-2026-q3-top10', 'season-2026-q3-champion'],
 };
 
@@ -57,25 +58,23 @@ describe('AvatarDecorationSection', () => {
   test('shows a short empty line per slot when nothing is owned', async () => {
     listOwnedAvatarCosmetics.mockResolvedValue([]);
     render(<AvatarDecorationSection me={me}/>, {wrapper});
-    expect(await screen.findAllByText(/Você ainda não tem itens deste tipo/)).toHaveLength(3);
+    expect(await screen.findAllByText(/Você ainda não tem itens deste tipo/)).toHaveLength(4);
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   test('lists only owned ids per slot, plus Nenhum/Nenhuma, with radio/checkbox semantics', async () => {
     render(<AvatarDecorationSection me={me}/>, {wrapper});
-    for (const slot of ['frame', 'hat', 'badge']) {
+    for (const slot of ['frame', 'hat', 'accessory', 'badge']) {
       expect(listOwnedAvatarCosmetics).toHaveBeenCalledWith(slot);
     }
-    // The accessory slot has no items in this build: no picker and no read.
-    expect(listOwnedAvatarCosmetics).not.toHaveBeenCalledWith('accessory');
-    expect(screen.queryByRole('group', {name: 'Acessório'})).not.toBeInTheDocument();
+    const ornaments = within(await group('Adorno equipado')).getAllByRole('radio').map(r => r.closest('label')?.textContent?.trim());
+    expect(ornaments).toEqual(['Nenhum', 'Asas de Morcego', 'Chifres de Diabo']);
     const hats = within(await group('Chapéu equipado')).getAllByRole('radio').map(r => r.closest('label')?.textContent?.trim());
     expect(hats).toEqual(['Nenhum', 'Coroa', 'Cartola']);
     const frames = within(await group('Borda equipada')).getAllByRole('radio');
     expect(frames).toHaveLength(3);
     expect(frames[0].closest('label')?.textContent?.trim()).toBe('Nenhuma');
-    expect(screen.queryByRole('radiogroup', {name: 'Acessório equipado'})).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', {name: 'Gorro'})).not.toBeInTheDocument();
     expect(await screen.findByRole('checkbox', {name: /Top 10 da Temporada/})).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
