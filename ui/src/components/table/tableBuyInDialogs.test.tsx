@@ -124,7 +124,7 @@ describe('BuyInPanel', () => {
     expect(seated).toHaveBeenCalledOnce();
   });
 
-  test('shows wallet activation guidance and real-money fee without seating on failure', async () => {
+  test('shows responsible-gambling guidance and real-money fee without seating on failure', async () => {
     const seated = vi.fn();
     mocks.query.mockReturnValue({
       data: {...sandboxRoom, currency_mode: 'real', buy_in_min: 10_000, buy_in_max: 20_000, entry_fee_cents: 250},
@@ -132,13 +132,13 @@ describe('BuyInPanel', () => {
     });
     mocks.joinRoom.mockRejectedValue({
       axios: true,
-      response: {data: {detail: 'has not activated gambling on ctech-wallet'}},
+      response: {status: 403, data: {type: '/problems/gambling-terms-required', detail: 'aceite o termo de jogo responsável para jogar com dinheiro real'}},
     });
     render(<BuyInPanel roomId="room-1" onSeatedAction={seated}/>);
     
     expect(screen.getByText(/Taxa fixa de mesa:/)).toHaveTextContent('R$ 2,50');
     await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
-    expect(await screen.findByRole('alert')).toHaveTextContent('carteira ainda não tem apostas ativadas');
+    expect(await screen.findByRole('alert')).toHaveTextContent('aceite o termo de jogo responsável');
     expect(seated).not.toHaveBeenCalled();
   });
   

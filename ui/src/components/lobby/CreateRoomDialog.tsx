@@ -114,7 +114,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
     <DialogContent>
       <DialogHeader><p className="font-mono text-xs tracking-widest text-(--brand-bright)">MESA PRIVADA</p><DialogTitle>Configure
         sua mesa</DialogTitle><DialogDescription>Convide amigos por link. {currencyMode === 'real'
-        ? 'Os valores abaixo são em dinheiro real, debitados da sua carteira ctech-wallet.'
+        ? 'Os valores abaixo são em dinheiro real, debitados do seu saldo na ctech-wallet.'
         : 'Os valores abaixo são em fichas.'}</DialogDescription></DialogHeader>
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
         {REAL_MONEY_UI_ENABLED && realStakes.length > 0 &&
@@ -144,8 +144,8 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
                                                                                                       })}>{option === 'real' ? 'Dinheiro real' : 'Fichas'}</button>)}
                                                                                           </div>}/></div>}
         {currencyMode === 'real' &&
-            <p className="form-error" role="alert">Dinheiro real exige ativação de apostas na sua carteira
-                ctech-wallet. Jogue com responsabilidade.</p>}
+            <p className="form-error" role="alert">Dinheiro real exige aceitar o termo de jogo responsável e definir seus limites
+                na seção Jogo responsável do seu perfil. Jogue com responsabilidade.</p>}
         <div className="space-y-2"><Label
           id="stake-label">Stakes {currencyMode === 'real' ? 'em dinheiro real' : 'em fichas'}</Label><Controller
           control={form.control}
