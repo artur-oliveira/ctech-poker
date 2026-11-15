@@ -394,14 +394,14 @@ describe('/player-profile', () => {
     mocks.realMoney.enabled = true;
     const view = render(<PlayerProfilePage/>);
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('switch', {name: 'Fichas'}));
+    await userEvent.click(screen.getByRole('button', {name: 'Dinheiro real'}));
     expect(mocks.mutate).toHaveBeenCalledWith({wallet_mode: 'real'});
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('Modo dinheiro real selecionado.', 'info'));
 
     view.unmount();
     mocks.state.player = {...player, wallet_mode: 'real'};
     render(<PlayerProfilePage/>);
-    await userEvent.click(screen.getByRole('switch', {name: 'Dinheiro real'}));
+    await userEvent.click(screen.getByRole('button', {name: 'Fichas'}));
     expect(mocks.mutate).toHaveBeenCalledWith({wallet_mode: 'sandbox'});
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('Modo fichas selecionado.', 'info'));
   });
@@ -410,7 +410,7 @@ describe('/player-profile', () => {
     mocks.realMoney.enabled = true;
     mocks.saveShouldFail = true;
     render(<PlayerProfilePage/>);
-    await userEvent.click(screen.getByRole('switch', {name: 'Fichas'}));
+    await userEvent.click(screen.getByRole('button', {name: 'Dinheiro real'}));
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']});
     expect(mocks.notify).toHaveBeenCalledWith(
       'Não foi possível trocar o modo de jogo. Seu modo atual foi mantido.');

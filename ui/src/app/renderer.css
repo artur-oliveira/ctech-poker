@@ -7798,6 +7798,25 @@ html:has(.has-tab-bar) {
     font-size: var(--font-size-compact);
     line-height: 1.4
 }
+.wallet-mode-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 14px;
+    max-width: 480px
+}
+.wallet-mode-setting label {
+    color: var(--paper);
+    font-size: var(--font-size-body)
+}
+.wallet-mode-setting .filter-tabs {
+    justify-content: flex-start;
+    margin: 0
+}
+.wallet-mode-setting .filter-tab {
+    min-height: 40px;
+    padding: 6px 14px
+}
 .profile-deck-setting {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 150px;
