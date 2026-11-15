@@ -119,15 +119,37 @@
     --seat-stack-ink: color-mix(in srgb, var(--gold-pale) 75%, #ffffff);
     /* Avatar cosmetics art (frames/hats/accessories/badges) fills with these
        names only; each aliases a palette token, so a palette change reaches
-       the art too. No new hex. See DESIGN.md "Avatar cosmetics art contract". */
+       the art too. The six gemstone/metal bases below have no palette colour
+       to alias, so they are the only hex here; their -pale/-deep steps are
+       mixes, never more hex. See DESIGN.md "Avatar cosmetics art contract". */
     --cosmetic-gold: var(--gold);
     --cosmetic-gold-pale: var(--gold-pale);
+    --cosmetic-gold-deep: color-mix(in srgb, var(--gold) 55%, var(--gold-ink));
     --cosmetic-oxblood: var(--brand);
+    --cosmetic-oxblood-bright: var(--brand-bright);
     --cosmetic-felt: var(--felt);
     --cosmetic-walnut: var(--table-rail);
+    --cosmetic-walnut-deep: color-mix(in srgb, var(--table-rail) 55%, var(--ink));
     --cosmetic-paper: var(--paper);
     --cosmetic-ink: var(--ink);
     --cosmetic-wine: var(--wine);
+    --cosmetic-pearl-shade: color-mix(in srgb, var(--paper) 62%, var(--muted-rose));
+    --cosmetic-silver: #aeb6c1;
+    --cosmetic-silver-pale: color-mix(in srgb, var(--cosmetic-silver) 35%, white);
+    --cosmetic-silver-deep: color-mix(in srgb, var(--cosmetic-silver) 50%, var(--ink));
+    --cosmetic-rose: #d4917c;
+    --cosmetic-rose-pale: color-mix(in srgb, var(--cosmetic-rose) 40%, white);
+    --cosmetic-rose-deep: color-mix(in srgb, var(--cosmetic-rose) 55%, var(--ink));
+    --cosmetic-obsidian: #1c1b22;
+    --cosmetic-obsidian-lift: color-mix(in srgb, var(--cosmetic-obsidian) 70%, var(--cosmetic-silver));
+    --cosmetic-emerald: #1f8f62;
+    --cosmetic-emerald-pale: color-mix(in srgb, var(--cosmetic-emerald) 45%, white);
+    --cosmetic-emerald-deep: color-mix(in srgb, var(--cosmetic-emerald) 50%, var(--ink));
+    --cosmetic-sapphire: #2d5cb8;
+    --cosmetic-sapphire-pale: color-mix(in srgb, var(--cosmetic-sapphire) 45%, white);
+    --cosmetic-sapphire-deep: color-mix(in srgb, var(--cosmetic-sapphire) 50%, var(--ink));
+    --cosmetic-olive: #9a9f45;
+    --cosmetic-olive-deep: color-mix(in srgb, var(--cosmetic-olive) 60%, var(--ink));
     /* Table geometry, one derivation. The rail's inset is authored per side
        (the portrait capsule is pushed down inside its ring to leave the top
        seats' cards room under the header), but the felt is ALWAYS the rail

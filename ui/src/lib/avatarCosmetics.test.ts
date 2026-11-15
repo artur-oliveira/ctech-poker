@@ -6,13 +6,16 @@ vi.mock('./api/client', () => ({apiClient: {get: (...a: unknown[]) => get(...a)}
 import {AVATAR_ITEMS, avatarBadgeLabel, decorProps, avatarFrameLabel, avatarItemLabel, listOwnedAvatarCosmetics} from './avatarCosmetics';
 
 describe('avatarCosmetics', () => {
-  test('registry has the launch set: 6 frames, 6 hats, 5 accessories, 7 badges with pt-BR labels', () => {
+  test('registry has the launch set: 14 frames, 6 hats, 5 accessories, 7 badges with pt-BR labels', () => {
     const labels = (slot: keyof typeof AVATAR_ITEMS) =>
       Object.fromEntries(Object.entries(AVATAR_ITEMS[slot]).map(([id, v]) => [id, v.label]));
     expect(labels('frame')).toEqual({
       'season-2026-q3': 'Moldura da Temporada', 'champion-gold': 'Moldura de Campeão',
       'chip-ring': 'Borda de Fichas', 'felt-ring': 'Borda de Feltro',
       'walnut-rail': 'Borda de Nogueira', 'oxblood-edge': 'Borda Oxblood',
+      'silver-filigree': 'Filigrana de Prata', 'pearl-beads': 'Colar de Pérolas', 'rose-gold': 'Ouro Rosé',
+      'obsidian-edge': 'Borda de Obsidiana', 'emerald-cut': 'Esmeralda', 'sapphire-deco': 'Art Déco Safira',
+      'olive-branch': 'Ramo de Oliveira', 'suit-ring': 'Naipes',
     });
     expect(labels('hat')).toEqual({
       'dealer-visor': 'Viseira do Dealer', crown: 'Coroa', laurel: 'Louros',
