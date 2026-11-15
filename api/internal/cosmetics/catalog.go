@@ -141,6 +141,8 @@ var catalog = []CatalogEntry{
 	{Kind: KindBadge, ID: "rainmaker", Premium: true, Source: SourceAchievement},
 	{Kind: KindBadge, ID: "veteran", Premium: true, Source: SourceAchievement},
 	{Kind: KindBadge, ID: "social-butterfly", Premium: true, Source: SourceAchievement},
+	{Kind: KindAccessory, ID: "devil-horns", Premium: true, Source: SourceAchievement},
+	{Kind: KindAccessory, ID: "angel-wings", Premium: true, Source: SourceAchievement},
 
 	// Sold for fichas or Pix (phase 3); fichas = cents x 3000 (3x the deck/felt ratio on purpose: Pix is the cheaper way in).
 	{Kind: KindFrame, ID: "felt-ring", Premium: true, Source: SourcePurchase, PriceFichas: 1800000, SKU: "poker_frame_felt_ring"},
@@ -154,6 +156,14 @@ var catalog = []CatalogEntry{
 	{Kind: KindFrame, ID: "sapphire-deco", Premium: true, Source: SourcePurchase, PriceFichas: 3600000, SKU: "poker_frame_sapphire_deco"},
 	{Kind: KindFrame, ID: "olive-branch", Premium: true, Source: SourcePurchase, PriceFichas: 4200000, SKU: "poker_frame_olive_branch"},
 	{Kind: KindFrame, ID: "suit-ring", Premium: true, Source: SourcePurchase, PriceFichas: 4500000, SKU: "poker_frame_suit_ring"},
+	{Kind: KindFrame, ID: "inferno", Premium: true, Source: SourcePurchase, PriceFichas: 7500000, SKU: "poker_frame_inferno"},
+	{Kind: KindFrame, ID: "arcane-aura", Premium: true, Source: SourcePurchase, PriceFichas: 6600000, SKU: "poker_frame_arcane_aura"},
+	{Kind: KindFrame, ID: "storm-ring", Premium: true, Source: SourcePurchase, PriceFichas: 6600000, SKU: "poker_frame_storm_ring"},
+	{Kind: KindFrame, ID: "gold-shimmer", Premium: true, Source: SourcePurchase, PriceFichas: 5400000, SKU: "poker_frame_gold_shimmer"},
+	{Kind: KindFrame, ID: "baroque-gilt", Premium: true, Source: SourcePurchase, PriceFichas: 5400000, SKU: "poker_frame_baroque_gilt"},
+	{Kind: KindFrame, ID: "laurel-wreath", Premium: true, Source: SourcePurchase, PriceFichas: 4800000, SKU: "poker_frame_laurel_wreath"},
+	{Kind: KindFrame, ID: "art-nouveau", Premium: true, Source: SourcePurchase, PriceFichas: 4800000, SKU: "poker_frame_art_nouveau"},
+	{Kind: KindFrame, ID: "celtic-knot", Premium: true, Source: SourcePurchase, PriceFichas: 4200000, SKU: "poker_frame_celtic_knot"},
 	{Kind: KindHat, ID: "top-hat", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_hat_top_hat"},
 	{Kind: KindHat, ID: "cowboy", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_hat_cowboy"},
 	{Kind: KindHat, ID: "beanie", Premium: true, Source: SourcePurchase, PriceFichas: 600000, SKU: "poker_hat_beanie"},
@@ -163,6 +173,12 @@ var catalog = []CatalogEntry{
 	{Kind: KindHat, ID: "captain-cap", Premium: true, Source: SourcePurchase, PriceFichas: 1800000, SKU: "poker_hat_captain_cap"},
 	{Kind: KindHat, ID: "wizard", Premium: true, Source: SourcePurchase, PriceFichas: 2100000, SKU: "poker_hat_wizard"},
 	{Kind: KindHat, ID: "sun-visor", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_hat_sun_visor"},
+	// Ornaments (the accessory slot): wings behind the avatar, horns on top under the hat.
+	{Kind: KindAccessory, ID: "bat-wings", Premium: true, Source: SourcePurchase, PriceFichas: 6000000, SKU: "poker_accessory_bat_wings"},
+	{Kind: KindAccessory, ID: "gold-wings", Premium: true, Source: SourcePurchase, PriceFichas: 7500000, SKU: "poker_accessory_gold_wings"},
+	{Kind: KindAccessory, ID: "dragon-wings", Premium: true, Source: SourcePurchase, PriceFichas: 7500000, SKU: "poker_accessory_dragon_wings"},
+	{Kind: KindAccessory, ID: "ram-horns", Premium: true, Source: SourcePurchase, PriceFichas: 5400000, SKU: "poker_accessory_ram_horns"},
+	{Kind: KindAccessory, ID: "bull-horns", Premium: true, Source: SourcePurchase, PriceFichas: 4500000, SKU: "poker_accessory_bull_horns"},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }

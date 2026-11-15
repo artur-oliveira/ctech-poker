@@ -125,6 +125,22 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
   The `accessory` slot itself stays (`KindAccessory`, the equip path, `equipped_accessory_id`, proto `Seat.accessory_id`
   24) for the next phase's horns and wings. With the registry empty the store department and the profile picker are
   hidden and never read (`hasAvatarItems`), and an accessory id renders nothing.
+- *Revised 2026-11-15, phase B* (branch `feat/avatar-ornaments-animated`): **ornaments fill the accessory slot**
+  (UI "Adornos"; no proto or wire change). Two bands in `components/avatar/ornaments.tsx`: **wings** paint *behind* the
+  photo (a `.player-avatar-wings` layer at `z-index: -1` inside the wrapper's own stacking context), viewBox
+  `-18 -10 100 64`, spreading 18 units past each side; **horns** sit on the head like a hat (`-8 -22 80 36`), painted
+  after the frame and before the hat, so a hat covers them. Layer order: wings < photo < frame < horns < hat. A sized
+  avatar wearing wings reserves `--avatar-wing-room` on each side (and every ornament raises `--avatar-hat-room`); a seat
+  sizes by CSS, so `.game-seat .seat-avatar-trigger:has(.player-avatar-wings)` keeps the spread free there; the store tile
+  shrinks the avatar so the span fits its width. Seven items: sold Asas de Morcego, Asas Douradas, Asas de Dragão,
+  Chifres de Carneiro, Chifres de Touro; earned Asas de Anjo (`wins` 5) and Chifres de Diabo (`bluff` 3).
+- *Revised 2026-11-15, phase B*: **eight new frames**, sold. Four are **animated** (Borda Inferno, Aura Arcana, Anel de
+  Tempestade, Ouro Cintilante): a static base plus whole-`<svg data-fx>` layers moved by CSS keyframes in
+  `renderer.css` with transform and opacity only (no filter, no JS timer). Reduced motion and seats that are not playing
+  (folded, sitting out, disconnected, pending name) show the resting pose, which is the finished static frame. Four are
+  **static and elegant**: Dourado Barroco, Coroa de Louros, Art Nouveau, Nó Celta. Measured in Chromium: ~280 animated
+  layers on one page produced no Layout, no Paint and one raster task in 8s; main thread only re-resolved style and
+  pre-paint (~2 ms per update), so 9 seats (~25 layers) are negligible.
 - Store: new sections in `CosmeticStoreSection` for the purchasable kinds; `CosmeticKind` widens. Profile: `AvatarDecorationSection` gets hat and accessory pickers
   and a live preview at seat size and profile size.
 
@@ -149,7 +165,7 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    pipeline announces only new items. Achievement grants run in `handPipeline.announceUnlocks` after the hand-counter
    claim and send `cosmetic_unlocked` (`ServerMessage` fields 22/23); the backfill is a self-heal on
    `GET /players/me/cosmetics/:kind/owned` (no Lambda), bounded at 3s. The store gains three lazy departments
-   (Molduras, Chapéus, Acessórios; Acessórios is hidden since 2026-11-15, see Rendering). **No season trigger**: season items and windows exist but no period-close hook
+   (Molduras, Chapéus, Acessórios; Acessórios was hidden on 2026-11-15 and came back as **Adornos** in phase B, see Rendering). **No season trigger**: season items and windows exist but no period-close hook
    was found, so nothing grants them yet.
 
    Prices (cents in `internal/catalog/catalog.go` `products`, fichas = cents x 3000 in the cosmetics catalog, i.e. 3x the deck/felt ratio so Pix is the better deal):
@@ -167,6 +183,14 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    | frame | sapphire-deco | `poker_frame_sapphire_deco` | 1200 | 3 600 000 |
    | frame | olive-branch | `poker_frame_olive_branch` | 1400 | 4 200 000 |
    | frame | suit-ring | `poker_frame_suit_ring` | 1500 | 4 500 000 |
+   | frame | celtic-knot | `poker_frame_celtic_knot` | 1400 | 4 200 000 |
+   | frame | laurel-wreath | `poker_frame_laurel_wreath` | 1600 | 4 800 000 |
+   | frame | art-nouveau | `poker_frame_art_nouveau` | 1600 | 4 800 000 |
+   | frame | baroque-gilt | `poker_frame_baroque_gilt` | 1800 | 5 400 000 |
+   | frame | gold-shimmer (animated) | `poker_frame_gold_shimmer` | 1800 | 5 400 000 |
+   | frame | arcane-aura (animated) | `poker_frame_arcane_aura` | 2200 | 6 600 000 |
+   | frame | storm-ring (animated) | `poker_frame_storm_ring` | 2200 | 6 600 000 |
+   | frame | inferno (animated) | `poker_frame_inferno` | 2500 | 7 500 000 |
    | hat | beanie | `poker_hat_beanie` | 200 | 600 000 |
    | hat | top-hat | `poker_hat_top_hat` | 300 | 900 000 |
    | hat | sun-visor | `poker_hat_sun_visor` | 300 | 900 000 |
@@ -176,6 +200,11 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    | hat | bowler | `poker_hat_bowler` | 500 | 1 500 000 |
    | hat | captain-cap | `poker_hat_captain_cap` | 600 | 1 800 000 |
    | hat | wizard | `poker_hat_wizard` | 700 | 2 100 000 |
+   | accessory | bull-horns | `poker_accessory_bull_horns` | 1500 | 4 500 000 |
+   | accessory | ram-horns | `poker_accessory_ram_horns` | 1800 | 5 400 000 |
+   | accessory | bat-wings | `poker_accessory_bat_wings` | 2000 | 6 000 000 |
+   | accessory | gold-wings | `poker_accessory_gold_wings` | 2500 | 7 500 000 |
+   | accessory | dragon-wings | `poker_accessory_dragon_wings` | 2500 | 7 500 000 |
 
    Grant table (`cosmetics.AchievementGrants`; a tier-skipping unlock grants every row with `row.Stars <= stars`;
    reason `achievement:<key>:<stars>`, `...:backfill` from the self-heal):
@@ -187,6 +216,8 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    | hands_played | 3 | frame | chip-ring |
    | wins | 3 | hat | laurel |
    | wins | 4 | hat | crown |
+   | wins | 5 | accessory | angel-wings |
+   | bluff | 3 | accessory | devil-horns |
    | all_in | 3 | badge | all-in-hero |
    | folded_streak | 1 | badge | iron-nerve |
    | sandbox_chips_earned | 3 | badge | rainmaker |

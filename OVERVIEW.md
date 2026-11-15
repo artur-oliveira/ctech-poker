@@ -194,7 +194,7 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
 5. **Table themes / cosmetics — shipped, season grants open.** Table themes (`tablePreferences.ts`),
    deck variants (`cardVariants.ts`) and avatar cosmetics (frame, hat sitting on top of the avatar, up to three badges;
    spec `docs/specs/2026-11-14-avatar-cosmetics.md`): frames and hats are sold for fichas or Pix, achievement tiers
-   grant their items, badges are never sold. The accessory slot exists but has no items (all removed 2026-11-15). Season items exist but nothing grants them yet.
+   grant their items, badges are never sold. The accessory slot holds the ornaments ("Adornos": wings behind the photo, horns on top), some sold, two earned; four frames are animated. Season items exist but nothing grants them yet.
 
 Beyond the original suggestions, these also shipped: time banks, action pre-selection, rabbit hunt,
 reality check, private opponent notes, self-HUD stats, profile showcase, public hand sharing,

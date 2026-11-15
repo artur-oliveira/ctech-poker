@@ -307,9 +307,9 @@ const mockSandboxPurchases: MockSandboxPurchase[] = [];
 const mockOwnedAvatarIDs: Record<AvatarSlot, string[]> = {
   // A mix per slot, so the store shows owned, earned-but-locked (chip-ring,
   // laurel) and purchasable items side by side.
-  frame: ['season-2026-q3', 'champion-gold', 'felt-ring', 'pearl-beads', 'sapphire-deco'],
+  frame: ['season-2026-q3', 'champion-gold', 'felt-ring', 'pearl-beads', 'sapphire-deco', 'inferno', 'laurel-wreath'],
   hat: ['dealer-visor', 'crown', 'top-hat', 'fedora', 'wizard'],
-  accessory: [],
+  accessory: ['devil-horns', 'bat-wings', 'gold-wings'],
   badge: Object.keys(AVATAR_ITEMS.badge),
 };
 
@@ -1201,14 +1201,15 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     // asked for (the client only re-sorts within the page it received).
     const lifetime: Entry[] = [
       {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286,
-        equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown',
+        equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown', equipped_accessory_id: 'angel-wings',
         equipped_badge_ids: ['all-in-hero', 'veteran']},
       {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
       {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244,
-        equipped_frame_id: 'chip-ring', equipped_badge_ids: ['iron-nerve']},
+        equipped_frame_id: 'storm-ring', equipped_accessory_id: 'bat-wings', equipped_badge_ids: ['iron-nerve']},
       {player_id: 'caio_goiânia', player_name: 'Caio', hands_played: 160, hands_won: 38, win_rate: .238,
         equipped_frame_id: 'felt-ring', equipped_hat_id: 'cowboy', equipped_badge_ids: ['rainmaker']},
-      {player_id: 'nina_recife', player_name: 'Nina', hands_played: 121, hands_won: 25, win_rate: .207},
+      {player_id: 'nina_recife', player_name: 'Nina', hands_played: 121, hands_won: 25, win_rate: .207,
+        equipped_frame_id: 'arcane-aura', equipped_accessory_id: 'gold-wings'},
     ];
     const rows = config.params?.period === 'month'
       ? lifetime.map(entry => ({
@@ -1297,13 +1298,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const kind = avatarCatalogMatch[1] as 'frame' | 'hat' | 'accessory';
     const earned: Record<string, 'achievement' | 'season'> = {
       'season-2026-q3': 'season', 'champion-gold': 'season', 'chip-ring': 'achievement', 'dealer-visor': 'achievement',
-      'crown': 'achievement', 'laurel': 'achievement',
+      'crown': 'achievement', 'laurel': 'achievement', 'devil-horns': 'achievement', 'angel-wings': 'achievement',
     };
     const cents: Record<string, number> = {
       'felt-ring': 600, 'walnut-rail': 800, 'oxblood-edge': 1000,
       'silver-filigree': 800, 'pearl-beads': 900, 'rose-gold': 1000, 'obsidian-edge': 1000, 'emerald-cut': 1200,
       'sapphire-deco': 1200, 'olive-branch': 1400, 'suit-ring': 1500, 'top-hat': 300, 'cowboy': 400, 'beanie': 200,
       'fedora': 500, 'beret': 400, 'bowler': 500, 'captain-cap': 600, 'wizard': 700, 'sun-visor': 300,
+      'inferno': 2500, 'arcane-aura': 2200, 'storm-ring': 2200, 'gold-shimmer': 1800, 'baroque-gilt': 1800,
+      'laurel-wreath': 1600, 'art-nouveau': 1600, 'celtic-knot': 1400,
+      'bat-wings': 2000, 'gold-wings': 2500, 'dragon-wings': 2500, 'ram-horns': 1800, 'bull-horns': 1500,
     };
     const entries = Object.keys(AVATAR_ITEMS[kind]).map(id => {
       const owned = mockOwnedAvatarIDs[kind].includes(id);
@@ -1383,9 +1387,10 @@ const baseSeats = () => [
     name: 'Bia',
     playstyle_badge: 'explorer',
     // Fully decorated, so dev:mock and the e2e layout gate exercise a seat
-    // wearing every cosmetic slot.
-    frame_id: 'champion-gold',
+    // wearing every cosmetic slot (an animated frame, horns under the crown).
+    frame_id: 'inferno',
     hat_id: 'crown',
+    accessory_id: 'devil-horns',
     badge_ids: ['all-in-hero', 'veteran'],
     stack: 3925,
     state: 'active',
@@ -1396,8 +1401,10 @@ const baseSeats = () => [
   {
     player_id: 'leo_rio',
     name: 'Léo',
-    // A folded seat with a frame and a badge: the dashed folded outline must stay visible.
-    frame_id: 'chip-ring',
+    // A folded seat with an animated frame, wings and a badge: the dashed folded
+    // outline must stay visible and the frame must stand still.
+    frame_id: 'storm-ring',
+    accessory_id: 'bat-wings',
     badge_ids: ['iron-nerve'],
     stack: 6100,
     state: 'folded',
@@ -1408,8 +1415,9 @@ const baseSeats = () => [
   {
     player_id: 'nina_recife',
     name: 'Nina',
-    frame_id: 'walnut-rail',
+    frame_id: 'gold-shimmer',
     hat_id: 'top-hat',
+    accessory_id: 'angel-wings',
     badge_ids: ['rainmaker', 'social-butterfly', 'season-2026-q3-top10'],
     stack: 2775,
     state: 'active',
@@ -1419,12 +1427,14 @@ const baseSeats = () => [
   },
   // Nameless on purpose — exercises the is-pending-name placeholder in dev;
   // decorated so the sitting-out greyscale covers the art and badges too.
-  {player_id: 'gui_bh', frame_id: 'oxblood-edge', hat_id: 'beanie', badge_ids: ['veteran'],
+  {player_id: 'gui_bh', frame_id: 'arcane-aura', hat_id: 'beanie', accessory_id: 'dragon-wings', badge_ids: ['veteran'],
     stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
   {
     player_id: 'joao_floripa',
     name: 'João',
+    frame_id: 'celtic-knot',
     hat_id: 'dealer-visor',
+    accessory_id: 'ram-horns',
     stack: 4375,
     state: 'active',
     dealt_in: true,
@@ -1436,6 +1446,7 @@ const baseSeats = () => [
     name: 'Mari',
     frame_id: 'season-2026-q3',
     hat_id: 'laurel',
+    accessory_id: 'gold-wings',
     badge_ids: ['season-2026-q3-champion'],
     stack: 8200,
     state: 'active',
@@ -1449,6 +1460,7 @@ const baseSeats = () => [
     // All-in with a frame: the all-in glow must still read around the ring.
     frame_id: 'felt-ring',
     hat_id: 'cowboy',
+    accessory_id: 'bull-horns',
     badge_ids: ['all-in-hero'],
     stack: 3400,
     state: 'all_in',
@@ -1461,6 +1473,7 @@ const baseSeats = () => [
   {
     player_id: 'rafa_curitiba',
     name: 'Rafa',
+    frame_id: 'arcane-aura',
     stack: 5200,
     state: 'active',
     dealt_in: true,

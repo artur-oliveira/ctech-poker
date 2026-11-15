@@ -16,7 +16,7 @@ export default function ProfileGuide() {
         body: <><p>Há dois caminhos, e eles combinam. Toque no seu avatar, no topo: o menu resolve na hora o que é rápido, ou seja, trocar o nome, trocar a foto e escolher o baralho. Ele também mostra se a sua vitrine está pública ou privada, os seus saldos, e leva à Loja, a <b>Seu jogo</b> e a <b>Sair da conta</b>.</p>
           <p>No mesmo menu, <b>Editar perfil</b> abre a página <b>Seu perfil</b>, que tem tudo isso e mais, em sete seções.</p>
           <GuideBullets><li><span><b>Identidade:</b> nome de exibição e foto.</span></li>
-            <li><span><b>Visual do avatar:</b> borda, chapéu e emblemas que você já tem, para usar ao redor da sua foto.</span></li>
+            <li><span><b>Visual do avatar:</b> borda, chapéu, adorno e emblemas que você já tem, para usar ao redor da sua foto.</span></li>
             <li><span><b>Sua vitrine:</b> privacidade, conquistas em destaque e ordem das seções.</span></li>
             <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo.</span></li>
             <li><span><b>Filtro de chat:</b> palavras que você mesmo quer que fiquem mascaradas no chat da mesa, além do filtro padrão que já vale para todos.</span></li>
@@ -37,12 +37,12 @@ export default function ProfileGuide() {
           <GuideCallout kind="info" title="Somente apresentação">Trocar o baralho não interfere na distribuição, no hash da prova nem nas cartas que você recebe.</GuideCallout></>
       },
       {
-        id: 'moldura-emblemas', title: 'Visual do avatar', summary: 'Borda, chapéu e emblemas, equipados ao redor da sua foto.',
-        body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. As listas só mostram o que você já tem; não há compra aqui. Novos itens ficam em <b>Molduras</b> e <b>Chapéus</b>, na Loja, à venda ou liberados por conquistas.</p>
-          <GuideSteps><li><span>Escolha uma borda e um chapéu, ou <b>Nenhuma</b> (borda) e <b>Nenhum</b> (chapéu) para não usar.</span></li>
+        id: 'moldura-emblemas', title: 'Visual do avatar', summary: 'Borda, chapéu, adorno e emblemas, equipados ao redor da sua foto.',
+        body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. As listas só mostram o que você já tem; não há compra aqui. Novos itens ficam em <b>Molduras</b>, <b>Chapéus</b> e <b>Adornos</b>, na Loja, à venda ou liberados por conquistas.</p>
+          <GuideSteps><li><span>Escolha uma borda, um chapéu e um adorno, ou <b>Nenhuma</b> (borda) e <b>Nenhum</b> (chapéu, adorno) para não usar.</span></li>
           <li><span>Marque até três emblemas.</span></li>
           <li><span>Toque em <b>Salvar visual do avatar</b>. O botão só acende quando algo mudou.</span></li></GuideSteps>
-          <p>As prévias usam a mesma arte da mesa: uma moldura como <b>Ouro Rosé</b> ou <b>Esmeralda</b>, e um chapéu como <b>Fedora</b> aparecem ali exatamente como os outros jogadores vão ver. O chapéu fica em cima do avatar, apoiado na borda, sem cobrir a sua foto.</p>
+          <p>As prévias usam a mesma arte da mesa: uma moldura como <b>Ouro Rosé</b> ou <b>Esmeralda</b>, e um chapéu como <b>Fedora</b> aparecem ali exatamente como os outros jogadores vão ver. O chapéu fica em cima do avatar, apoiado na borda, sem cobrir a sua foto. Um adorno como <b>Asas Douradas</b> abre atrás da foto; chifres como <b>Chifres de Carneiro</b> ficam sobre ela, por baixo do chapéu. Uma borda animada como <b>Aura Arcana</b> se move na prévia como na mesa.</p>
           <p>Num tipo em que você ainda não tem nada, a seção avisa que é preciso conquistar ou comprar um item para equipar. Um item equipado que deixou de ser seu continua na lista, marcado, até você trocar.</p></>
       },
       {

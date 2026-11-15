@@ -178,7 +178,7 @@ off by default — do not build UI that assumes real money is on.
 - **The store's initial load is the profile plus four catalogs: sandbox packs (`skus`), reactions,
   deck and felt.** Those own the above-the-fold ownership flags and the directory's "N de M
   liberadas" counters, so they stay eager. The avatar departments (Molduras, Chapéus, and
-  Acessórios once that slot has items: `useAvatarDepartment` in `store/page.tsx`, `AvatarStoreDepartment`;
+  Adornos, the accessory slot: `useAvatarDepartment` in `store/page.tsx`, `AvatarStoreDepartment`;
   a slot with no item in `AVATAR_ITEMS` is left out and never read, `hasAvatarItems`) are lazy for
   catalog *and* history: both wait for that section's `useInViewOnce` (the history also arms
   when "Compras e estornos" comes into view), so first paint costs no extra request
@@ -252,10 +252,16 @@ off by default — do not build UI that assumes real money is on.
   no context menu): a photo is identity, not a download. The render prop takes the
   seat *and* the trigger, both stable per seat, so the renders-per-snapshot budget holds.
   **Avatar cosmetics (#292, spec `docs/specs/2026-11-14-avatar-cosmetics.md`).** A frame, a hat
-  and up to three badges are composed client-side over the avatar. The accessory slot is plumbing only
-  (2026-11-15: every accessory removed, the slot kept for horns/wings): `AVATAR_ITEMS.accessory` is empty, so the
-  store department and the profile picker are hidden and never read (`hasAvatarItems`), and `PlayerAvatar` ignores
-  `accessoryId` (an accessory alone leaves the avatar plain). A hat sits on top of the avatar and rises above its
+  and up to three badges are composed client-side over the avatar, plus an ornament in the accessory slot
+  ("Adornos", phase B 2026-11-15): wings painted *behind* the photo (`.player-avatar-wings`, `z-index: -1` in the
+  wrapper's `isolation: isolate` context) or horns on the head under the hat (`ORNAMENTS` in
+  `components/avatar/ornaments.tsx`, band `wings | horns`). A slot with no item in `AVATAR_ITEMS` stays hidden and is
+  never read (`hasAvatarItems`); an unknown accessory id leaves the avatar plain. Wings need side room: `PlayerAvatar`
+  sets `--avatar-wing-room` (taken as `margin-inline` by the wrapper) on a sized avatar, a seat reserves it on
+  `.seat-avatar-trigger:has(.player-avatar-wings)`, and the store tile shrinks the avatar to fit. **Four frames are
+  animated** (`inferno`, `arcane-aura`, `storm-ring`, `gold-shimmer`): whole `<svg data-fx>` layers moved by
+  `renderer.css` keyframes with transform/opacity only, stopped under reduced motion and on folded, sitting-out,
+  disconnected and pending seats (`frames.motion.test.ts`); never add a filter, a layout property or a JS timer to them. A hat sits on top of the avatar and rises above its
   box (`HAT_VIEWBOX`/`HAT_RISE` in `components/avatar/hats.tsx`); a surface that stacks a label right above the
   avatar reserves `var(--avatar-hat-room)` (podium, store tile and dialog previews). The registry is
   `lib/avatarCosmetics.ts`: `AVATAR_ITEMS` (ids and pt-BR labels per slot), `avatarItemLabel`
@@ -263,7 +269,7 @@ off by default — do not build UI that assumes real money is on.
   `decorProps` (those fields to `PlayerAvatar` props, keeping the array reference). Art lives in
   `components/avatar/`: `FRAME_ART`, `HAT_ART` (inline SVG in the avatar's 64-unit box, the
   avatar circle r=32, paint only `var(--cosmetic-*)`) and `BADGE_ART` + `BADGE_TONE` (a lucide
-  glyph plus a tone). Layer order is frame < hat (the hat rests on the ring); the frame is an SVG ring overlay,
+  glyph plus a tone). Layer order is wings < photo < frame < horns < hat (the hat rests on the ring); the frame is an SVG ring overlay,
   never CSS `outline` (that stays for focus and the folded/all-in states). DESIGN.md "Avatar
   cosmetics art contract" holds the zones. `PlayerAvatar` takes `frameId`/`hatId`/`accessoryId`/
   `badgeIds`; with none of them its markup is **byte-identical** to a plain avatar, and an id the
@@ -279,7 +285,7 @@ off by default — do not build UI that assumes real money is on.
   and the podium decorate every player but show a photo only for showcase-public players (the
   server sends `avatar_url` only for them). The
   `/player-profile` pickers (`AvatarDecorationSection`) list owned ids only, plus "Nenhuma"
-  (borda) / "Nenhum" (chapéu) and an equipped id that is no longer owned, so the
+  (borda) / "Nenhum" (chapéu, adorno) and an equipped id that is no longer owned, so the
   picker always matches the preview; save sends only the changed fields. Known dead code, left
   on purpose: the `[data-slot='avatar']` rules at `app.css` (`.player-profile-avatar`) and
   `renderer.css` (`.profile-menu-avatar`) were found dead in the phase 2 review and are not

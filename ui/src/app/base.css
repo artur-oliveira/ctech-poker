@@ -150,6 +150,16 @@
     --cosmetic-sapphire-deep: color-mix(in srgb, var(--cosmetic-sapphire) 50%, var(--ink));
     --cosmetic-olive: #9a9f45;
     --cosmetic-olive-deep: color-mix(in srgb, var(--cosmetic-olive) 60%, var(--ink));
+    /* Animated frames and ornaments (phase B). Fire is mixed from the palette
+       (brand-bright into gold, gold-pale into white); amethyst is the one new
+       hex base, for the arcane aura; spark is sapphire almost white, the
+       storm's arc. */
+    --cosmetic-ember: color-mix(in srgb, var(--brand-bright) 30%, var(--gold));
+    --cosmetic-flame: color-mix(in srgb, var(--gold-pale) 55%, white);
+    --cosmetic-amethyst: #7a5bd1;
+    --cosmetic-amethyst-pale: color-mix(in srgb, var(--cosmetic-amethyst) 45%, white);
+    --cosmetic-amethyst-deep: color-mix(in srgb, var(--cosmetic-amethyst) 45%, var(--ink));
+    --cosmetic-spark: color-mix(in srgb, var(--cosmetic-sapphire) 18%, white);
     /* Table geometry, one derivation. The rail's inset is authored per side
        (the portrait capsule is pushed down inside its ring to leave the top
        seats' cards room under the header), but the felt is ALWAYS the rail

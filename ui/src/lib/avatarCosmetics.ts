@@ -27,6 +27,14 @@ export const AVATAR_ITEMS: Record<AvatarSlot, Record<string, { label: string }>>
     'sapphire-deco': {label: 'Art Déco Safira'},
     'olive-branch': {label: 'Ramo de Oliveira'},
     'suit-ring': {label: 'Naipes'},
+    'inferno': {label: 'Borda Inferno'},
+    'arcane-aura': {label: 'Aura Arcana'},
+    'storm-ring': {label: 'Anel de Tempestade'},
+    'gold-shimmer': {label: 'Ouro Cintilante'},
+    'baroque-gilt': {label: 'Dourado Barroco'},
+    'laurel-wreath': {label: 'Coroa de Louros'},
+    'art-nouveau': {label: 'Art Nouveau'},
+    'celtic-knot': {label: 'Nó Celta'},
   },
   hat: {
     'dealer-visor': {label: 'Viseira do Dealer'},
@@ -42,10 +50,17 @@ export const AVATAR_ITEMS: Record<AvatarSlot, Record<string, { label: string }>>
     'wizard': {label: 'Chapéu de Mago'},
     'sun-visor': {label: 'Viseira'},
   },
-  // No accessory exists for now (all removed 2026-11-15); the slot and its wire
-  // field stay for the next phase's horns/wings. Every accessory surface (store
-  // department, profile picker) is hidden while this is empty: hasAvatarItems.
-  accessory: {},
+  // The accessory slot holds the ornaments ("Adornos"): wings behind the
+  // photo, horns on top under the hat (components/avatar/ornaments.tsx).
+  accessory: {
+    'angel-wings': {label: 'Asas de Anjo'},
+    'bat-wings': {label: 'Asas de Morcego'},
+    'gold-wings': {label: 'Asas Douradas'},
+    'dragon-wings': {label: 'Asas de Dragão'},
+    'devil-horns': {label: 'Chifres de Diabo'},
+    'ram-horns': {label: 'Chifres de Carneiro'},
+    'bull-horns': {label: 'Chifres de Touro'},
+  },
   badge: {
     'season-2026-q3-top10': {label: 'Top 10 da Temporada'},
     'season-2026-q3-champion': {label: 'Campeão da Temporada'},

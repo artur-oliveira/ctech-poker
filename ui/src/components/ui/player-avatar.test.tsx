@@ -7,6 +7,7 @@ import {PlayerAvatar} from './player-avatar';
 // art. Frames use the real FRAME_ART.
 vi.mock('@/components/avatar/hats', () => ({
   HAT_ART: {'test-hat': () => <svg data-art="hat"/>},
+  HAT_RISE: 22 / 64,
 }));
 
 describe('PlayerAvatar', () => {
@@ -61,7 +62,7 @@ describe('PlayerAvatar', () => {
 
   test('TestLayerOrder', () => {
     const {container} = render(<PlayerAvatar className="seat-avatar" name="Ana Beatriz"
-                                              frameId="chip-ring" hatId="test-hat" accessoryId="horns"/>);
+                                              frameId="chip-ring" hatId="test-hat" accessoryId="devil-horns"/>);
     const wrapper = container.firstElementChild!;
     expect(wrapper).toHaveClass('player-avatar-decorated');
     // The avatar keeps its own class (the seat CSS hooks it) and sits first.
@@ -69,9 +70,9 @@ describe('PlayerAvatar', () => {
     const art = wrapper.querySelectorAll('.player-avatar-art');
     expect(art).toHaveLength(1);
     expect(art[0]).toHaveAttribute('aria-hidden', 'true');
-    // The hat rests on the frame ring, so it paints last; the accessory slot has no art.
-    const layers = [...art[0].children].map(el => el.getAttribute('data-art') ?? 'frame');
-    expect(layers).toEqual(['frame', 'hat']);
+    // Horns sit on the frame ring under the hat, which rests on top and paints last.
+    const layers = [...art[0].children].map(el => el.getAttribute('data-art') ?? el.getAttribute('data-band') ?? 'frame');
+    expect(layers).toEqual(['frame', 'horns', 'hat']);
     expect(art[0].firstElementChild!.getAttribute('viewBox')).toBe('0 0 64 64');
     // The frame is the SVG ring now, not an outline hook on the avatar.
     expect(screen.getByRole('img', {name: 'Avatar de Ana Beatriz'})).not.toHaveAttribute('data-frame');
@@ -86,9 +87,31 @@ describe('PlayerAvatar', () => {
     expect(layers.map(el => el.getAttribute('data-art'))).toEqual(['hat']);
   });
 
-  test('an accessory alone (reserved slot, no art yet) leaves the avatar plain', () => {
+  test('an unknown accessory alone leaves the avatar plain', () => {
     const {container} = render(<PlayerAvatar className="seat-avatar" name="Ana Beatriz" size={36} accessoryId="horns"/>);
     expect(container.querySelector('.player-avatar-decorated')).toBeNull();
+  });
+
+  test('wings paint behind the photo and reserve room above and beside a sized avatar', () => {
+    const {container} = render(<PlayerAvatar className="seat-avatar" name="Ana" size={64} accessoryId="angel-wings"/>);
+    const wrapper = container.querySelector<HTMLElement>('.player-avatar-decorated')!;
+    // First in tree order: the wrapper's own stacking context puts it (z-index -1) under the avatar.
+    expect(wrapper.firstElementChild).toHaveClass('player-avatar-wings');
+    expect(wrapper.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    expect(wrapper.querySelector('.player-avatar-wings > svg')).toHaveAttribute('data-band', 'wings');
+    expect(wrapper.children[1]).toHaveClass('seat-avatar');
+    expect(wrapper.querySelector('.player-avatar-art')).toBeNull();
+    expect(wrapper.style.getPropertyValue('--avatar-hat-room')).toBe('10px');
+    expect(wrapper.style.getPropertyValue('--avatar-wing-room')).toBe('18px');
+  });
+
+  test('horns sit in the art layer and reserve the hat room; no wing room', () => {
+    const {container} = render(<PlayerAvatar name="Ana" size={64} accessoryId="ram-horns"/>);
+    const wrapper = container.querySelector<HTMLElement>('.player-avatar-decorated')!;
+    expect([...wrapper.querySelector('.player-avatar-art')!.children].map(el => el.getAttribute('data-band'))).toEqual(['horns']);
+    expect(wrapper.querySelector('.player-avatar-wings')).toBeNull();
+    expect(wrapper.style.getPropertyValue('--avatar-hat-room')).toBe('22px');
+    expect(wrapper.style.getPropertyValue('--avatar-wing-room')).toBe('');
   });
 
   test('unknown badge ids still render the fallback medal with the raw id as tooltip', () => {
