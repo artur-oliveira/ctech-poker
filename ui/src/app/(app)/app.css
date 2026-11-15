@@ -5502,6 +5502,11 @@ button.deck-grid-slot:hover {
     margin-bottom: 8px;
     text-transform: uppercase;
 }
+/* A hat on the podium avatar rises into the badge right above it; push the
+   avatar down by the hat's height (set by PlayerAvatar only when one is worn). */
+.podium-card > .player-avatar-decorated {
+    margin-top: var(--avatar-hat-room, 0px)
+}
 .podium-name {
     font-weight: 700;
     font-size: 1.05rem;
@@ -6032,10 +6037,16 @@ button.deck-grid-slot:hover {
     display: grid;
     place-items: center;
     width: 48px;
-    height: 64px;
+    height: 68px;
     border-radius: var(--rounded-control);
     background: var(--surface-seat);
     overflow: hidden
+}
+/* A hat rises above the avatar (--avatar-hat-room, set only when one is worn):
+   the clipped preview tile and the dialog preview make room for it. */
+.cosmetic-store-preview > .player-avatar-decorated,
+.cosmetic-preview-avatar > .player-avatar-decorated {
+    margin-top: var(--avatar-hat-room, 0px)
 }
 .cosmetic-store-deck-preview {
     display: flex;

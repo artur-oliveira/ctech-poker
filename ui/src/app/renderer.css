@@ -8661,10 +8661,10 @@ html:has(.has-tab-bar) {
     width: 100%;
     height: 100%
 }
-/* Exactly the avatar's box (the art's 64x64 viewBox is that box). Everything
-   paints inside it, so the all-in box-shadow and folded outline, both outside
-   the box, stay visible; and the trigger's ::after ring comes later in tree
-   order, so it paints over the art. */
+/* Exactly the avatar's box (the art's 64x64 viewBox is that box). Frames paint
+   inside it, so the all-in box-shadow and folded outline, both outside the
+   box, stay visible; and the trigger's ::after ring comes later in tree order,
+   so it paints over the art. */
 .player-avatar-art,
 .player-avatar-art > svg {
     position: absolute;
@@ -8672,6 +8672,15 @@ html:has(.has-tab-bar) {
     width: 100%;
     height: 100%;
     pointer-events: none
+}
+/* A hat sits ON the avatar and rises above it: its viewBox (HAT_VIEWBOX in
+   components/avatar/hats.tsx, 0 -22 64 36) is the box's width and starts 22
+   units above it, so it is placed 22/64 up and 36/64 tall. Nothing between
+   here and the page clips it (overflow stays visible); a surface that stacks
+   the avatar under something adds headroom itself. */
+.player-avatar-art > svg[data-band='hat'] {
+    top: calc(-22 / 64 * 100%);
+    height: calc(36 / 64 * 100%)
 }
 .game-seat .player-avatar-decorated {
     --avatar-badge-size: min(20px, max(12px, var(--seat-size, 36px) * .4))
