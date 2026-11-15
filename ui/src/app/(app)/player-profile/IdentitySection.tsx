@@ -6,7 +6,7 @@ import {decorProps} from '@/lib/avatarCosmetics';
 import {type PlayerProfile} from '@/lib/api/player';
 import {useProfileNameSave} from '@/lib/hooks/useProfileEdits';
 
-const NAME_MAX_LENGTH = 40;
+import {NAME_MAX_LENGTH} from '@/lib/inputLimits';
 
 /**
  * Name and photo: the two things every other player sees first. The header
@@ -34,7 +34,7 @@ export function IdentitySection({me}: {me: PlayerProfile}) {
         if (changed) save.saveName(name);
       }}>
         <Field label="Nome de exibição" hint={`Até ${NAME_MAX_LENGTH} caracteres.`}>
-          {control => <Input {...control} value={name} maxLength={NAME_MAX_LENGTH}
+          {control => <Input {...control} compact={false} value={name} maxLength={NAME_MAX_LENGTH}
                              placeholder="Como quer ser chamado na mesa"
                              onChange={event => setName(event.target.value)}/>}
         </Field>

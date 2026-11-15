@@ -1,4 +1,5 @@
 'use client';
+import {FRIEND_CODE_MAX_LENGTH} from '@/lib/inputLimits';
 import {useState} from 'react';
 import {Check, Copy, Search, UserPlus} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
@@ -60,7 +61,7 @@ export function FriendCodeLookup({actions}: { actions: SocialActionState }) {
     <Field className="friend-code-search" label="Código de um amigo" error={error}
            hint="O nome de exibição não é único; só o código encontra alguém.">
       {control => <div className="friend-code-search-row">
-        <Input {...control} value={code} placeholder="PKR-XXXX-XXXX-XXXX" autoComplete="off"
+        <Input {...control} value={code} placeholder="PKR-XXXX-XXXX-XXXX" autoComplete="off" maxLength={FRIEND_CODE_MAX_LENGTH}
                onChange={event => setCode(event.target.value)}
                onKeyDown={event => event.key === 'Enter' && void search()}/>
         <Button type="button" loading={searching} disabled={!code.trim()} onClick={() => void search()}>

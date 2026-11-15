@@ -1,4 +1,5 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {expectNoAxeViolations} from '@/test/axe';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {HandItem} from '@/lib/api/player';
@@ -76,6 +77,12 @@ function queryResult(pages: Page<HandItem>[], overrides: Record<string, unknown>
     isFetchingNextPage: false,
     ...overrides,
   };
+}
+
+async function pickView(label: string) {
+  await userEvent.click(screen.getByRole('combobox', {name: 'Mostrar'}));
+  await userEvent.click(await screen.findByRole('option', {name: label}));
+  await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument());
 }
 
 describe('hands list page', () => {
@@ -189,7 +196,7 @@ describe('hands list page', () => {
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
 
-  test('stops auto-paginating while a collection is shown', () => {
+  test('stops auto-paginating while a collection is shown', async () => {
     const instances: {disconnect: ReturnType<typeof vi.fn>}[] = [];
     vi.stubGlobal('IntersectionObserver', class {
       observe = vi.fn();
@@ -213,7 +220,7 @@ describe('hands list page', () => {
     // A collection is short, so the sentinel never leaves the viewport:
     // auto-loading here downloads the whole history in one cascade. The
     // observer is torn down and not replaced.
-    fireEvent.change(screen.getByLabelText('Mostrar'), {target: {value: 'Estudar depois'}});
+    await pickView('Estudar depois');
     expect(instances[0].disconnect).toHaveBeenCalled();
     expect(instances).toHaveLength(1);
     expect(mocks.fetchNextPage).not.toHaveBeenCalled();
@@ -250,7 +257,7 @@ describe('hands list page', () => {
     expect(screen.queryByRole('button', {name: /Mesa /})).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Salvar filtro atual como')).not.toBeInTheDocument();
     // With no collections there is nothing to pick, so no picker either.
-    expect(screen.queryByLabelText('Mostrar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', {name: 'Mostrar'})).not.toBeInTheDocument();
   });
 
   test('renders the shared-links panel above the infinite list, not after it', () => {
@@ -312,7 +319,7 @@ describe('hands list page', () => {
     expect(screen.getByText(/Sequência/)).toBeInTheDocument();
   });
 
-  test('the Mostrar picker narrows the list to a collection, including the review-marker one', () => {
+  test('the Mostrar picker narrows the list to a collection, including the review-marker one', async () => {
     mocks.collections.mockReturnValue({
       data: [
         {hand_id: 'h1', review_marked: true, collections: ['Estudar depois']},
@@ -321,39 +328,40 @@ describe('hands list page', () => {
       isLoading: false, isError: false,
     });
     render(<HandsHistory/>);
-    const picker = screen.getByLabelText('Mostrar');
-    expect(picker).toHaveValue('');
+    const picker = screen.getByRole('combobox', {name: 'Mostrar'});
+    expect(picker).toHaveTextContent('Todas as mãos');
     expect(screen.getByText('tied')).toBeInTheDocument();
 
     // The review-marker collection is offered first.
+    await userEvent.click(picker);
     const options = screen.getAllByRole('option').map(option => option.textContent);
     expect(options).toEqual(['Todas as mãos', 'Marcadas para revisar', 'Estudar depois']);
-
-    fireEvent.change(picker, {target: {value: '__review__'}});
+    await userEvent.click(screen.getByRole('option', {name: 'Marcadas para revisar'}));
+    await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument());
     expect(screen.getAllByText('won')).toHaveLength(1);
     expect(screen.queryByText('lost')).not.toBeInTheDocument();
 
-    fireEvent.change(picker, {target: {value: 'Estudar depois'}});
+    await pickView('Estudar depois');
     expect(screen.getAllByText('won')).toHaveLength(1);
     expect(screen.getByText('lost')).toBeInTheDocument();
     expect(screen.queryByText('tied')).not.toBeInTheDocument();
   });
 
-  test('a collection with none of its hands loaded says so honestly and offers the way back', () => {
+  test('a collection with none of its hands loaded says so honestly and offers the way back', async () => {
     mocks.collections.mockReturnValue({
       data: [{hand_id: 'older', review_marked: false, collections: ['Antigas']}],
       isLoading: false, isError: false,
     });
     mocks.query.mockReturnValue(queryResult([pageOf(hands, true)]));
     render(<HandsHistory/>);
-    fireEvent.change(screen.getByLabelText('Mostrar'), {target: {value: 'Antigas'}});
+    await pickView('Antigas');
 
     expect(screen.getByText(/Entre as 3 mãos mais recentes/)).toBeInTheDocument();
     // Loading more stays possible even though nothing is visible yet.
     expect(screen.getByRole('button', {name: 'Carregar mais mãos'})).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', {name: 'Ver todas as mãos'}));
-    expect(screen.getByLabelText('Mostrar')).toHaveValue('');
+    expect(screen.getByRole('combobox', {name: 'Mostrar'})).toHaveTextContent('Todas as mãos');
     expect(screen.getByText('tied')).toBeInTheDocument();
   });
 

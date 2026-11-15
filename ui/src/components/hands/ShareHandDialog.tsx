@@ -3,7 +3,7 @@ import {useState} from 'react';
 import {
   Check, CircleAlert, Clock3, Copy, HeartCrack, LoaderCircle, Share2, ShieldCheck, ShieldOff, Trophy
 } from 'lucide-react';
-import {Button} from '@aoctech/ui';
+import {Button, Select} from '@aoctech/ui';
 import {
   Dialog,
   DialogContent,
@@ -128,13 +128,11 @@ export function ShareHandDialog({handId, outcome, mode = 'sandbox'}: {
             <input type="checkbox" checked={includeCards} onChange={event => setIncludeCards(event.target.checked)}/>
             <span><b>Mostrar minhas cartas</b><small>Desmarque para publicar somente board, resultado e ações.</small></span>
           </label>
-          <label className="share-hand-expiry"><span><Clock3 aria-hidden="true"/>Link disponível por</span>
-            <select value={expiryDays} onChange={event => setExpiryDays(Number(event.target.value))}>
-              <option value={1}>24 horas</option>
-              <option value={7}>7 dias</option>
-              <option value={30}>30 dias</option>
-            </select>
-          </label>
+          <div className="share-hand-expiry"><span id="share-hand-expiry-label"><Clock3 aria-hidden="true"/>Link disponível por</span>
+            <Select aria-labelledby="share-hand-expiry-label" value={String(expiryDays)}
+                    onValueChange={value => setExpiryDays(Number(value))}
+                    options={[{value: '1', label: '24 horas'}, {value: '7', label: '7 dias'}, {value: '30', label: '30 dias'}]}/>
+          </div>
           <p className="share-hand-privacy"><ShieldCheck aria-hidden="true"/>
             <span><b>Você controla o que sai da mesa.</b> O link expira sozinho e nunca revela cartas não mostradas.</span>
           </p>

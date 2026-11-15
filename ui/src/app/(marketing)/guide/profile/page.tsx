@@ -18,7 +18,7 @@ export default function ProfileGuide() {
           <GuideBullets><li><span><b>Identidade:</b> nome de exibição e foto.</span></li>
             <li><span><b>Visual do avatar:</b> borda, chapéu, adorno e emblemas que você já tem, para usar ao redor da sua foto.</span></li>
             <li><span><b>Sua vitrine:</b> privacidade, conquistas em destaque e ordem das seções.</span></li>
-            <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo.</span></li>
+            <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo (<b>Fichas</b> ou <b>Dinheiro real</b>, também no menu do seu avatar).</span></li>
             <li><span><b>Filtro de chat:</b> palavras que você mesmo quer que fiquem mascaradas no chat da mesa, além do filtro padrão que já vale para todos.</span></li>
             <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li>
             <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li></GuideBullets>
@@ -68,10 +68,15 @@ export default function ProfileGuide() {
           <GuideLink href="/player-profile">Abrir meu perfil</GuideLink></>
       },
       {
+        id: 'limites', title: 'Limites de entrada (dinheiro real)', summary: 'Quanto você pode levar para as mesas de dinheiro real.',
+        body: <><p>Onde o dinheiro real está liberado, <b>Jogo responsável</b> pede o aceite do termo e três limites: <b>diário</b>, <b>semanal</b> e <b>mensal</b>. Cada campo já traz o R$, usa vírgula nos centavos (no máximo duas casas) e aceita até R$ 1.000.000,00.</p>
+          <GuideCallout kind="safe" title="Sempre em ordem crescente">O semanal não pode ser menor que o diário, nem o mensal menor que o semanal. O campo avisa qual limite está fora de ordem e o botão <b>Salvar limites</b> só libera quando a ordem fecha. Diminuir um limite vale na hora; aumentar espera alguns dias.</GuideCallout></>
+      },
+      {
         id: 'alertas', title: 'Configurar alertas de carteira', summary: 'Um aviso no perfil, nunca um bloqueio de compra.',
-        body: <><p>Em <b>Alertas de carteira</b>, dois limites são opcionais e independentes. Deixe qualquer um em 0 para desligá-lo; <b>Remover alertas</b> aparece assim que algum estiver configurado.</p>
-          <GuideTerms><GuideTerm term="Avisar quando o saldo de fichas cair abaixo de">Um aviso aparece em <b>Seus saldos</b> sempre que o seu saldo atual estiver abaixo do valor configurado.</GuideTerm>
-            <GuideTerm term="Avisar quando uma compra passar de (R$)">O limite de gasto por compra de fichas, em reais.</GuideTerm></GuideTerms>
+        body: <><p>Em <b>Alertas de carteira</b>, dois limites são opcionais e independentes. Deixe qualquer um vazio para desligá-lo; <b>Remover alertas</b> aparece assim que algum estiver configurado.</p>
+          <GuideTerms><GuideTerm term="Avisar quando o saldo de fichas cair abaixo de">Um aviso aparece em <b>Seus saldos</b> sempre que o seu saldo atual estiver abaixo do valor configurado. Aceita até 999.999.999 fichas.</GuideTerm>
+            <GuideTerm term="Avisar quando uma compra passar de">O limite de gasto por compra de fichas, em reais. O campo já traz o R$, usa vírgula nos centavos (no máximo duas casas) e aceita até R$ 1.000.000,00.</GuideTerm></GuideTerms>
           <GuideCallout kind="safe" title="Nunca bloqueia nada">O alerta é só um aviso. Ele não impede uma compra nem muda taxa ou bônus de nenhum pacote.</GuideCallout></>
       },
       {

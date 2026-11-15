@@ -146,7 +146,10 @@ func TestValidateLimits(t *testing.T) {
 	if err := ValidateLimits(100, 200, 300); err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range [][3]int64{{0, 200, 300}, {100, 99, 300}, {100, 200, 199}} {
+	if err := ValidateLimits(100, 200, MaxLimitCents); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range [][3]int64{{0, 200, 300}, {100, 99, 300}, {100, 200, 199}, {100, 200, MaxLimitCents + 1}} {
 		if err := ValidateLimits(bad[0], bad[1], bad[2]); err == nil {
 			t.Fatalf("expected error for %v", bad)
 		}

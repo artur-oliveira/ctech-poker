@@ -4,7 +4,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {ResponsibleStatus} from '@/lib/api/responsible';
-import {ResponsibleSection, toCentavos} from './ResponsibleSection';
+import {ResponsibleSection} from './ResponsibleSection';
 
 const api = vi.hoisted(() => ({
   getResponsible: vi.fn(),
@@ -33,13 +33,6 @@ describe('ResponsibleSection', () => {
     notify.mockReset();
   });
 
-  test('toCentavos reads reais, with a comma or a dot, and refuses anything that is not a positive amount', () => {
-    expect(toCentavos('100')).toBe(10_000);
-    expect(toCentavos('12,34')).toBe(1_234);
-    expect(toCentavos('12.34')).toBe(1_234);
-    expect([toCentavos(''), toCentavos('-5'), toCentavos('abc')]).toEqual([0, 0, 0]);
-  });
-
   test('loads, then offers only the consent until it is given', async () => {
     api.getResponsible.mockResolvedValue({...base, accepted: false});
     api.acceptGamblingAddendum.mockResolvedValue(undefined);
@@ -66,14 +59,14 @@ describe('ResponsibleSection', () => {
 
     expect(await screen.findByText('Defina seus três limites antes de jogar com dinheiro real.')).toBeInTheDocument();
     const save = screen.getByRole('button', {name: 'Salvar limites'});
-    await userEvent.type(screen.getByLabelText('Limite diário (R$)'), '50');
-    await userEvent.type(screen.getByLabelText('Limite semanal (R$)'), '20');
-    await userEvent.type(screen.getByLabelText('Limite mensal (R$)'), '800');
-    expect(screen.getByRole('alert')).toHaveTextContent('O limite diário não pode passar do semanal');
+    await userEvent.type(screen.getByLabelText('Limite diário'), '50');
+    await userEvent.type(screen.getByLabelText('Limite semanal'), '20');
+    await userEvent.type(screen.getByLabelText('Limite mensal'), '800');
+    expect(screen.getByText(/Não pode ser menor que o limite diário/)).toBeInTheDocument();
     expect(save).toBeDisabled();
 
-    await userEvent.clear(screen.getByLabelText('Limite semanal (R$)'));
-    await userEvent.type(screen.getByLabelText('Limite semanal (R$)'), '200');
+    await userEvent.clear(screen.getByLabelText('Limite semanal'));
+    await userEvent.type(screen.getByLabelText('Limite semanal'), '200');
     await userEvent.click(save);
     expect(api.saveLimits).toHaveBeenCalledWith({daily: 5_000, weekly: 20_000, monthly: 80_000}, expect.anything());
   });
@@ -86,8 +79,8 @@ describe('ResponsibleSection', () => {
     api.cancelPendingLimits.mockResolvedValue(withLimits.limits);
     render(<ResponsibleSection/>, {wrapper});
 
-    const daily = await screen.findByLabelText('Limite diário (R$)');
-    expect(daily).toHaveValue(100);
+    const daily = await screen.findByLabelText('Limite diário');
+    expect(daily).toHaveValue('100,00');
     expect(screen.queryByText(/só vale depois de 7 dias/)).not.toBeInTheDocument();
     await userEvent.clear(daily);
     await userEvent.type(daily, '150');
@@ -103,7 +96,8 @@ describe('ResponsibleSection', () => {
     api.selfExclude.mockResolvedValue({period: '90d', requested_at: '', until: '2027-01-13T00:00:00Z'});
     render(<ResponsibleSection/>, {wrapper});
 
-    await userEvent.selectOptions(await screen.findByLabelText('Pausar por'), '90d');
+    await userEvent.click(await screen.findByRole('combobox', {name: 'Pausar por'}));
+    await userEvent.click(screen.getByRole('option', {name: '90 dias'}));
     await userEvent.click(screen.getByRole('button', {name: 'Pausar'}));
     expect(api.selfExclude).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Você não poderá encurtá-la');

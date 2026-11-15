@@ -38,7 +38,7 @@ describe('WalletAlertsSection', () => {
     render(<WalletAlertsSection/>, {wrapper});
 
     expect(screen.getByText('Carregando seus alertas…')).toBeInTheDocument();
-    expect(await screen.findByRole('spinbutton', {name: /saldo de fichas/})).toHaveValue(null);
+    expect(await screen.findByRole('textbox', {name: /saldo de fichas/})).toHaveValue('');
     // Nothing configured yet — no "remove" affordance to offer.
     expect(screen.queryByRole('button', {name: /Remover alertas/})).not.toBeInTheDocument();
   });
@@ -56,8 +56,8 @@ describe('WalletAlertsSection', () => {
     saveWalletAlertPrefs.mockResolvedValue({min_sandbox_balance: 500, max_purchase_cents: 5000});
     render(<WalletAlertsSection/>, {wrapper});
 
-    const maxPurchase = await screen.findByRole('spinbutton', {name: /uma compra passar/});
-    expect(maxPurchase).toHaveValue(20);
+    const maxPurchase = await screen.findByRole('textbox', {name: /uma compra passar/});
+    expect(maxPurchase).toHaveValue('20,00');
     await userEvent.clear(maxPurchase);
     await userEvent.type(maxPurchase, '50');
     await userEvent.click(screen.getByRole('button', {name: 'Salvar alertas'}));
@@ -65,6 +65,24 @@ describe('WalletAlertsSection', () => {
     expect(saveWalletAlertPrefs).toHaveBeenCalledWith(
       {min_sandbox_balance: 500, max_purchase_cents: 5000}, expect.anything());
     expect(await screen.findByRole('button', {name: /Remover alertas/})).toBeInTheDocument();
+  });
+
+  test('refuses amounts above the ceiling and letters, and groups thousands', async () => {
+    getWalletAlertPrefs.mockResolvedValue(empty);
+    render(<WalletAlertsSection/>, {wrapper});
+
+    const balance = await screen.findByRole('textbox', {name: /saldo de fichas/});
+    await userEvent.type(balance, '12a3456');
+    expect(balance).toHaveValue('123.456');
+    await userEvent.clear(balance);
+    await userEvent.type(balance, '9999999999');
+    expect(balance).toHaveValue('999.999.999');
+
+    const purchase = screen.getByRole('textbox', {name: /uma compra passar/});
+    await userEvent.type(purchase, '10000001');
+    expect(purchase).toHaveValue('1.000.000');
+    await userEvent.type(purchase, ',5');
+    expect(purchase).toHaveValue('1.000.000,'); // a comma costs nothing, but no cent fits above the ceiling
   });
 
   test('removes a configured alert', async () => {

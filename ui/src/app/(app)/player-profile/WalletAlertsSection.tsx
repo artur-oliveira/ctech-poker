@@ -1,7 +1,10 @@
 'use client';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Field, Input, Button} from '@aoctech/ui';
+import {Field, Button} from '@aoctech/ui';
+import {AmountInput} from '@/components/AmountInput';
+import {MAX_BALANCE_ALERT_FICHAS, MAX_PURCHASE_ALERT_CENTS} from '@/lib/amountLimits';
+import {chipsExact, moneyExact} from '@/lib/chips';
 import {
   deleteWalletAlertPrefs,
   getWalletAlertPrefs,
@@ -42,8 +45,8 @@ export function WalletAlertsSection() {
 
 function WalletAlertsForm({prefs}: {prefs: WalletAlertPrefs}) {
   const queryClient = useQueryClient();
-  const [minBalance, setMinBalance] = useState(prefs.min_sandbox_balance ? String(prefs.min_sandbox_balance) : '');
-  const [maxPurchase, setMaxPurchase] = useState(prefs.max_purchase_cents ? String(prefs.max_purchase_cents / 100) : '');
+  const [minBalance, setMinBalance] = useState<number | null>(prefs.min_sandbox_balance || null);
+  const [maxPurchase, setMaxPurchase] = useState<number | null>(prefs.max_purchase_cents || null);
 
   const save = useMutation({
     mutationFn: saveWalletAlertPrefs,
@@ -66,20 +69,22 @@ function WalletAlertsForm({prefs}: {prefs: WalletAlertPrefs}) {
   });
 
   const hasAnyConfigured = Boolean(prefs.min_sandbox_balance || prefs.max_purchase_cents);
-  const minBalanceValue = Math.max(0, Math.trunc(Number(minBalance) || 0));
-  const maxPurchaseCentsValue = Math.max(0, Math.round((Number(maxPurchase) || 0) * 100));
+  const minBalanceValue = minBalance ?? 0;
+  const maxPurchaseCentsValue = maxPurchase ?? 0;
 
   return <form className="player-profile-wallet-alerts" onSubmit={event => {
     event.preventDefault();
     save.mutate({min_sandbox_balance: minBalanceValue, max_purchase_cents: maxPurchaseCentsValue});
   }}>
-    <Field label="Avisar quando o saldo de fichas cair abaixo de" hint="Deixe em 0 para desligar este alerta.">
-      {control => <Input {...control} type="number" inputMode="numeric" min={0} step={1} value={minBalance}
-                         placeholder="0" onChange={event => setMinBalance(event.target.value)}/>}
+    <Field label="Avisar quando o saldo de fichas cair abaixo de"
+           hint={`Deixe vazio para desligar este alerta. Até ${chipsExact(MAX_BALANCE_ALERT_FICHAS)} fichas.`}>
+      {control => <AmountInput {...control} decimals={0} value={minBalance} onValueChange={setMinBalance}
+                               max={MAX_BALANCE_ALERT_FICHAS} placeholder="0"/>}
     </Field>
-    <Field label="Avisar quando uma compra passar de (R$)" hint="Deixe em 0 para desligar este alerta.">
-      {control => <Input {...control} type="number" inputMode="decimal" min={0} step="0.01" value={maxPurchase}
-                         placeholder="0,00" onChange={event => setMaxPurchase(event.target.value)}/>}
+    <Field label="Avisar quando uma compra passar de"
+           hint={`Deixe vazio para desligar este alerta. Até ${moneyExact(MAX_PURCHASE_ALERT_CENTS)}.`}>
+      {control => <AmountInput {...control} prefix="R$" value={maxPurchase} onValueChange={setMaxPurchase}
+                               max={MAX_PURCHASE_ALERT_CENTS} placeholder="0,00"/>}
     </Field>
     <div className="player-profile-actions">
       <Button type="submit" disabled={save.isPending} loading={save.isPending}>
