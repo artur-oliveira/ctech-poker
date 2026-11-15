@@ -4973,6 +4973,9 @@
 .stage-v-ring .game-seat.sitting_out .seat-avatar,
 .stage-v-ring .game-seat.disconnected .seat-avatar,
 .stage-v-ring .game-seat.is-pending-name .seat-avatar,
+.stage-v-ring .game-seat.sitting_out .player-avatar-wings,
+.stage-v-ring .game-seat.disconnected .player-avatar-wings,
+.stage-v-ring .game-seat.is-pending-name .player-avatar-wings,
 .stage-v-ring .game-seat.sitting_out .player-avatar-art,
 .stage-v-ring .game-seat.disconnected .player-avatar-art,
 .stage-v-ring .game-seat.is-pending-name .player-avatar-art,
@@ -8654,7 +8657,13 @@ html:has(.has-tab-bar) {
     --avatar-badge-size: 20px;
     position: relative;
     display: inline-flex;
-    flex: none
+    flex: none;
+    /* A sized avatar wearing wings keeps their spread free on each side
+       (PlayerAvatar sets it; 0 otherwise, and on seats, which size by CSS). */
+    margin-inline: var(--avatar-wing-room, 0px);
+    /* Its own stacking context, so wings at z-index -1 paint under the photo
+       but never under the seat or card behind the avatar. */
+    isolation: isolate
 }
 .seat-avatar-trigger > .player-avatar-decorated,
 .stage-v-ring .game-seat > .player-avatar-decorated {
@@ -8681,6 +8690,37 @@ html:has(.has-tab-bar) {
 .player-avatar-art > svg[data-band='hat'] {
     top: calc(-22 / 64 * 100%);
     height: calc(36 / 64 * 100%)
+}
+/* Horns sit on the head like a hat (same rise), painted after the frame and
+   before the hat; their viewBox (HORNS_VIEWBOX, -8 -22 80 36) is 8 units wider
+   each side for the bull's sweep. */
+.player-avatar-art > svg[data-band='horns'] {
+    top: calc(-22 / 64 * 100%);
+    left: calc(-8 / 64 * 100%);
+    width: calc(80 / 64 * 100%);
+    height: calc(36 / 64 * 100%)
+}
+/* Wings spread behind the photo: WINGS_VIEWBOX (-18 -10 100 64) is the box plus
+   18 units each side and 10 above. A surface that sits something right beside
+   the avatar reserves var(--avatar-wing-room). */
+.player-avatar-wings {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none
+}
+.player-avatar-wings > svg {
+    position: absolute;
+    top: calc(-10 / 64 * 100%);
+    left: calc(-18 / 64 * 100%);
+    width: calc(100 / 64 * 100%);
+    height: 100%
+}
+/* At a seat the avatar sits between the hole cards and the name: wings would
+   cover both, so a winged trigger keeps their spread (18/64 of the avatar) free
+   on each side. Only winged seats grow. */
+.game-seat .seat-avatar-trigger:has(.player-avatar-wings) {
+    margin-inline: calc(var(--seat-size, 36px) * 18 / 64)
 }
 .game-seat .player-avatar-decorated {
     --avatar-badge-size: min(20px, max(12px, var(--seat-size, 36px) * .4))

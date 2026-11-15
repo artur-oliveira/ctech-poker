@@ -6,10 +6,11 @@ import {avatarBadgeLabel} from '@/lib/avatarCosmetics';
 import {BADGE_ART, BADGE_TONE} from '@/components/avatar/badges';
 import {FRAME_ART} from '@/components/avatar/frames';
 import {HAT_ART, HAT_RISE} from '@/components/avatar/hats';
+import {ORNAMENT_RISE, ORNAMENTS, WING_SPREAD} from '@/components/avatar/ornaments';
 import {cn, initials} from '@/lib/utils';
 
 export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className, decorative = false,
-                               frameId, hatId, badgeIds}: {
+                               frameId, hatId, accessoryId, badgeIds}: {
   name?: string;
   avatarUrl?: string;
   size?: number;
@@ -23,8 +24,8 @@ export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className
    * `badgeIds`) so a memoised `Seat` keeps its render budget. */
   frameId?: string;
   hatId?: string;
-  /** Reserved slot (the wire still carries it): no accessory art exists yet,
-   * so it renders nothing and an accessory alone leaves the avatar plain. */
+  /** The ornament (accessory slot): wings behind the photo or horns on top,
+   * under the hat. An id the registry doesn't know leaves the avatar plain. */
   accessoryId?: string;
   /** Up to three equipped badges, a small row under the avatar. */
   badgeIds?: string[];
@@ -37,23 +38,32 @@ export function PlayerAvatar({name, avatarUrl, size, isViewer = false, className
     {avatarUrl && <AvatarImage src={avatarUrl} alt=""/>}
     <AvatarFallback>{isViewer ? 'EU' : initials(name)}</AvatarFallback>
   </Avatar>;
-  if (!frameId && !hatId && !badgeIds?.length) return avatar;
-  // Bottom to top: frame (the ring over the photo edge), then the hat resting
-  // on top of the ring and rising above the box.
+  const ornament = accessoryId ? ORNAMENTS[accessoryId] : undefined;
+  if (!frameId && !hatId && !ornament && !badgeIds?.length) return avatar;
+  // Bottom to top: wings (behind the photo, z-index -1 in the wrapper's own
+  // stacking context), the photo, the frame (the ring over the photo edge),
+  // horns, then the hat resting on top of the ring and rising above the box.
   const Hat = hatId ? HAT_ART[hatId] : undefined;
   const Frame = frameId ? FRAME_ART[frameId] : undefined;
+  const Wings = ornament?.band === 'wings' ? ornament.Art : undefined;
+  const Horns = ornament?.band === 'horns' ? ornament.Art : undefined;
   // A sized avatar scales its badges like the seat does (40%, 12-20px), so a
   // 28px leaderboard row does not wear a 20px badge.
-  // A hat rises above the box (HAT_RISE of it): a surface that stacks a label
-  // right above the avatar reserves that much with `var(--avatar-hat-room)`.
+  // A hat, horns or wings rise above the box: a surface that stacks a label
+  // right above the avatar reserves `var(--avatar-hat-room)`, and one that sits
+  // something right beside it `var(--avatar-wing-room)` (wings only).
+  const rise = Math.max(Hat ? HAT_RISE : 0, ornament ? ORNAMENT_RISE[ornament.band] : 0);
   const sized = size ? {
     '--avatar-badge-size': `${Math.min(20, Math.max(12, Math.round(size * .4)))}px`,
-    ...(Hat && {'--avatar-hat-room': `${Math.round(size * HAT_RISE)}px`}),
+    ...(rise && {'--avatar-hat-room': `${Math.round(size * rise)}px`}),
+    ...(Wings && {'--avatar-wing-room': `${Math.round(size * WING_SPREAD)}px`}),
   } as CSSProperties : undefined;
   return <span className="player-avatar-decorated" style={sized}>
+    {Wings && <span className="player-avatar-wings" aria-hidden="true"><Wings/></span>}
     {avatar}
-    {(frameId || hatId) && <span className="player-avatar-art" aria-hidden="true">
+    {(Frame || Horns || Hat) && <span className="player-avatar-art" aria-hidden="true">
       {Frame && <Frame/>}
+      {Horns && <Horns/>}
       {Hat && <Hat/>}
     </span>}
     {!!badgeIds?.length && <span className="player-avatar-badges" aria-hidden="true">
