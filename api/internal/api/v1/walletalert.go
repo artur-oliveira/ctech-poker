@@ -29,7 +29,7 @@ func (h *playerHandlers) walletAlertsGet(c fiber.Ctx) error {
 
 // Upper bounds for the alert thresholds; the UI input stops at the same values (ui/src/lib/amountLimits.ts).
 const (
-	maxAlertSandboxBalance int64 = 999_999_999
+	maxAlertSandboxBalance int64 = 999_999_999_999
 	maxAlertPurchaseCents  int64 = 100_000_000
 )
 

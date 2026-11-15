@@ -41,9 +41,9 @@ describe('amount input', () => {
   });
 
   test('whole units drop the decimal part', () => {
-    const fichas = {decimals: 0 as const, max: 999_999_999};
+    const fichas = {decimals: 0 as const, max: 999_999_999_999};
     expect(parseAmountInput('1234,56', fichas, '')).toEqual({text: '123.456', value: 123456});
-    expect(parseAmountInput('1000000000', fichas, '5').text).toBe('5');
+    expect(parseAmountInput('1000000000000', fichas, '5').text).toBe('5');
   });
 
   test('text round-trips to the integer', () => {

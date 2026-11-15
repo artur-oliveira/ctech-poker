@@ -75,7 +75,7 @@ export default function ProfileGuide() {
       {
         id: 'alertas', title: 'Configurar alertas de carteira', summary: 'Um aviso no perfil, nunca um bloqueio de compra.',
         body: <><p>Em <b>Alertas de carteira</b>, dois limites são opcionais e independentes. Deixe qualquer um vazio para desligá-lo; <b>Remover alertas</b> aparece assim que algum estiver configurado.</p>
-          <GuideTerms><GuideTerm term="Avisar quando o saldo de fichas cair abaixo de">Um aviso aparece em <b>Seus saldos</b> sempre que o seu saldo atual estiver abaixo do valor configurado. Aceita até 999.999.999 fichas.</GuideTerm>
+          <GuideTerms><GuideTerm term="Avisar quando o saldo de fichas cair abaixo de">Um aviso aparece em <b>Seus saldos</b> sempre que o seu saldo atual estiver abaixo do valor configurado. Aceita até 999.999.999.999 fichas.</GuideTerm>
             <GuideTerm term="Avisar quando uma compra passar de">O limite de gasto por compra de fichas, em reais. O campo já traz o R$, usa vírgula nos centavos (no máximo duas casas) e aceita até R$ 1.000.000,00.</GuideTerm></GuideTerms>
           <GuideCallout kind="safe" title="Nunca bloqueia nada">O alerta é só um aviso. Ele não impede uma compra nem muda taxa ou bônus de nenhum pacote.</GuideCallout></>
       },

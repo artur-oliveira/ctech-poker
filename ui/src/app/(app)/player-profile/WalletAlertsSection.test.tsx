@@ -75,8 +75,8 @@ describe('WalletAlertsSection', () => {
     await userEvent.type(balance, '12a3456');
     expect(balance).toHaveValue('123.456');
     await userEvent.clear(balance);
-    await userEvent.type(balance, '9999999999');
-    expect(balance).toHaveValue('999.999.999');
+    await userEvent.type(balance, '9999999999999');
+    expect(balance).toHaveValue('999.999.999.999');
 
     const purchase = screen.getByRole('textbox', {name: /uma compra passar/});
     await userEvent.type(purchase, '10000001');
