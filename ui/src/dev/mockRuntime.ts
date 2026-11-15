@@ -309,7 +309,7 @@ const mockOwnedAvatarIDs: Record<AvatarSlot, string[]> = {
   // laurel) and purchasable items side by side.
   frame: ['season-2026-q3', 'champion-gold', 'felt-ring', 'pearl-beads', 'sapphire-deco'],
   hat: ['dealer-visor', 'crown', 'top-hat', 'fedora', 'wizard'],
-  accessory: ['bandit-mask', 'shades', 'round-glasses', 'cigar'],
+  accessory: [],
   badge: Object.keys(AVATAR_ITEMS.badge),
 };
 
@@ -1201,7 +1201,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     // asked for (the client only re-sorts within the page it received).
     const lifetime: Entry[] = [
       {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286,
-        equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown', equipped_accessory_id: 'monocle',
+        equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown',
         equipped_badge_ids: ['all-in-hero', 'veteran']},
       {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
       {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244,
@@ -1297,15 +1297,13 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const kind = avatarCatalogMatch[1] as 'frame' | 'hat' | 'accessory';
     const earned: Record<string, 'achievement' | 'season'> = {
       'season-2026-q3': 'season', 'champion-gold': 'season', 'chip-ring': 'achievement', 'dealer-visor': 'achievement',
-      'crown': 'achievement', 'laurel': 'achievement', 'bandit-mask': 'achievement',
+      'crown': 'achievement', 'laurel': 'achievement',
     };
     const cents: Record<string, number> = {
       'felt-ring': 600, 'walnut-rail': 800, 'oxblood-edge': 1000,
       'silver-filigree': 800, 'pearl-beads': 900, 'rose-gold': 1000, 'obsidian-edge': 1000, 'emerald-cut': 1200,
       'sapphire-deco': 1200, 'olive-branch': 1400, 'suit-ring': 1500, 'top-hat': 300, 'cowboy': 400, 'beanie': 200,
-      'shades': 300, 'monocle': 500, 'mustache': 200, 'headset': 400,
       'fedora': 500, 'beret': 400, 'bowler': 500, 'captain-cap': 600, 'wizard': 700, 'sun-visor': 300,
-      'round-glasses': 400, 'eyepatch': 300, 'cigar': 500, 'handlebar': 400, 'earring': 300,
     };
     const entries = Object.keys(AVATAR_ITEMS[kind]).map(id => {
       const owned = mockOwnedAvatarIDs[kind].includes(id);
@@ -1388,7 +1386,6 @@ const baseSeats = () => [
     // wearing every cosmetic slot.
     frame_id: 'champion-gold',
     hat_id: 'crown',
-    accessory_id: 'monocle',
     badge_ids: ['all-in-hero', 'veteran'],
     stack: 3925,
     state: 'active',
@@ -1413,7 +1410,6 @@ const baseSeats = () => [
     name: 'Nina',
     frame_id: 'walnut-rail',
     hat_id: 'top-hat',
-    accessory_id: 'headset',
     badge_ids: ['rainmaker', 'social-butterfly', 'season-2026-q3-top10'],
     stack: 2775,
     state: 'active',
@@ -1423,13 +1419,12 @@ const baseSeats = () => [
   },
   // Nameless on purpose — exercises the is-pending-name placeholder in dev;
   // decorated so the sitting-out greyscale covers the art and badges too.
-  {player_id: 'gui_bh', frame_id: 'oxblood-edge', hat_id: 'beanie', accessory_id: 'shades', badge_ids: ['veteran'],
+  {player_id: 'gui_bh', frame_id: 'oxblood-edge', hat_id: 'beanie', badge_ids: ['veteran'],
     stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
   {
     player_id: 'joao_floripa',
     name: 'João',
     hat_id: 'dealer-visor',
-    accessory_id: 'bandit-mask',
     stack: 4375,
     state: 'active',
     dealt_in: true,
@@ -1441,7 +1436,6 @@ const baseSeats = () => [
     name: 'Mari',
     frame_id: 'season-2026-q3',
     hat_id: 'laurel',
-    accessory_id: 'mustache',
     badge_ids: ['season-2026-q3-champion'],
     stack: 8200,
     state: 'active',
@@ -1504,8 +1498,7 @@ function fullHandSeats(): SeatView[] {
       playstyle_badge: 'explorer',
       frame_id: 'champion-gold',
       hat_id: 'crown',
-      accessory_id: 'monocle',
-      badge_ids: ['all-in-hero', 'veteran'],
+        badge_ids: ['all-in-hero', 'veteran'],
       stack: 3925,
       state: 'active',
       dealt_in: true,

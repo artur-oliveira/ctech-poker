@@ -42,18 +42,10 @@ export const AVATAR_ITEMS: Record<AvatarSlot, Record<string, { label: string }>>
     'wizard': {label: 'Chapéu de Mago'},
     'sun-visor': {label: 'Viseira'},
   },
-  accessory: {
-    'bandit-mask': {label: 'Máscara de Bandido'},
-    'shades': {label: 'Óculos Escuros'},
-    'monocle': {label: 'Monóculo'},
-    'mustache': {label: 'Bigode'},
-    'headset': {label: 'Headset'},
-    'round-glasses': {label: 'Óculos Redondos'},
-    'eyepatch': {label: 'Tapa-olho'},
-    'cigar': {label: 'Charuto'},
-    'handlebar': {label: 'Bigode Francês'},
-    'earring': {label: 'Brinco'},
-  },
+  // No accessory exists for now (all removed 2026-11-15); the slot and its wire
+  // field stay for the next phase's horns/wings. Every accessory surface (store
+  // department, profile picker) is hidden while this is empty: hasAvatarItems.
+  accessory: {},
   badge: {
     'season-2026-q3-top10': {label: 'Top 10 da Temporada'},
     'season-2026-q3-champion': {label: 'Campeão da Temporada'},
@@ -64,6 +56,9 @@ export const AVATAR_ITEMS: Record<AvatarSlot, Record<string, { label: string }>>
     'social-butterfly': {label: 'Anfitrião'},
   },
 };
+
+/** Whether this build has any item for slot; a slot without one shows no UI. */
+export const hasAvatarItems = (slot: AvatarSlot) => Object.keys(AVATAR_ITEMS[slot]).length > 0;
 
 /** Unknown id (new server item, old client) falls back to the raw id. */
 export function avatarItemLabel(slot: AvatarSlot, id: string): string {

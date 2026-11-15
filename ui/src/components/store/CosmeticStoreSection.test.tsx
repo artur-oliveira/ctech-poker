@@ -222,7 +222,7 @@ describe('avatar item sections', () => {
     expect(within(list).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  test('frames and accessories render their own catalogs', () => {
+  test('frames render their catalog; an accessory id (no art in this build) is hidden', () => {
     render(<>
       <FrameStoreSection catalog={[{kind: 'frame', id: 'felt-ring', premium: true, source: 'purchase', available: true,
         price_cents: 600, price_fichas: 600_000}]} purchases={[]} isLoading={false} isError={false} {...actions}/>
@@ -230,7 +230,8 @@ describe('avatar item sections', () => {
         available: true}]} purchases={[]} isLoading={false} isError={false} {...actions}/>
     </>);
     expect(within(screen.getByRole('list', {name: 'Catálogo de molduras'})).getByText('Borda de Feltro')).toBeInTheDocument();
-    expect(within(screen.getByRole('list', {name: 'Catálogo de acessórios'})).getByText('Conquista')).toBeInTheDocument();
+    expect(screen.queryByRole('list', {name: 'Catálogo de acessórios'})).not.toBeInTheDocument();
+    expect(screen.getByText('Nenhum acessório disponível no momento.')).toBeInTheDocument();
   });
 });
 
@@ -239,10 +240,9 @@ describe('cosmeticActivityRows', () => {
     const rows = cosmeticActivityRows([
       purchase({purchase_id: 'a', kind: 'frame', item_id: 'walnut-rail'}),
       purchase({purchase_id: 'b', kind: 'hat', item_id: 'top-hat', method: 'fichas'}),
-      purchase({purchase_id: 'c', kind: 'accessory', item_id: 'monocle'}),
     ]);
     expect(rows.map(row => [row.label, row.detail.split(' · ').slice(0, 2).join(' · ')])).toEqual([
-      ['Borda de Nogueira', 'Borda · Pix'], ['Cartola', 'Chapéu · Fichas'], ['Monóculo', 'Acessório · Pix'],
+      ['Borda de Nogueira', 'Borda · Pix'], ['Cartola', 'Chapéu · Fichas'],
     ]);
     expect(rows.every(row => row.media)).toBe(true);
   });

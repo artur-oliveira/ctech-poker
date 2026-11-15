@@ -2,7 +2,7 @@
 import {useCallback, useRef, useState} from 'react';
 import {useInfiniteQuery, useQuery, useQueryClient} from '@tanstack/react-query';
 import {
-  Bookmark, ChevronRight, CircleUserRound, Clock3, Coins, Crown, Glasses, Layers, Palette, ShoppingBag, Sparkles
+  Bookmark, ChevronRight, CircleUserRound, Clock3, Coins, Crown, Gem, Layers, Palette, ShoppingBag, Sparkles
 } from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
 import {DAILY_REWARD_ANCHOR, DailyRewardBanner} from '@/components/store/DailyRewardBanner';
@@ -39,6 +39,7 @@ import type {Page} from '@/lib/api/client';
 import {pushNotification} from '@/lib/notify';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {useInViewOnce} from '@/lib/hooks/useInViewOnce';
+import {hasAvatarItems} from '@/lib/avatarCosmetics';
 import {getMe} from '@/lib/api/player';
 import {DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
 import {
@@ -93,15 +94,17 @@ function usePurchaseHistory<T>(queryKey: readonly unknown[], fetchPage: (cursor?
 
 // An avatar department (frame, hat, accessory) is below the fold, so unlike the
 // four eager catalogs its catalog waits for the section too: first paint adds no
-// request. Until the section has been in view the grid reports loading, so it
+// request. A slot this build has no item for (accessory, for now) never reads
+// anything and is left out of the page (hasAvatarItems). Until the section has been in view the grid reports loading, so it
 // is a skeleton or a whole grid, never one without its prices or actions.
 function useAvatarDepartment(kind: AvatarStoreKind, released: string, activitySeen: boolean) {
   const [ref, seen] = useInViewOnce();
+  const live = hasAvatarItems(kind);
   const catalog = useQuery({
-    queryKey: ['wallet', 'cosmetic-catalog', kind], queryFn: () => listCosmeticCatalog(kind), enabled: seen,
+    queryKey: ['wallet', 'cosmetic-catalog', kind], queryFn: () => listCosmeticCatalog(kind), enabled: live && seen,
   });
   const purchases = usePurchaseHistory(['wallet', 'cosmetic-purchases', kind],
-    cursor => listCosmeticPurchases(kind, cursor), seen || activitySeen);
+    cursor => listCosmeticPurchases(kind, cursor), live && (seen || activitySeen));
   const premium = (catalog.data ?? []).filter(entry => entry.premium);
   return {
     ref, catalog, purchases,
@@ -155,17 +158,18 @@ export default function Store() {
   const frames = useAvatarDepartment('frame', 'liberadas', activitySeen);
   const hats = useAvatarDepartment('hat', 'liberados', activitySeen);
   const accessories = useAvatarDepartment('accessory', 'liberados', activitySeen);
-  const avatarDepartments = [
+  const avatarDepartments = ([
     {kind: 'frame', anchor: 'molduras', title: 'Molduras', icon: CircleUserRound, Grid: FrameStoreSection, dept: frames,
       hint: 'Borda ao redor da sua foto',
       description: 'Uma borda ao redor da sua foto em qualquer mesa. Libere uma vez e equipe no perfil.'},
     {kind: 'hat', anchor: 'chapeus', title: 'Chapéus', icon: Crown, Grid: HatStoreSection, dept: hats,
       hint: 'Sobre a sua foto',
       description: 'Um chapéu sobre a sua foto. Alguns se compram, outros só vêm com conquistas.'},
-    {kind: 'accessory', anchor: 'acessorios', title: 'Acessórios', icon: Glasses, Grid: AccessoryStoreSection,
-      dept: accessories, hint: 'Óculos, bigode e mais',
-      description: 'Óculos, bigode e outros detalhes no rosto do avatar. Libere uma vez e equipe no perfil.'},
-  ] as const;
+    {kind: 'accessory', anchor: 'acessorios', title: 'Acessórios', icon: Gem, Grid: AccessoryStoreSection,
+      dept: accessories, hint: 'Detalhes extras no avatar',
+      description: 'Detalhes extras no avatar. Libere uma vez e equipe no perfil.'},
+  ] as const).filter(department => hasAvatarItems(department.kind));
+  const avatarDepts = avatarDepartments.map(department => department.dept);
 
   const skus = useQuery({
     queryKey: ['wallet', 'skus'], queryFn: listSkus,
@@ -507,14 +511,13 @@ export default function Store() {
               <section aria-labelledby="avatar-activity-title">
                 <h3 id="avatar-activity-title">Visual do avatar</h3>
                 <PurchaseActivityList
-                  rows={cosmeticActivityRows([...frames.purchases.items, ...hats.purchases.items,
-                    ...accessories.purchases.items])}
-                  isLoading={frames.purchases.isLoading || hats.purchases.isLoading || accessories.purchases.isLoading}
-                  isError={frames.purchases.isError || hats.purchases.isError || accessories.purchases.isError}
-                  onRetryAction={() => [frames, hats, accessories].forEach(dept => void dept.purchases.refetch())}
+                  rows={cosmeticActivityRows(avatarDepts.flatMap(dept => dept.purchases.items))}
+                  isLoading={avatarDepts.some(dept => dept.purchases.isLoading)}
+                  isError={avatarDepts.some(dept => dept.purchases.isError)}
+                  onRetryAction={() => avatarDepts.forEach(dept => void dept.purchases.refetch())}
                   loadingLabel="Carregando compras do avatar…"
-                  errorLabel="Não foi possível carregar as compras de molduras, chapéus e acessórios."
-                  emptyLabel="Suas compras de molduras, chapéus e acessórios aparecerão aqui."/>
+                  errorLabel="Não foi possível carregar as compras do avatar."
+                  emptyLabel="Suas compras de molduras e chapéus aparecerão aqui."/>
               </section>
             </div>
           </section>

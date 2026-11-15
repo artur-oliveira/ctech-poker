@@ -48,8 +48,9 @@ test('first paint requests no avatar catalog; a department in view requests its 
   enter('chapeus');
   await waitFor(() => expect(catalogGets('hat')).toBe(1));
   enter('molduras');
-  enter('acessorios');
   await waitFor(() => expect(catalogGets('frame')).toBe(1));
-  await waitFor(() => expect(catalogGets('accessory')).toBe(1));
   expect(catalogGets('hat')).toBe(1);
+  // The accessory slot has no items in this build: no section to enter, never a read.
+  expect(observed.some(entry => entry.ids.includes('acessorios'))).toBe(false);
+  expect(catalogGets('accessory')).toBe(0);
 });

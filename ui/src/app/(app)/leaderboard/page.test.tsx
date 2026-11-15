@@ -78,7 +78,7 @@ describe('community leaderboard page', () => {
       {...entries[0], avatar_url: 'https://cdn.test/ana.png', equipped_frame_id: 'champion-gold', equipped_hat_id: 'crown'},
       entries[1], entries[2],
       {...entries[3], avatar_url: 'https://cdn.test/dani.png', equipped_frame_id: 'chip-ring',
-        equipped_accessory_id: 'monocle', equipped_badge_ids: ['veteran']},
+        equipped_hat_id: 'top-hat', equipped_badge_ids: ['veteran']},
       {player_id: 'fifth', player_name: 'Edu Lima', hands_played: 40, hands_won: 2, win_rate: .05},
     ]);
     render(<Ranking/>);

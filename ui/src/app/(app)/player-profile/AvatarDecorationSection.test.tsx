@@ -35,7 +35,6 @@ const me: PlayerProfile = {
 const OWNED: Record<string, string[]> = {
   frame: ['season-2026-q3', 'chip-ring'],
   hat: ['crown', 'top-hat'],
-  accessory: ['monocle'],
   badge: ['season-2026-q3-top10', 'season-2026-q3-champion'],
 };
 
@@ -58,22 +57,25 @@ describe('AvatarDecorationSection', () => {
   test('shows a short empty line per slot when nothing is owned', async () => {
     listOwnedAvatarCosmetics.mockResolvedValue([]);
     render(<AvatarDecorationSection me={me}/>, {wrapper});
-    expect(await screen.findAllByText(/Você ainda não tem itens deste tipo/)).toHaveLength(4);
+    expect(await screen.findAllByText(/Você ainda não tem itens deste tipo/)).toHaveLength(3);
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   test('lists only owned ids per slot, plus Nenhum/Nenhuma, with radio/checkbox semantics', async () => {
     render(<AvatarDecorationSection me={me}/>, {wrapper});
-    for (const slot of ['frame', 'hat', 'accessory', 'badge']) {
+    for (const slot of ['frame', 'hat', 'badge']) {
       expect(listOwnedAvatarCosmetics).toHaveBeenCalledWith(slot);
     }
+    // The accessory slot has no items in this build: no picker and no read.
+    expect(listOwnedAvatarCosmetics).not.toHaveBeenCalledWith('accessory');
+    expect(screen.queryByRole('group', {name: 'Acessório'})).not.toBeInTheDocument();
     const hats = within(await group('Chapéu equipado')).getAllByRole('radio').map(r => r.closest('label')?.textContent?.trim());
     expect(hats).toEqual(['Nenhum', 'Coroa', 'Cartola']);
     const frames = within(await group('Borda equipada')).getAllByRole('radio');
     expect(frames).toHaveLength(3);
     expect(frames[0].closest('label')?.textContent?.trim()).toBe('Nenhuma');
-    expect(within(await group('Acessório equipado')).getByRole('radio', {name: 'Monóculo'})).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', {name: 'Acessório equipado'})).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', {name: 'Gorro'})).not.toBeInTheDocument();
     expect(await screen.findByRole('checkbox', {name: /Top 10 da Temporada/})).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
@@ -93,10 +95,9 @@ describe('AvatarDecorationSection', () => {
   test.each([
     ['Borda equipada', 'Nenhuma', 'equipped_frame_id', {equipped_frame_id: 'chip-ring'}],
     ['Chapéu equipado', 'Nenhum', 'equipped_hat_id', {equipped_hat_id: 'crown'}],
-    ['Acessório equipado', 'Nenhum', 'equipped_accessory_id', {equipped_accessory_id: 'monocle'}],
   ] as const)('the empty option in %s (%s) unequips only that slot', async (name, none, field, equipped) => {
     const current = {...me, equipped_frame_id: 'season-2026-q3', equipped_hat_id: 'top-hat',
-      equipped_accessory_id: 'monocle', equipped_badge_ids: ['season-2026-q3-top10'], ...equipped};
+      equipped_badge_ids: ['season-2026-q3-top10'], ...equipped};
     updateMe.mockResolvedValue({...current, [field]: ''});
     render(<AvatarDecorationSection me={current}/>, {wrapper});
     await userEvent.click(within(await group(name)).getByRole('radio', {name: none}));
@@ -133,13 +134,11 @@ describe('AvatarDecorationSection', () => {
     for (const size of [72, 36]) expect(screen.getByTestId(`preview-${size}`)).toHaveAttribute('data-hat', 'crown');
     await userEvent.click(await screen.findByRole('radio', {name: 'Borda de Fichas'}));
     await userEvent.click(screen.getByRole('radio', {name: 'Cartola'}));
-    await userEvent.click(screen.getByRole('radio', {name: 'Monóculo'}));
     await userEvent.click(screen.getByRole('checkbox', {name: /Campeão da Temporada/}));
     for (const size of [72, 36]) {
       const preview = screen.getByTestId(`preview-${size}`);
       expect(preview).toHaveAttribute('data-frame', 'chip-ring');
       expect(preview).toHaveAttribute('data-hat', 'top-hat');
-      expect(preview).toHaveAttribute('data-accessory', 'monocle');
       expect(preview).toHaveAttribute('data-badges', 'season-2026-q3-champion');
     }
   });

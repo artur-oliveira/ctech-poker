@@ -618,10 +618,13 @@ describe('store cosmetics and reactions', () => {
   test('lists the avatar departments in the directory with their anchors', () => {
     render(<Store/>);
     const directory = screen.getByRole('navigation', {name: 'Seções da loja'});
-    for (const [name, anchor] of [['Molduras', 'molduras'], ['Chapéus', 'chapeus'], ['Acessórios', 'acessorios']]) {
+    for (const [name, anchor] of [['Molduras', 'molduras'], ['Chapéus', 'chapeus']]) {
       expect(within(directory).getByText(name).closest('a')).toHaveAttribute('href', `#${anchor}`);
       expect(screen.getByRole('heading', {level: 2, name}).closest('section')).toHaveAttribute('id', anchor);
     }
+    // No accessory exists in this build, so its department is left out entirely.
+    expect(within(directory).queryByText('Acessórios')).not.toBeInTheDocument();
+    expect(document.getElementById('acessorios')).toBeNull();
   });
 
   test('a purchasable hat opens its purchase dialog', async () => {
