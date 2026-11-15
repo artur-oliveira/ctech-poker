@@ -10,13 +10,21 @@ import {useId, type JSX, type ReactNode, type SVGProps} from 'react';
  * is >=4 units; thinner lines below are only contrast edges or shading.
  * The grammar is a calm main band plus hairlines: an ink edge on the photo
  * side, engraved rules, one specular sweep lit from the upper left.
+ *
+ * Animated frames are a static base svg plus `Fx` layers: whole <svg>
+ * elements that renderer.css moves by `data-fx` with transform/opacity only,
+ * so every frame of the animation is a compositor job (no paint, no layout).
+ * Each layer's resting pose is part of the static frame that reduced motion
+ * and inactive seats show, so it is drawn to look finished at rest. Fx
+ * layers may reach past r=32 (flames, aura glow, twinkles): overflow visible.
  */
 
 type Token =
   | 'gold' | 'gold-pale' | 'gold-deep' | 'oxblood' | 'oxblood-bright' | 'felt' | 'walnut' | 'walnut-deep'
   | 'paper' | 'ink' | 'wine' | 'pearl-shade' | 'silver' | 'silver-pale' | 'silver-deep'
   | 'rose' | 'rose-pale' | 'rose-deep' | 'obsidian' | 'obsidian-lift' | 'emerald' | 'emerald-pale' | 'emerald-deep'
-  | 'sapphire' | 'sapphire-pale' | 'sapphire-deep' | 'olive' | 'olive-deep';
+  | 'sapphire' | 'sapphire-pale' | 'sapphire-deep' | 'olive' | 'olive-deep'
+  | 'ember' | 'flame' | 'amethyst' | 'amethyst-pale' | 'amethyst-deep' | 'spark';
 type Paint = Token | `url(#${string})`;
 
 const paint = (p: Paint) => (p.startsWith('url(') ? p : `var(--cosmetic-${p})`);
@@ -273,6 +281,241 @@ function SuitFrame() {
   </Frame>;
 }
 
+
+const f2 = (n: number) => n.toFixed(2);
+/** [x, y] at radius r and angle deg (0 = 3 o'clock, clockwise). */
+const polar = (r: number, deg: number): [number, number] => {
+  const a = (deg * Math.PI) / 180;
+  return [32 + r * Math.cos(a), 32 + r * Math.sin(a)];
+};
+const pt = ([x, y]: [number, number]) => `${f2(x)} ${f2(y)}`;
+/** A closed polyline through r(deg) sampled every 2 degrees, from `from` over `sweep`. */
+const wave = (r: (deg: number) => number, from = 0, sweep = 360) => {
+  const n = Math.round(sweep / 2);
+  return Array.from({length: n + 1}, (_, i) => {
+    const d = from + (sweep * i) / n;
+    return `${i ? 'L' : 'M'}${pt(polar(r(d), d))}`;
+  }).join(' ') + (sweep === 360 ? ' Z' : '');
+};
+
+/** One animated layer: the whole <svg> is what renderer.css moves (`data-fx`). */
+function Fx({fx, children}: { fx: string; children: ReactNode }) {
+  return <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false" overflow="visible" data-fx={fx}>{children}</svg>;
+}
+
+/** A flame tongue rooted on r0 between deg±half, licking `len` outward and bending `bend` degrees. */
+const tongue = (deg: number, half: number, r0: number, len: number, bend: number) =>
+  `M${pt(polar(r0, deg - half))} Q${pt(polar(r0 + len * 0.6, deg - half * 0.7 + bend * 0.3))} ${pt(polar(r0 + len, deg + bend))}`
+  + ` Q${pt(polar(r0 + len * 0.45, deg + half * 0.8 + bend * 0.2))} ${pt(polar(r0, deg + half))} Z`;
+/** Ring of `n` tongues, taller at the top and bent upward like fire rising off a ring. */
+const flames = (n: number, offset: number, r0: number, short: number, tall: number) =>
+  Array.from({length: n}, (_, i) => {
+    const deg = offset + (360 * i) / n;
+    const up = (1 - Math.sin((deg * Math.PI) / 180)) / 2; // 1 at the top, 0 at the bottom
+    return tongue(deg, 180 / n, r0, short + (tall - short) * up, -9 * Math.cos((deg * Math.PI) / 180));
+  }).join(' ');
+
+// Inferno: an oxblood band in a crown of flames, taller at the top; the outer
+// tongues lick upward and the hot inner ones flicker (animated layers).
+function InfernoFrame() {
+  const [g, rim] = useMetal('oxblood-bright', 'oxblood', 'wine');
+  return <>
+    <Fx fx="flame">
+      <path d={flames(13, 0, 27, 5.5, 10.5)} fill={paint('oxblood-bright')} stroke={paint('wine')} strokeWidth={0.7}/>
+      <path d={flames(13, 0, 27, 3.8, 7.6)} fill={paint('ember')}/>
+    </Fx>
+    <Frame defs={g}>
+      <Ring r={25.1} w={0.8} c="ink"/>
+      <Ring r={28.6} w={5.8} c={rim}/>
+      <Ring r={26.4} w={0.6} c="ember" strokeOpacity={0.8}/>
+      <Ring r={31.3} w={0.6} c="wine"/>
+    </Frame>
+    <Fx fx="flame-core">
+      <path d={flames(13, 180 / 13, 29.5, 2.4, 5)} fill={paint('ember')} stroke={paint('oxblood-bright')} strokeWidth={0.5}/>
+      <path d={flames(13, 180 / 13, 30.2, 1.2, 3)} fill={paint('flame')}/>
+    </Fx>
+  </>;
+}
+
+// Arcane aura: an amethyst band breathing a soft violet glow (stacked
+// translucent strokes, never a blur filter) with light motes orbiting it.
+function ArcaneFrame() {
+  const [g, band] = useMetal('amethyst-pale', 'amethyst', 'amethyst-deep');
+  const mote = (deg: number, r: number, size: number) => {
+    const [cx, cy] = polar(r, deg);
+    return <g key={deg}>
+      <circle cx={cx} cy={cy} r={size * 2} fill={paint('amethyst-pale')} fillOpacity={0.35}/>
+      <circle cx={cx} cy={cy} r={size} fill={paint('paper')}/>
+    </g>;
+  };
+  return <>
+    <Fx fx="breathe">
+      <Ring r={31.5} w={7} c="amethyst" strokeOpacity={0.16}/>
+      <Ring r={32.5} w={4} c="amethyst-pale" strokeOpacity={0.22}/>
+    </Fx>
+    <Frame defs={g}>
+      <Ring r={25.1} w={0.8} c="ink"/>
+      <Ring r={28.6} w={5.6} c={band}/>
+      <Ring r={26.3} w={0.45} c="amethyst-pale" strokeOpacity={0.7}/>
+      <Ring r={31.2} w={0.6} c="amethyst-deep"/>
+      <Arc r={28.6} w={1.3} c="amethyst-pale" strokeOpacity={0.6} from={196} sweep={50}/>
+    </Frame>
+    <Fx fx="orbit">{[220, 340, 100].map(d => mote(d, 28.6, 1.35))}</Fx>
+    <Fx fx="orbit-back">{[40, 160, 280].map(d => mote(d, 31.6, 0.8))}</Fx>
+  </>;
+}
+
+/** A zigzag bolt along the ring from `from` over `sweep` degrees. */
+const bolt = (from: number, sweep: number, kinks: number) => Array.from({length: kinks + 1}, (_, i) =>
+  `${i ? 'L' : 'M'}${pt(polar(i % 2 ? 30.6 : 26.8, from + (sweep * i) / kinks))}`).join(' ');
+
+// Storm ring: a cold sapphire band; electric arcs run around it and flicker.
+function StormFrame() {
+  const [g, band] = useMetal('sapphire-pale', 'sapphire', 'sapphire-deep');
+  const arc = (from: number, sweep: number, kinks: number) => <>
+    <path d={bolt(from, sweep, kinks)} fill="none" stroke={paint('sapphire-pale')} strokeOpacity={0.5} strokeWidth={3.2}
+      strokeLinejoin="round" strokeLinecap="round"/>
+    <path d={bolt(from, sweep, kinks)} fill="none" stroke={paint('spark')} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"/>
+  </>;
+  return <>
+    <Frame defs={g}>
+      <Ring r={25.1} w={0.8} c="ink"/>
+      <Ring r={28.7} w={6.2} c="sapphire-deep"/>
+      <Ring r={27.1} w={1.6} c={band}/>
+      <Ring r={30.6} w={1} c={band}/>
+      <Ring r={31.7} w={0.6} c="silver-pale"/>
+    </Frame>
+    <Fx fx="arc">{arc(188, 74, 7)}</Fx>
+    <Fx fx="arc-back">{arc(18, 46, 5)}</Fx>
+  </>;
+}
+
+/** A four-point twinkle of radius s at (cx, cy). */
+const star = ([cx, cy]: [number, number], s: number) => {
+  const k = s * 0.22;
+  return `M${f2(cx)} ${f2(cy - s)} L${f2(cx + k)} ${f2(cy - k)} L${f2(cx + s)} ${f2(cy)} L${f2(cx + k)} ${f2(cy + k)}`
+    + ` L${f2(cx)} ${f2(cy + s)} L${f2(cx - k)} ${f2(cy + k)} L${f2(cx - s)} ${f2(cy)} L${f2(cx - k)} ${f2(cy - k)} Z`;
+};
+
+// Gold shimmer: polished gold with a pale bevel; a specular sweep travels
+// around it and two or three twinkles catch the light.
+function ShimmerFrame() {
+  const [g, metal] = useMetal('gold-pale', 'gold', 'gold-deep');
+  return <>
+    <Frame defs={g}>
+      <Ring r={25.1} w={0.8} c="ink"/>
+      <Ring r={28.75} w={6.5} c={metal}/>
+      <Ring r={26.5} w={1.8} c="gold-pale"/>
+      <Ring r={31.35} w={0.5} c="gold-deep"/>
+    </Frame>
+    <Fx fx="sweep">
+      <Arc r={28.75} w={5} c="gold-pale" strokeOpacity={0.5} from={184} sweep={70}/>
+      <Arc r={28.75} w={2.8} c="paper" strokeOpacity={0.9} from={204} sweep={30}/>
+    </Fx>
+    <Fx fx="twinkle">
+      <path d={star(polar(30.5, 318), 5)} fill={paint('paper')} stroke={paint('gold-deep')} strokeWidth={0.4}/>
+      <path d={star(polar(30.5, 128), 4)} fill={paint('paper')} stroke={paint('gold-deep')} strokeWidth={0.4}/>
+    </Fx>
+    <Fx fx="twinkle-late">
+      <path d={star(polar(30.5, 48), 4.2)} fill={paint('paper')} stroke={paint('gold-deep')} strokeWidth={0.4}/>
+    </Fx>
+  </>;
+}
+
+// Baroque gilt: a gilt band with a scrolled cartouche at 12/3/6/9, each a pale
+// plaque between two curled volutes with an oxblood cabochon.
+function BaroqueFrame() {
+  const [g, metal] = useMetal('gold-pale', 'gold', 'gold-deep');
+  const volute = 'M27.2 3.2 C26.6 0.6 23.2 0.4 22.6 2.6 C22.1 4.6 24.4 5.9 25.6 4.6 C24.6 4.4 24 3.4 24.8 2.6 C25.6 1.9 26.8 2.4 27.2 3.2 Z';
+  return <Frame defs={g}>
+    <Ring r={25.1} w={0.8} c="ink"/>
+    <Ring r={28.7} w={5.4} c={metal}/>
+    <Ring r={26.3} w={0.45} c="gold-deep"/>
+    <Ring r={31.15} w={0.45} c="gold-deep"/>
+    {COMPASS.map(d => <g key={d} transform={`rotate(${d + 90} 32 32)`}>
+      <path d={volute} fill={paint('gold-deep')} stroke={paint('gold-pale')} strokeWidth={0.4}/>
+      <path d={volute} transform="translate(64 0) scale(-1 1)" fill={paint('gold-deep')} stroke={paint('gold-pale')} strokeWidth={0.4}/>
+      <ellipse cx={32} cy={3.3} rx={4.3} ry={2.9} fill={paint('gold-pale')} stroke={paint('gold-deep')} strokeWidth={0.6}/>
+      <circle cx={32} cy={3.3} r={1.35} fill={paint('oxblood')} stroke={paint('wine')} strokeWidth={0.35}/>
+    </g>)}
+  </Frame>;
+}
+
+/** Laurel leaves along r=28.6, rooted every `step` degrees from `from` toward `to`. */
+function laurelLeaves(from: number, to: number, step: number) {
+  const out: { d: string; pale: boolean }[] = [];
+  const dir = Math.sign(to - from);
+  for (let deg = from, i = 0; dir * (to - deg) >= 0; deg += dir * step, i++) {
+    const [bx, by] = polar(28.6, deg);
+    const tangent = ((deg + 90 * dir) * Math.PI) / 180;
+    for (const side of [-1, 1]) {
+      const a = tangent + side * 0.62 * dir;
+      const tx = bx + 5.2 * Math.cos(a), ty = by + 5.2 * Math.sin(a);
+      const mx = (bx + tx) / 2, my = (by + ty) / 2, nx = -Math.sin(a) * 1.9, ny = Math.cos(a) * 1.9;
+      out.push({pale: (i + (side > 0 ? 1 : 0)) % 2 === 0,
+        d: `M${f2(bx)} ${f2(by)} Q${f2(mx + nx)} ${f2(my + ny)} ${f2(tx)} ${f2(ty)} Q${f2(mx - nx)} ${f2(my - ny)} ${f2(bx)} ${f2(by)} Z`});
+    }
+  }
+  return out;
+}
+
+// Laurel wreath: no band, a full ring of gold leaves on two branches rising from
+// an oxblood ribbon at the bottom and meeting at the top.
+function LaurelWreathFrame() {
+  const leaves = [...laurelLeaves(100, 262, 13.5), ...laurelLeaves(80, -82, 13.5)];
+  return <Frame>
+    <Ring r={25.1} w={0.8} c="ink"/>
+    <Ring r={28.6} w={1.6} c="gold-deep"/>
+    {leaves.map(({d, pale}, i) => <path key={i} d={d} fill={paint(pale ? 'gold-pale' : 'gold')}
+      stroke={paint('gold-deep')} strokeWidth={0.5}/>)}
+    <path d="M32 59.2 L27.2 56.4 L27.6 62 Z M32 59.2 L36.8 56.4 L36.4 62 Z" fill={paint('oxblood')} stroke={paint('wine')}
+      strokeWidth={0.5} strokeLinejoin="round"/>
+    <circle cx={32} cy={59.2} r={1.5} fill={paint('oxblood-bright')} stroke={paint('wine')} strokeWidth={0.4}/>
+  </Frame>;
+}
+
+// Art nouveau: a whiplash vine wanders across a deep emerald band between gold
+// rules, a gold leaf on each outer crest and a pale bud in each hollow.
+function NouveauFrame() {
+  const crest = (deg: number) => 28.6 + 1.9 * Math.sin((6 * deg * Math.PI) / 180);
+  return <Frame>
+    <Ring r={25.1} w={0.8} c="ink"/>
+    <Ring r={25.8} w={0.8} c="gold"/>
+    <Ring r={28.8} w={5.4} c="emerald-deep"/>
+    <Ring r={31.65} w={0.7} c="gold"/>
+    <path d={wave(crest)} fill="none" stroke={paint('emerald-pale')} strokeWidth={1.3} strokeLinejoin="round"/>
+    {Array.from({length: 6}, (_, i) => {
+      const crestDeg = 15 + i * 60, hollow = 45 + i * 60;
+      const [lx, ly] = polar(30.2, crestDeg);
+      return <g key={i}>
+        <ellipse cx={lx} cy={ly} rx={2.4} ry={1.15} transform={`rotate(${crestDeg + 60} ${f2(lx)} ${f2(ly)})`}
+          fill={paint('gold')} stroke={paint('gold-deep')} strokeWidth={0.4}/>
+        <circle {...at(hollow, 26.9)} r={1.05} fill={paint('gold-pale')}/>
+      </g>;
+    })}
+  </Frame>;
+}
+
+// Celtic knot: two silver strands woven over and under each other around an
+// emerald band, every crossing alternating which strand is on top.
+function CelticFrame() {
+  const strand = (sign: number) => (deg: number) => 28.7 + sign * 2.1 * Math.sin((8 * deg * Math.PI) / 180);
+  const cord = (d: string, key?: string) => <g key={key}>
+    <path d={d} fill="none" stroke={paint('ink')} strokeWidth={2.7} strokeLinejoin="round"/>
+    <path d={d} fill="none" stroke={paint('silver-pale')} strokeWidth={1.5} strokeLinejoin="round"/>
+  </g>;
+  return <Frame>
+    <Ring r={25.1} w={0.8} c="ink"/>
+    <Ring r={28.7} w={6.4} c="emerald-deep"/>
+    <Ring r={25.9} w={0.5} c="emerald" />
+    <Ring r={31.6} w={0.6} c="silver"/>
+    {cord(wave(strand(1)))}
+    {cord(wave(strand(-1)))}
+    {/* Crossings sit every 22.5 degrees; every other one is redrawn with the first strand on top. */}
+    {Array.from({length: 8}, (_, i) => cord(wave(strand(1), i * 45 - 7, 14), String(i)))}
+  </Frame>;
+}
+
 export const FRAME_ART: Record<string, () => JSX.Element> = {
   'season-2026-q3': SeasonFrame,
   'champion-gold': ChampionFrame,
@@ -288,4 +531,12 @@ export const FRAME_ART: Record<string, () => JSX.Element> = {
   'sapphire-deco': SapphireFrame,
   'olive-branch': OliveFrame,
   'suit-ring': SuitFrame,
+  'inferno': InfernoFrame,
+  'arcane-aura': ArcaneFrame,
+  'storm-ring': StormFrame,
+  'gold-shimmer': ShimmerFrame,
+  'baroque-gilt': BaroqueFrame,
+  'laurel-wreath': LaurelWreathFrame,
+  'art-nouveau': NouveauFrame,
+  'celtic-knot': CelticFrame,
 };
