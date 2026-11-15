@@ -21,6 +21,8 @@ export default function ProfileGuide() {
             <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo (<b>Fichas</b> ou <b>Dinheiro real</b>, também no menu do seu avatar).</span></li>
             <li><span><b>Filtro de chat:</b> palavras que você mesmo quer que fiquem mascaradas no chat da mesa, além do filtro padrão que já vale para todos.</span></li>
             <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li>
+            <li><span><b>Atalhos no topo:</b> uma faixa fixa com um botão por seção leva direto até ela. No celular ela rola para o lado.</span></li>
+            <li><span><b>Jogo responsável:</b> onde as apostas em dinheiro real estão liberadas, o aceite do termo, seus limites e a pausa. Sem o aceite, as mesas de dinheiro real ficam bloqueadas.</span></li>
             <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li></GuideBullets>
           <p>Nome, foto e baralho aparecem nos dois lugares de propósito: é o mesmo controle, salvando no mesmo lugar. Alterou num, o outro já mostra o valor novo.</p></>
       },
@@ -38,7 +40,7 @@ export default function ProfileGuide() {
       },
       {
         id: 'moldura-emblemas', title: 'Visual do avatar', summary: 'Borda, chapéu, adorno e emblemas, equipados ao redor da sua foto.',
-        body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. As listas só mostram o que você já tem; não há compra aqui. Novos itens ficam em <b>Molduras</b>, <b>Chapéus</b> e <b>Adornos</b>, na Loja, à venda ou liberados por conquistas.</p>
+        body: <><p>Em <b>Visual do avatar</b>, duas prévias mostram sua foto com o que está marcado agora: no tamanho do perfil e no tamanho da mesa. Num celular, as listas ficam recolhidas atrás de <b>Personalizar borda, chapéu, adorno e emblemas</b>; num computador já vêm abertas. As listas só mostram o que você já tem; não há compra aqui. Novos itens ficam em <b>Molduras</b>, <b>Chapéus</b> e <b>Adornos</b>, na Loja, à venda ou liberados por conquistas.</p>
           <GuideSteps><li><span>Escolha uma borda, um chapéu e um adorno, ou <b>Nenhuma</b> (borda) e <b>Nenhum</b> (chapéu, adorno) para não usar.</span></li>
           <li><span>Marque até três emblemas.</span></li>
           <li><span>Toque em <b>Salvar visual do avatar</b>. O botão só acende quando algo mudou.</span></li></GuideSteps>

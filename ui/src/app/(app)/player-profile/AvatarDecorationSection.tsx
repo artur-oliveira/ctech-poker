@@ -55,6 +55,8 @@ function OwnedList({query, saved, loading, error, children}: {
   return ids.length === 0 ? <p className="player-profile-empty">{EMPTY_COPY}</p> : children(ids);
 }
 
+const NARROW_QUERY = '(max-width: 640px)';
+
 /**
  * Native radios (arrow keys for free) dressed as chips. The check mark, not
  * the tint, says which one is on.
@@ -84,6 +86,10 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
     frame: me.equipped_frame_id ?? '', hat: me.equipped_hat_id ?? '', accessory: me.equipped_accessory_id ?? '',
   };
   const [picked, setPicked] = useState<Record<RadioSlot, string>>(saved);
+  // Open on a desktop, folded on a phone: the pickers are the longest block of the page, and the preview
+  // and Save stay in view either way. The component only mounts after the profile loads, so reading the
+  // viewport here cannot disagree with the server render.
+  const [open, setOpen] = useState(() => typeof window.matchMedia !== 'function' || !window.matchMedia(NARROW_QUERY).matches);
   const [badgeIds, setBadgeIds] = useState<string[]>(me.equipped_badge_ids ?? []);
 
   const owned = {frame: useOwned('frame'), hat: useOwned('hat'), accessory: useOwned('accessory')};
@@ -139,6 +145,8 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
       <figure><PlayerAvatar {...preview} size={36}/><figcaption>Na mesa</figcaption></figure>
     </div>
 
+    <details className="avatar-decoration-more" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+      <summary>Personalizar borda, chapéu, adorno e emblemas</summary>
     {LIVE_RADIO_SLOTS.map(slot => {
       const cfg = RADIO_SLOTS[slot];
       const name = `avatar-decoration-${slot}`;
@@ -176,6 +184,7 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
         </ul>}
       </OwnedList>
     </fieldset>
+    </details>
 
     <div className="player-profile-actions">
       <Button type="button" disabled={!changed || save.isPending} loading={save.isPending} onClick={() => save.mutate()}>

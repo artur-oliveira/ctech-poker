@@ -8095,3 +8095,179 @@ button.deck-grid-slot:hover {
     height: 44px;
     min-height: 44px
 }
+
+/* --- Profile polish (impeccable critique/audit) -------------------------------------------- */
+
+/* Pinned like the select triggers: the package's Input drops to 36px on a narrow viewport. */
+.player-profile [data-slot='input'] {
+    min-height: 44px
+}
+.player-profile .profile-wallet-link.profile-wallet-link,
+.player-profile .achievement-carousel-step,
+.player-profile .showcase-layout-controls button {
+    min-width: 44px;
+    min-height: 44px
+}
+
+/* Wallet mode: one joined track with a filled thumb, so it reads as a mode switch rather
+   than two loose buttons next to a select. */
+.wallet-mode-setting .filter-tabs {
+    display: inline-flex;
+    width: fit-content;
+    gap: 0;
+    padding: 3px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat)
+}
+.wallet-mode-setting .filter-tab {
+    min-height: 40px;
+    border: 0;
+    border-radius: calc(var(--rounded-control) - 3px);
+    background: transparent
+}
+.wallet-mode-setting .filter-tab.active {
+    background: var(--brand-600, var(--brand-bright))
+}
+
+/* The consent gate is the one thing that unlocks real money: give it the weight of a callout. */
+.player-profile-responsible-gate {
+    display: grid;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--control-border);
+    border-left: 3px solid var(--gold);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat)
+}
+.player-profile-responsible-gate h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: var(--font-size-subtitle)
+}
+.player-profile-responsible-gate h3 > svg {
+    width: 18px;
+    height: 18px;
+    color: var(--gold);
+    flex: none
+}
+.player-profile-responsible-gate p {
+    margin: 0
+}
+.player-profile-responsible-gate .btn,
+.player-profile-responsible-gate button {
+    justify-self: start
+}
+
+/* Equal, full-width actions on a phone instead of three different widths. */
+@media (max-width: 640px) {
+    .player-profile-showcase-actions > *,
+    .player-profile-actions > * {
+        flex: 1 1 100%;
+        justify-content: center
+    }
+}
+
+/* --- Profile: wayfinding, folded avatar pickers, emblem chips, one subsection scale -------------- */
+
+.player-profile-nav {
+    position: sticky;
+    top: calc(var(--api-bar-h, 0px) + 78px); /* parks under the sticky .app-nav */
+    z-index: 5;
+    display: flex;
+    gap: 8px;
+    margin: 0 -4px;
+    padding: 10px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: color-mix(in srgb, var(--background, #0e0a0b) 94%, transparent);
+    backdrop-filter: blur(8px)
+}
+.player-profile-nav::-webkit-scrollbar {
+    display: none
+}
+.player-profile-nav a {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap
+}
+.player-profile-nav a:hover {
+    background: var(--surface-control-hover);
+    color: var(--on-brand)
+}
+.player-profile-nav a:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.player-profile-section-head h2 {
+    scroll-margin-top: 170px
+}
+
+.avatar-decoration-more > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+    color: var(--on-brand);
+    font-weight: 600;
+    list-style: none
+}
+.avatar-decoration-more > summary::-webkit-details-marker {
+    display: none
+}
+.avatar-decoration-more > summary::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    margin-left: 10px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform .2s
+}
+.avatar-decoration-more[open] > summary::after {
+    transform: rotate(-135deg)
+}
+.avatar-decoration-more > summary:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+/* Emblems are chips like the frame/hat/ornament options above them. */
+.avatar-decoration-badges-list {
+    gap: 8px
+}
+.avatar-decoration-badge-option {
+    padding: 0 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    font-weight: 600;
+    transition: background-color .2s, border-color .2s
+}
+.avatar-decoration-badge-option:hover {
+    background: var(--surface-control-hover)
+}
+.avatar-decoration-badge-option:has([role='checkbox'][data-checked]) {
+    border-color: var(--brand-bright);
+    background: color-mix(in srgb, var(--brand) 18%, var(--surface-control))
+}
+
+/* One subsection style: bold, body size. Section titles (h2) stay the only large type. */
+.player-profile-section :is(h3, legend),
+.player-profile-featured h3,
+.player-profile-order h3 {
+    font-size: var(--font-size-body);
+    font-weight: 700
+}

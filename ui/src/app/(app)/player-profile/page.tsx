@@ -14,6 +14,7 @@ import {ChatFilterSection} from './ChatFilterSection';
 import {ResponsibleSection} from './ResponsibleSection';
 import {IdentitySection} from './IdentitySection';
 import {ShowcaseSection} from './ShowcaseSection';
+import {ProfileNav} from './ProfileNav';
 import {TableSection} from './TableSection';
 import {WalletAlertsSection} from './WalletAlertsSection';
 
@@ -67,6 +68,7 @@ export default function PlayerProfilePage() {
         />
         {me
           ? <>
+            <ProfileNav/>
             <IdentitySection key={`identity:${me.name ?? ''}:${me.avatar_url ?? ''}`} me={me}/>
             <AvatarDecorationSection
               key={`avatar-decoration:${me.equipped_frame_id ?? ''}:${me.equipped_hat_id ?? ''}:${me.equipped_accessory_id ?? ''}:${(me.equipped_badge_ids || []).join(',')}`}
@@ -77,8 +79,8 @@ export default function PlayerProfilePage() {
             <TableSection me={me}/>
             <ChatFilterSection/>
             <BalancesSection me={me}/>
-            <WalletAlertsSection/>
             {REAL_MONEY_UI_ENABLED && <ResponsibleSection/>}
+            <WalletAlertsSection/>
           </>
           : <LoadingRegion label={isLoading ? 'Carregando seu perfil…' : 'Preparando seu perfil…'}
                            className="skeleton-panel player-profile-skeleton">
