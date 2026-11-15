@@ -55,6 +55,25 @@ describe('AvatarDecorationSection', () => {
     listOwnedAvatarCosmetics.mockImplementation((slot: string) => Promise.resolve(OWNED[slot]));
   });
 
+  test('the pickers are open on a desktop and folded on a phone, and can be toggled', async () => {
+    const original = window.matchMedia;
+    try {
+      window.matchMedia = ((query: string) => ({matches: false, media: query})) as typeof window.matchMedia;
+      const desktop = render(<AvatarDecorationSection me={me}/>, {wrapper});
+      expect(desktop.container.querySelector('details')).toHaveProperty('open', true);
+      desktop.unmount();
+
+      window.matchMedia = ((query: string) => ({matches: true, media: query})) as typeof window.matchMedia;
+      const phone = render(<AvatarDecorationSection me={me}/>, {wrapper});
+      const details = phone.container.querySelector('details')!;
+      expect(details.open).toBe(false);
+      await userEvent.click(screen.getByText('Personalizar borda, chapéu, adorno e emblemas'));
+      expect(details.open).toBe(true);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   test('shows a short empty line per slot when nothing is owned', async () => {
     listOwnedAvatarCosmetics.mockResolvedValue([]);
     render(<AvatarDecorationSection me={me}/>, {wrapper});
