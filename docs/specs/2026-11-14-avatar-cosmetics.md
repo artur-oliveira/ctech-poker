@@ -132,7 +132,7 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    (Molduras, Chapéus, Acessórios). **No season trigger**: season items and windows exist but no period-close hook
    was found, so nothing grants them yet.
 
-   Prices (cents in `internal/catalog/catalog.go` `products`, fichas = cents x 1000 in the cosmetics catalog):
+   Prices (cents in `internal/catalog/catalog.go` `products`, fichas = cents x 3000 in the cosmetics catalog, i.e. 3x the deck/felt ratio so Pix is the better deal):
 
    | Kind | Item | SKU | Cents | Fichas |
    |---|---|---|---|---|

@@ -218,8 +218,8 @@ func TestAvatarPurchasableCatalog(t *testing.T) {
 			}
 		}
 		sku := "poker_" + string(w.kind) + "_" + strings.ReplaceAll(w.id, "-", "_")
-		if got == nil || !got.Premium || got.Source != SourcePurchase || got.SKU != sku || got.PriceFichas != w.cents*1000 || !got.From.IsZero() || !got.Until.IsZero() {
-			t.Errorf("%s/%s = %+v, want purchase %s %d fichas", w.kind, w.id, got, sku, w.cents*1000)
+		if got == nil || !got.Premium || got.Source != SourcePurchase || got.SKU != sku || got.PriceFichas != w.cents*3000 || !got.From.IsZero() || !got.Until.IsZero() {
+			t.Errorf("%s/%s = %+v, want purchase %s %d fichas", w.kind, w.id, got, sku, w.cents*3000)
 		}
 	}
 }

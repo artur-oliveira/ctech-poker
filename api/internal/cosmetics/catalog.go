@@ -143,17 +143,17 @@ var catalog = []CatalogEntry{
 	{Kind: KindBadge, ID: "veteran", Premium: true, Source: SourceAchievement},
 	{Kind: KindBadge, ID: "social-butterfly", Premium: true, Source: SourceAchievement},
 
-	// Sold for fichas or Pix (phase 3); fichas = cents x 1000.
-	{Kind: KindFrame, ID: "felt-ring", Premium: true, Source: SourcePurchase, PriceFichas: 600000, SKU: "poker_frame_felt_ring"},
-	{Kind: KindFrame, ID: "walnut-rail", Premium: true, Source: SourcePurchase, PriceFichas: 800000, SKU: "poker_frame_walnut_rail"},
-	{Kind: KindFrame, ID: "oxblood-edge", Premium: true, Source: SourcePurchase, PriceFichas: 1000000, SKU: "poker_frame_oxblood_edge"},
-	{Kind: KindHat, ID: "top-hat", Premium: true, Source: SourcePurchase, PriceFichas: 300000, SKU: "poker_hat_top_hat"},
-	{Kind: KindHat, ID: "cowboy", Premium: true, Source: SourcePurchase, PriceFichas: 400000, SKU: "poker_hat_cowboy"},
-	{Kind: KindHat, ID: "beanie", Premium: true, Source: SourcePurchase, PriceFichas: 200000, SKU: "poker_hat_beanie"},
-	{Kind: KindAccessory, ID: "shades", Premium: true, Source: SourcePurchase, PriceFichas: 300000, SKU: "poker_accessory_shades"},
-	{Kind: KindAccessory, ID: "monocle", Premium: true, Source: SourcePurchase, PriceFichas: 500000, SKU: "poker_accessory_monocle"},
-	{Kind: KindAccessory, ID: "mustache", Premium: true, Source: SourcePurchase, PriceFichas: 200000, SKU: "poker_accessory_mustache"},
-	{Kind: KindAccessory, ID: "headset", Premium: true, Source: SourcePurchase, PriceFichas: 400000, SKU: "poker_accessory_headset"},
+	// Sold for fichas or Pix (phase 3); fichas = cents x 3000 (3x the deck/felt ratio on purpose: Pix is the cheaper way in).
+	{Kind: KindFrame, ID: "felt-ring", Premium: true, Source: SourcePurchase, PriceFichas: 1800000, SKU: "poker_frame_felt_ring"},
+	{Kind: KindFrame, ID: "walnut-rail", Premium: true, Source: SourcePurchase, PriceFichas: 2400000, SKU: "poker_frame_walnut_rail"},
+	{Kind: KindFrame, ID: "oxblood-edge", Premium: true, Source: SourcePurchase, PriceFichas: 3000000, SKU: "poker_frame_oxblood_edge"},
+	{Kind: KindHat, ID: "top-hat", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_hat_top_hat"},
+	{Kind: KindHat, ID: "cowboy", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_hat_cowboy"},
+	{Kind: KindHat, ID: "beanie", Premium: true, Source: SourcePurchase, PriceFichas: 600000, SKU: "poker_hat_beanie"},
+	{Kind: KindAccessory, ID: "shades", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_accessory_shades"},
+	{Kind: KindAccessory, ID: "monocle", Premium: true, Source: SourcePurchase, PriceFichas: 1500000, SKU: "poker_accessory_monocle"},
+	{Kind: KindAccessory, ID: "mustache", Premium: true, Source: SourcePurchase, PriceFichas: 600000, SKU: "poker_accessory_mustache"},
+	{Kind: KindAccessory, ID: "headset", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_accessory_headset"},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
