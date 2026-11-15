@@ -8722,6 +8722,80 @@ html:has(.has-tab-bar) {
 .game-seat .seat-avatar-trigger:has(.player-avatar-wings) {
     margin-inline: calc(var(--seat-size, 36px) * 18 / 64)
 }
+/* Animated frames (DESIGN.md "Avatar cosmetics art contract"): each moving
+   layer is a whole <svg data-fx> (FRAME_ART's Fx), moved with transform and
+   opacity only, so 9 animated seats stay compositor work (no layout, no paint,
+   no filter). Its resting pose is the static frame: reduced motion and the
+   seats that are not playing (folded, sitting out, disconnected, pending)
+   show exactly that. */
+svg[data-fx] {
+    transform-origin: 50% 50%
+}
+svg[data-fx='flame'] {
+    transform-origin: 50% 88%;
+    animation: cosmetic-flame 1.15s ease-in-out infinite alternate
+}
+svg[data-fx='flame-core'] {
+    transform-origin: 50% 88%;
+    animation: cosmetic-flame-core .7s ease-in-out infinite alternate
+}
+svg[data-fx='breathe'] {
+    animation: cosmetic-breathe 3.2s ease-in-out infinite alternate
+}
+svg[data-fx='orbit'] {
+    animation: cosmetic-spin 14s linear infinite
+}
+svg[data-fx='orbit-back'] {
+    animation: cosmetic-spin 22s linear infinite reverse
+}
+svg[data-fx='arc'] {
+    animation: cosmetic-spin 2.8s linear infinite, cosmetic-flicker 1.9s step-end infinite
+}
+svg[data-fx='arc-back'] {
+    animation: cosmetic-spin 4.1s linear infinite reverse, cosmetic-flicker 2.7s step-end .6s infinite
+}
+svg[data-fx='sweep'] {
+    animation: cosmetic-spin 4.5s linear infinite
+}
+svg[data-fx='twinkle'] {
+    animation: cosmetic-twinkle 2.6s ease-in-out infinite
+}
+svg[data-fx='twinkle-late'] {
+    animation: cosmetic-twinkle 2.6s ease-in-out 1.3s infinite
+}
+@keyframes cosmetic-spin {
+    to { transform: rotate(1turn) }
+}
+@keyframes cosmetic-flame {
+    from { transform: scale(1, 1) }
+    to { transform: scale(1.035, 1.075); opacity: .82 }
+}
+@keyframes cosmetic-flame-core {
+    from { transform: scale(.97); opacity: .7 }
+    to { transform: scale(1.03, 1.05); opacity: 1 }
+}
+@keyframes cosmetic-breathe {
+    from { transform: scale(.975); opacity: .55 }
+    to { transform: scale(1.035); opacity: 1 }
+}
+@keyframes cosmetic-flicker {
+    0%, 38%, 46%, 100% { opacity: 1 }
+    40%, 44% { opacity: .2 }
+    78% { opacity: .55 }
+    80% { opacity: 1 }
+}
+@keyframes cosmetic-twinkle {
+    0%, 55%, 100% { opacity: .15 }
+    72% { opacity: 1 }
+}
+.game-seat:is(.folded, .sitting_out, .disconnected, .is-pending-name) svg[data-fx] {
+    animation: none
+}
+@media (prefers-reduced-motion: reduce) {
+    svg[data-fx] {
+        animation: none
+    }
+}
 .game-seat .player-avatar-decorated {
     --avatar-badge-size: min(20px, max(12px, var(--seat-size, 36px) * .4))
 }
