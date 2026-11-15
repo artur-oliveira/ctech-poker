@@ -147,7 +147,7 @@ describe('ProfileMenu', () => {
     mocks.realMoney.enabled = true;
     render(<ProfileMenu/>);
     await openProfile();
-    expect(screen.getByText('Dinheiro real')).toBeInTheDocument();
+    expect(screen.getByText('Dinheiro real', {selector: 'span'})).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
   });
 
@@ -158,13 +158,18 @@ describe('ProfileMenu', () => {
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
   });
 
-  // The wallet-mode switch is the one preference that stayed on the route:
-  // it needs the explanation a 360px panel cannot give it.
-  test('never offers the wallet-mode switch, even with real money on', async () => {
+  test('offers the wallet-mode choice when real money is on and saves a change', async () => {
     mocks.realMoney.enabled = true;
     render(<ProfileMenu/>);
     await openProfile();
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.getByText('Modo de jogo')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Dinheiro real'}));
+    expect(mocks.mutate).toHaveBeenCalledWith({wallet_mode: 'real'});
+  });
+
+  test('hides the wallet-mode choice while real money is off', async () => {
+    render(<ProfileMenu/>);
+    await openProfile();
     expect(screen.queryByText('Modo de jogo')).not.toBeInTheDocument();
   });
 

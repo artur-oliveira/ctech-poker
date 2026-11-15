@@ -1,5 +1,6 @@
 'use client';
 import {useState} from 'react';
+import {WalletModeSetting} from '@/components/profile/WalletModeSetting';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
@@ -158,6 +159,7 @@ export function ProfileMenu() {
             <div><Sparkles aria-hidden="true"/><span><b id="profile-table-title">Sua mesa, do seu jeito</b>
               <small>Preferências aplicadas na próxima mão.</small></span></div>
           </div>
+          <WalletModeSetting walletMode={me?.wallet_mode}/>
           {menuOpened && <DeckPicker className="profile-deck-setting" deckVariant={me?.deck_variant}/>}
         </section>
 
