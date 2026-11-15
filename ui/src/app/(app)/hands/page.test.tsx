@@ -336,7 +336,7 @@ describe('hands list page', () => {
     await userEvent.click(picker);
     const options = screen.getAllByRole('option').map(option => option.textContent);
     expect(options).toEqual(['Todas as mãos', 'Marcadas para revisar', 'Estudar depois']);
-    await userEvent.click(screen.getByRole('option', {name: 'Marcadas para revisar'}));
+    await userEvent.click(await screen.findByRole('option', {name: 'Marcadas para revisar'}));
     await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument());
     expect(screen.getAllByText('won')).toHaveLength(1);
     expect(screen.queryByText('lost')).not.toBeInTheDocument();

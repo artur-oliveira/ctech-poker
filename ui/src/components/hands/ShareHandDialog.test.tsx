@@ -28,7 +28,7 @@ describe('ShareHandDialog', () => {
     await user.click(screen.getByRole('radio', {name: /Brag/}));
     await user.click(screen.getByRole('checkbox', {name: /Mostrar minhas cartas/}));
     await user.click(screen.getByRole('combobox', {name: /Link disponível por/}));
-    await user.click(screen.getByRole('option', {name: '30 dias'}));
+    await user.click(await screen.findByRole('option', {name: '30 dias'}));
     await user.click(screen.getByRole('button', {name: /Criar link/}));
     
     await waitFor(() => expect(createHandShare).toHaveBeenCalledWith('hand/1', {

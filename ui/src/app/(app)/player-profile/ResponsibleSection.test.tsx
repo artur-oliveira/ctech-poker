@@ -97,7 +97,7 @@ describe('ResponsibleSection', () => {
     render(<ResponsibleSection/>, {wrapper});
 
     await userEvent.click(await screen.findByRole('combobox', {name: 'Pausar por'}));
-    await userEvent.click(screen.getByRole('option', {name: '90 dias'}));
+    await userEvent.click(await screen.findByRole('option', {name: '90 dias'}));
     await userEvent.click(screen.getByRole('button', {name: 'Pausar'}));
     expect(api.selfExclude).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Você não poderá encurtá-la');
