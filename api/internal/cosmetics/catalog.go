@@ -162,6 +162,17 @@ var catalog = []CatalogEntry{
 	{Kind: KindAccessory, ID: "monocle", Premium: true, Source: SourcePurchase, PriceFichas: 1500000, SKU: "poker_accessory_monocle"},
 	{Kind: KindAccessory, ID: "mustache", Premium: true, Source: SourcePurchase, PriceFichas: 600000, SKU: "poker_accessory_mustache"},
 	{Kind: KindAccessory, ID: "headset", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_accessory_headset"},
+	{Kind: KindHat, ID: "fedora", Premium: true, Source: SourcePurchase, PriceFichas: 1500000, SKU: "poker_hat_fedora"},
+	{Kind: KindHat, ID: "beret", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_hat_beret"},
+	{Kind: KindHat, ID: "bowler", Premium: true, Source: SourcePurchase, PriceFichas: 1500000, SKU: "poker_hat_bowler"},
+	{Kind: KindHat, ID: "captain-cap", Premium: true, Source: SourcePurchase, PriceFichas: 1800000, SKU: "poker_hat_captain_cap"},
+	{Kind: KindHat, ID: "wizard", Premium: true, Source: SourcePurchase, PriceFichas: 2100000, SKU: "poker_hat_wizard"},
+	{Kind: KindHat, ID: "sun-visor", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_hat_sun_visor"},
+	{Kind: KindAccessory, ID: "round-glasses", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_accessory_round_glasses"},
+	{Kind: KindAccessory, ID: "eyepatch", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_accessory_eyepatch"},
+	{Kind: KindAccessory, ID: "cigar", Premium: true, Source: SourcePurchase, PriceFichas: 1500000, SKU: "poker_accessory_cigar"},
+	{Kind: KindAccessory, ID: "handlebar", Premium: true, Source: SourcePurchase, PriceFichas: 1200000, SKU: "poker_accessory_handlebar"},
+	{Kind: KindAccessory, ID: "earring", Premium: true, Source: SourcePurchase, PriceFichas: 900000, SKU: "poker_accessory_earring"},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }
