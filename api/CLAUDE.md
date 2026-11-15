@@ -864,10 +864,14 @@ catalog.
   (`internal/cosmetics/catalog.go`, fichas = cents x 3000 for avatar items, 3x the deck/felt ratio so Pix is the better deal) and cents in `internal/catalog/catalog.go` `products`
   (nothing is registered in wallet or billing; `catalog.TestCosmeticSKUsMatchProducts` pins SKUs and the ratio): frames
   `poker_frame_felt_ring` 600, `poker_frame_walnut_rail` 800, `poker_frame_oxblood_edge` 1000; hats `poker_hat_beanie`
-  200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400 (cents). **The accessory catalog is empty** (2026-11-15: every
-  accessory, its `poker_accessory_*` product and the `bluff` -> `bandit-mask` grant row were removed; nobody owned one).
-  The slot itself stays (`KindAccessory`, the equip path, `equipped_accessory_id`, proto `Seat.accessory_id`) for the
-  next phase's horns/wings; `cosmetics.TestAccessorySlotIsEmpty` pins both halves. **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
+  200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400 (cents); phase B frames `poker_frame_inferno` 2500,
+  `poker_frame_arcane_aura`/`storm_ring` 2200, `poker_frame_gold_shimmer`/`baroque_gilt` 1800,
+  `poker_frame_laurel_wreath`/`art_nouveau` 1600, `poker_frame_celtic_knot` 1400. **The accessory slot holds the
+  ornaments** (UI "Adornos", 2026-11-15 phase B; the earlier accessories and the `bluff` -> `bandit-mask` row were removed
+  first): sold `poker_accessory_bat_wings` 2000, `gold_wings`/`dragon_wings` 2500, `ram_horns` 1800, `bull_horns` 1500;
+  earned `devil-horns` (`bluff` 3 stars) and `angel-wings` (`wins` 5 stars). Same wire as before (`KindAccessory`,
+  `equipped_accessory_id`, proto `Seat.accessory_id`); `cosmetics.TestAccessoryOrnaments` pins 5 sold + 2 earned and
+  `cosmeticpurchase.TestGrantsForOrnaments` the two grant rows. **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
   (inside the `ClaimHandCounters` branch, so once per hand) sends the `achievement_unlocked` frames, then
   `handPipeline.grantUnlocks` runs AFTER `leaderboard.RecordUnlocks`/`RecordHand` (a slow grant must not eat the shared
   pipeline timeout the non-retried increments need) and for each
