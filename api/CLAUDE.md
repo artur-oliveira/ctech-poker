@@ -864,8 +864,10 @@ catalog.
   (`internal/cosmetics/catalog.go`, fichas = cents x 3000 for avatar items, 3x the deck/felt ratio so Pix is the better deal) and cents in `internal/catalog/catalog.go` `products`
   (nothing is registered in wallet or billing; `catalog.TestCosmeticSKUsMatchProducts` pins SKUs and the ratio): frames
   `poker_frame_felt_ring` 600, `poker_frame_walnut_rail` 800, `poker_frame_oxblood_edge` 1000; hats `poker_hat_beanie`
-  200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400; accessories `poker_accessory_mustache` 200,
-  `poker_accessory_shades` 300, `poker_accessory_headset` 400, `poker_accessory_monocle` 500 (cents). **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
+  200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400 (cents). **The accessory catalog is empty** (2026-11-15: every
+  accessory, its `poker_accessory_*` product and the `bluff` -> `bandit-mask` grant row were removed; nobody owned one).
+  The slot itself stays (`KindAccessory`, the equip path, `equipped_accessory_id`, proto `Seat.accessory_id`) for the
+  next phase's horns/wings; `cosmetics.TestAccessorySlotIsEmpty` pins both halves. **Achievement items are granted in the hand pipeline:** `handPipeline.announceUnlocks`
   (inside the `ClaimHandCounters` branch, so once per hand) sends the `achievement_unlocked` frames, then
   `handPipeline.grantUnlocks` runs AFTER `leaderboard.RecordUnlocks`/`RecordHand` (a slow grant must not eat the shared
   pipeline timeout the non-retried increments need) and for each

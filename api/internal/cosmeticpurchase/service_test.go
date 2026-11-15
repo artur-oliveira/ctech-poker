@@ -552,10 +552,10 @@ func TestCreateRejectsNonPurchasable(t *testing.T) {
 		kind   cosmetics.Kind
 		itemID string
 	}{
-		{cosmetics.KindHat, "crown"},             // achievement
-		{cosmetics.KindFrame, "season-2026-q3"},  // season
-		{cosmetics.KindBadge, "veteran"},         // badges are never sold
-		{cosmetics.KindAccessory, "bandit-mask"}, // achievement
+		{cosmetics.KindHat, "crown"},            // achievement
+		{cosmetics.KindFrame, "season-2026-q3"}, // season
+		{cosmetics.KindBadge, "veteran"},        // badges are never sold
+		{cosmetics.KindHat, "laurel"},           // achievement
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.kind)+"/"+tc.itemID, func(t *testing.T) {
@@ -684,17 +684,17 @@ func TestConfirmFromWebhookGrantsAvatarEntitlement(t *testing.T) {
 	ctx := context.Background()
 	playerID := uniquePlayer("player-avatar-webhook")
 	purchaseID := "prdp-avatar-" + playerID
-	w := &fakeWallet{getResult: &walletclient.ProductPurchase{PurchaseID: purchaseID, UserID: playerID, SKU: "poker_accessory_monocle", Amount: 500, Status: "confirmed"}}
+	w := &fakeWallet{getResult: &walletclient.ProductPurchase{PurchaseID: purchaseID, UserID: playerID, SKU: "poker_hat_fedora", Amount: 500, Status: "confirmed"}}
 	svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
-	if !svc.HandlesSKU("poker_accessory_monocle") {
+	if !svc.HandlesSKU("poker_hat_fedora") {
 		t.Fatal("avatar SKU not routed to cosmeticpurchase")
 	}
 	rec, _, err := svc.ConfirmFromWebhook(ctx, purchaseID)
-	if err != nil || rec.Kind != string(cosmetics.KindAccessory) || rec.ItemID != "monocle" {
+	if err != nil || rec.Kind != string(cosmetics.KindHat) || rec.ItemID != "fedora" {
 		t.Fatalf("ConfirmFromWebhook: rec=%+v err=%v", rec, err)
 	}
-	if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindAccessory, "monocle"); err != nil || !owned {
-		t.Fatalf("monocle not owned after webhook: owned=%v err=%v", owned, err)
+	if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindHat, "fedora"); err != nil || !owned {
+		t.Fatalf("fedora not owned after webhook: owned=%v err=%v", owned, err)
 	}
 }
 

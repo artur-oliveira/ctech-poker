@@ -23,7 +23,6 @@ var AchievementGrants = []AchievementGrant{
 	{"hands_played", 3, KindFrame, "chip-ring"},
 	{"wins", 3, KindHat, "laurel"},
 	{"wins", 4, KindHat, "crown"},
-	{"bluff", 2, KindAccessory, "bandit-mask"},
 	{"all_in", 3, KindBadge, "all-in-hero"},
 	{"folded_streak", 1, KindBadge, "iron-nerve"},
 	{"sandbox_chips_earned", 3, KindBadge, "rainmaker"},

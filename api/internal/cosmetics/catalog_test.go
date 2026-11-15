@@ -185,10 +185,9 @@ func TestDecorEmptyEqual(t *testing.T) {
 
 func TestAvatarCatalogLaunchIDs(t *testing.T) {
 	want := map[Kind][]string{
-		KindFrame:     {"chip-ring"},
-		KindHat:       {"dealer-visor", "crown", "laurel"},
-		KindAccessory: {"bandit-mask"},
-		KindBadge:     {"all-in-hero", "iron-nerve", "rainmaker", "veteran", "social-butterfly"},
+		KindFrame: {"chip-ring"},
+		KindHat:   {"dealer-visor", "crown", "laurel"},
+		KindBadge: {"all-in-hero", "iron-nerve", "rainmaker", "veteran", "social-butterfly"},
 	}
 	for kind, ids := range want {
 		for _, id := range ids {
@@ -197,6 +196,17 @@ func TestAvatarCatalogLaunchIDs(t *testing.T) {
 				t.Errorf("%s/%s: want premium achievement entry, got %+v (found=%v)", kind, id, e, ok)
 			}
 		}
+	}
+}
+
+// The accessory slot stays (wire field, equip path) for the next phase's
+// horns/wings, but no accessory exists until then.
+func TestAccessorySlotIsEmpty(t *testing.T) {
+	if got := All(KindAccessory); len(got) != 0 {
+		t.Fatalf("accessory catalog = %+v, want empty", got)
+	}
+	if !IsAvatarKind(KindAccessory) {
+		t.Fatal("accessory must stay an avatar kind")
 	}
 }
 
@@ -209,8 +219,7 @@ func TestAvatarPurchasableCatalog(t *testing.T) {
 		{KindFrame, "felt-ring", 600}, {KindFrame, "walnut-rail", 800}, {KindFrame, "oxblood-edge", 1000},
 		{KindFrame, "silver-filigree", 800}, {KindFrame, "pearl-beads", 900}, {KindFrame, "rose-gold", 1000}, {KindFrame, "obsidian-edge", 1000}, {KindFrame, "emerald-cut", 1200}, {KindFrame, "sapphire-deco", 1200}, {KindFrame, "olive-branch", 1400}, {KindFrame, "suit-ring", 1500},
 		{KindHat, "top-hat", 300}, {KindHat, "cowboy", 400}, {KindHat, "beanie", 200},
-		{KindAccessory, "shades", 300}, {KindAccessory, "monocle", 500}, {KindAccessory, "mustache", 200}, {KindAccessory, "headset", 400},
-		{KindHat, "fedora", 500}, {KindHat, "beret", 400}, {KindHat, "bowler", 500}, {KindHat, "captain-cap", 600}, {KindHat, "wizard", 700}, {KindHat, "sun-visor", 300}, {KindAccessory, "round-glasses", 400}, {KindAccessory, "eyepatch", 300}, {KindAccessory, "cigar", 500}, {KindAccessory, "handlebar", 400}, {KindAccessory, "earring", 300},
+		{KindHat, "fedora", 500}, {KindHat, "beret", 400}, {KindHat, "bowler", 500}, {KindHat, "captain-cap", 600}, {KindHat, "wizard", 700}, {KindHat, "sun-visor", 300},
 	}
 	for _, w := range want {
 		var got *CatalogEntry
