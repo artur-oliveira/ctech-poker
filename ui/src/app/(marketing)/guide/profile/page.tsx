@@ -21,6 +21,7 @@ export default function ProfileGuide() {
             <li><span><b>Sua mesa:</b> o baralho que você vê e, onde as apostas em dinheiro real estão liberadas, o modo de jogo (<b>Fichas</b> ou <b>Dinheiro real</b>, também no menu do seu avatar).</span></li>
             <li><span><b>Filtro de chat:</b> palavras que você mesmo quer que fiquem mascaradas no chat da mesa, além do filtro padrão que já vale para todos.</span></li>
             <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li>
+            <li><span><b>Jogo responsável:</b> onde as apostas em dinheiro real estão liberadas, o aceite do termo, seus limites e a pausa. Sem o aceite, as mesas de dinheiro real ficam bloqueadas.</span></li>
             <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li></GuideBullets>
           <p>Nome, foto e baralho aparecem nos dois lugares de propósito: é o mesmo controle, salvando no mesmo lugar. Alterou num, o outro já mostra o valor novo.</p></>
       },

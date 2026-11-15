@@ -1,5 +1,6 @@
 'use client';
 import {useState} from 'react';
+import {ShieldCheck} from 'lucide-react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button, Field, Select} from '@aoctech/ui';
 import {AmountInput} from '@/components/AmountInput';
@@ -67,11 +68,12 @@ function ResponsibleBody({status}: {status: ResponsibleStatus}) {
   const accept = useResponsibleMutation(acceptGamblingAddendum, 'Termo aceito.', 'Não foi possível registrar o aceite agora. Tente novamente.');
 
   return <>
-    <div className="player-profile-responsible-block">
+    <div className={status.accepted ? 'player-profile-responsible-block' : 'player-profile-responsible-block player-profile-responsible-gate'}>
       {status.accepted
         ? <p role="status">Você aceitou o termo de jogo responsável (versão {status.addendum_version}).</p>
         : <>
-          <p>Para jogar com dinheiro real você precisa aceitar o <a href={GAMBLING_ADDENDUM_URL} target="_blank" rel="noreferrer">termo de jogo responsável</a>.</p>
+          <h3><ShieldCheck aria-hidden="true"/> Aceite o termo para jogar com dinheiro real</h3>
+          <p>Até o aceite, as mesas de dinheiro real e os limites abaixo ficam bloqueados. Leia o <a href={GAMBLING_ADDENDUM_URL} target="_blank" rel="noreferrer">termo de jogo responsável</a> antes de aceitar.</p>
           <Button type="button" onClick={() => accept.mutate()} disabled={accept.isPending} loading={accept.isPending}>
             Aceitar o termo
           </Button>

@@ -8095,3 +8095,77 @@ button.deck-grid-slot:hover {
     height: 44px;
     min-height: 44px
 }
+
+/* --- Profile polish (impeccable critique/audit) -------------------------------------------- */
+
+/* Pinned like the select triggers: the package's Input drops to 36px on a narrow viewport. */
+.player-profile [data-slot='input'] {
+    min-height: 44px
+}
+.player-profile .profile-wallet-link.profile-wallet-link,
+.player-profile .achievement-carousel-step,
+.player-profile .showcase-layout-controls button {
+    min-width: 44px;
+    min-height: 44px
+}
+
+/* Wallet mode: one joined track with a filled thumb, so it reads as a mode switch rather
+   than two loose buttons next to a select. */
+.wallet-mode-setting .filter-tabs {
+    display: inline-flex;
+    width: fit-content;
+    gap: 0;
+    padding: 3px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat)
+}
+.wallet-mode-setting .filter-tab {
+    min-height: 40px;
+    border: 0;
+    border-radius: calc(var(--rounded-control) - 3px);
+    background: transparent
+}
+.wallet-mode-setting .filter-tab.active {
+    background: var(--brand-600, var(--brand-bright))
+}
+
+/* The consent gate is the one thing that unlocks real money: give it the weight of a callout. */
+.player-profile-responsible-gate {
+    display: grid;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--control-border);
+    border-left: 3px solid var(--gold);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat)
+}
+.player-profile-responsible-gate h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: var(--font-size-subtitle)
+}
+.player-profile-responsible-gate h3 > svg {
+    width: 18px;
+    height: 18px;
+    color: var(--gold);
+    flex: none
+}
+.player-profile-responsible-gate p {
+    margin: 0
+}
+.player-profile-responsible-gate .btn,
+.player-profile-responsible-gate button {
+    justify-self: start
+}
+
+/* Equal, full-width actions on a phone instead of three different widths. */
+@media (max-width: 640px) {
+    .player-profile-showcase-actions > *,
+    .player-profile-actions > * {
+        flex: 1 1 100%;
+        justify-content: center
+    }
+}

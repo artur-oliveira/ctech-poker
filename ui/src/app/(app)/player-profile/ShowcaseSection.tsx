@@ -165,7 +165,7 @@ export function ShowcaseSection({me}: {me: PlayerProfile}) {
       <Button type="button" variant="outline" render={<Link href={profileHref(me.user_id, true)}/>}>
         <Eye aria-hidden="true"/> Ver como visitante
       </Button>
-      {me.showcase_public && <Button type="button" variant="ghost" onClick={async () => {
+      {me.showcase_public && <Button type="button" variant="outline" onClick={async () => {
         await navigator.clipboard.writeText(shareUrl);
         pushNotification('Link do perfil copiado.', 'info');
       }}><Copy aria-hidden="true"/> Copiar link</Button>}

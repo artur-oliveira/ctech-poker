@@ -77,8 +77,8 @@ export default function PlayerProfilePage() {
             <TableSection me={me}/>
             <ChatFilterSection/>
             <BalancesSection me={me}/>
-            <WalletAlertsSection/>
             {REAL_MONEY_UI_ENABLED && <ResponsibleSection/>}
+            <WalletAlertsSection/>
           </>
           : <LoadingRegion label={isLoading ? 'Carregando seu perfil…' : 'Preparando seu perfil…'}
                            className="skeleton-panel player-profile-skeleton">
