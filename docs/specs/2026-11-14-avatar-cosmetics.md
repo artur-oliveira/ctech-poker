@@ -18,7 +18,6 @@ purchases (fichas or PIX) or from seasons. The model must allow seasonal drops l
 
 ## Non-goals
 
-- Hats that overflow the avatar circle (see Constraints).
 - A generic `equipped: map[slot]id` or migrating frame/badge off their current columns (approach B, rejected).
 - Outfit loadouts for avatar items (`cosmeticloadout` stays deck/felt only).
 - English copy. The app is pt-BR only; item names live in a client label map like `avatarFrameLabel` today.
@@ -111,6 +110,21 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
   Chapéu de Mago, Viseira. Accessories: Óculos Redondos, Tapa-olho, Charuto, Bigode Francês, Brinco (a bow tie was proposed, but the avatar circle
   fills the 64x64 box, so there is no room below it; Brinco replaced it). Frames may now use a per-instance `linearGradient`/`radialGradient`
   whose stops are `--cosmetic-*` tokens; hats and accessories stay flat. New tokens are listed in `ui/DESIGN.md`.
+- *Revised 2026-11-15* (branch `feat/avatar-hats-above`): **hats sit on top of the avatar**, like a hat on a head seen
+  as a circle, instead of painting over the photo's top. Each hat's viewBox is `0 -22 64 36` (`HAT_VIEWBOX` in
+  `components/avatar/hats.tsx`): the 64-box's width, starting 22 units (0.34 of the avatar) above it; the band or brim
+  rests on the circle's top arc overlapping the ring by ~2 units, and nothing paints inside r=28.5, so the photo stays
+  uncovered (`hats.test.tsx` walks every outline). All 12 hats were redrawn as front-view silhouettes (same ids and
+  prices; the laurel is a wreath hugging the ring from outside; the beret is now oxblood and the bowler a walnut derby so
+  neither is a black blob on the dark table). The hat now paints **after** the frame (it rests on the ring).
+  `.player-avatar-art > svg[data-band=hat]` places it, nothing on the way to the page clips it, and the few surfaces that
+  stack something right above the avatar reserve `--avatar-hat-room` (set by `PlayerAvatar` only when a hat is worn and
+  the avatar has a `size`): the podium card, the store tile preview and the purchase dialog preview.
+- *Revised 2026-11-15*: **every accessory was removed** (nobody owned one): the 9 purchasable items, their
+  `poker_accessory_*` products, the `bandit-mask` achievement item and its `bluff` grant row, the UI registry and art.
+  The `accessory` slot itself stays (`KindAccessory`, the equip path, `equipped_accessory_id`, proto `Seat.accessory_id`
+  24) for the next phase's horns and wings. With the registry empty the store department and the profile picker are
+  hidden and never read (`hasAvatarItems`), and an accessory id renders nothing.
 - Store: new sections in `CosmeticStoreSection` for the purchasable kinds; `CosmeticKind` widens. Profile: `AvatarDecorationSection` gets hat and accessory pickers
   and a live preview at seat size and profile size.
 
@@ -135,7 +149,7 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    pipeline announces only new items. Achievement grants run in `handPipeline.announceUnlocks` after the hand-counter
    claim and send `cosmetic_unlocked` (`ServerMessage` fields 22/23); the backfill is a self-heal on
    `GET /players/me/cosmetics/:kind/owned` (no Lambda), bounded at 3s. The store gains three lazy departments
-   (Molduras, Chapéus, Acessórios). **No season trigger**: season items and windows exist but no period-close hook
+   (Molduras, Chapéus, Acessórios; Acessórios is hidden since 2026-11-15, see Rendering). **No season trigger**: season items and windows exist but no period-close hook
    was found, so nothing grants them yet.
 
    Prices (cents in `internal/catalog/catalog.go` `products`, fichas = cents x 3000 in the cosmetics catalog, i.e. 3x the deck/felt ratio so Pix is the better deal):
@@ -162,15 +176,6 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    | hat | bowler | `poker_hat_bowler` | 500 | 1 500 000 |
    | hat | captain-cap | `poker_hat_captain_cap` | 600 | 1 800 000 |
    | hat | wizard | `poker_hat_wizard` | 700 | 2 100 000 |
-   | accessory | mustache | `poker_accessory_mustache` | 200 | 600 000 |
-   | accessory | shades | `poker_accessory_shades` | 300 | 900 000 |
-   | accessory | eyepatch | `poker_accessory_eyepatch` | 300 | 900 000 |
-   | accessory | earring | `poker_accessory_earring` | 300 | 900 000 |
-   | accessory | headset | `poker_accessory_headset` | 400 | 1 200 000 |
-   | accessory | round-glasses | `poker_accessory_round_glasses` | 400 | 1 200 000 |
-   | accessory | handlebar | `poker_accessory_handlebar` | 400 | 1 200 000 |
-   | accessory | monocle | `poker_accessory_monocle` | 500 | 1 500 000 |
-   | accessory | cigar | `poker_accessory_cigar` | 500 | 1 500 000 |
 
    Grant table (`cosmetics.AchievementGrants`; a tier-skipping unlock grants every row with `row.Stars <= stars`;
    reason `achievement:<key>:<stars>`, `...:backfill` from the self-heal):
@@ -182,7 +187,6 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
    | hands_played | 3 | frame | chip-ring |
    | wins | 3 | hat | laurel |
    | wins | 4 | hat | crown |
-   | bluff | 2 | accessory | bandit-mask |
    | all_in | 3 | badge | all-in-hero |
    | folded_streak | 1 | badge | iron-nerve |
    | sandbox_chips_earned | 3 | badge | rainmaker |

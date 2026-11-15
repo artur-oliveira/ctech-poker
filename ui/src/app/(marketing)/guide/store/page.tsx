@@ -5,16 +5,16 @@ import {GuideBullets, GuideCallout, GuideLink, GuidePage, GuideSteps, GuideTerm,
 
 export default function StoreGuide() {
   return <GuidePage icon={ShoppingBag} eyebrow="LOJA" title="Reações, cosméticos e fichas"
-    description="Reações premium, baralhos, feltros, molduras, chapéus, acessórios, recompensa diária, pacotes via Pix e o histórico de tudo o que você liberou."
+    description="Reações premium, baralhos, feltros, molduras, chapéus, recompensa diária, pacotes via Pix e o histórico de tudo o que você liberou."
     currentHref="/guide/store" next={{href: '/guide/profile', label: 'Configurar meu perfil'}} sections={[
       {
-        id: 'secoes', title: 'Os nove departamentos', summary: 'O diretório no topo leva direto à seção certa.',
+        id: 'secoes', title: 'Os oito departamentos', summary: 'O diretório no topo leva direto à seção certa.',
         image: {src: '/guide/store-live.webp', alt: 'Loja com o diretório de reações, baralhos, feltro, combos, fichas e compras'},
         body: <><p>Abra a <b>Loja</b> na navegação ou toque no saldo ao lado do avatar. Cada entrada do diretório mostra quantos itens você já liberou; a de fichas mostra o saldo atual.</p>
           <GuideBullets><li><span><b>Reações premium:</b> seis gestos além dos gratuitos.</span></li>
             <li><span><b>Baralhos:</b> variações de cor e desenho das cartas.</span></li>
             <li><span><b>Feltro:</b> os temas de mesa além do Clássico.</span></li>
-            <li><span><b>Molduras, Chapéus e Acessórios:</b> o visual do avatar, mostrado ao redor da sua foto em qualquer mesa.</span></li>
+            <li><span><b>Molduras e Chapéus:</b> o visual do avatar em qualquer mesa. A moldura contorna a sua foto e o chapéu fica em cima dela, sem cobri-la.</span></li>
             <li><span><b>Combos:</b> baralho e feltro salvos juntos, com nome, para aplicar os dois de uma vez.</span></li>
             <li><span><b>Fichas:</b> saldo, recompensa diária e pacotes.</span></li>
             <li><span><b>Compras e estornos:</b> recibos de reações, baralhos, feltros e itens do avatar. As compras de fichas ficam na própria seção de fichas.</span></li></GuideBullets>
@@ -31,14 +31,14 @@ export default function StoreGuide() {
           <GuideCallout kind="info" title="Estorno enquanto o item não foi usado">Um cosmético só pode ser estornado se nunca tiver sido selecionado. O servidor verifica isso antes de autorizar, e o item volta a ficar bloqueado.</GuideCallout></>
       },
       {
-        id: 'avatar', title: 'Molduras, chapéus e acessórios', summary: 'Alguns itens do avatar se compram; outros só vêm com conquistas ou temporadas.',
+        id: 'avatar', title: 'Molduras e chapéus', summary: 'Alguns itens do avatar se compram; outros só vêm com conquistas ou temporadas.',
         body: <><p>Cada item mostra uma prévia sobre o avatar e um estado:</p>
           <GuideTerms><GuideTerm term="A liberar">À venda. Libere com fichas ou Pix, como um baralho ou um feltro.</GuideTerm>
           <GuideTerm term="Conquista">Não se compra: o item é seu quando você atinge a conquista ligada a ele.</GuideTerm>
           <GuideTerm term="Temporada">Não se compra: itens sazonais vêm das temporadas do ranking.</GuideTerm>
           <GuideTerm term="Indisponível">Fora de venda agora. Um Pix que você já gerou continua em <b>Compras e estornos</b>.</GuideTerm>
           <GuideTerm term="Na coleção">Já é seu. <b>Equipar no perfil</b> leva ao seu perfil para usá-lo.</GuideTerm></GuideTerms>
-          <p>À venda: as molduras <b>Borda de Feltro</b>, <b>Borda de Nogueira</b>, <b>Borda Oxblood</b>, <b>Filigrana de Prata</b>, <b>Colar de Pérolas</b>, <b>Ouro Rosé</b>, <b>Borda de Obsidiana</b>, <b>Esmeralda</b>, <b>Art Déco Safira</b>, <b>Ramo de Oliveira</b> e <b>Naipes</b>; os chapéus <b>Cartola</b>, <b>Chapéu de Cowboy</b>, <b>Gorro</b>, <b>Fedora</b>, <b>Boina</b>, <b>Chapéu-coco</b>, <b>Boné de Capitão</b>, <b>Chapéu de Mago</b> e <b>Viseira</b>; os acessórios <b>Óculos Escuros</b>, <b>Monóculo</b>, <b>Bigode</b>, <b>Headset</b>, <b>Óculos Redondos</b>, <b>Tapa-olho</b>, <b>Charuto</b>, <b>Bigode Francês</b> e <b>Brinco</b>. Em fichas, os itens do avatar custam proporcionalmente mais que baralhos e feltros; no Pix, o preço segue a mesma tabela.</p>
+          <p>À venda: as molduras <b>Borda de Feltro</b>, <b>Borda de Nogueira</b>, <b>Borda Oxblood</b>, <b>Filigrana de Prata</b>, <b>Colar de Pérolas</b>, <b>Ouro Rosé</b>, <b>Borda de Obsidiana</b>, <b>Esmeralda</b>, <b>Art Déco Safira</b>, <b>Ramo de Oliveira</b> e <b>Naipes</b>; os chapéus <b>Cartola</b>, <b>Chapéu de Cowboy</b>, <b>Gorro</b>, <b>Fedora</b>, <b>Boina</b>, <b>Chapéu-coco</b>, <b>Boné de Capitão</b>, <b>Chapéu de Mago</b> e <b>Viseira</b>. Em fichas, os itens do avatar custam proporcionalmente mais que baralhos e feltros; no Pix, o preço segue a mesma tabela.</p>
           <p>Quando uma conquista libera um item durante a partida, um aviso na mesa diz qual foi. Os emblemas não aparecem na Loja: todos vêm de conquistas e temporadas.</p></>
       },
       {
