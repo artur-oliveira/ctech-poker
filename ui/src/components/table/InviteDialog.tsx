@@ -1,4 +1,5 @@
 'use client';
+import {FRIEND_SEARCH_MAX_LENGTH} from '@/lib/inputLimits';
 import {useId, useState} from 'react';
 import {Check, Copy, Share2} from 'lucide-react';
 import {Button, Input, Label} from '@aoctech/ui';
@@ -121,7 +122,7 @@ export function InviteDialog({url, roomId, open: controlledOpen, onOpenChangeAct
       {roomId && <section className="invite-friends" aria-labelledby="invite-friends-title">
         <h3 id="invite-friends-title">Amigos</h3>
         <Label htmlFor={searchId}>Buscar na sua lista</Label>
-        <Input id={searchId} value={search} placeholder="Nome do amigo" autoComplete="off"
+        <Input id={searchId} value={search} placeholder="Nome do amigo" autoComplete="off" maxLength={FRIEND_SEARCH_MAX_LENGTH}
                onChange={event => setSearch(event.target.value)}/>
         <PeopleList variant="friends" items={matches} isLoading={friends.isLoading} isError={friends.isError}
                     onRetryAction={friends.retry} hasNext={friends.hasNext} loadingMore={friends.loadingMore}

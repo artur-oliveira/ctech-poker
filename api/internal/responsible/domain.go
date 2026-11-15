@@ -153,9 +153,16 @@ func (u *State) EffectiveGameLimits(now time.Time) (GameLimits, bool) {
 }
 
 // ValidateLimits enforces 0 < daily ≤ weekly ≤ monthly.
+// MaxLimitCents caps a personal limit (R$ 1.000.000,00). The UI input stops at the same value
+// (ui/src/lib/amountLimits.ts); the cap only keeps a typo or an absurd value out of the table.
+const MaxLimitCents int64 = 100_000_000
+
 func ValidateLimits(daily, weekly, monthly int64) error {
 	if daily <= 0 || weekly < daily || monthly < weekly {
 		return fmt.Errorf("limits must satisfy 0 < daily <= weekly <= monthly")
+	}
+	if monthly > MaxLimitCents {
+		return fmt.Errorf("limits must not exceed %d centavos", MaxLimitCents)
 	}
 	return nil
 }

@@ -1,7 +1,9 @@
 'use client';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Button, Field, Input} from '@aoctech/ui';
+import {Button, Field, Select} from '@aoctech/ui';
+import {AmountInput} from '@/components/AmountInput';
+import {MAX_LIMIT_CENTS} from '@/lib/amountLimits';
 import {
   acceptGamblingAddendum,
   cancelPendingLimits,
@@ -25,12 +27,6 @@ const PERIOD_LABELS: Record<ExclusionPeriod, string> = {
 
 const dateFormat = new Intl.DateTimeFormat('pt-BR', {dateStyle: 'long'});
 const formatDate = (iso: string) => dateFormat.format(new Date(iso));
-
-/** Reais typed by the player to integer centavos; anything not a positive amount is 0. */
-export function toCentavos(reais: string): number {
-  const value = Number(reais.replace(',', '.'));
-  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
-}
 
 /**
  * The player's consent, personal limits and self-exclusion for real-money play. They used to
@@ -93,16 +89,21 @@ const limitsKey = (s: ResponsibleStatus) =>
 
 function LimitsForm({status}: {status: ResponsibleStatus}) {
   const limits = status.limits;
-  const reais = (c?: number) => (c ? String(c / 100) : '');
-  const [daily, setDaily] = useState(reais(limits?.daily));
-  const [weekly, setWeekly] = useState(reais(limits?.weekly));
-  const [monthly, setMonthly] = useState(reais(limits?.monthly));
+  const initial = (c?: number) => (c ? c : null);
+  const [daily, setDaily] = useState<number | null>(initial(limits?.daily));
+  const [weekly, setWeekly] = useState<number | null>(initial(limits?.weekly));
+  const [monthly, setMonthly] = useState<number | null>(initial(limits?.monthly));
   const save = useResponsibleMutation(saveLimits, 'Limites salvos.', 'Não foi possível salvar os limites agora. Confira os valores e tente novamente.');
   const cancel = useResponsibleMutation(cancelPendingLimits, 'Aumento cancelado.', 'Não foi possível cancelar o aumento agora.');
 
-  const [d, w, m] = [toCentavos(daily), toCentavos(weekly), toCentavos(monthly)];
+  const [d, w, m] = [daily ?? 0, weekly ?? 0, monthly ?? 0];
   const ordered = d > 0 && w >= d && m >= w;
   const isIncrease = Boolean(limits) && (d > (limits?.daily ?? 0) || w > (limits?.weekly ?? 0) || m > (limits?.monthly ?? 0));
+  // Each limit is checked against the one before it, and only once both are filled in, so the
+  // form never scolds a field the player has not reached yet.
+  const weeklyError = daily !== null && weekly !== null && w < d ? `Não pode ser menor que o limite diário (${moneyExact(d)}).` : undefined;
+  const monthlyError = weekly !== null && monthly !== null && m < w ? `Não pode ser menor que o limite semanal (${moneyExact(w)}).` : undefined;
+  const dailyError = daily === 0 ? 'Informe um valor maior que zero.' : undefined;
 
   return <form className="player-profile-responsible-block" onSubmit={event => {
     event.preventDefault();
@@ -111,19 +112,15 @@ function LimitsForm({status}: {status: ResponsibleStatus}) {
     <h3>Limites de entrada</h3>
     {!limits && <p role="status">Defina seus três limites antes de jogar com dinheiro real.</p>}
     <p className="field-description">O que você pode levar para as mesas de dinheiro real em cada período. Sacar da mesa não devolve limite.</p>
-    <Field label="Limite diário (R$)">
-      {control => <Input {...control} type="number" inputMode="decimal" min={0} step="0.01" value={daily}
-                         onChange={event => setDaily(event.target.value)}/>}
+    <Field label="Limite diário" hint={`Até ${moneyExact(MAX_LIMIT_CENTS)}.`} error={dailyError}>
+      {control => <AmountInput {...control} prefix="R$" value={daily} onValueChange={setDaily} max={MAX_LIMIT_CENTS} placeholder="0,00"/>}
     </Field>
-    <Field label="Limite semanal (R$)">
-      {control => <Input {...control} type="number" inputMode="decimal" min={0} step="0.01" value={weekly}
-                         onChange={event => setWeekly(event.target.value)}/>}
+    <Field label="Limite semanal" error={weeklyError}>
+      {control => <AmountInput {...control} prefix="R$" value={weekly} onValueChange={setWeekly} max={MAX_LIMIT_CENTS} placeholder="0,00"/>}
     </Field>
-    <Field label="Limite mensal (R$)">
-      {control => <Input {...control} type="number" inputMode="decimal" min={0} step="0.01" value={monthly}
-                         onChange={event => setMonthly(event.target.value)}/>}
+    <Field label="Limite mensal" error={monthlyError}>
+      {control => <AmountInput {...control} prefix="R$" value={monthly} onValueChange={setMonthly} max={MAX_LIMIT_CENTS} placeholder="0,00"/>}
     </Field>
-    {!ordered && (daily || weekly || monthly) && <p className="form-error" role="alert">O limite diário não pode passar do semanal, nem o semanal do mensal.</p>}
     {isIncrease && ordered && <p role="status">Aumentar um limite só vale depois de 7 dias (14 se for o mensal). Diminuir vale na hora.</p>}
     {limits && <p className="field-description">
       Usado hoje {moneyExact(status.usage.daily)}, na semana {moneyExact(status.usage.weekly)}, no mês {moneyExact(status.usage.monthly)}.
@@ -162,9 +159,9 @@ function ExclusionBlock({status}: {status: ResponsibleStatus}) {
       </>
       : <p className="field-description">Uma pausa impede buy-ins em mesas de dinheiro real. As mesas de fichas continuam abertas.</p>}
     <Field label={excluded ? 'Estender a pausa para' : 'Pausar por'}>
-      {control => <select {...control} value={period} onChange={event => { setPeriod(event.target.value as ExclusionPeriod); setConfirming(false); }}>
-        {(Object.keys(PERIOD_LABELS) as ExclusionPeriod[]).map(p => <option key={p} value={p}>{PERIOD_LABELS[p]}</option>)}
-      </select>}
+      {control => <Select id={control.id} value={period} aria-describedby={control['aria-describedby']}
+                          onValueChange={value => { setPeriod(value as ExclusionPeriod); setConfirming(false); }}
+                          options={(Object.keys(PERIOD_LABELS) as ExclusionPeriod[]).map(p => ({value: p, label: PERIOD_LABELS[p]}))}/>}
     </Field>
     {confirming
       ? <p role="alert">

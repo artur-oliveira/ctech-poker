@@ -27,6 +27,7 @@ import {ProfilePhotoEditor, ProfilePhotoRemoveButton} from '@/components/profile
 import {SelfHudDialog} from '@/components/lobby/SelfHudDialog';
 import {chipsExact, moneyExact} from '@/lib/chips';
 import {PLAYER_ME_KEY, useProfileNameSave} from '@/lib/hooks/useProfileEdits';
+import {NAME_MAX_LENGTH} from '@/lib/inputLimits';
 import {pushNotification} from '@/lib/notify';
 import {availableWalletMode, REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
@@ -125,7 +126,7 @@ export function ProfileMenu() {
             <small>Nome de exibição</small>
             {editingName ? (
               <div className="profile-name-edit">
-                <Input aria-label="Nome de exibição" value={name} onChange={e => setName(e.target.value)} autoFocus
+                <Input aria-label="Nome de exibição" maxLength={NAME_MAX_LENGTH} value={name} onChange={e => setName(e.target.value)} autoFocus
                        onKeyDown={e => {
                          if (e.key === 'Enter') commitName();
                          if (e.key === 'Escape') setEditingName(false);

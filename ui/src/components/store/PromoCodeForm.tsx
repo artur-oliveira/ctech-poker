@@ -1,4 +1,5 @@
 'use client';
+import {PROMO_CODE_MAX_LENGTH} from '@/lib/inputLimits';
 import {useState} from 'react';
 import {Ticket} from 'lucide-react';
 import {Button, Field, Input} from '@aoctech/ui';
@@ -38,7 +39,7 @@ export function PromoCodeForm({onRedeemedAction}: {onRedeemedAction: (purchase: 
     <Field label="Código promocional" hint="Opcional. O pacote e o preço são definidos pelo código.">
       {control => <div className="store-promo-row">
         <Input {...control} value={code} placeholder="Ex.: BEMVINDO10"
-               autoComplete="off" autoCapitalize="characters"
+               autoComplete="off" autoCapitalize="characters" maxLength={PROMO_CODE_MAX_LENGTH}
                onChange={event => {
                  setCode(event.target.value.toUpperCase());
                  setRedeemed(false);

@@ -69,6 +69,7 @@ export function ChatFilterSection() {
             <Label htmlFor="chatprefs-word-input" className="sr-only">Nova palavra</Label>
             <Input
               id="chatprefs-word-input"
+              compact={false}
               value={draft}
               onChange={e => {
                 setDraft(e.target.value);

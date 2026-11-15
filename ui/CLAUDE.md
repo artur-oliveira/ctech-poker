@@ -20,6 +20,15 @@ off by default — do not build UI that assumes real money is on.
   `span[role=switch]` and would lose its own centring. The one local file that keeps a
   `standards:allow <reason>` comment is `lib/network/NetworkProvider.tsx` (wraps the package
   provider; see the reason in the file). Delete the allow comment when the file goes.
+- **Every typed field is bounded.** A typed amount is `components/AmountInput` (pt-BR grouping, at most two decimals,
+  an optional `R$` prefix, typing past `max` ignored), driven by integers (centavos or whole fichas) through the pure
+  `lib/amountInput.ts`; its ceilings live in `lib/amountLimits.ts` and the API enforces the same values
+  (`responsible.MaxLimitCents`, `walletalert.go`). Never a `type="number"` input for money. Free text carries a
+  `maxLength` from `lib/inputLimits.ts` (or a local named constant). A choice between options is `@aoctech/ui`'s
+  `Select`, never a native `<select>`. The profile route's inputs pass `compact={false}` and its select triggers are
+  pinned to 44px in `app.css` (Tailwind's `in-data-[density=compact]` matches the root scope from any depth, so a nested
+  `DensityScope` cannot undo it). Personal limits are checked in order (daily <= weekly <= monthly) per field, in
+  `ResponsibleSection`, and again by `responsible.ValidateLimits`.
 - **Reuse shared CTech client libraries:** `@aoctech/auth-client` (OAuth) and
   `@aoctech/ws-client` (WebSocket). Do NOT hand-roll auth or socket clients. (The design
   docs mention `ctech-oauth-client`; the code uses `@aoctech/auth-client` — trust the code.)

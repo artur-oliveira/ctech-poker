@@ -2387,17 +2387,8 @@ html:has(.app-page) {
     height: 16px;
     color: var(--gold)
 }
-.share-hand-expiry select {
-    min-height: 40px;
-    border: 1px solid var(--control-border);
-    border-radius: var(--rounded-control);
-    background: var(--surface-seat);
-    color: var(--paper);
-    padding: 0 32px 0 10px
-}
-.share-hand-expiry select:focus-visible {
-    outline: 3px solid var(--focus-ring);
-    outline-offset: 2px
+.share-hand-expiry [data-slot='select-trigger'] {
+    min-width: 160px
 }
 .share-hand-privacy {
     display: flex;
@@ -2538,7 +2529,7 @@ html:has(.app-page) {
         flex-direction: column;
         gap: 7px
     }
-.share-hand-expiry select {
+.share-hand-expiry [data-slot='select-trigger'] {
         width: 100%
     }
 .share-hand-link {
@@ -6892,53 +6883,17 @@ button.deck-grid-slot:hover {
 }
 
 .hands-view-select {
-    position: relative;
-    display: inline-flex;
-    min-width: 0
-}
-
-.hands-view-select select {
-    min-width: 0;
-    max-width: min(32ch, 70vw);
-    min-height: 40px;
-    padding: 0 34px 0 12px;
-    border: 1px solid var(--control-border);
-    border-radius: var(--rounded-control);
-    background: var(--surface-seat);
-    color: var(--paper);
-    font: inherit;
-    text-overflow: ellipsis;
-    appearance: none;
-    cursor: pointer
-}
-
-.hands-view-select select:hover {
-    background: var(--surface-control)
-}
-
-.hands-view-select select:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px
-}
-
-.hands-view-select svg {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    width: 16px;
-    height: 16px;
-    color: var(--muted-rose);
-    transform: translateY(-50%);
-    pointer-events: none
+    min-width: 180px;
+    max-width: min(32ch, 70vw)
 }
 
 @media (max-width: 600px) {
-    .hands-view-select,
-    .hands-view-select select {
+    .hands-view-select {
         flex: 1;
         max-width: none
     }
 }
+
 
 /* Blind level of the hand, next to the mesa id: a readout, so it stays mono
    and tabular like every other value that has to line up down the column. */
@@ -7551,6 +7506,7 @@ button.deck-grid-slot:hover {
    cards.
    --------------------------------------------------------------------------- */
 .player-profile-section {
+    --profile-measure: 520px;
     display: grid;
     grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
     align-items: start;
@@ -7617,10 +7573,9 @@ button.deck-grid-slot:hover {
 }
 .player-profile-deck {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 180px;
-    align-items: end;
-    gap: 16px;
-    max-width: 480px
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    max-width: var(--profile-measure)
 }
 .player-profile-deck [data-slot='select-trigger'] {
     width: 100%
@@ -7645,13 +7600,13 @@ button.deck-grid-slot:hover {
 .player-profile-wallet-alerts {
     display: grid;
     gap: 16px;
-    max-width: 420px
+    max-width: var(--profile-measure)
 }
 .player-profile-balances {
     display: grid;
     gap: 10px;
     margin: 0;
-    max-width: 420px
+    max-width: var(--profile-measure)
 }
 .player-profile-balances > div {
     display: flex;
@@ -7715,7 +7670,7 @@ button.deck-grid-slot:hover {
 /* Seasonal avatar frame/badges picker (#292). */
 .avatar-decoration-preview {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: flex-end;
     gap: 32px;
     margin-bottom: 4px
@@ -7872,7 +7827,7 @@ button.deck-grid-slot:hover {
 .chatprefs-editor {
     display: grid;
     gap: 14px;
-    max-width: 480px
+    max-width: var(--profile-measure)
 }
 .chatprefs-add {
     display: flex;
@@ -8123,4 +8078,20 @@ button.deck-grid-slot:hover {
     line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap
+}
+
+/* One measure for every form-like block of the sheet, so labels, inputs, toggles and lists
+   share a left edge and a right edge; only the carousel and the avatar pickers run wider. */
+.showcase-privacy-group,
+.showcase-layout-list,
+.player-profile-responsible-block,
+.player-profile-setting {
+    max-width: var(--profile-measure)
+}
+
+/* The route's buttons are 44px (base.css), so its selects are too; Select has no `compact` prop
+   and Tailwind's in-data variant matches the root's compact scope from any depth. */
+.player-profile [data-slot='select-trigger'] {
+    height: 44px;
+    min-height: 44px
 }

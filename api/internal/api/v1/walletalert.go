@@ -27,6 +27,12 @@ func (h *playerHandlers) walletAlertsGet(c fiber.Ctx) error {
 	return c.JSON(prefs)
 }
 
+// Upper bounds for the alert thresholds; the UI input stops at the same values (ui/src/lib/amountLimits.ts).
+const (
+	maxAlertSandboxBalance int64 = 999_999_999_999
+	maxAlertPurchaseCents  int64 = 100_000_000
+)
+
 func (h *playerHandlers) walletAlertsPut(c fiber.Ctx) error {
 	if h.walletAlerts == nil {
 		return problem.NotFound("wallet alerts not available").Send(c)
@@ -37,6 +43,9 @@ func (h *playerHandlers) walletAlertsPut(c fiber.Ctx) error {
 	}
 	if req.MinSandboxBalance < 0 || req.MaxPurchaseCents < 0 {
 		return problem.BadRequest("thresholds must not be negative").Send(c)
+	}
+	if req.MinSandboxBalance > maxAlertSandboxBalance || req.MaxPurchaseCents > maxAlertPurchaseCents {
+		return problem.BadRequest("thresholds are above the allowed maximum").Send(c)
 	}
 	userID := c.Locals(localsUserID).(string)
 	prefs, err := h.walletAlerts.Set(c.Context(), userID, req.MinSandboxBalance, req.MaxPurchaseCents)

@@ -7819,9 +7819,8 @@ html:has(.has-tab-bar) {
 }
 .profile-deck-setting {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 150px;
-    align-items: end;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
     margin-top: 14px
 }
 /* The picker arrives as its own chunk on the menu's first open; the fallback
@@ -7840,8 +7839,9 @@ html:has(.has-tab-bar) {
 .profile-deck-label {
     display: flex;
     min-width: 0;
-    flex-direction: column;
-    gap: 7px
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px
 }
 .profile-deck-preview {
     display: flex;
@@ -9233,4 +9233,24 @@ svg[data-fx='twinkle-late'] {
 .stage-v-ring .seat-disconnect-badge svg {
     width: 8px;
     height: 8px
+}
+.amount-input {
+    position: relative;
+    display: block;
+    width: 100%
+}
+.amount-input-prefix {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    font-family: var(--font-mono, inherit);
+    pointer-events: none
+}
+.amount-input-field.has-prefix {
+    padding-left: 44px
+}
+.amount-input-field {
+    font-variant-numeric: tabular-nums
 }

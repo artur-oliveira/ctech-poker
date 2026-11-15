@@ -6,7 +6,6 @@ import {measureElement, useWindowVirtualizer} from '@tanstack/react-virtual';
 import {
   AlertCircle,
   ArrowRight,
-  ChevronDown,
   ChevronRight,
   History,
   Infinity as InfinityIcon,
@@ -19,7 +18,7 @@ import {HAND_COLLECTIONS_KEY, listHandCollections} from '@/lib/api/handMeta';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
-import {SkeletonList, Button} from '@aoctech/ui';
+import {SkeletonList, Button, Select} from '@aoctech/ui';
 import {StatsBarSkeleton} from '@/components/StatsBarSkeleton';
 import {TermsGate} from '@/components/TermsGate';
 import {bestHandCategory} from '@/lib/pokerRules';
@@ -302,15 +301,9 @@ export default function HandsHistory() {
 
       {!history.isLoading && !history.isError && collectionNames.length > 0 && <div className="hands-view">
         <label htmlFor="hands-view-select">Mostrar</label>
-        <span className="hands-view-select">
-          <select id="hands-view-select" value={activeCollection} onChange={e => setView(e.target.value)}>
-            <option value={ALL_HANDS}>Todas as mãos</option>
-            {collectionNames.map(name => <option key={name} value={name}>
-              {name === REVIEW_COLLECTION ? 'Marcadas para revisar' : name}
-            </option>)}
-          </select>
-          <ChevronDown aria-hidden="true"/>
-        </span>
+        <Select id="hands-view-select" className="hands-view-select" value={activeCollection} onValueChange={setView}
+                none="Todas as mãos"
+                options={collectionNames.map(name => ({value: name, label: name === REVIEW_COLLECTION ? 'Marcadas para revisar' : name}))}/>
       </div>}
 
       {history.isLoading ?
