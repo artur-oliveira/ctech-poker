@@ -334,7 +334,7 @@ describe('hands list page', () => {
 
     // The review-marker collection is offered first.
     await userEvent.click(picker);
-    const options = screen.getAllByRole('option').map(option => option.textContent);
+    const options = (await screen.findAllByRole('option')).map(option => option.textContent);
     expect(options).toEqual(['Todas as mãos', 'Marcadas para revisar', 'Estudar depois']);
     await userEvent.click(await screen.findByRole('option', {name: 'Marcadas para revisar'}));
     await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument());
