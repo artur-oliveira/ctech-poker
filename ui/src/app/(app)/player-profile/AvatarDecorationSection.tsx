@@ -4,11 +4,10 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Ban, Check, Medal} from 'lucide-react';
 import {Button, Checkbox, SkeletonList} from '@aoctech/ui';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
-import {ACCESSORY_ART} from '@/components/avatar/accessories';
 import {BADGE_ART} from '@/components/avatar/badges';
 import {FRAME_ART} from '@/components/avatar/frames';
 import {HAT_ART} from '@/components/avatar/hats';
-import {type AvatarSlot, avatarItemLabel, listOwnedAvatarCosmetics} from '@/lib/avatarCosmetics';
+import {type AvatarSlot, avatarItemLabel, hasAvatarItems, listOwnedAvatarCosmetics} from '@/lib/avatarCosmetics';
 import {type PlayerProfile, updateMe} from '@/lib/api/player';
 import {PLAYER_ME_KEY} from '@/lib/hooks/useProfileEdits';
 import {pushNotification} from '@/lib/notify';
@@ -25,14 +24,19 @@ const RADIO_SLOTS: Record<RadioSlot, {
     error: 'Não foi possível carregar suas bordas agora.', art: FRAME_ART, field: 'equipped_frame_id'},
   hat: {legend: 'Chapéu', group: 'Chapéu equipado', none: 'Nenhum', loading: 'Carregando chapéus…',
     error: 'Não foi possível carregar seus chapéus agora.', art: HAT_ART, field: 'equipped_hat_id'},
+  // Reserved slot with no art yet: hidden (and never read) while the registry is empty.
   accessory: {legend: 'Acessório', group: 'Acessório equipado', none: 'Nenhum', loading: 'Carregando acessórios…',
-    error: 'Não foi possível carregar seus acessórios agora.', art: ACCESSORY_ART, field: 'equipped_accessory_id'},
+    error: 'Não foi possível carregar seus acessórios agora.', art: {}, field: 'equipped_accessory_id'},
 };
+
+/** The pickers this build can show: a slot without any item has nothing to pick. */
+const LIVE_RADIO_SLOTS = (Object.keys(RADIO_SLOTS) as RadioSlot[]).filter(hasAvatarItems);
 
 const EMPTY_COPY = 'Você ainda não tem itens deste tipo. Conquiste ou compre para equipar.';
 
 const useOwned = (slot: AvatarSlot) => useQuery({
-  queryKey: ['wallet', 'avatar-cosmetic-owned', slot], queryFn: () => listOwnedAvatarCosmetics(slot)
+  queryKey: ['wallet', 'avatar-cosmetic-owned', slot], queryFn: () => listOwnedAvatarCosmetics(slot),
+  enabled: hasAvatarItems(slot),
 });
 
 /** Loading / error-with-retry / empty around a slot's owned list. `saved`
@@ -69,7 +73,8 @@ function SlotOption({name, checked, label, onSelect, children}: {
 }
 
 /**
- * Avatar decoration (#292): one owned frame, hat and accessory and up to three
+ * Avatar decoration (#292): one owned frame and hat (and accessory, once that
+ * slot has items) and up to three
  * owned badges, saved through the same `POST /players/me` every other profile
  * field uses. Only owned ids are listed (granted or bought elsewhere; nothing
  * locked to browse here). Both previews render the pending, unsaved choice.
@@ -88,7 +93,7 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
   const savedBadgeIds = me.equipped_badge_ids ?? [];
   const badgesChanged = badgeIds.length !== savedBadgeIds.length || badgeIds.some(id => !savedBadgeIds.includes(id));
   const changes: Parameters<typeof updateMe>[0] = {};
-  for (const slot of Object.keys(RADIO_SLOTS) as RadioSlot[]) {
+  for (const slot of LIVE_RADIO_SLOTS) {
     if (picked[slot] !== saved[slot]) changes[RADIO_SLOTS[slot].field] = picked[slot];
   }
   if (badgesChanged) changes.equipped_badge_ids = badgeIds;
@@ -127,7 +132,7 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
   return <section className="player-profile-section" aria-labelledby="player-profile-avatar-decoration-title">
     <header className="player-profile-section-head">
       <h2 id="player-profile-avatar-decoration-title">Visual do avatar</h2>
-      <p>Borda, chapéu, acessório e emblemas aparecem ao redor da sua foto em qualquer mesa e na sua vitrine.</p>
+      <p>Borda, chapéu e emblemas aparecem ao redor da sua foto em qualquer mesa e na sua vitrine.</p>
     </header>
 
     <div className="avatar-decoration-preview" aria-hidden="true">
@@ -135,7 +140,7 @@ export function AvatarDecorationSection({me}: { me: PlayerProfile }) {
       <figure><PlayerAvatar {...preview} size={36}/><figcaption>Na mesa</figcaption></figure>
     </div>
 
-    {(Object.keys(RADIO_SLOTS) as RadioSlot[]).map(slot => {
+    {LIVE_RADIO_SLOTS.map(slot => {
       const cfg = RADIO_SLOTS[slot];
       const name = `avatar-decoration-${slot}`;
       return <fieldset key={slot} className="avatar-decoration-group">

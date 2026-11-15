@@ -192,9 +192,9 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
 4. **Chat moderation — partial.** `internal/chatfilter` masks banned words and chat is capped at
    500 chars; there is **no report/mute flow**.
 5. **Table themes / cosmetics — shipped, season grants open.** Table themes (`tablePreferences.ts`),
-   deck variants (`cardVariants.ts`) and avatar cosmetics (frame, hat, accessory, up to three badges; spec
-   `docs/specs/2026-11-14-avatar-cosmetics.md`): frames, hats and accessories are sold for fichas or Pix, achievement
-   tiers grant their items, badges are never sold. Season items exist but nothing grants them yet.
+   deck variants (`cardVariants.ts`) and avatar cosmetics (frame, hat sitting on top of the avatar, up to three badges;
+   spec `docs/specs/2026-11-14-avatar-cosmetics.md`): frames and hats are sold for fichas or Pix, achievement tiers
+   grant their items, badges are never sold. The accessory slot exists but has no items (all removed 2026-11-15). Season items exist but nothing grants them yet.
 
 Beyond the original suggestions, these also shipped: time banks, action pre-selection, rabbit hunt,
 reality check, private opponent notes, self-HUD stats, profile showcase, public hand sharing,

@@ -75,7 +75,8 @@ whenever a players store is wired) are all **fixed**; older docs that still list
   grant table with the `cosmetic_unlocked` toast, self-heal backfill on the owned read), plan
   [`plans/2026-11-14-avatar-cosmetics-phase3.md`](plans/2026-11-14-avatar-cosmetics-phase3.md), **implemented** on
   branch `feat/avatar-cosmetics-shop`. Pending: season-grant trigger, real-handset and WebKit verification,
-  social-butterfly mapping review.
+  social-butterfly mapping review. *2026-11-15* (branch `feat/avatar-hats-above`): hats redrawn to sit on top of the
+  avatar instead of over the photo, and every accessory removed (slot kept); see the spec's Rendering revisions.
 - [`2026-09-18-handeval-equity-optimization`](specs/2026-09-18-handeval-equity-optimization.md) — packed perfect-hash evaluation, precomputed preflop equity, lazy sampling, exact heads-up rivers, and benchmark results.
 
 - `plans/2026-08-16-social-friends-safety-and-recent.md` — plano full-stack de amizade mútua, presença, convites

@@ -48,7 +48,7 @@ async function clippedElements(page: Page) {
     // Seat badges and cards are the payload; the decorative felt washes and
     // glows are allowed to bleed past their box on purpose.
     const targets = '.game-seat, .seat-role, .seat-streak, .seat-timebank-badge, .playing-card, .seat-info, .seat-bet, '
-      + '.player-avatar-badges, .player-avatar-art';
+      + '.player-avatar-badges, .player-avatar-art, .player-avatar-art > svg[data-band="hat"]';
     for (const el of document.querySelectorAll(targets)) {
       const clipper = clipperOf(el);
       if (!clipper) continue;

@@ -15,7 +15,6 @@ import {AVATAR_ITEMS} from '@/lib/avatarCosmetics';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {FRAME_ART} from '@/components/avatar/frames';
 import {HAT_ART} from '@/components/avatar/hats';
-import {ACCESSORY_ART} from '@/components/avatar/accessories';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -127,7 +126,9 @@ export function FeltStoreSection(props: CosmeticSectionProps) {
     emptyLabel="Nenhum feltro disponível no momento."/>;
 }
 
-const AVATAR_ART = {frame: FRAME_ART, hat: HAT_ART, accessory: ACCESSORY_ART};
+// The accessory slot has no art yet (reserved for the next phase), so every
+// accessory id is unlabelled and hidden like any id this build does not know.
+const AVATAR_ART: Record<AvatarStoreKind, Record<string, unknown>> = {frame: FRAME_ART, hat: HAT_ART, accessory: {}};
 const AVATAR_KIND_LABEL: Record<AvatarStoreKind, string> = {frame: 'Borda', hat: 'Chapéu', accessory: 'Acessório'};
 
 export const isAvatarStoreKind = (kind: CosmeticKind): kind is AvatarStoreKind => kind in AVATAR_ART;
@@ -140,8 +141,8 @@ export function cosmeticItemLabel(kind: CosmeticKind, id: string): string | unde
   return AVATAR_ART[kind][id] ? AVATAR_ITEMS[kind][id]?.label : undefined;
 }
 
-/** An avatar item worn by a blank default avatar (initials hidden, so a mask
- * or monocle is not drawn over letters): the same `PlayerAvatar` composition
+/** An avatar item worn by a blank default avatar (initials hidden, so the
+ * item is never drawn against letters): the same `PlayerAvatar` composition
  * the table and profile use, never a second one. Decorative. */
 export function AvatarItemPreview({kind, id, size}: { kind: AvatarStoreKind; id: string; size: number }) {
   const slot = {frame: {frameId: id}, hat: {hatId: id}, accessory: {accessoryId: id}}[kind];

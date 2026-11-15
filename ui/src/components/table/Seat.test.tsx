@@ -477,7 +477,8 @@ describe('Seat chip amounts and the touch tap target', () => {
     const seatEl = container.querySelector(`.game-seat.${state}`)!;
     const avatar = seatEl.querySelector('.player-avatar-decorated > .seat-avatar');
     expect(avatar).toBeInTheDocument();
-    expect(seatEl.querySelectorAll('.player-avatar-art > svg')).toHaveLength(3);
+    // Frame and hat; the accessory slot is forwarded but has no art in this build.
+    expect(seatEl.querySelectorAll('.player-avatar-art > svg')).toHaveLength(2);
     expect(seatEl.querySelectorAll('.player-avatar-badge')).toHaveLength(2);
   });
 
