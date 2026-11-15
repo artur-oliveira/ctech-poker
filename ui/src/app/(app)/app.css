@@ -8174,16 +8174,20 @@ button.deck-grid-slot:hover {
 
 .player-profile-nav {
     position: sticky;
-    top: calc(var(--api-bar-h, 0px) + 78px); /* parks under the sticky .app-nav */
-    z-index: 5;
+    top: calc(var(--api-bar-h, 0px) + 78px + 8px); /* parks under the sticky .app-nav */
+    z-index: calc(var(--z-chrome) - 1);
     display: flex;
-    gap: 8px;
-    margin: 0 -4px;
-    padding: 10px 4px;
+    gap: 2px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 4px;
     overflow-x: auto;
     scrollbar-width: none;
-    background: color-mix(in srgb, var(--background, #0e0a0b) 94%, transparent);
-    backdrop-filter: blur(8px)
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    box-shadow: var(--shadow-seat)
 }
 .player-profile-nav::-webkit-scrollbar {
     display: none
@@ -8194,13 +8198,13 @@ button.deck-grid-slot:hover {
     align-items: center;
     min-height: 44px;
     padding: 0 14px;
-    border: 1px solid var(--control-border);
-    border-radius: 999px;
+    border-radius: var(--rounded-pill);
     color: var(--text-secondary);
     font-size: var(--font-size-compact);
     font-weight: 600;
     text-decoration: none;
-    white-space: nowrap
+    white-space: nowrap;
+    transition: background-color .2s, color .2s
 }
 .player-profile-nav a:hover {
     background: var(--surface-control-hover);
@@ -8208,7 +8212,7 @@ button.deck-grid-slot:hover {
 }
 .player-profile-nav a:focus-visible {
     outline: 2px solid var(--focus-ring);
-    outline-offset: 2px
+    outline-offset: -2px
 }
 .player-profile-section-head h2 {
     scroll-margin-top: 170px
