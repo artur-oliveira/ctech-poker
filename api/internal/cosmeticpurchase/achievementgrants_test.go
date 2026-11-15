@@ -81,3 +81,23 @@ func TestGrantsForUnmappedAndLowStars(t *testing.T) {
 		t.Errorf("wins@2: %v", g)
 	}
 }
+
+// The two earned ornaments: devil horns for a 3-star bluff, angel wings for a 5-star wins
+// (after the laurel and the crown, tier order).
+func TestGrantsForOrnaments(t *testing.T) {
+	ids := func(key string, stars int) (out []string) {
+		for _, g := range cosmetics.GrantsFor(key, stars) {
+			out = append(out, string(g.Kind)+"/"+g.ID)
+		}
+		return out
+	}
+	if got, want := ids("bluff", 3), []string{"accessory/devil-horns"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("bluff@3 = %v, want %v", got, want)
+	}
+	if got := ids("bluff", 2); got != nil {
+		t.Errorf("bluff@2 = %v, want none", got)
+	}
+	if got, want := ids("wins", 5), []string{"hat/laurel", "hat/crown", "accessory/angel-wings"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("wins@5 = %v, want %v", got, want)
+	}
+}

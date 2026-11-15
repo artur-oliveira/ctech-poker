@@ -42,6 +42,8 @@ func TestProductsAreTheOnesTheWalletSold(t *testing.T) {
 		"poker_felt_midnight": 1000, "poker_felt_burgundy": 1000, "poker_felt_ocean": 1000,
 		"poker_frame_felt_ring": 600, "poker_frame_walnut_rail": 800, "poker_frame_oxblood_edge": 1000,
 		"poker_frame_silver_filigree": 800, "poker_frame_pearl_beads": 900, "poker_frame_rose_gold": 1000, "poker_frame_obsidian_edge": 1000, "poker_frame_emerald_cut": 1200, "poker_frame_sapphire_deco": 1200, "poker_frame_olive_branch": 1400, "poker_frame_suit_ring": 1500,
+		"poker_frame_inferno": 2500, "poker_frame_arcane_aura": 2200, "poker_frame_storm_ring": 2200, "poker_frame_gold_shimmer": 1800, "poker_frame_baroque_gilt": 1800, "poker_frame_laurel_wreath": 1600, "poker_frame_art_nouveau": 1600, "poker_frame_celtic_knot": 1400,
+		"poker_accessory_bat_wings": 2000, "poker_accessory_gold_wings": 2500, "poker_accessory_dragon_wings": 2500, "poker_accessory_ram_horns": 1800, "poker_accessory_bull_horns": 1500,
 		"poker_hat_top_hat": 300, "poker_hat_cowboy": 400, "poker_hat_beanie": 200,
 		"poker_hat_fedora": 500, "poker_hat_beret": 400, "poker_hat_bowler": 500, "poker_hat_captain_cap": 600, "poker_hat_wizard": 700, "poker_hat_sun_visor": 300,
 	}

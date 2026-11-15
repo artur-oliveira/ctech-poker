@@ -185,9 +185,10 @@ func TestDecorEmptyEqual(t *testing.T) {
 
 func TestAvatarCatalogLaunchIDs(t *testing.T) {
 	want := map[Kind][]string{
-		KindFrame: {"chip-ring"},
-		KindHat:   {"dealer-visor", "crown", "laurel"},
-		KindBadge: {"all-in-hero", "iron-nerve", "rainmaker", "veteran", "social-butterfly"},
+		KindFrame:     {"chip-ring"},
+		KindHat:       {"dealer-visor", "crown", "laurel"},
+		KindBadge:     {"all-in-hero", "iron-nerve", "rainmaker", "veteran", "social-butterfly"},
+		KindAccessory: {"devil-horns", "angel-wings"},
 	}
 	for kind, ids := range want {
 		for _, id := range ids {
@@ -199,14 +200,19 @@ func TestAvatarCatalogLaunchIDs(t *testing.T) {
 	}
 }
 
-// The accessory slot stays (wire field, equip path) for the next phase's
-// horns/wings, but no accessory exists until then.
-func TestAccessorySlotIsEmpty(t *testing.T) {
-	if got := All(KindAccessory); len(got) != 0 {
-		t.Fatalf("accessory catalog = %+v, want empty", got)
+// The accessory slot holds the ornaments (wings and horns): five sold, two earned.
+func TestAccessoryOrnaments(t *testing.T) {
+	sold, earned := 0, 0
+	for _, e := range All(KindAccessory) {
+		switch e.Source {
+		case SourcePurchase:
+			sold++
+		case SourceAchievement:
+			earned++
+		}
 	}
-	if !IsAvatarKind(KindAccessory) {
-		t.Fatal("accessory must stay an avatar kind")
+	if sold != 5 || earned != 2 || !IsAvatarKind(KindAccessory) {
+		t.Fatalf("accessory catalog: %d sold, %d earned, want 5 and 2", sold, earned)
 	}
 }
 
@@ -218,6 +224,8 @@ func TestAvatarPurchasableCatalog(t *testing.T) {
 	}{
 		{KindFrame, "felt-ring", 600}, {KindFrame, "walnut-rail", 800}, {KindFrame, "oxblood-edge", 1000},
 		{KindFrame, "silver-filigree", 800}, {KindFrame, "pearl-beads", 900}, {KindFrame, "rose-gold", 1000}, {KindFrame, "obsidian-edge", 1000}, {KindFrame, "emerald-cut", 1200}, {KindFrame, "sapphire-deco", 1200}, {KindFrame, "olive-branch", 1400}, {KindFrame, "suit-ring", 1500},
+		{KindFrame, "inferno", 2500}, {KindFrame, "arcane-aura", 2200}, {KindFrame, "storm-ring", 2200}, {KindFrame, "gold-shimmer", 1800}, {KindFrame, "baroque-gilt", 1800}, {KindFrame, "laurel-wreath", 1600}, {KindFrame, "art-nouveau", 1600}, {KindFrame, "celtic-knot", 1400},
+		{KindAccessory, "bat-wings", 2000}, {KindAccessory, "gold-wings", 2500}, {KindAccessory, "dragon-wings", 2500}, {KindAccessory, "ram-horns", 1800}, {KindAccessory, "bull-horns", 1500},
 		{KindHat, "top-hat", 300}, {KindHat, "cowboy", 400}, {KindHat, "beanie", 200},
 		{KindHat, "fedora", 500}, {KindHat, "beret", 400}, {KindHat, "bowler", 500}, {KindHat, "captain-cap", 600}, {KindHat, "wizard", 700}, {KindHat, "sun-visor", 300},
 	}
