@@ -207,6 +207,7 @@ func TestAvatarPurchasableCatalog(t *testing.T) {
 		cents int64
 	}{
 		{KindFrame, "felt-ring", 600}, {KindFrame, "walnut-rail", 800}, {KindFrame, "oxblood-edge", 1000},
+		{KindFrame, "silver-filigree", 800}, {KindFrame, "pearl-beads", 900}, {KindFrame, "rose-gold", 1000}, {KindFrame, "obsidian-edge", 1000}, {KindFrame, "emerald-cut", 1200}, {KindFrame, "sapphire-deco", 1200}, {KindFrame, "olive-branch", 1400}, {KindFrame, "suit-ring", 1500},
 		{KindHat, "top-hat", 300}, {KindHat, "cowboy", 400}, {KindHat, "beanie", 200},
 		{KindAccessory, "shades", 300}, {KindAccessory, "monocle", 500}, {KindAccessory, "mustache", 200}, {KindAccessory, "headset", 400},
 	}
