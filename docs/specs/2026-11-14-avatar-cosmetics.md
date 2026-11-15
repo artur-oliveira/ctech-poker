@@ -105,6 +105,12 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
   `--seat-size`; offsets scale with `--seat-size` like `.seat-note-trigger`. Seat-scope CSS goes in `renderer.css`; profile-only CSS stays in `app.css`.
 - Named colour tokens in `globals.css` `:root` and `DESIGN.md`; no raw hex/px in component CSS. SVG is inline React (no network, no layout shift).
 - Launch set (names are working titles): 6 frames, 6 hats, 5 accessories, 7 badges. About half earnable, half purchasable, with a few seasonal.
+  *Expanded 2026-11-14* (branch `feat/avatar-cosmetics-fichas-pricing`): the six frames were redrawn in place (same ids) and 8 frames, 6 hats and
+  5 accessories were added, all purchasable (table below): now 14 frames, 12 hats, 10 accessories. Frames: Filigrana de Prata, Colar de Pérolas,
+  Ouro Rosé, Borda de Obsidiana, Esmeralda, Art Déco Safira, Ramo de Oliveira, Naipes. Hats: Fedora, Boina, Chapéu-coco, Boné de Capitão,
+  Chapéu de Mago, Viseira. Accessories: Óculos Redondos, Tapa-olho, Charuto, Bigode Francês, Brinco (a bow tie was proposed, but the avatar circle
+  fills the 64x64 box, so there is no room below it; Brinco replaced it). Frames may now use a per-instance `linearGradient`/`radialGradient`
+  whose stops are `--cosmetic-*` tokens; hats and accessories stay flat. New tokens are listed in `ui/DESIGN.md`.
 - Store: new sections in `CosmeticStoreSection` for the purchasable kinds; `CosmeticKind` widens. Profile: `AvatarDecorationSection` gets hat and accessory pickers
   and a live preview at seat size and profile size.
 
@@ -136,16 +142,35 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
 
    | Kind | Item | SKU | Cents | Fichas |
    |---|---|---|---|---|
-   | frame | felt-ring | `poker_frame_felt_ring` | 600 | 600 000 |
-   | frame | walnut-rail | `poker_frame_walnut_rail` | 800 | 800 000 |
-   | frame | oxblood-edge | `poker_frame_oxblood_edge` | 1000 | 1 000 000 |
-   | hat | beanie | `poker_hat_beanie` | 200 | 200 000 |
-   | hat | top-hat | `poker_hat_top_hat` | 300 | 300 000 |
-   | hat | cowboy | `poker_hat_cowboy` | 400 | 400 000 |
-   | accessory | mustache | `poker_accessory_mustache` | 200 | 200 000 |
-   | accessory | shades | `poker_accessory_shades` | 300 | 300 000 |
-   | accessory | headset | `poker_accessory_headset` | 400 | 400 000 |
-   | accessory | monocle | `poker_accessory_monocle` | 500 | 500 000 |
+   | frame | felt-ring | `poker_frame_felt_ring` | 600 | 1 800 000 |
+   | frame | walnut-rail | `poker_frame_walnut_rail` | 800 | 2 400 000 |
+   | frame | silver-filigree | `poker_frame_silver_filigree` | 800 | 2 400 000 |
+   | frame | pearl-beads | `poker_frame_pearl_beads` | 900 | 2 700 000 |
+   | frame | oxblood-edge | `poker_frame_oxblood_edge` | 1000 | 3 000 000 |
+   | frame | rose-gold | `poker_frame_rose_gold` | 1000 | 3 000 000 |
+   | frame | obsidian-edge | `poker_frame_obsidian_edge` | 1000 | 3 000 000 |
+   | frame | emerald-cut | `poker_frame_emerald_cut` | 1200 | 3 600 000 |
+   | frame | sapphire-deco | `poker_frame_sapphire_deco` | 1200 | 3 600 000 |
+   | frame | olive-branch | `poker_frame_olive_branch` | 1400 | 4 200 000 |
+   | frame | suit-ring | `poker_frame_suit_ring` | 1500 | 4 500 000 |
+   | hat | beanie | `poker_hat_beanie` | 200 | 600 000 |
+   | hat | top-hat | `poker_hat_top_hat` | 300 | 900 000 |
+   | hat | sun-visor | `poker_hat_sun_visor` | 300 | 900 000 |
+   | hat | cowboy | `poker_hat_cowboy` | 400 | 1 200 000 |
+   | hat | beret | `poker_hat_beret` | 400 | 1 200 000 |
+   | hat | fedora | `poker_hat_fedora` | 500 | 1 500 000 |
+   | hat | bowler | `poker_hat_bowler` | 500 | 1 500 000 |
+   | hat | captain-cap | `poker_hat_captain_cap` | 600 | 1 800 000 |
+   | hat | wizard | `poker_hat_wizard` | 700 | 2 100 000 |
+   | accessory | mustache | `poker_accessory_mustache` | 200 | 600 000 |
+   | accessory | shades | `poker_accessory_shades` | 300 | 900 000 |
+   | accessory | eyepatch | `poker_accessory_eyepatch` | 300 | 900 000 |
+   | accessory | earring | `poker_accessory_earring` | 300 | 900 000 |
+   | accessory | headset | `poker_accessory_headset` | 400 | 1 200 000 |
+   | accessory | round-glasses | `poker_accessory_round_glasses` | 400 | 1 200 000 |
+   | accessory | handlebar | `poker_accessory_handlebar` | 400 | 1 200 000 |
+   | accessory | monocle | `poker_accessory_monocle` | 500 | 1 500 000 |
+   | accessory | cigar | `poker_accessory_cigar` | 500 | 1 500 000 |
 
    Grant table (`cosmetics.AchievementGrants`; a tier-skipping unlock grants every row with `row.Stars <= stars`;
    reason `achievement:<key>:<stars>`, `...:backfill` from the self-heal):
@@ -181,7 +206,7 @@ UI: `RankingRow` and the podium render `PlayerAvatar` with the decoration. The 5
 ## My calls (not yet confirmed by you)
 
 - Slot names, the 24-item count and its split, and the pt-BR names.
-- Indicative price bands (builder sets exact values next to existing deck/felt prices: deck 200 to 500 cents, felt 1000): frames 300 to 1000, hats 200 to 500, accessories 200 to 500 cents; badges are never sold.
+- Indicative price bands (builder sets exact values next to existing deck/felt prices: deck 200 to 500 cents, felt 1000): frames 300 to 1500, hats 200 to 700, accessories 200 to 500 cents (bands widened by the 2026-11-14 expansion); badges are never sold.
 - Season grants are out of scope unless a period-close hook already exists.
 - No animation in the first release.
 

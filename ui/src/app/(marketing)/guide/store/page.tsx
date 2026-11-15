@@ -38,6 +38,7 @@ export default function StoreGuide() {
           <GuideTerm term="Temporada">Não se compra: itens sazonais vêm das temporadas do ranking.</GuideTerm>
           <GuideTerm term="Indisponível">Fora de venda agora. Um Pix que você já gerou continua em <b>Compras e estornos</b>.</GuideTerm>
           <GuideTerm term="Na coleção">Já é seu. <b>Equipar no perfil</b> leva ao seu perfil para usá-lo.</GuideTerm></GuideTerms>
+          <p>À venda: as molduras <b>Borda de Feltro</b>, <b>Borda de Nogueira</b>, <b>Borda Oxblood</b>, <b>Filigrana de Prata</b>, <b>Colar de Pérolas</b>, <b>Ouro Rosé</b>, <b>Borda de Obsidiana</b>, <b>Esmeralda</b>, <b>Art Déco Safira</b>, <b>Ramo de Oliveira</b> e <b>Naipes</b>; os chapéus <b>Cartola</b>, <b>Chapéu de Cowboy</b>, <b>Gorro</b>, <b>Fedora</b>, <b>Boina</b>, <b>Chapéu-coco</b>, <b>Boné de Capitão</b>, <b>Chapéu de Mago</b> e <b>Viseira</b>; os acessórios <b>Óculos Escuros</b>, <b>Monóculo</b>, <b>Bigode</b>, <b>Headset</b>, <b>Óculos Redondos</b>, <b>Tapa-olho</b>, <b>Charuto</b>, <b>Bigode Francês</b> e <b>Brinco</b>. Em fichas, os itens do avatar custam proporcionalmente mais que baralhos e feltros; no Pix, o preço segue a mesma tabela.</p>
           <p>Quando uma conquista libera um item durante a partida, um aviso na mesa diz qual foi. Os emblemas não aparecem na Loja: todos vêm de conquistas e temporadas.</p></>
       },
       {

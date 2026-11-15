@@ -42,6 +42,7 @@ export default function ProfileGuide() {
           <GuideSteps><li><span>Escolha uma borda, um chapéu e um acessório, ou <b>Nenhuma</b> (borda) e <b>Nenhum</b> (chapéu, acessório) para não usar.</span></li>
           <li><span>Marque até três emblemas.</span></li>
           <li><span>Toque em <b>Salvar visual do avatar</b>. O botão só acende quando algo mudou.</span></li></GuideSteps>
+          <p>As prévias usam a mesma arte da mesa: uma moldura como <b>Ouro Rosé</b> ou <b>Esmeralda</b>, um chapéu como <b>Fedora</b> e um acessório como <b>Óculos Redondos</b> aparecem ali exatamente como os outros jogadores vão ver.</p>
           <p>Num tipo em que você ainda não tem nada, a seção avisa que é preciso conquistar ou comprar um item para equipar. Um item equipado que deixou de ser seu continua na lista, marcado, até você trocar.</p></>
       },
       {
