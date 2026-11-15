@@ -41,8 +41,10 @@ func TestProductsAreTheOnesTheWalletSold(t *testing.T) {
 		"poker_deck_golden": 500, "poker_deck_pink": 500, "poker_deck_alt": 500,
 		"poker_felt_midnight": 1000, "poker_felt_burgundy": 1000, "poker_felt_ocean": 1000,
 		"poker_frame_felt_ring": 600, "poker_frame_walnut_rail": 800, "poker_frame_oxblood_edge": 1000,
+		"poker_frame_silver_filigree": 800, "poker_frame_pearl_beads": 900, "poker_frame_rose_gold": 1000, "poker_frame_obsidian_edge": 1000, "poker_frame_emerald_cut": 1200, "poker_frame_sapphire_deco": 1200, "poker_frame_olive_branch": 1400, "poker_frame_suit_ring": 1500,
 		"poker_hat_top_hat": 300, "poker_hat_cowboy": 400, "poker_hat_beanie": 200,
 		"poker_accessory_shades": 300, "poker_accessory_monocle": 500, "poker_accessory_mustache": 200, "poker_accessory_headset": 400,
+		"poker_hat_fedora": 500, "poker_hat_beret": 400, "poker_hat_bowler": 500, "poker_hat_captain_cap": 600, "poker_hat_wizard": 700, "poker_hat_sun_visor": 300, "poker_accessory_round_glasses": 400, "poker_accessory_eyepatch": 300, "poker_accessory_cigar": 500, "poker_accessory_handlebar": 400, "poker_accessory_earring": 300,
 	}
 	got := Products()
 	if len(got) != len(want) {

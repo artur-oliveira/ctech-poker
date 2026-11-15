@@ -82,8 +82,8 @@ func premiumFixtures() []premiumFixture {
 	return []premiumFixture{
 		{kind: cosmetics.KindDeck, itemID: "golden", sku: "poker_deck_golden", priceFichas: 500_000, priceCents: 500},
 		{kind: cosmetics.KindFelt, itemID: "midnight", sku: "poker_felt_midnight", priceFichas: 1_000_000, priceCents: 1000},
-		{kind: cosmetics.KindHat, itemID: "top-hat", sku: "poker_hat_top_hat", priceFichas: 300_000, priceCents: 300},
-		{kind: cosmetics.KindFrame, itemID: "felt-ring", sku: "poker_frame_felt_ring", priceFichas: 600_000, priceCents: 600},
+		{kind: cosmetics.KindHat, itemID: "top-hat", sku: "poker_hat_top_hat", priceFichas: 900_000, priceCents: 300},
+		{kind: cosmetics.KindFrame, itemID: "felt-ring", sku: "poker_frame_felt_ring", priceFichas: 1_800_000, priceCents: 600},
 	}
 }
 
@@ -472,13 +472,13 @@ func uniquePlayer(prefix string) string {
 }
 
 // allSKUsWithAvatars is allCosmeticSKUs plus every purchasable avatar SKU, at
-// the catalog's fichas price / 1000 (the cents the wallet would report).
+// the catalog's fichas price / 3000 (the cents the wallet would report).
 func allSKUsWithAvatars() []walletclient.ProductSKU {
 	skus := allCosmeticSKUs()
 	for _, kind := range []cosmetics.Kind{cosmetics.KindFrame, cosmetics.KindHat, cosmetics.KindAccessory} {
 		for _, e := range cosmetics.All(kind) {
 			if e.Source == cosmetics.SourcePurchase {
-				skus = append(skus, walletclient.ProductSKU{ID: e.SKU, PriceCents: e.PriceFichas / 1000})
+				skus = append(skus, walletclient.ProductSKU{ID: e.SKU, PriceCents: e.PriceFichas / 3000})
 			}
 		}
 	}
@@ -511,7 +511,7 @@ func TestListCatalogIncludesEarnableWithoutPrice(t *testing.T) {
 		t.Fatalf("locked season frame: %+v", locked)
 	}
 	sold := byID["felt-ring"]
-	if sold.Source != string(cosmetics.SourcePurchase) || sold.PriceCents != 600 || sold.PriceFichas != 600_000 || sold.Owned || !sold.Available {
+	if sold.Source != string(cosmetics.SourcePurchase) || sold.PriceCents != 600 || sold.PriceFichas != 1_800_000 || sold.Owned || !sold.Available {
 		t.Fatalf("purchasable frame: %+v", sold)
 	}
 	raw, _ := json.Marshal(earned)
@@ -667,7 +667,7 @@ func TestSandboxPurchaseOfAvatarItemGrantsOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSandbox(top-hat): %v", err)
 	}
-	if rec.Status != "confirmed" || rec.Kind != string(cosmetics.KindHat) || rec.PriceFichas != 300_000 {
+	if rec.Status != "confirmed" || rec.Kind != string(cosmetics.KindHat) || rec.PriceFichas != 900_000 {
 		t.Fatalf("unexpected record: %+v", rec)
 	}
 	if owned, err := svc.IsOwned(ctx, playerID, cosmetics.KindHat, "top-hat"); err != nil || !owned {

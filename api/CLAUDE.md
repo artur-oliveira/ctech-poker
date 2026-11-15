@@ -861,7 +861,7 @@ catalog.
   (`cosmetics.Available` now) on every entry and prices only `CatalogEntry.Purchasable()` ones (avatar `purchase`
   source, or deck/felt with a SKU; `cosmetics.Purchasable(kind, id)` by id); earnable entries carry no price. Ownership
   is permanent once granted. **Prices** live in two places only, both poker-owned: fichas in the cosmetics catalog
-  (`internal/cosmetics/catalog.go`, fichas = cents x 1000) and cents in `internal/catalog/catalog.go` `products`
+  (`internal/cosmetics/catalog.go`, fichas = cents x 3000 for avatar items, 3x the deck/felt ratio so Pix is the better deal) and cents in `internal/catalog/catalog.go` `products`
   (nothing is registered in wallet or billing; `catalog.TestCosmeticSKUsMatchProducts` pins SKUs and the ratio): frames
   `poker_frame_felt_ring` 600, `poker_frame_walnut_rail` 800, `poker_frame_oxblood_edge` 1000; hats `poker_hat_beanie`
   200, `poker_hat_top_hat` 300, `poker_hat_cowboy` 400; accessories `poker_accessory_mustache` 200,

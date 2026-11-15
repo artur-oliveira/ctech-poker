@@ -207,8 +207,10 @@ func TestAvatarPurchasableCatalog(t *testing.T) {
 		cents int64
 	}{
 		{KindFrame, "felt-ring", 600}, {KindFrame, "walnut-rail", 800}, {KindFrame, "oxblood-edge", 1000},
+		{KindFrame, "silver-filigree", 800}, {KindFrame, "pearl-beads", 900}, {KindFrame, "rose-gold", 1000}, {KindFrame, "obsidian-edge", 1000}, {KindFrame, "emerald-cut", 1200}, {KindFrame, "sapphire-deco", 1200}, {KindFrame, "olive-branch", 1400}, {KindFrame, "suit-ring", 1500},
 		{KindHat, "top-hat", 300}, {KindHat, "cowboy", 400}, {KindHat, "beanie", 200},
 		{KindAccessory, "shades", 300}, {KindAccessory, "monocle", 500}, {KindAccessory, "mustache", 200}, {KindAccessory, "headset", 400},
+		{KindHat, "fedora", 500}, {KindHat, "beret", 400}, {KindHat, "bowler", 500}, {KindHat, "captain-cap", 600}, {KindHat, "wizard", 700}, {KindHat, "sun-visor", 300}, {KindAccessory, "round-glasses", 400}, {KindAccessory, "eyepatch", 300}, {KindAccessory, "cigar", 500}, {KindAccessory, "handlebar", 400}, {KindAccessory, "earring", 300},
 	}
 	for _, w := range want {
 		var got *CatalogEntry
@@ -218,8 +220,8 @@ func TestAvatarPurchasableCatalog(t *testing.T) {
 			}
 		}
 		sku := "poker_" + string(w.kind) + "_" + strings.ReplaceAll(w.id, "-", "_")
-		if got == nil || !got.Premium || got.Source != SourcePurchase || got.SKU != sku || got.PriceFichas != w.cents*1000 || !got.From.IsZero() || !got.Until.IsZero() {
-			t.Errorf("%s/%s = %+v, want purchase %s %d fichas", w.kind, w.id, got, sku, w.cents*1000)
+		if got == nil || !got.Premium || got.Source != SourcePurchase || got.SKU != sku || got.PriceFichas != w.cents*3000 || !got.From.IsZero() || !got.Until.IsZero() {
+			t.Errorf("%s/%s = %+v, want purchase %s %d fichas", w.kind, w.id, got, sku, w.cents*3000)
 		}
 	}
 }

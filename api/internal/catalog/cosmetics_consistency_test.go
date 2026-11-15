@@ -7,7 +7,8 @@ import (
 )
 
 // Every sellable cosmetic must have a Billing product, and avatar fichas prices are
-// exactly the cents price x 1000 (one price list, two currencies).
+// exactly the cents price x 3000 (one price list, two currencies; fichas cost 3x on purpose so Pix is the
+// better deal). Decks and felts keep x 1000.
 func TestCosmeticSKUsMatchProducts(t *testing.T) {
 	for _, k := range []cosmetics.Kind{cosmetics.KindDeck, cosmetics.KindFelt, cosmetics.KindFrame, cosmetics.KindHat, cosmetics.KindAccessory, cosmetics.KindBadge} {
 		for _, e := range cosmetics.All(k) {
@@ -19,8 +20,12 @@ func TestCosmeticSKUsMatchProducts(t *testing.T) {
 				t.Errorf("%s/%s: SKU %s has no catalog product", e.Kind, e.ID, e.SKU)
 				continue
 			}
-			if e.Source == cosmetics.SourcePurchase && e.PriceFichas != p.PriceCents*1000 {
-				t.Errorf("%s/%s: %d fichas, want %d (cents x 1000)", e.Kind, e.ID, e.PriceFichas, p.PriceCents*1000)
+			ratio := int64(1000)
+			if cosmetics.IsAvatarKind(e.Kind) {
+				ratio = 3000
+			}
+			if e.Source == cosmetics.SourcePurchase && e.PriceFichas != p.PriceCents*ratio {
+				t.Errorf("%s/%s: %d fichas, want %d (cents x %d)", e.Kind, e.ID, e.PriceFichas, p.PriceCents*ratio, ratio)
 			}
 		}
 	}

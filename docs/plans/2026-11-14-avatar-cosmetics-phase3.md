@@ -21,7 +21,7 @@
 - UI: no new store request on first paint (store initial-load budget, `ui/CLAUDE.md`: avatar catalogs load lazily via `useInViewOnce`, like the purchase histories, and a deferred section reports loading, never paints half); pt-BR copy; items shown with the registry art; locked earnable items show "Conquista", never a price; keyboard/touch rules as elsewhere.
 - Commits carry no Claude/Anthropic attribution. Zero lint warnings; `go test -race`; `scripts/standards-check.sh` (known local failure only from stale `.claude/worktrees/agent-*` dirs); layout gate must stay green (WebKit only in CI on this machine).
 
-## Item prices (cents; fichas = cents x 1000) and SKUs (binding)
+## Item prices (cents; fichas = cents x 1000 at the time; raised to x 3000 afterwards, see the spec) and SKUs (binding)
 
 | Kind | id | SKU | cents |
 |---|---|---|---|
