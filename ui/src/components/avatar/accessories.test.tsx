@@ -6,13 +6,13 @@ import {ACCESSORY_ART} from './accessories';
 
 const ACCESSORY_IDS = Object.keys(AVATAR_ITEMS.accessory);
 
-// Eye line by default; the mustache sits on the mouth line; the headset's band
+// Eye line by default; the mustaches and the cigar sit on the mouth line; the headset's band
 // arcs over the head (hat zone) down to an ear cup on the eye line.
-const BANDS: Record<string, [number, number]> = {mustache: [40, 48], headset: [0, 40]};
+const BANDS: Record<string, [number, number]> = {mustache: [40, 48], handlebar: [40, 48], cigar: [40, 48], headset: [0, 40]};
 
 describe('ACCESSORY_ART', () => {
   test('TestEveryAccessoryIdHasArt', () => {
-    expect(ACCESSORY_IDS).toHaveLength(5);
+    expect(ACCESSORY_IDS).toHaveLength(10);
     expect(Object.keys(ACCESSORY_ART).sort()).toEqual([...ACCESSORY_IDS].sort());
   });
 

@@ -308,8 +308,8 @@ const mockOwnedAvatarIDs: Record<AvatarSlot, string[]> = {
   // A mix per slot, so the store shows owned, earned-but-locked (chip-ring,
   // laurel) and purchasable items side by side.
   frame: ['season-2026-q3', 'champion-gold', 'felt-ring', 'pearl-beads', 'sapphire-deco'],
-  hat: ['dealer-visor', 'crown', 'top-hat'],
-  accessory: ['bandit-mask', 'shades'],
+  hat: ['dealer-visor', 'crown', 'top-hat', 'fedora', 'wizard'],
+  accessory: ['bandit-mask', 'shades', 'round-glasses', 'cigar'],
   badge: Object.keys(AVATAR_ITEMS.badge),
 };
 
@@ -1304,6 +1304,8 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       'silver-filigree': 800, 'pearl-beads': 900, 'rose-gold': 1000, 'obsidian-edge': 1000, 'emerald-cut': 1200,
       'sapphire-deco': 1200, 'olive-branch': 1400, 'suit-ring': 1500, 'top-hat': 300, 'cowboy': 400, 'beanie': 200,
       'shades': 300, 'monocle': 500, 'mustache': 200, 'headset': 400,
+      'fedora': 500, 'beret': 400, 'bowler': 500, 'captain-cap': 600, 'wizard': 700, 'sun-visor': 300,
+      'round-glasses': 400, 'eyepatch': 300, 'cigar': 500, 'handlebar': 400, 'earring': 300,
     };
     const entries = Object.keys(AVATAR_ITEMS[kind]).map(id => {
       const owned = mockOwnedAvatarIDs[kind].includes(id);

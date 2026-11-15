@@ -6,7 +6,7 @@ vi.mock('./api/client', () => ({apiClient: {get: (...a: unknown[]) => get(...a)}
 import {AVATAR_ITEMS, avatarBadgeLabel, decorProps, avatarFrameLabel, avatarItemLabel, listOwnedAvatarCosmetics} from './avatarCosmetics';
 
 describe('avatarCosmetics', () => {
-  test('registry has the launch set: 14 frames, 6 hats, 5 accessories, 7 badges with pt-BR labels', () => {
+  test('registry has the launch set: 14 frames, 12 hats, 10 accessories, 7 badges with pt-BR labels', () => {
     const labels = (slot: keyof typeof AVATAR_ITEMS) =>
       Object.fromEntries(Object.entries(AVATAR_ITEMS[slot]).map(([id, v]) => [id, v.label]));
     expect(labels('frame')).toEqual({
@@ -20,10 +20,13 @@ describe('avatarCosmetics', () => {
     expect(labels('hat')).toEqual({
       'dealer-visor': 'Viseira do Dealer', crown: 'Coroa', laurel: 'Louros',
       'top-hat': 'Cartola', cowboy: 'Chapéu de Cowboy', beanie: 'Gorro',
+      fedora: 'Fedora', beret: 'Boina', bowler: 'Chapéu-coco', 'captain-cap': 'Boné de Capitão',
+      wizard: 'Chapéu de Mago', 'sun-visor': 'Viseira',
     });
     expect(labels('accessory')).toEqual({
       'bandit-mask': 'Máscara de Bandido', shades: 'Óculos Escuros', monocle: 'Monóculo',
-      mustache: 'Bigode', headset: 'Headset',
+      mustache: 'Bigode', headset: 'Headset', 'round-glasses': 'Óculos Redondos', eyepatch: 'Tapa-olho',
+      cigar: 'Charuto', handlebar: 'Bigode Francês', earring: 'Brinco',
     });
     expect(labels('badge')).toEqual({
       'season-2026-q3-top10': 'Top 10 da Temporada', 'season-2026-q3-champion': 'Campeão da Temporada',

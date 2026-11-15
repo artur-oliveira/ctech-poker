@@ -7,7 +7,7 @@ const HAT_IDS = Object.keys(AVATAR_ITEMS.hat);
 
 describe('HAT_ART', () => {
   test('TestEveryHatIdHasArt', () => {
-    expect(HAT_IDS).toHaveLength(6);
+    expect(HAT_IDS).toHaveLength(12);
     expect(Object.keys(HAT_ART).sort()).toEqual([...HAT_IDS].sort());
   });
 
