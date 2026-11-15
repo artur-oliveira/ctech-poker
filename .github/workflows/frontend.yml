@@ -238,6 +238,7 @@ jobs:
         NEXT_PUBLIC_API_URL=https://poker-api.aoctech.app
         NEXT_PUBLIC_WS_URL=wss://poker-api.aoctech.app
         NEXT_PUBLIC_CTECH_URL=https://accounts-api.aoctech.app
+        NEXT_PUBLIC_REAL_MONEY_ENABLED=true
         NEXT_PUBLIC_CTECH_CLIENT_ID=poker
         NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.TURNSTILE_SITE_KEY_PROD }}
         AVATAR_UPLOAD_ORIGIN=https://prod-ctech-poker-avatars.s3.dualstack.us-east-1.amazonaws.com

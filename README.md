@@ -43,8 +43,9 @@ Status (re-verified against the code, **2026-07-28**): **sandbox mode is live en
 accepts `currency_mode: "real"` and rejects it unless `REAL_MONEY_ENABLED` is on
 (`api/internal/api/v1/rooms.go:58-66`, `:262`), with `REAL_MONEY_ENABLED` /
 `LEGAL_SIGNOFF_REF` wired from SSM by the API stack (`cdk/lib/api-stack.ts:251-254`).
-Real money remains **off by default** and still blocked on the Brazilian regulatory opinion
-below — the gate is a business decision, not a missing feature.
+Real money is **on in production since 2026-11-15** (SSM `real-money-enabled=true`, `legal-signoff-ref`
+= Poker Terms of Use v2.1; UI flag `NEXT_PUBLIC_REAL_MONEY_ENABLED=true` in `frontend.yml`). It stays
+off by default elsewhere; the kill switch is the SSM parameter plus an ASG instance refresh.
 
 The provably-fair surface is built: the shuffle commit, root commit and (for full showdowns
 only) the server seed are published on the table snapshot and persisted with hand history, and

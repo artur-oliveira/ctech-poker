@@ -27,15 +27,21 @@ function isTableFullError(err: unknown) {
     (err.response?.data as { type?: string } | undefined)?.type === TABLE_FULL_TYPE;
 }
 
-// The API's real-money buy-in gate (buyin.walletFor) reports "has not
-// activated gambling on ctech-wallet" as a plain RFC 9457 `detail` string.
-// Surface it verbatim so a real-money player knows to activate their wallet,
-// instead of the generic sandbox message.
+// Real-money buy-ins are refused by the responsible-gambling rules (consent, limits,
+// self-exclusion, deposit limit). The API's `detail` is already pt-BR and specific, so
+// show it verbatim and point at the profile, where those settings live.
+const RESPONSIBLE_TYPES = new Set([
+  '/problems/gambling-terms-required', '/problems/limits-not-configured',
+  '/problems/self-excluded', '/problems/deposit-limit-exceeded',
+]);
+
 function joinErrorMessage(err: unknown) {
   if (axios.isAxiosError(err)) {
-    const detail = (err.response?.data as { detail?: string } | undefined)?.detail;
+    const data = err.response?.data as { type?: string; detail?: string } | undefined;
     if (isTableFullError(err)) return TABLE_FULL_ERROR;
-    if (detail?.includes('gambling')) return 'Sua carteira ainda não tem apostas ativadas. Ative em ctech-wallet e tente novamente.';
+    if (data?.type && RESPONSIBLE_TYPES.has(data.type) && data.detail) {
+      return `${data.detail}. Ajuste na seção Jogo responsável do seu perfil.`;
+    }
   }
   return GENERIC_JOIN_ERROR;
 }

@@ -41,7 +41,7 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 | `NEXT_PUBLIC_WS_URL` | `src/lib/ws/origin.ts` | WebSocket origin for both gateways. Set explicitly in deployed builds and **must** be: the deploy workflow builds the CSP's `connect-src` from the origin literals in the build environment and `connect-src` is scheme-exact, so a `wss://` host derived at runtime never appears in the policy and every socket is blocked. Falls back to `NEXT_PUBLIC_API_URL` with the scheme swapped, which is the local-dev path |
 | `NEXT_PUBLIC_APP_URL` | `src/app/layout.tsx` | `metadataBase` for OG/meta tags |
 | `NEXT_PUBLIC_MOCK_API` | `src/lib/mockConfig.ts` | `true` runs the in-memory mock realtime engine instead of a live API |
-| `NEXT_PUBLIC_REAL_MONEY_ENABLED` | `src/lib/capabilities.ts` | `true` exposes real-money statistics/history; absent or any other value keeps the UI sandbox-only and coerces real-money hand URLs to sandbox |
+| `NEXT_PUBLIC_REAL_MONEY_ENABLED` | `src/lib/capabilities.ts` | set `true` in the prod build (`frontend.yml`); exposes real-money statistics/history; absent or any other value keeps the UI sandbox-only and coerces real-money hand URLs to sandbox |
 | `NEXT_PUBLIC_CTECH_URL` | `src/lib/auth/oauth.ts` | ctech-account base URL for `OAuthClient` |
 | `NEXT_PUBLIC_CTECH_CLIENT_ID` | `src/lib/auth/oauth.ts` | poker's OAuth client id |
 | `DEV_API_ORIGIN` | `next.config.ts` | dev-only rewrite target for `/v1.0/*` |
