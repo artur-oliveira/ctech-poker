@@ -158,6 +158,7 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   what gates it at runtime is `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`, checked fail-closed in
   `config.Load` and, since the reconcile Lambda also moves real money, in `config.LoadForLambda`. (Earlier revisions of
   this file said to reject non-`sandbox` outright — that is no longer the rule.)
+- **`buyin` picks the ledger by the room's `currency_mode`, never by comparing movers.** With `REAL_MONEY_ENABLED`, `newBuyinService` passes the same `*walletclient.Client` as both `wallet` and `game`, so `mover == s.game` was always true and every sandbox buy-in did `HoldGame` on the real wallet (409 `insufficient-balance` for anyone without real balance, 2026-11-16). `buyIn` branches on `realRoom`, `settle` on `mode`; `TestSandboxBuyInNeverHoldsOnTheGameWalletWhenBothAreTheSameClient` (integration tag) pins it.
 - **Money ordering is deliberate**: debit-then-seat on buy-in, remove-then-credit on cash-out. Anything that can fail
   after chips moved goes to `poker_pending_cashouts` for the `cmd/reconcile` sweeper. Keep new money paths in that shape
   rather than inventing a compensating transaction per call site.
