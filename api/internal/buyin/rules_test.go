@@ -169,3 +169,19 @@ func TestSandboxBuyInIgnoresTheRules(t *testing.T) {
 		t.Fatalf("a self-excluded player may still play Sandbox: %v", err)
 	}
 }
+
+// Prod wires one walletclient.Client as both ledgers, so the mover's identity cannot tell them apart.
+func TestSandboxBuyInNeverHoldsOnTheGameWalletWhenBothAreTheSameClient(t *testing.T) {
+	mgr := testManager(t)
+	wallet := &fakeWallet{}
+	svc := NewServiceWithGame(wallet, wallet, mgr, testRoomLookup(), responsible.NewService(responsible.NewMemoryStore()))
+	if _, err := mgr.GetOrCreateActor(context.Background(), "test-room", func() *hand.Table { return hand.NewTable(nil, 10, 20) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.BuyIn(context.Background(), "test-room", "user-1", 400, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(wallet.holds) != 0 || len(wallet.debits) != 1 {
+		t.Fatalf("sandbox buy-in must debit the sandbox wallet, not hold real money: holds=%d debits=%d", len(wallet.holds), len(wallet.debits))
+	}
+}

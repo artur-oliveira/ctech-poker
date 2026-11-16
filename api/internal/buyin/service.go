@@ -289,7 +289,8 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	}
 
 	var holdID string
-	if mover == s.game {
+	// Room mode, not mover identity: with real money on, wallet and game are the same client.
+	if realRoom {
 		holdID, err = mover.HoldGame(ctx, playerID, amount, roomID, key, "poker_buyin")
 		if err != nil {
 			return fmt.Errorf("buyin: hold: %w", err)
@@ -328,7 +329,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		// dropped.
 		cctx, cancel := compensationContext(ctx)
 		defer cancel()
-		if mover == s.game {
+		if realRoom {
 			if refundErr := mover.ReleaseHold(cctx, playerID, holdID, key+":release"); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND release failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
@@ -928,7 +929,8 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 	// forever even once the credit eventually succeeded.
 	var walletErr error
 	if stack > 0 {
-		if mover == s.game {
+		// Room mode, not mover identity: with real money on, wallet and game are the same client.
+		if mode == roomstore.CurrencyModeReal {
 			if holdID == "" {
 				walletErr = fmt.Errorf("buyin: no hold ID found for player %s", playerID)
 			} else if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout", fmt.Sprintf(descriptionCashoutFormat, roomID)); err != nil {
