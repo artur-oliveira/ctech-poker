@@ -55,12 +55,18 @@ func (f *fakeReminders) MarkSent(_ context.Context, sub, kind, day string) (bool
 	return true, nil
 }
 
-func (f *fakeReminders) Put(_ context.Context, r pushsvc.Reminder) error {
+// MoveSlot is conditional like the real one: only an enabled reminder still in `from` moves.
+func (f *fakeReminders) MoveSlot(_ context.Context, sub, kind string, from, to int) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.rows[r.Sub+"/"+r.Kind] = r
+	r, ok := f.rows[sub+"/"+kind]
+	if !ok || !r.Enabled || r.Slot != from {
+		return false, nil
+	}
+	r.Slot = to
+	f.rows[sub+"/"+kind] = r
 	f.puts = append(f.puts, r)
-	return nil
+	return true, nil
 }
 
 type fakeDevices map[string]int
@@ -214,4 +220,32 @@ func TestRunKeepsGoingAfterOneUserFails(t *testing.T) {
 	if len(s.jobs) != 1 || s.jobs[0].Recipients[0] != "u2" {
 		t.Errorf("jobs = %+v", s.jobs)
 	}
+}
+
+// The player turns "come play" off while the tick is deciding: the learned-hour move must not switch it back on.
+func TestRunNeverResurrectsAReminderThePlayerSwitchedOff(t *testing.T) {
+	play := pushsvc.Reminder{Sub: "u1", Kind: pokerpush.KindPlay, Enabled: true, Slot: 80}
+	rem := newReminders(play)
+	s := &switchOffOnSend{fakeSender: &fakeSender{}, rem: rem}
+	if err := NewTick(rem, fakeDevices{"u1": 1}, fakeRules{}, s, fakeHabits{}).Run(context.Background(), now); err != nil {
+		t.Fatal(err)
+	}
+	if got := rem.rows["u1/play"]; got.Enabled {
+		t.Errorf("reminder = %+v: the background move re-enabled a reminder the player switched off", got)
+	}
+}
+
+// switchOffOnSend disables the reminder as the push is handed over, the way a PUT /preferences would land mid-tick.
+type switchOffOnSend struct {
+	*fakeSender
+	rem *fakeReminders
+}
+
+func (s *switchOffOnSend) Send(ctx context.Context, j pushsvc.Job) error {
+	s.rem.mu.Lock()
+	r := s.rem.rows["u1/play"]
+	r.Enabled = false
+	s.rem.rows["u1/play"] = r
+	s.rem.mu.Unlock()
+	return s.fakeSender.Send(ctx, j)
 }

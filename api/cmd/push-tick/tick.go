@@ -24,7 +24,7 @@ const (
 type Reminders interface {
 	ListSlot(ctx context.Context, slot, limit int, cursor map[string]types.AttributeValue) ([]pushsvc.Reminder, map[string]types.AttributeValue, error)
 	MarkSent(ctx context.Context, sub, kind, day string) (bool, error)
-	Put(ctx context.Context, r pushsvc.Reminder) error
+	MoveSlot(ctx context.Context, sub, kind string, from, to int) (bool, error)
 }
 
 // Devices lists a person's registered devices (pushsvc.Store).
@@ -159,7 +159,9 @@ func (t *Tick) relearn(ctx context.Context, rem pushsvc.Reminder) {
 	if slot == rem.Slot {
 		return
 	}
-	if err := t.reminders.Put(ctx, pushsvc.Reminder{Sub: rem.Sub, Kind: rem.Kind, Enabled: true, Slot: slot}); err != nil {
+	// Conditional on the reminder still being on and still where the tick found it: a player who switched it off or moved
+	// it meanwhile wins, so this background move can never resurrect an opt-out.
+	if _, err := t.reminders.MoveSlot(ctx, rem.Sub, rem.Kind, rem.Slot, slot); err != nil {
 		slog.WarnContext(ctx, "push tick: slot not moved", "error", err)
 	}
 }
