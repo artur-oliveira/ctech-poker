@@ -41,7 +41,7 @@ export type TableName =
   'poker_promo_codes' | 'poker_promo_redemptions' |
   'poker_table_entitlements' | 'poker_table_highlights' |
   'poker_hand_reveals' | 'poker_hand_reveal_payments' | 'poker_erasure_state' |
-  'poker_responsible' | 'poker_idempotency' |
+  'poker_responsible' | 'poker_idempotency' | 'poker_push' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -281,6 +281,22 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_win_rate_pk', type: dynamodb.AttributeType.STRING},
       sortKey: {name: 'win_rate_score', type: dynamodb.AttributeType.NUMBER},
       projectionType: dynamodb.ProjectionType.ALL,
+    });
+    // poker_push (docs/specs/2026-11-18-scheduled-web-push.md, go-common pushsvc): pk = USER#{sub}, sk = SUB#{id} (a browser
+    // subscription, TTL renewed by the client's sync), META#counts, REMIND#{kind} (a scheduled reminder, no TTL). Two sparse
+    // KEYS_ONLY indexes: endpoint-index (who holds a browser endpoint) and slot-index (the reminders due in a 15-minute slot).
+    const push = table('poker_push', true, true);
+    push.addGlobalSecondaryIndex({
+      indexName: 'endpoint-index',
+      partitionKey: {name: 'endpoint_id', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
+    push.addGlobalSecondaryIndex({
+      indexName: 'slot-index',
+      partitionKey: {name: 'slot_key', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'kind_sub', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
     // One item per player/day and a TTL for automatic cooldown history cleanup.
     table('poker_daily_reward', true, true);

@@ -192,3 +192,11 @@ test('subscribes a poker queue to the account user-erasure topic (account deleti
   expect(text).toContain('BILLING_CLIENT_SECRET=');
   expect(text).not.toContain('PURCHASES_VIA');
 });
+
+test('the API can read the VAPID public key and invoke only the push sender', () => {
+  const template = Template.fromStack(synthStack());
+  const text = JSON.stringify(template.findResources('AWS::IAM::Policy'));
+  expect(text).toContain('/ctech-poker/dev/push/vapid-public-key');
+  expect(text).toContain('function:dev-ctech-poker-push-sender');
+  expect(text).not.toContain('vapid-private-key');
+});
