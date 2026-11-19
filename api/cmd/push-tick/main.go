@@ -46,5 +46,6 @@ func handler(ctx context.Context) error {
 	status := dailyreward.NewService(nil, dailyreward.NewStore(db, cfg.Env))
 	rules := pokerpush.NewRules(status, sessions, reminders)
 	invoker := pushsvc.NewInvoker(awslambda.NewFromConfig(awsCfg), cfg.PushSenderFunction)
-	return NewTick(reminders, pushsvc.NewStore(db, pokerpush.TablePrefix(cfg.Env)), rules, invoker, sessions).Run(ctx, time.Now())
+	relearn := pokerpush.NewRelearner(reminders, sessions)
+	return pushsvc.NewTick(reminders, pushsvc.NewStore(db, pokerpush.TablePrefix(cfg.Env)), rules, invoker).OnSent(relearn.OnSent).Run(ctx, time.Now())
 }
