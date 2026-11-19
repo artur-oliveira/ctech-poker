@@ -980,6 +980,7 @@ type routeParams struct {
 	Players              *player.Service
 	LeaderboardSvc       *leaderboard.Service
 	DailyRewardSvc       *dailyreward.Service
+	Push                 *v1.PushDeps
 	TableStore           *tablestore.Store
 	SessionStore         *sessionlog.Store
 	AchievementStore     *achievements.Store
@@ -1023,6 +1024,7 @@ func registerRoutesWithSocialRuntime(p routeParams) {
 		Players:              p.Players,
 		LeaderboardSvc:       p.LeaderboardSvc,
 		DailyRewardSvc:       p.DailyRewardSvc,
+		Push:                 p.Push,
 		TableStore:           p.TableStore,
 		SessionStore:         p.SessionStore,
 		AchievementStore:     p.AchievementStore,
