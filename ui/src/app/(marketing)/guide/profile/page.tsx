@@ -23,7 +23,8 @@ export default function ProfileGuide() {
             <li><span><b>Seus saldos:</b> Fichas e, onde as apostas em dinheiro real estão liberadas, Dinheiro real.</span></li>
             <li><span><b>Atalhos no topo:</b> uma faixa fixa com um botão por seção leva direto até ela. No celular ela rola para o lado.</span></li>
             <li><span><b>Jogo responsável:</b> onde as apostas em dinheiro real estão liberadas, o aceite do termo, seus limites e a pausa. Sem o aceite, as mesas de dinheiro real ficam bloqueadas.</span></li>
-            <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li></GuideBullets>
+            <li><span><b>Alertas de carteira:</b> um aviso no saldo de fichas e um limite de compra, ambos opcionais.</span></li>
+            <li><span><b>Notificações:</b> lembretes no celular ou no computador, mesmo com o jogo fechado.</span></li></GuideBullets>
           <p>Nome, foto e baralho aparecem nos dois lugares de propósito: é o mesmo controle, salvando no mesmo lugar. Alterou num, o outro já mostra o valor novo.</p></>
       },
       {
@@ -80,6 +81,14 @@ export default function ProfileGuide() {
           <GuideTerms><GuideTerm term="Avisar quando o saldo de fichas cair abaixo de">Um aviso aparece em <b>Seus saldos</b> sempre que o seu saldo atual estiver abaixo do valor configurado. Aceita até 999.999.999.999 fichas.</GuideTerm>
             <GuideTerm term="Avisar quando uma compra passar de">O limite de gasto por compra de fichas, em reais. O campo já traz o R$, usa vírgula nos centavos (no máximo duas casas) e aceita até R$ 1.000.000,00.</GuideTerm></GuideTerms>
           <GuideCallout kind="safe" title="Nunca bloqueia nada">O alerta é só um aviso. Ele não impede uma compra nem muda taxa ou bônus de nenhum pacote.</GuideCallout></>
+      },
+      {
+        id: 'notificacoes', title: 'Ligar as notificações', summary: 'Dois lembretes, só neste dispositivo, e você escolhe quais.',
+        body: <><p>Em <b>Notificações</b>, toque em <b>Ativar neste dispositivo</b>. O navegador pede a sua permissão só nesse momento. No iPhone, primeiro adicione o app à Tela de Início e abra por lá.</p>
+          <GuideTerms><GuideTerm term="Lembrete de ofensiva">Um aviso por dia, no <b>Horário do lembrete</b> que você escolher (horário de Brasília, de 15 em 15 minutos), se a sua ofensiva ainda está em risco e o bônus do dia não foi resgatado. Começa desligado: ligue e escolha o horário.</GuideTerm>
+            <GuideTerm term="Venha jogar hoje">Um aviso por dia, perto da hora em que você costuma jogar. Começa ligado e não sai se você já jogou, nem quando o lembrete de ofensiva fala por ele.</GuideTerm></GuideTerms>
+          <p>Toque em <b>Salvar lembretes</b> para guardar a escolha, <b>Enviar teste</b> para ver um aviso chegar e <b>Desativar neste dispositivo</b> para parar de receber aqui. Ao sair da conta, este dispositivo deixa de receber os seus avisos.</p>
+          <GuideCallout kind="safe" title="Os avisos não mostram valores">Eles dizem só quantos dias de ofensiva você tem; nunca mostram fichas nem dinheiro.</GuideCallout></>
       },
       {
         id: 'hud', title: 'Ler “Seu jogo”', summary: 'Tendências pré-flop calculadas a partir das suas mãos concluídas.',

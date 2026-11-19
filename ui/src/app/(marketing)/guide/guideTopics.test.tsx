@@ -74,6 +74,14 @@ describe('guide topic pages', () => {
     }
   });
 
+  // Names in the guide must match the strings the screen ships, verbatim (ui/CLAUDE.md).
+  test('the profile topic documents the notifications section with the shipped labels', () => {
+    render(<ProfileGuide/>);
+    for (const label of ['Notificações', 'Ativar neste dispositivo', 'Lembrete de ofensiva', 'Horário do lembrete', 'Venha jogar hoje', 'Salvar lembretes', 'Enviar teste']) {
+      expect(document.body.textContent).toContain(label);
+    }
+  });
+
   test.each(topics)('$href keeps the shipped copy rules', ({Page}) => {
     render(<Page/>);
     const text = document.body.textContent!;

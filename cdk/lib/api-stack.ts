@@ -21,6 +21,8 @@ import {
   HEALTH_CHECK_PATH,
   instanceRoleName,
   NGINX_PORT,
+  pushParameterPath,
+  pushSenderName,
   S3_PREFIX,
   SERVICE,
   SSM_ACCOUNT,
@@ -225,6 +227,15 @@ export class PokerApiStack extends cdk.Stack {
         (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
       ),
     }));
+    // Web Push: the API reads the VAPID public key at start and invokes push-sender for the test route.
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [`arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${pushParameterPath(environment, 'vapid-public-key')}`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'],
+      resources: [`arn:${cdk.Aws.PARTITION}:lambda:${this.region}:${this.account}:function:${pushSenderName(environment)}`],
+    }));
     // The dedicated ack client's credentials, read at service start (ruling R2).
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
@@ -325,6 +336,7 @@ export class PokerApiStack extends cdk.Stack {
       `AVATAR_BUCKET=${avatarsBucketName}`,
       `ERASURE_QUEUE_URL=${erasureQueue.queueUrl}`,
       `ALERTS_TOPIC_ARN=${alertsTopicArn}`,
+      `PUSH_SENDER_FUNCTION=${pushSenderName(environment)}`,
       `ACTION_LOG_ARCHIVE_BUCKET=${archiveBucket}`,
       `ENV`,
     );
@@ -359,6 +371,8 @@ export class PokerApiStack extends cdk.Stack {
       `BILLING_CLIENT_ID=${poker.billingClientId}`,
       `BILLING_CLIENT_SECRET=${poker.billingClientSecret}`,
       `BILLING_EVENT_SECRET=${poker.billingEventSecret}`,
+      // The VAPID public key (a plain String parameter an operator writes). Empty leaves Web Push off.
+      `PUSH_VAPID_PUBLIC_KEY=${pushParameterPath(environment, 'vapid-public-key')}`,
     ];
     if (isAlpine) {
       const quoted = ssmEnvArgs.map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' ');

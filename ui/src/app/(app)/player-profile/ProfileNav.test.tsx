@@ -12,7 +12,7 @@ describe('ProfileNav', () => {
     render(<ProfileNav/>);
     const links = screen.getAllByRole('link');
     expect(links.map(link => link.textContent)).toEqual(
-      ['Identidade', 'Avatar', 'Vitrine', 'Mesa', 'Chat', 'Saldos', 'Alertas']);
+      ['Identidade', 'Avatar', 'Vitrine', 'Mesa', 'Chat', 'Saldos', 'Alertas', 'Notificações']);
     expect(screen.getByRole('link', {name: 'Saldos'})).toHaveAttribute('href', '#player-profile-balances-title');
   });
 

@@ -67,6 +67,8 @@ vi.mock('@/lib/api/player', async importOriginal => ({
 }));
 vi.mock('@/lib/avatar', () => ({uploadAvatar: mocks.uploadAvatar, deleteAvatar: mocks.deleteAvatar}));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notify}));
+// The page only mounts the notifications section; its own test covers it. The real provider pulls @aoctech/push-client.
+vi.mock('@/lib/providers/PushProvider', () => ({usePush: () => ({status: 'default', canInstall: false, subscribe: vi.fn(), unsubscribe: vi.fn(), install: vi.fn()})}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: {children: React.ReactNode}) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/lib/hooks/useSocialUnread', () => ({useSocialUnread: () => 0}));
@@ -140,7 +142,7 @@ describe('/player-profile', () => {
 
     expect(screen.getByRole('heading', {level: 1, name: 'Seu perfil'})).toBeInTheDocument();
     expect(screen.getAllByRole('heading', {level: 2}).map(node => node.textContent))
-      .toEqual(['Identidade', 'Visual do avatar', 'Sua vitrine', 'Sua mesa', 'Filtro de chat', 'Seus saldos', 'Alertas de carteira']);
+      .toEqual(['Identidade', 'Visual do avatar', 'Sua vitrine', 'Sua mesa', 'Filtro de chat', 'Seus saldos', 'Alertas de carteira', 'Notificações']);
     expect(screen.getByRole('textbox', {name: /Nome de exibição/})).toHaveValue('Ana Silva');
     expect(screen.getByRole('combobox', {name: 'Baralho'})).toBeInTheDocument();
     expect(screen.getByRole('definition')).toHaveTextContent('12.345');

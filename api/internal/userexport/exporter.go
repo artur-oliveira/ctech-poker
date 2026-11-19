@@ -36,8 +36,10 @@ type Query interface {
 type source struct {
 	table string
 	pks   func(sub string) []string // base-table partitions
-	index string                    // or: a GSI queried on attr = sub
-	attr  string
+	// skPrefix, when set, limits a partition to the rows whose sort key starts with it.
+	skPrefix string
+	index    string // or: a GSI queried on attr = sub
+	attr     string
 }
 
 func bySub(sub string) []string { return []string{sub} }
@@ -69,6 +71,8 @@ var sources = []source{
 	{table: "poker_recent_players", pks: bySub},
 	{table: "poker_social_events", pks: bySub},
 	{table: "poker_responsible", pks: bySub},
+	// Reminder choices only (REMIND#...): the browser endpoint and keys under SUB# are a capability, not a choice.
+	{table: "poker_push", pks: func(sub string) []string { return []string{"USER#" + sub} }, skPrefix: "REMIND#"},
 	{table: "poker_hand_shares", index: "gsi_owner", attr: "owner_id"},
 	{table: "poker_pending_cashouts", index: "gsi_player_settlements", attr: "player_id"},
 }
@@ -126,12 +130,17 @@ func (e *Exporter) write(ctx context.Context, zw *zip.Writer, name string, s sou
 		})
 	} else {
 		for _, pk := range s.pks(sub) {
-			queries = append(queries, &dynamodb.QueryInput{
+			in := &dynamodb.QueryInput{
 				TableName:                 aws.String(dynamo.TableName(e.env, s.table)),
 				KeyConditionExpression:    aws.String("pk = :pk"),
 				ExpressionAttributeValues: map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: pk}},
 				ConsistentRead:            aws.Bool(true),
-			})
+			}
+			if s.skPrefix != "" {
+				in.KeyConditionExpression = aws.String("pk = :pk AND begins_with(sk, :sk)")
+				in.ExpressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: s.skPrefix}
+			}
+			queries = append(queries, in)
 		}
 	}
 	var it *dataexport.Items

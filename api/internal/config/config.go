@@ -107,6 +107,11 @@ type Config struct {
 	// From SSM /ctech/<env>/poker/erasure-ack-client-{id,secret}.
 	ErasureAckClientID     string `env:"ERASURE_ACK_CLIENT_ID"`
 	ErasureAckClientSecret string `env:"ERASURE_ACK_CLIENT_SECRET"`
+
+	// Web Push (docs/specs/2026-11-18-scheduled-web-push.md). Empty PushVAPIDPublicKey leaves it off: /push/config says
+	// enabled=false and subscribing answers 503. PushSenderFunction is the push-sender Lambda the test route invokes.
+	PushVAPIDPublicKey string `env:"PUSH_VAPID_PUBLIC_KEY"`
+	PushSenderFunction string `env:"PUSH_SENDER_FUNCTION"`
 }
 
 // Load reads config from environment variables.

@@ -11,6 +11,7 @@ const SECTIONS = [
   {id: 'player-profile-balances-title', label: 'Saldos'},
   {id: 'player-profile-responsible-title', label: 'Jogo responsável', realMoney: true},
   {id: 'player-profile-wallet-alerts-title', label: 'Alertas'},
+  {id: 'player-profile-notifications-title', label: 'Notificações'},
 ] as const;
 
 /** Sticky jump list for a page that is several screens long; scrolls sideways on a phone. */

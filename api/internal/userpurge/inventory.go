@@ -44,6 +44,7 @@ const (
 	TableErasureState         = "poker_erasure_state"
 	TableResponsible          = "poker_responsible"
 	TableIdempotency          = "poker_idempotency"
+	TablePush                 = "poker_push"
 
 	// CountSelfExclusionCarried is the ack count for an exclusion kept past the account.
 	CountSelfExclusionCarried = "self_exclusion_carried"
@@ -101,5 +102,6 @@ var inventory = map[string]string{
 	TablePlayerReports:        "retain anonymized 1 year: re-keyed to the pseudonym, the user's own text dropped",
 	TableErasureState:         "untouched: the saga's own lock/tombstone (api-commons erasure.Store)",
 	TableIdempotency:          "untouched: Idempotency-Key claims and replayable answers, keyed by the player, expire by TTL within 24 h",
+	TablePush:                 "erase: every browser subscription, the count row and the reminders, all under pk USER#<sub>",
 	TableResponsible:          "erase: consent, limits, counters, audit and inflow markers; an active self-exclusion is carried first, keyed by the CPF keyed hash (carried rows are keyed SELFEXCL#<hash>, not by the user)",
 }

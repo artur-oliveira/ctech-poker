@@ -313,6 +313,8 @@ func (r *run) ownRows(ctx context.Context) error {
 		{TablePlayerSessions, "buyinguard#" + r.sub},
 		{TablePokerStats, "stats#" + roomstore.CurrencyModeSandbox + "#" + r.sub},
 		{TablePokerStats, "stats#" + roomstore.CurrencyModeReal + "#" + r.sub},
+		// Web Push: subscriptions, the count row and the reminders share one partition (go-common pushsvc).
+		{TablePush, "USER#" + r.sub},
 	} {
 		if err := r.erasePartition(ctx, part.table, part.pk); err != nil {
 			return err

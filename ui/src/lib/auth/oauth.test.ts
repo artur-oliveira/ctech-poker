@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
   revoke: vi.fn(),
   endSession: vi.fn(),
   decode: vi.fn(),
+  removePush: vi.fn(),
 }));
+vi.mock('@/lib/push/logout', () => ({removeThisDevicePush: mocks.removePush}));
 
 // The client is constructed while this module's import is evaluated, before
 // any test runs. vitest 5 clears spies before each test (`clearMocks`
@@ -185,5 +187,37 @@ describe('OAuth integration', () => {
     await logout();
     expect(order).toEqual(['revoke', 'redirect']);
     expect(mocks.endSession).toHaveBeenCalledWith('/');
+  });
+
+  // The token must still exist when the server row is deleted, so the device leaves push before the session does.
+  test('removes this device from push BEFORE revoking the token', async () => {
+    const order: string[] = [];
+    mocks.removePush.mockImplementation(async () => {
+      order.push('push');
+    });
+    mocks.revoke.mockImplementation(async () => {
+      order.push('revoke');
+    });
+    mocks.endSession.mockImplementation(() => {
+      order.push('redirect');
+    });
+    await logout();
+    expect(order).toEqual(['push', 'revoke', 'redirect']);
+  });
+
+  // A tab opened before a deploy asks for a chunk the deploy removed: the import rejects. Logout must still end the session.
+  test('still revokes and redirects when the push cleanup cannot even be loaded', async () => {
+    const order: string[] = [];
+    mocks.removePush.mockImplementation(async () => {
+      throw new Error('ChunkLoadError');
+    });
+    mocks.revoke.mockImplementation(async () => {
+      order.push('revoke');
+    });
+    mocks.endSession.mockImplementation(() => {
+      order.push('redirect');
+    });
+    await logout();
+    expect(order).toEqual(['revoke', 'redirect']);
   });
 });

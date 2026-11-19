@@ -32,6 +32,8 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.12 h1:wzAqMZ2O
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.12/go.mod h1:/0TfyruByHsOlphzP26xDTRe2DKD0J1I1Uyy2TyP8EI=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.12 h1:H0IaQayT3TLiGIHiNnleQZTbndDlx7LGZ0NWZ5mDwjA=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.12/go.mod h1:YuJJNxaOjnknLIrscBmkLhIpnmg9LzHd25sQRKUboGU=
+github.com/aws/aws-sdk-go-v2/service/lambda v1.117.0 h1:/0r/bWpqypusBKOSCl62WzJPbm1NLis72POikhFFbXc=
+github.com/aws/aws-sdk-go-v2/service/lambda v1.117.0/go.mod h1:Y/PfQ6QmryXcdj5kOOCMUYFYCiDvwuYpjCJJE76DEKs=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10 h1:WBJb2VxRzzKnuN94YWqZPiu5a5zc3IleFqgZnmVCyvU=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10/go.mod h1:8NhAIBVYkVHq0hIbbzujdoou0VkKwMdG+De9e5oX6qI=
 github.com/aws/aws-sdk-go-v2/service/signin v1.13.1 h1:ssrDA6AKfXEc3h0Pf4EI4vQ8sN5Zd136SrU9Tjr0XPc=
@@ -137,5 +139,5 @@ golang.org/x/tools v0.52.0 h1:ryxg4U63oaUYk7uOLTF37n43f4qgtGvqV4Ioit1BaEs=
 golang.org/x/tools v0.52.0/go.mod h1:ItcP5UNaVGG+Yc4eIYmaFLNJ4soEopkx5Y2d4lcEurs=
 google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=
 google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
-gopkg.aoctech.app/api-commons v1.40.1 h1:WbPYnIlniLkkBHO5Uxk7r+BFZ4t1XNdNEMlCCCTlvWo=
-gopkg.aoctech.app/api-commons v1.40.1/go.mod h1:n8FtPqLtzO12rdJ4A0Iu/KpghQK27dAq5C1Xv6UV5NI=
+gopkg.aoctech.app/api-commons v1.44.0 h1:vlYTYKTbPrgkj2eCEiYFcnfQWdWImJSUQziWoDa4R70=
+gopkg.aoctech.app/api-commons v1.44.0/go.mod h1:SrQbBNoh/1g3+93yiV6xjo+tAVwzOL3CnNFwlBUEQPQ=

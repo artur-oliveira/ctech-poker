@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.0
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.21
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.74.0
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.117.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.83.0
@@ -24,7 +25,7 @@ require (
 	github.com/valyala/fasthttp v1.78.0
 	go.uber.org/fx v1.24.0
 	google.golang.org/protobuf v1.36.12
-	gopkg.aoctech.app/api-commons v1.40.1
+	gopkg.aoctech.app/api-commons v1.44.0
 )
 
 require (

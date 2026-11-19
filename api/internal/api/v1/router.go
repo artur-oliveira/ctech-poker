@@ -61,6 +61,7 @@ type Deps struct {
 	Players              *player.Service
 	LeaderboardSvc       *leaderboard.Service
 	DailyRewardSvc       *dailyreward.Service
+	Push                 *PushDeps // nil in the narrow test-only wiring
 	TableStore           *tablestore.Store
 	SessionStore         *sessionlog.Store
 	AchievementStore     *achievements.Store
@@ -209,6 +210,9 @@ func Register(app *fiber.App, d Deps) {
 	RegisterMatchups(router, auth, matchupStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc, players, cfg.AvatarBaseURL, leaderboardReadLimiter)
 	RegisterDailyReward(router, auth, idem, dailyRewardSvc, spinLimiter)
+	if d.Push != nil {
+		RegisterPush(router, auth, d.Push.Service, d.Push.Prefs, d.Push.Sender, newLimiter(limiterCounter, "push-test", 5, time.Minute))
+	}
 	RegisterSandboxPurchase(router, auth, idem, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, idem, reactionPurchaseSvc, purchaseLimiter)
 	RegisterCosmeticPurchase(router, auth, idem, cosmeticPurchaseSvc, purchaseLimiter)

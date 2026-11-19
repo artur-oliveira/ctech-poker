@@ -8,6 +8,7 @@ import {ArchiverStack} from '../lib/archiver-stack';
 import {StorageStack} from '../lib/storage-stack';
 import {ReconcileStack} from '../lib/reconcile-stack';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
+import {PushStack} from '../lib/push-stack';
 import {
   ACCOUNTS_DOMAIN_PREFIX,
   APP_DOMAIN_PREFIX,
@@ -140,4 +141,13 @@ new TableCleanupStack(app, id('TableCleanup'), {
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
   description: `CTech Poker stale-table cleanup Lambda - ${ENVIRONMENT}`,
+});
+
+new PushStack(app, id('Push'), {
+  env,
+  environment: ENVIRONMENT,
+  pushTableArn: dynamoStack.tables.get('poker_push')!.tableArn,
+  dailyRewardTableArn: dynamoStack.tables.get('poker_daily_reward')!.tableArn,
+  sessionsTableArn: dynamoStack.tables.get('poker_player_sessions')!.tableArn,
+  description: `CTech Poker scheduled Web Push (tick + sender) - ${ENVIRONMENT}`,
 });

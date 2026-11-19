@@ -102,6 +102,17 @@ export const reconcileDlqName = (env: Environment) => `${reconcileJobName(env)}-
 export const tableCleanupJobName = (env: Environment) => `${env}-${SERVICE}-tablecleanup`;
 export const tableCleanupDlqName = (env: Environment) => `${tableCleanupJobName(env)}-dlq`;
 
+// ── Web Push (docs/specs/2026-11-18-scheduled-web-push.md) ──────────────────
+export const pushTickName = (env: Environment) => `${env}-${SERVICE}-push-tick`;
+export const pushTickDlqName = (env: Environment) => `${pushTickName(env)}-dlq`;
+export const pushSenderName = (env: Environment) => `${env}-${SERVICE}-push-sender`;
+// SSM parameters of the VAPID pair, written by an operator (pushsvc/cmd/push-keygen prints the commands), never by CDK.
+export const pushParameterPath = (env: Environment, name: 'vapid-private-key' | 'vapid-private-key-previous' | 'vapid-public-key') =>
+  `/${SERVICE}/${env}/push/${name}`;
+// Reminders go out on 15-minute marks of São Paulo time.
+export const PUSH_TICK_SCHEDULE = 'cron(0/15 * * * ? *)';
+export const PUSH_TICK_TIMEZONE = 'America/Sao_Paulo';
+
 // ── Poker social storage ───────────────────────────────────────────────────
 // Keep table and index identifiers centralized so the infrastructure and its
 // assertions cannot silently drift as the social modules are implemented.
