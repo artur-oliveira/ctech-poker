@@ -204,4 +204,20 @@ describe('OAuth integration', () => {
     await logout();
     expect(order).toEqual(['push', 'revoke', 'redirect']);
   });
+
+  // A tab opened before a deploy asks for a chunk the deploy removed: the import rejects. Logout must still end the session.
+  test('still revokes and redirects when the push cleanup cannot even be loaded', async () => {
+    const order: string[] = [];
+    mocks.removePush.mockImplementation(async () => {
+      throw new Error('ChunkLoadError');
+    });
+    mocks.revoke.mockImplementation(async () => {
+      order.push('revoke');
+    });
+    mocks.endSession.mockImplementation(() => {
+      order.push('redirect');
+    });
+    await logout();
+    expect(order).toEqual(['revoke', 'redirect']);
+  });
 });

@@ -471,7 +471,7 @@ off by default — do not build UI that assumes real money is on.
   `/hands` and `/leaderboard` render the same response and used to cache it under two different keys, so walking
   between them refetched data already in the cache.
 - **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
-  persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
+  persisted); server data flows through `QueryProvider` (TanStack Query). The one other provider is `PushProvider` (`lib/providers`, mounted by `(app)/layout.tsx`): it registers the push service worker and syncs this device's subscription; logout removes the device from push through a dynamic import in `lib/auth/oauth.ts`, guarded so a failed chunk load cannot stop the logout.
 - **Animations are CSS** (keyframes in `globals.css` / `app.css` / `table.css`) — no animation library. Keep it that
   way; honor `prefers-reduced-motion`.
 - **Type safety:** `zod` for form/API shapes, `react-hook-form` for forms.

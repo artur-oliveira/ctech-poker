@@ -150,8 +150,14 @@ export async function logout(returnTo = '/') {
   // While the token still exists: this browser must stop notifying whoever is leaving (shared computers). Bounded and
   // never throws, so it cannot hold up the logout.
   // Dynamic import: push/logout reaches the API client, which imports this module (a static import would be a cycle).
-  const {removeThisDevicePush} = await import('@/lib/push/logout');
-  await removeThisDevicePush();
+  // Guarded as a whole, the import included: a tab opened before a deploy can fail to load the chunk, and a logout that
+  // stops here would leave the player signed in on a shared computer.
+  try {
+    const {removeThisDevicePush} = await import('@/lib/push/logout');
+    await removeThisDevicePush();
+  } catch {
+    // Best effort: the push service answers 410 for a subscription nobody renews, and the sender drops the row.
+  }
   const {promise} = withTokenDeadline(client.revoke());
   await promise.catch(() => undefined);
   endSession(returnTo);
