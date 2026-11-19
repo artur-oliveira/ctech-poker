@@ -110,3 +110,7 @@ func (s *Service) SeedOnSubscribe(ctx context.Context, sub string) error {
 	}
 	return s.reminders.Put(ctx, pushsvc.Reminder{Sub: sub, Kind: KindPlay, Enabled: true, Slot: DefaultPlaySlot})
 }
+
+// TablePrefix is the prefix Poker gives pushsvc so its table is `{env}_poker_push`, like every other Poker table
+// (`{env}_poker_*`); a bare `{env}_push` could collide with another service's table in the same account.
+func TablePrefix(env string) string { return env + "_poker" }

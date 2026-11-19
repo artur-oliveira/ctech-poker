@@ -40,11 +40,11 @@ func handler(ctx context.Context) error {
 		return err
 	}
 	db := dynamodb.NewFromConfig(awsCfg)
-	reminders := pushsvc.NewReminderStore(db, cfg.Env)
+	reminders := pushsvc.NewReminderStore(db, pokerpush.TablePrefix(cfg.Env))
 	sessions := pokerpush.SessionLog{Store: sessionlog.NewStore(db, cfg.Env)}
 	// The wallet is nil on purpose: the tick only reads Status, it never claims a reward.
 	status := dailyreward.NewService(nil, dailyreward.NewStore(db, cfg.Env))
 	rules := pokerpush.NewRules(status, sessions, reminders)
 	invoker := pushsvc.NewInvoker(awslambda.NewFromConfig(awsCfg), cfg.PushSenderFunction)
-	return NewTick(reminders, pushsvc.NewStore(db, cfg.Env), rules, invoker, sessions).Run(ctx, time.Now())
+	return NewTick(reminders, pushsvc.NewStore(db, pokerpush.TablePrefix(cfg.Env)), rules, invoker, sessions).Run(ctx, time.Now())
 }

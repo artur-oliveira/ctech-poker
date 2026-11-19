@@ -25,8 +25,8 @@ func (offSender) Send(context.Context, pushsvc.Job) error {
 // newPushDeps builds the Web Push routes' dependencies. Without PUSH_VAPID_PUBLIC_KEY the service is off (config answers
 // enabled=false, subscribing answers 503), so a deploy before the operator writes the keys changes nothing.
 func newPushDeps(cfg *config.Config, db *dynamodb.Client) (*v1.PushDeps, error) {
-	prefs := pokerpush.NewService(pushsvc.NewReminderStore(db, cfg.Env))
-	svc := pushsvc.NewService(pushsvc.NewStore(db, cfg.Env), cfg.PushVAPIDPublicKey).WithOnSubscribe(prefs.SeedOnSubscribe)
+	prefs := pokerpush.NewService(pushsvc.NewReminderStore(db, pokerpush.TablePrefix(cfg.Env)))
+	svc := pushsvc.NewService(pushsvc.NewStore(db, pokerpush.TablePrefix(cfg.Env)), cfg.PushVAPIDPublicKey).WithOnSubscribe(prefs.SeedOnSubscribe)
 	var sender v1.PushJobSender = offSender{}
 	if cfg.PushSenderFunction != "" {
 		awsCfg, err := awsconfig.Load(context.Background(), cfg.AWSRegion)

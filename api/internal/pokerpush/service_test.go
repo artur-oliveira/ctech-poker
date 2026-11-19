@@ -112,3 +112,10 @@ func TestSeedOnSubscribeKeepsExistingChoice(t *testing.T) {
 		t.Errorf("play = %+v; a new device must not switch a deliberate off back on", r)
 	}
 }
+
+// Poker's tables are `{env}_poker_*`; pushsvc appends `_push` to the prefix it is given.
+func TestTablePrefixKeepsThePokerTableNamingConvention(t *testing.T) {
+	if got := TablePrefix("prod"); got != "prod_poker" {
+		t.Errorf("TablePrefix = %q, want prod_poker (table prod_poker_push)", got)
+	}
+}

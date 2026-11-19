@@ -16,6 +16,7 @@ import (
 
 	"gopkg.aoctech.app/api-commons/alerts"
 	"gopkg.aoctech.app/api-commons/pushsvc"
+	"gopkg.aoctech.app/poker/api/internal/pokerpush"
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 		slog.WarnContext(ctx, "alerts: publisher unavailable, operator alerts are log-only", "err", err)
 		pub = alerts.Nop{}
 	}
-	h := pushsvc.NewHandler(pushsvc.NewStore(dynamodb.NewFromConfig(awsCfg), os.Getenv("ENVIRONMENT")), nil, pub)
+	h := pushsvc.NewHandler(pushsvc.NewStore(dynamodb.NewFromConfig(awsCfg), pokerpush.TablePrefix(os.Getenv("ENVIRONMENT"))), nil, pub)
 	lambda.Start(pushsvc.Lambda(h, ssm.NewFromConfig(awsCfg), pushsvc.Paths{
 		Private: os.Getenv("PUSH_VAPID_PRIVATE_KEY_SSM_PATH"), Previous: os.Getenv("PUSH_VAPID_PRIVATE_KEY_PREVIOUS_SSM_PATH"),
 		Public: os.Getenv("PUSH_VAPID_PUBLIC_KEY_SSM_PATH"), Subject: os.Getenv("PUSH_SUBJECT_SSM_PATH"),
