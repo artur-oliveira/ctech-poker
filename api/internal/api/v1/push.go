@@ -24,14 +24,15 @@ type PushDeps struct {
 	Sender  PushJobSender
 }
 
-// RegisterPush mounts /v1.0/push/*: the device routes of pushsvc (config, subscriptions) plus the player's reminder
+// RegisterPush mounts /v1.0/push/*, first-party only (a device belongs to a person and no public scope grants it, like
+// /social): the device routes of pushsvc (config, subscriptions) plus the player's reminder
 // preferences and a test push to the caller's own devices. Subscribing seeds "come play" on (the service's OnSubscribe
 // hook is set where it is built). docs/specs/2026-11-18-scheduled-web-push.md.
 func RegisterPush(router fiber.Router, auth fiber.Handler, push *pushsvc.Service, prefs *pokerpush.Service, sender PushJobSender, testLimiter *ratelimit.Limiter) {
 	userID := func(c fiber.Ctx) string { return c.Locals(localsUserID).(string) }
-	pushsvc.Mount(router, push, auth, userID)
+	pushsvc.Mount(router, push, auth, userID, firstPartyOnly)
 
-	g := router.Group("/push", auth)
+	g := router.Group("/push", auth, firstPartyOnly)
 	g.Get("/preferences", func(c fiber.Ctx) error {
 		p, err := prefs.Get(c.Context(), userID(c))
 		if err != nil {

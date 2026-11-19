@@ -68,6 +68,11 @@ func TestScopedPokerTokensAreReadOnlyAndResourceBound(t *testing.T) {
 		{"reaction purchase catalog", "GET", "/v1.0/wallet/reaction-purchase/catalog", ScopeReactionPurchasesRead, firstPartyPokerClientID, 200},
 		{"social read is scope-exempt for first-party UI", "GET", "/v1.0/social/friends", ScopeRoomsRead, firstPartyPokerClientID, 200},
 		{"social summary is scope-exempt for first-party UI", "GET", "/v1.0/social/summary", ScopePlayersRead, firstPartyPokerClientID, 200},
+		// Web Push is personal and first-party only (the route group is gated by firstPartyOnly): it has no grantable scope, so
+		// the read-scope table must not deny it (it answered 403 to the UI's GET /push/config and /push/preferences).
+		{"push config read is scope-exempt for first-party UI", "GET", "/v1.0/push/config", ScopeRoomsRead, firstPartyPokerClientID, 200},
+		{"push preferences read is scope-exempt for first-party UI", "GET", "/v1.0/push/preferences", ScopeRoomsRead, firstPartyPokerClientID, 200},
+		{"push subscriptions read is scope-exempt for first-party UI", "GET", "/v1.0/push/subscriptions", ScopePlayersRead, firstPartyPokerClientID, 200},
 		{"API key cannot create room", "POST", "/v1.0/rooms", ScopeRoomsRead, "api-key", 403},
 		{"third-party client cannot buy", "POST", "/v1.0/sandbox-purchases", ScopeSandboxPurchasesRead, "third-party", 403},
 		{"scoped first-party UI can create room", "POST", "/v1.0/rooms", ScopeRoomsRead, firstPartyPokerClientID, 200},
