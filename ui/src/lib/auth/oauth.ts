@@ -147,6 +147,11 @@ export async function logout(returnTo = '/') {
   // below may never come back to this page, and a stale hint would greet the
   // player on the landing page with a signed-in call to action.
   forgetSessionHint();
+  // While the token still exists: this browser must stop notifying whoever is leaving (shared computers). Bounded and
+  // never throws, so it cannot hold up the logout.
+  // Dynamic import: push/logout reaches the API client, which imports this module (a static import would be a cycle).
+  const {removeThisDevicePush} = await import('@/lib/push/logout');
+  await removeThisDevicePush();
   const {promise} = withTokenDeadline(client.revoke());
   await promise.catch(() => undefined);
   endSession(returnTo);
