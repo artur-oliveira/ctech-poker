@@ -19,6 +19,9 @@ const (
 	// by this single name.
 	firstPartyPokerClientID = "poker"
 	socialReadPathPrefix    = "/v1.0" + socialBasePath
+	// pushPathPrefix is Web Push (go-common pushsvc): personal and first-party only, gated by firstPartyOnly on the route
+	// group, so it has no grantable read scope.
+	pushPathPrefix = "/v1.0/push"
 
 	ScopeRoomsRead             = "poker:rooms:read"
 	ScopePlayersRead           = "poker:players:read"
@@ -81,7 +84,7 @@ func enforceReadOnlyScope(c fiber.Ctx, claims *jwtverify.Claims) *problem.Proble
 	// Social reads have no grantable public scope: the /social group is gated by
 	// firstPartyOnly, so the read-scope table (which denies unknown paths) must
 	// not apply to them.
-	if strings.HasPrefix(c.Path(), socialReadPathPrefix) {
+	if strings.HasPrefix(c.Path(), socialReadPathPrefix) || strings.HasPrefix(c.Path(), pushPathPrefix) {
 		return nil
 	}
 	if !hasPokerScope(claims) {

@@ -49,6 +49,7 @@ func pushApp(t *testing.T, enabled bool, inv *recordingInvoker) *fiber.App {
 			return unauthorizedProblem("missing bearer token").Send(c)
 		}
 		c.Locals(localsUserID, "player-1")
+		c.Locals(localsFirstParty, true)
 		return c.Next()
 	}
 	prefs := pokerpush.NewService(&memReminders{rows: map[string]pushsvc.Reminder{}})
@@ -123,3 +124,37 @@ func TestPushTestWhenPushIsOffIs503(t *testing.T) {
 		t.Errorf("status = %d jobs = %d", res.StatusCode, len(inv.jobs))
 	}
 }
+
+// Push is personal: a delegated token or an API key (not the first-party UI) must not read or change anyone's devices.
+func TestPushRoutesAreFirstPartyOnly(t *testing.T) {
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals(localsUserID, "player-1")
+		c.Locals(localsFirstParty, c.Get("X-First-Party") == "1")
+		return c.Next()
+	})
+	pass := func(c fiber.Ctx) error { return c.Next() }
+	prefs := pokerpush.NewService(&memReminders{rows: map[string]pushsvc.Reminder{}})
+	RegisterPush(app.Group("/v1.0"), pass, pushsvc.NewService(emptyDevices{}, testVAPIDPublicKey(t)), prefs, &recordingInvoker{}, nil)
+	for _, path := range []string{"/v1.0/push/config", "/v1.0/push/preferences", "/v1.0/push/subscriptions"} {
+		req := httptest.NewRequest("GET", path, nil)
+		if res, err := app.Test(req); err != nil || res.StatusCode != 403 {
+			t.Errorf("%s without the first-party client: status = %v, %v; want 403", path, res.StatusCode, err)
+		}
+		req = httptest.NewRequest("GET", path, nil)
+		req.Header.Set("X-First-Party", "1")
+		if res, err := app.Test(req); err != nil || res.StatusCode != 200 {
+			t.Errorf("%s with the first-party client: status = %v, %v; want 200", path, res.StatusCode, err)
+		}
+	}
+}
+
+// emptyDevices is a SubscriptionStore with no devices, enough for the read routes.
+type emptyDevices struct{}
+
+func (emptyDevices) List(context.Context, string) ([]pushsvc.Subscription, error) { return nil, nil }
+func (emptyDevices) Upsert(context.Context, string, pushsvc.Subscription) (string, error) {
+	return "", nil
+}
+func (emptyDevices) Delete(context.Context, string, string) error                  { return nil }
+func (emptyDevices) OtherOwners(context.Context, string, string) ([]string, error) { return nil, nil }
