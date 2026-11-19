@@ -67,10 +67,6 @@ func TestPurgeAnonymizesSharedHands(t *testing.T) {
 			t.Fatalf("%s: want erased, %d rows left", table, n)
 		}
 	}
-	// Web Push: the user's subscription, count row and reminder are gone; only the opponent's reminder is left.
-	if rows := scanTable(t, db, env, TablePush); len(rows) != 1 {
-		t.Fatalf("poker_push: want only the opponent's reminder, got %d rows: %v", len(rows), rows)
-	}
 	archived := string(objects.objects["archive/t1/h1/1-e1.jsonl"])
 	if strings.Contains(archived, testU) || strings.Contains(archived, "Alice") || !strings.Contains(archived, pseudo) || !strings.Contains(archived, "Bob") {
 		t.Fatalf("archive: %s", archived)
@@ -141,6 +137,10 @@ func TestPurgeLeavesNoTraceOfTheUser(t *testing.T) {
 		if ack, err := p.Purge(ctx, purgeMsg()); err != nil || ack.Result != erasure.ResultDone {
 			t.Fatalf("run %d: %+v %v", i, ack, err)
 		}
+	}
+	// Web Push: the user's subscription, count row and reminder are gone; only the opponent's reminder is left.
+	if rows := scanTable(t, db, env, TablePush); len(rows) != 1 {
+		t.Fatalf("poker_push: want only the opponent's reminder, got %d rows: %v", len(rows), rows)
 	}
 
 	for table := range purgeTables {
