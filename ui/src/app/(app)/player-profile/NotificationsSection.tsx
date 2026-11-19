@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Button, Field, Input, Switch} from '@aoctech/ui';
+import {Button, Field, Select, Switch} from '@aoctech/ui';
 import {
   getPushConfig,
   getPushPreferences,
@@ -14,8 +14,14 @@ import {
 import {pushNotification} from '@/lib/notify';
 import {usePush} from '@/lib/providers/PushProvider';
 
-/** The server places reminders in 15-minute slots (go-common pushsvc), so the time input moves in 900 s steps. */
-const TIME_STEP_SECONDS = 900;
+/**
+ * The server places reminders in 15-minute slots of the day (go-common pushsvc: 96, '00:00' to '23:45'), so the time is a
+ * choice among exactly those, never a free-typed value the server would round down.
+ */
+const SLOT_OPTIONS = Array.from({length: 96}, (_, i) => {
+  const label = `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`;
+  return {value: label, label};
+});
 
 /**
  * Web Push: turn notifications on for this device, then choose the two reminders (docs/specs/2026-11-18-scheduled-web-push.md).
@@ -139,8 +145,8 @@ function RemindersForm({prefs}: {prefs: PushPreferences}) {
         <Switch checked={streakOn} onCheckedChange={setStreakOn} aria-label="Lembrete de ofensiva"/>
       </div>
       {streakOn && <Field label="Horário do lembrete" hint="Horário de Brasília.">
-        {control => <Input {...control} type="time" step={TIME_STEP_SECONDS} compact={false} value={time}
-                           onChange={event => setTime(event.target.value)}/>}
+        {control => <Select id={control.id} value={time} aria-describedby={control['aria-describedby']}
+                            onValueChange={setTime} options={SLOT_OPTIONS}/>}
       </Field>}
       <div className="showcase-privacy-row">
         <span><b>Venha jogar hoje</b><small>Um aviso por dia, perto da hora em que você costuma jogar. Não sai se você já jogou.</small></span>

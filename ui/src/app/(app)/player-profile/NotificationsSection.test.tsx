@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
@@ -98,17 +98,30 @@ describe('NotificationsSection', () => {
       expect(api.putPushPreferences).not.toHaveBeenCalled();
     });
 
-    test('the time input moves in 15-minute steps, matching the server slots', async () => {
+    // The time is a Select of the server's own 15-minute slots (00:00 to 23:45), not a free-typing native time input.
+    test('offers the 96 slots of the day, every 15 minutes, as the only choices', async () => {
       render(<NotificationsSection/>, {wrapper});
       await userEvent.click(await screen.findByRole('switch', {name: 'Lembrete de ofensiva'}));
-      expect(screen.getByLabelText('Horário do lembrete')).toHaveAttribute('step', '900');
+      await userEvent.click(screen.getByRole('combobox', {name: 'Horário do lembrete'}));
+      const options = await screen.findAllByRole('option');
+      expect(options).toHaveLength(96);
+      expect(options[0]).toHaveTextContent('00:00');
+      expect(options[1]).toHaveTextContent('00:15');
+      expect(options[95]).toHaveTextContent('23:45');
+    });
+
+    test('shows the time the server holds', async () => {
+      api.getPushPreferences.mockResolvedValue({streak_reminder: {enabled: true, time: '20:30'}, come_play: {enabled: true}});
+      render(<NotificationsSection/>, {wrapper});
+      expect(await screen.findByRole('combobox', {name: 'Horário do lembrete'})).toHaveTextContent('20:30');
     });
 
     test('saves the chosen time and the come-play switch', async () => {
       api.putPushPreferences.mockResolvedValue({streak_reminder: {enabled: true, time: '20:30'}, come_play: {enabled: false}});
       render(<NotificationsSection/>, {wrapper});
       await userEvent.click(await screen.findByRole('switch', {name: 'Lembrete de ofensiva'}));
-      fireEvent.change(screen.getByLabelText('Horário do lembrete'), {target: {value: '20:30'}});
+      await userEvent.click(screen.getByRole('combobox', {name: 'Horário do lembrete'}));
+      await userEvent.click(await screen.findByRole('option', {name: '20:30'}));
       await userEvent.click(screen.getByRole('switch', {name: 'Venha jogar hoje'}));
       await userEvent.click(screen.getByRole('button', {name: 'Salvar lembretes'}));
       expect(api.putPushPreferences).toHaveBeenCalledWith({streak_reminder: {enabled: true, time: '20:30'}, come_play: {enabled: false}});
