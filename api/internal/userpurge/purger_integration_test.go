@@ -67,6 +67,10 @@ func TestPurgeAnonymizesSharedHands(t *testing.T) {
 			t.Fatalf("%s: want erased, %d rows left", table, n)
 		}
 	}
+	// Web Push: the user's subscription, count row and reminder are gone; only the opponent's reminder is left.
+	if rows := scanTable(t, db, env, TablePush); len(rows) != 1 {
+		t.Fatalf("poker_push: want only the opponent's reminder, got %d rows: %v", len(rows), rows)
+	}
 	archived := string(objects.objects["archive/t1/h1/1-e1.jsonl"])
 	if strings.Contains(archived, testU) || strings.Contains(archived, "Alice") || !strings.Contains(archived, pseudo) || !strings.Contains(archived, "Bob") {
 		t.Fatalf("archive: %s", archived)
@@ -100,6 +104,11 @@ func TestPurgeLeavesNoTraceOfTheUser(t *testing.T) {
 	put(t, db, env, TablePlayerProfiles, map[string]any{"pk": testU, "name": "Alice", "friend_code": "PKR-ALICE"})
 	put(t, db, env, TablePlayerSessions, map[string]any{"pk": "buyinguard#" + testU, "sk": "k1"})
 	put(t, db, env, TablePokerStats, map[string]any{"pk": "stats#sandbox#" + testU})
+	// Web Push: a browser subscription, its count row and a reminder, all under USER#<sub>; the opponent's must survive.
+	put(t, db, env, TablePush, map[string]any{"pk": "USER#" + testU, "sk": "SUB#0123456789abcdef", "endpoint": "https://fcm.googleapis.com/fcm/send/x"})
+	put(t, db, env, TablePush, map[string]any{"pk": "USER#" + testU, "sk": "META#counts", "subscriptions": 1})
+	put(t, db, env, TablePush, map[string]any{"pk": "USER#" + testU, "sk": "REMIND#streak", "enabled": true, "slot": 80})
+	put(t, db, env, TablePush, map[string]any{"pk": "USER#" + testO, "sk": "REMIND#play", "enabled": true, "slot": 76})
 	put(t, db, env, TablePokerStats, map[string]any{"pk": "stats#real#" + testU})
 	put(t, db, env, TableHandShares, map[string]any{"pk": "tok1", "owner_id": testU, "created_at": 1})
 	put(t, db, env, TablePendingCashouts, map[string]any{"pk": "t1#" + testU + "#cashout", "sk": "pending", "player_id": testU,

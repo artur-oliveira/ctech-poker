@@ -57,7 +57,7 @@ var purgeTables = map[string]bool{
 	TableChatPrefs: false, TableBotCheckContests: true, TableWalletAlertPrefs: false, TablePromoRedemptions: true, TableResponsible: true,
 	TableTableEntitlements: true, TableTableHighlights: true, TableHandReveals: false, TableHandRevealPayments: false,
 	TableSocialEdges: true, TableRecentPlayers: true, TableSocialEvents: true,
-	TablePlayerReports: true, TableHandShares: false, TablePendingCashouts: true,
+	TablePlayerReports: true, TableHandShares: false, TablePendingCashouts: true, TablePush: true,
 }
 
 var purgeIndexes = map[string][]gsi{

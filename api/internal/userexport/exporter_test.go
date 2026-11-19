@@ -65,9 +65,16 @@ func (f *fakeDB) Query(_ context.Context, in *dynamodb.QueryInput, _ ...func(*dy
 		pk = v.Value
 	}
 	f.queries = append(f.queries, name+"|"+pk)
+	skPrefix := ""
+	if v, ok := in.ExpressionAttributeValues[":sk"].(*types.AttributeValueMemberS); ok {
+		skPrefix = v.Value
+	}
 	var out []map[string]types.AttributeValue
 	for _, it := range f.byTable[name] {
 		if p, _ := it["pk"].(*types.AttributeValueMemberS); in.IndexName != nil || (p != nil && p.Value == pk) {
+			if k, _ := it["sk"].(*types.AttributeValueMemberS); skPrefix != "" && (k == nil || !strings.HasPrefix(k.Value, skPrefix)) {
+				continue
+			}
 			out = append(out, it)
 		}
 	}
@@ -175,5 +182,44 @@ func TestWriteCutsALongTableAndSaysSo(t *testing.T) {
 	}
 	if !strings.Contains(files["README.txt"], "player_hands.json") || !strings.Contains(files["README.txt"], "cut at 100000 items") {
 		t.Errorf("the README must name the cut file: %s", files["README.txt"])
+	}
+}
+
+// The reminder choices are the person's data; the browser endpoint and keys are a capability, not a choice, and never
+// leave in a file the person may forward.
+func TestPushExportHasReminderChoicesButNeverTheEndpointOrKeys(t *testing.T) {
+	db := &fakeDB{byTable: map[string][]map[string]types.AttributeValue{
+		"test_poker_push": {
+			{"pk": s("USER#alice"), "sk": s("REMIND#streak"), "enabled": &types.AttributeValueMemberBOOL{Value: true}, "slot": &types.AttributeValueMemberN{Value: "80"}},
+			{"pk": s("USER#alice"), "sk": s("SUB#0123456789abcdef"), "endpoint": s("https://fcm.googleapis.com/fcm/send/SECRET"), "p256dh": s("KEY"), "auth": s("AUTHSECRET")},
+			{"pk": s("USER#alice"), "sk": s("META#counts"), "subscriptions": &types.AttributeValueMemberN{Value: "1"}},
+			{"pk": s("USER#bob"), "sk": s("REMIND#play"), "enabled": &types.AttributeValueMemberBOOL{Value: true}},
+		},
+	}}
+	var out bytes.Buffer
+	if err := New(db, "test").Write(context.Background(), "alice", &out); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(out.Bytes()), int64(out.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := ""
+	push := ""
+	for _, f := range zr.File {
+		r, _ := f.Open()
+		b, _ := io.ReadAll(r)
+		all += string(b)
+		if f.Name == "push.json" {
+			push = string(b)
+		}
+	}
+	if !strings.Contains(push, "REMIND#streak") || !strings.Contains(push, `"slot"`) {
+		t.Errorf("the reminder choice is missing: %q", push)
+	}
+	for _, secret := range []string{"SECRET", "fcm.googleapis", "AUTHSECRET", "KEY", "USER#bob", "REMIND#play"} {
+		if strings.Contains(all, secret) {
+			t.Errorf("the export contains %q", secret)
+		}
 	}
 }
