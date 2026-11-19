@@ -1,6 +1,6 @@
 # Web Push agendado: lembrete de ofensiva e "venha jogar hoje" (Poker) e pendências (Billing)
 
-**Status:** proposta, aguardando aprovação · **Data:** 2026-11-18 · **Base:** `ctech-dfe/docs/specs/2026-11-17-web-push.md`
+**Status:** aprovado em 2026-11-18; implementado e inerte (sem chaves VAPID nada é enviado) · **Data:** 2026-11-18 · **Base:** `ctech-dfe/docs/specs/2026-11-17-web-push.md`
 
 ## 1. Intenção
 
